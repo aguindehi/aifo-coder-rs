@@ -140,16 +140,30 @@ fn default_image_for(agent: &str) -> String {
     format!("{prefix}-{agent}:{tag}")
 }
 
-fn docker_path() -> io::Result<PathBuf> {
-    which("docker").map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Docker is required but was not found in PATH."))
+fn container_runtime_path() -> io::Result<PathBuf> {
+    if let Ok(p) = which("docker") {
+        return Ok(p);
+    }
+    if let Ok(p) = which("podman") {
+        return Ok(p);
+    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "Docker or Podman is required but was not found in PATH.",
+    ))
 }
 
 fn docker_supports_apparmor() -> bool {
-    let docker = match docker_path() {
+    let runtime = match container_runtime_path() {
         Ok(p) => p,
         Err(_) => return false,
     };
-    let output = Command::new(docker)
+    // Podman reports security differently; conservatively disable AppArmor flag to avoid errors.
+    let rt_name = runtime.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    if rt_name.contains("podman") {
+        return false;
+    }
+    let output = Command::new(runtime)
         .args(["info", "--format", "{{json .SecurityOptions}}"])
         .output();
     let Ok(out) = output else { return false };
@@ -158,7 +172,7 @@ fn docker_supports_apparmor() -> bool {
 }
 
 fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str) -> io::Result<Command> {
-    let docker = docker_path()?;
+    let runtime = container_runtime_path()?;
 
     // TTY flags
     let tty_flags: Vec<&str> = if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
@@ -376,7 +390,7 @@ fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str) -> io::Res
     );
 
     // docker run command
-    let mut cmd = Command::new(docker);
+    let mut cmd = Command::new(runtime);
     cmd.arg("run").arg("--rm");
     for f in tty_flags {
         cmd.arg(f);

@@ -89,7 +89,8 @@ If cargo is not installed, please install Rust from https://rustup.rs.
 
 ## Requirements
 
-- Docker installed and running
+- Docker or Podman installed and running
+- Optional: make (GNU Make) for Makefile targets; if not installed, you can run the docker build commands directly or use the aifo-coder wrapper without make.
 - Network access to install dependencies during build
 - Access to the base image registry:
   - Base image used: `repository.migros.net/node:22-bookworm-slim`  
