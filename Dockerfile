@@ -8,6 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano libnss-wrapper \
+    build-essential pkg-config libssl-dev cargo rustc \
  && rm -rf /var/lib/apt/lists/*
 
 # Default working directory; the host project will be mounted here
