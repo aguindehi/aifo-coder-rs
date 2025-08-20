@@ -3,11 +3,12 @@ use once_cell::sync::Lazy;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use which::which;
+use nix::libc;
 
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
@@ -84,7 +85,7 @@ enum Agent {
 }
 
 fn main() -> ExitCode {
-    let mut cli = Cli::parse();
+    let cli = Cli::parse();
 
     if cli.no_apparmor {
         env::set_var("AIFO_CODER_NO_APPARMOR", "1");
@@ -464,7 +465,7 @@ fn acquire_lock() -> io::Result<File> {
                 if res == 0 {
                     return Ok(f);
                 } else {
-                    let errno = nix::errno::errno();
+                    let errno = nix::errno::Errno::last_raw();
                     if errno == libc::EWOULDBLOCK || errno == libc::EAGAIN {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
