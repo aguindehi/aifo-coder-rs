@@ -1,0 +1,8 @@
+*~
+.aider*
+.crush*
+.env
+build
+build.session
+ISSUES
+/target

@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Tiny wrapper to execute the Rust-based launcher.
+# It prefers an existing compiled binary (release or debug),
+# otherwise attempts to build with cargo and run it.
+set -e
+
+BIN="${AIFO_CODER_BIN:-./target/release/aifo-coder}"
+
+if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder" ]; then
+  BIN="./target/debug/aifo-coder"
+fi
+
+if [ -x "$BIN" ]; then
+  exec "$BIN" "$@"
+fi
+
+if command -v cargo >/dev/null 2>&1; then
+  echo "Building aifo-coder (release)..." >&2
+  cargo build --release
+  exec ./target/release/aifo-coder "$@"
+fi
+
+echo "Error: compiled launcher not found and cargo is not installed." >&2
+echo "Please install Rust (https://rustup.rs) and build with: cargo build --release" >&2
+exit 127

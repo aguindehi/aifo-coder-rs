@@ -1,0 +1,22 @@
+
+# aider configuration for AIFO Sandbox
+
+model: azure/mgb-aifo-model-gpt-5
+weak-model: azure/mgb-aifo-model-gpt-5-mini
+
+editor: "emacs -nw"
+
+restore-chat-history: true
+llm-history-file: .aider.llm.history
+cache-keepalive-pings: 3 # 15min
+
+multiline: false
+cache-prompts: true
+dark-mode: true
+show-diffs: true
+subtree-only: true
+no-auto-commits: true
+auto-test: true
+analytics-disable: true
+watch-files: true
+check-update: true

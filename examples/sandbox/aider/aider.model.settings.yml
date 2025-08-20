@@ -1,0 +1,1067 @@
+- name: (default values)
+  edit_format: whole
+  weak_model_name: null
+  use_repo_map: false
+  send_undo_reply: false
+  lazy: false
+  overeager: false
+  reminder: user
+  examples_as_sys_msg: false
+  extra_params: null
+  cache_control: false
+  caches_by_default: false
+  use_system_prompt: true
+  use_temperature: true
+  streaming: true
+  editor_model_name: null
+  editor_edit_format: null
+  reasoning_tag: null
+  remove_reasoning: null
+  system_prompt_prefix: null
+  accepts_settings: null
+
+- name: azure/mgb-aifo-model-gpt-5
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-mini
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/mgb-aifo-model-gpt-5-mini
+  edit_format: diff
+  weak_model_name: azure/azure/mgb-aifo-model-gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/mgb-aifo-model-gpt-5-nano
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-4.1
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  reminder: sys
+  editor_model_name: azure/gpt-4.1-mini
+
+- name: azure/gpt-4.1-mini
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+
+- name: azure/gpt-5
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-2025-08-07
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-chat
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-chat-latest
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-mini-2025-08-07
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-nano
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/gpt-5-nano-2025-08-07
+  edit_format: diff
+  weak_model_name: azure/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o1
+  edit_format: diff
+  weak_model_name: azure/gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  streaming: false
+  editor_model_name: azure/gpt-4o
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o1-mini
+  weak_model_name: azure/gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: azure/gpt-4o
+  editor_edit_format: editor-diff
+
+- name: azure/o1-preview
+  edit_format: diff
+  weak_model_name: azure/gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: azure/gpt-4o
+  editor_edit_format: editor-diff
+
+- name: azure/o3
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o3-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4o
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o3-pro
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o4-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o4-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o4-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o4-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: azure/o4-mini
+  edit_format: diff
+  weak_model_name: azure/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: azure/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: deepseek-chat
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+
+- name: deepseek-coder
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+  caches_by_default: true
+
+- name: deepseek/deepseek-chat
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+  caches_by_default: true
+
+- name: deepseek/deepseek-coder
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+  caches_by_default: true
+
+- name: deepseek/deepseek-reasoner
+  edit_format: diff
+  weak_model_name: deepseek/deepseek-chat
+  use_repo_map: true
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 64000
+  caches_by_default: true
+  use_temperature: false
+  editor_model_name: deepseek/deepseek-chat
+  editor_edit_format: editor-diff
+
+- name: gemini/gemini-1.5-flash-002
+
+- name: gemini/gemini-1.5-pro
+  edit_format: diff-fenced
+  use_repo_map: true
+
+- name: gemini/gemini-1.5-pro-002
+  edit_format: diff
+  use_repo_map: true
+
+- name: gemini/gemini-1.5-pro-latest
+  edit_format: diff-fenced
+  use_repo_map: true
+
+- name: gemini/gemini-2.0-flash
+  edit_format: diff
+  use_repo_map: true
+
+- name: gemini/gemini-2.0-flash-exp
+  edit_format: diff
+  use_repo_map: true
+
+- name: gemini/gemini-2.5-flash
+  edit_format: diff-fenced
+  use_repo_map: true
+  overeager: true
+  use_temperature: false
+  accepts_settings:
+  - thinking_tokens
+
+- name: gemini/gemini-2.5-flash-lite-preview-06-17
+  edit_format: diff-fenced
+  use_repo_map: true
+  overeager: true
+  use_temperature: false
+  accepts_settings:
+  - thinking_tokens
+
+- name: gemini/gemini-2.5-flash-preview-04-17
+  edit_format: diff
+  use_repo_map: true
+  accepts_settings:
+  - reasoning_effort
+  - thinking_tokens
+
+- name: gemini/gemini-2.5-pro
+  edit_format: diff-fenced
+  weak_model_name: gemini/gemini-2.5-flash
+  use_repo_map: true
+  overeager: true
+  use_temperature: false
+  accepts_settings:
+  - thinking_tokens
+
+- name: gemini/gemini-2.5-pro-exp-03-25
+  edit_format: diff-fenced
+  weak_model_name: gemini/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+
+- name: gemini/gemini-2.5-pro-preview-03-25
+  edit_format: diff-fenced
+  weak_model_name: gemini/gemini-2.0-flash
+  use_repo_map: true
+  overeager: true
+
+- name: gemini/gemini-2.5-pro-preview-05-06
+  edit_format: diff-fenced
+  weak_model_name: gemini/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+
+- name: gemini/gemini-2.5-pro-preview-06-05
+  edit_format: diff-fenced
+  weak_model_name: gemini/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+  accepts_settings:
+  - thinking_tokens
+
+- name: gemini/gemini-exp-1206
+  edit_format: diff
+  use_repo_map: true
+
+- name: gemini/gemma-3-27b-it
+  use_system_prompt: false
+
+- name: gpt-3.5-turbo
+  weak_model_name: gpt-4o-mini
+  reminder: sys
+
+- name: gpt-3.5-turbo-0125
+  weak_model_name: gpt-4o-mini
+  reminder: sys
+
+- name: gpt-3.5-turbo-0613
+  weak_model_name: gpt-4o-mini
+  reminder: sys
+
+- name: gpt-3.5-turbo-1106
+  weak_model_name: gpt-4o-mini
+  reminder: sys
+
+- name: gpt-3.5-turbo-16k-0613
+  weak_model_name: gpt-4o-mini
+  reminder: sys
+
+- name: gpt-4-0125-preview
+  edit_format: udiff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: gpt-4-0314
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: gpt-4-0613
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  reminder: sys
+
+- name: gpt-4-1106-preview
+  edit_format: udiff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+
+- name: gpt-4-32k-0613
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  reminder: sys
+
+- name: gpt-4-turbo
+  edit_format: udiff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+
+- name: gpt-4-turbo-2024-04-09
+  edit_format: udiff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+
+- name: gpt-4-vision-preview
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  reminder: sys
+
+- name: gpt-4.1
+  edit_format: diff
+  weak_model_name: gpt-4.1-mini
+  use_repo_map: true
+  reminder: sys
+  editor_model_name: gpt-4.1-mini
+
+- name: gpt-4.1-mini
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+
+- name: gpt-4.5-preview
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+
+- name: gpt-4o
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+  editor_edit_format: editor-diff
+
+- name: gpt-4o-2024-08-06
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: gpt-4o-2024-11-20
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: gpt-4o-mini
+  weak_model_name: gpt-4o-mini
+  lazy: true
+  reminder: sys
+
+- name: gpt-5
+  edit_format: diff
+  weak_model_name: gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-2025-08-07
+  edit_format: diff
+  weak_model_name: gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-chat
+  edit_format: diff
+  weak_model_name: gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-chat-latest
+  edit_format: diff
+  weak_model_name: gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-mini
+  edit_format: diff
+  weak_model_name: gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-mini-2025-08-07
+  edit_format: diff
+  weak_model_name: gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-nano
+  edit_format: diff
+  weak_model_name: gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: gpt-5-nano-2025-08-07
+  edit_format: diff
+  weak_model_name: gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: groq/llama3-70b-8192
+  edit_format: diff
+  weak_model_name: groq/llama3-8b-8192
+  examples_as_sys_msg: true
+
+- name: groq/qwen-qwq-32b
+  edit_format: diff
+  weak_model_name: groq/qwen-2.5-coder-32b
+  use_repo_map: true
+  extra_params:
+    max_tokens: 128000
+    top_p: 0.95
+  use_temperature: 0.6
+  editor_model_name: groq/qwen-2.5-coder-32b
+  editor_edit_format: editor-diff
+  reasoning_tag: think
+
+- name: o1
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  streaming: false
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: o1-mini
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+
+- name: o1-preview
+  edit_format: architect
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+
+- name: o3
+  edit_format: diff
+  weak_model_name: gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: o3-mini
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: o3-pro
+  edit_format: diff
+  weak_model_name: gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: o4-mini
+  edit_format: diff
+  weak_model_name: gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-4.1
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  reminder: sys
+  editor_model_name: openai/gpt-4.1-mini
+
+- name: openai/gpt-4.1-mini
+  edit_format: diff
+  use_repo_map: true
+  reminder: sys
+
+- name: openai/gpt-4.5-preview
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+  editor_model_name: openai/gpt-4o
+  editor_edit_format: editor-diff
+
+- name: openai/gpt-4o
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+  editor_edit_format: editor-diff
+
+- name: openai/gpt-4o-2024-08-06
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: openai/gpt-4o-2024-11-20
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  lazy: true
+  reminder: sys
+  examples_as_sys_msg: true
+
+- name: openai/gpt-4o-mini
+  weak_model_name: openai/gpt-4o-mini
+  lazy: true
+  reminder: sys
+
+- name: openai/gpt-5
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-2025-08-07
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-chat
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-chat-latest
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-mini-2025-08-07
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-nano
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/gpt-5-nano-2025-08-07
+  edit_format: diff
+  weak_model_name: openai/gpt-5-nano-2025-08-07
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o1
+  edit_format: diff
+  weak_model_name: openai/gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  streaming: false
+  editor_model_name: openai/gpt-4o
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o1-mini
+  weak_model_name: openai/gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: openai/gpt-4o
+  editor_edit_format: editor-diff
+
+- name: openai/o1-preview
+  edit_format: diff
+  weak_model_name: openai/gpt-4o-mini
+  use_repo_map: true
+  use_system_prompt: false
+  use_temperature: false
+  editor_model_name: openai/gpt-4o
+  editor_edit_format: editor-diff
+
+- name: openai/o3
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o3-mini
+  edit_format: diff
+  weak_model_name: gpt-4o-mini
+  use_repo_map: true
+  use_temperature: false
+  editor_model_name: gpt-4o
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o3-pro
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  streaming: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o4-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o4-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o4-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o4-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: openai/o4-mini
+  edit_format: diff
+  weak_model_name: openai/gpt-4.1-mini
+  use_repo_map: true
+  examples_as_sys_msg: true
+  use_temperature: false
+  editor_model_name: openai/gpt-4.1
+  editor_edit_format: editor-diff
+  system_prompt_prefix: 'Formatting re-enabled. '
+  accepts_settings:
+  - reasoning_effort
+
+- name: vertex_ai/claude-3-5-haiku@20241022
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  extra_params:
+    max_tokens: 4096
+
+- name: vertex_ai/claude-3-5-sonnet-v2@20241022
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+  editor_model_name: vertex_ai/claude-3-5-sonnet-v2@20241022
+  editor_edit_format: editor-diff
+
+- name: vertex_ai/claude-3-5-sonnet@20240620
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 8192
+  editor_model_name: vertex_ai/claude-3-5-sonnet@20240620
+  editor_edit_format: editor-diff
+
+- name: vertex_ai/claude-3-7-sonnet@20250219
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  overeager: true
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 64000
+  editor_model_name: vertex_ai/claude-3-7-sonnet@20250219
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/claude-3-7-sonnet@20250219
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  overeager: true
+  examples_as_sys_msg: true
+  extra_params:
+    max_tokens: 64000
+  editor_model_name: vertex_ai/claude-3-7-sonnet@20250219
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/claude-3-opus@20240229
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+
+- name: vertex_ai/claude-3-sonnet@20240229
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+
+- name: vertex_ai/claude-opus-4@20250514
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  extra_params:
+    max_tokens: 32000
+  editor_model_name: vertex_ai/claude-sonnet-4@20250514
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/claude-opus-4@20250514
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  extra_params:
+    max_tokens: 32000
+  editor_model_name: vertex_ai/claude-sonnet-4@20250514
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/claude-sonnet-4@20250514
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  extra_params:
+    max_tokens: 64000
+  editor_model_name: vertex_ai/claude-sonnet-4@20250514
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/claude-sonnet-4@20250514
+  edit_format: diff
+  weak_model_name: vertex_ai/claude-3-5-haiku@20241022
+  use_repo_map: true
+  extra_params:
+    max_tokens: 64000
+  editor_model_name: vertex_ai/claude-sonnet-4@20250514
+  editor_edit_format: editor-diff
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/gemini-2.5-flash
+  edit_format: diff-fenced
+  use_repo_map: true
+  overeager: true
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/gemini-2.5-flash-preview-04-17
+  edit_format: diff
+  use_repo_map: true
+  accepts_settings:
+  - reasoning_effort
+  - thinking_tokens
+
+- name: vertex_ai/gemini-2.5-flash-preview-05-20
+  edit_format: diff
+  use_repo_map: true
+  accepts_settings:
+  - reasoning_effort
+  - thinking_tokens
+
+- name: vertex_ai/gemini-2.5-pro
+  edit_format: diff-fenced
+  weak_model_name: vertex_ai/gemini-2.5-flash
+  use_repo_map: true
+  overeager: true
+  editor_model_name: vertex_ai/gemini-2.5-flash
+  accepts_settings:
+  - thinking_tokens
+
+- name: vertex_ai/gemini-2.5-pro-exp-03-25
+  edit_format: diff-fenced
+  weak_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+  editor_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+
+- name: vertex_ai/gemini-2.5-pro-preview-03-25
+  edit_format: diff-fenced
+  weak_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+  editor_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+
+- name: vertex_ai/gemini-2.5-pro-preview-05-06
+  edit_format: diff-fenced
+  weak_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+  editor_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+
+- name: vertex_ai/gemini-2.5-pro-preview-06-05
+  edit_format: diff-fenced
+  weak_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+  use_repo_map: true
+  overeager: true
+  editor_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
+  accepts_settings:
+  - thinking_tokens
+

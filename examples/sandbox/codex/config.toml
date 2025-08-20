@@ -1,0 +1,30 @@
+# Defaults
+
+profile = "gpt-5"
+approval_policy = "on-request"
+
+# Azure Provider
+
+[model_providers.azure]
+name = "Azure"
+
+# AIFO Sandbox 
+base_url = "https://mgb-aifo-sandbox-oai-swe.openai.azure.com/openai"
+
+env_key = "AZURE_API_KEY"  # Name of the environment variable
+wire_api = "responses"     # API type
+query_params = { api-version = "2025-04-01-preview" }
+
+# Profiles
+
+[profiles.codex_mini]
+model_provider = "azure"
+model = "mgb-aifo-model-codex-mini"
+
+[profiles.o3]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-o3"
+
+[profiles.gpt-5]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5"
