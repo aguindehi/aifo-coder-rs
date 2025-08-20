@@ -20,6 +20,20 @@ if command -v cargo >/dev/null 2>&1; then
   exec ./target/release/aifo-coder "$@"
 fi
 
-echo "Error: compiled launcher not found and cargo is not installed." >&2
-echo "Please install Rust (https://rustup.rs) and build with: cargo build --release" >&2
+# Try to build inside a container using Docker or Podman
+RUNTIME=""
+if command -v docker >/dev/null 2>&1; then
+  RUNTIME="docker"
+elif command -v podman >/dev/null 2>&1; then
+  RUNTIME="podman"
+fi
+
+if [ -n "$RUNTIME" ]; then
+  echo "Building aifo-coder (release) using $RUNTIME and rust:1-bookworm ..." >&2
+  "$RUNTIME" run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace rust:1-bookworm cargo build --release
+  exec ./target/release/aifo-coder "$@"
+fi
+
+echo "Error: compiled launcher not found and neither cargo nor Docker/Podman is installed." >&2
+echo "Please install Rust (https://rustup.rs), or install Docker/Podman so the wrapper can build inside a container." >&2
 exit 127

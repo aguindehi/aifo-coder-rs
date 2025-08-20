@@ -74,7 +74,7 @@ cargo build --release
 ./aifo-coder aider --version
 ```
 
-If cargo is not installed, please install Rust from https://rustup.rs.
+If cargo is not installed, ./aifo-coder will attempt to build the launcher inside a container using Docker or Podman (image: rust:1-bookworm). Alternatively, install Rust from https://rustup.rs.
 
 ## Contents
 

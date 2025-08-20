@@ -8,7 +8,7 @@ use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use which::which;
-use nix::libc;
+use libc;
 
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
