@@ -43,6 +43,7 @@ help:
 	@echo "  git-amend-no-sign                  - Amend the last commit without GPG signing"
 	@echo "  git-commit-no-sign-all             - Stage all and commit without signing (MESSAGE='your message' optional)"
 	@echo "  docker-enter                       - Enter a running container via docker exec with GPG runtime prepared"
+	@echo "  release                            - Build multi-platform release archives into dist/"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -259,3 +260,59 @@ scrub-coauthors:
 	@git --version >/dev/null 2>&1 || { echo "git not working"; exit 1; }
 	@git filter-repo -h >/dev/null 2>&1 || { echo "git-filter-repo is required. See https://github.com/newren/git-filter-repo#installation"; exit 1; }
 	@git -c commit.gpgsign=false -c tag.gpgSign=false filter-repo --force --message-callback 'import re; return re.sub(br"(?mi)^[ \t]*Co-authored-by: aider \(azure/mgb-aifo-model-gpt-5\) <aider@aider.chat>[ \t]*\r?\n?", b"", message)'
+
+# Release packaging variables
+DIST_DIR ?= dist
+BIN_NAME ?= aifo-coder
+VERSION ?= $(shell sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -n1)
+ifeq ($(strip $(VERSION)),)
+VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
+endif
+
+# Build release binaries and package archives for macOS and Linux (Ubuntu/Arch)
+# Requires: cargo (and optionally cross), appropriate targets installed for non-native builds
+.PHONY: release
+release:
+	@set -e; \
+	BIN="$(BIN_NAME)"; \
+	VERSION="$(VERSION)"; \
+	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
+	echo "Building release version: $$VERSION"; \
+	if command -v cross >/dev/null 2>&1; then BUILD="cross build --release --target"; else BUILD="cargo build --release --target"; fi; \
+	TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin"; \
+	for t in $$TARGETS; do \
+	  if command -v cross >/dev/null 2>&1; then \
+	    echo "Building with cross for $$t ..."; $$BUILD "$$t" || echo "Warning: build failed for $$t"; \
+	  elif command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
+	    echo "Building with cargo for $$t ..."; $$BUILD "$$t" || echo "Warning: build failed for $$t"; \
+	  else \
+	    echo "Target $$t not installed. Skipping (install with: rustup target add $$t)"; \
+	    continue; \
+	  fi; \
+	done; \
+	echo "Packaging artifacts into $$DIST ..."; \
+	for t in $$TARGETS; do \
+	  case "$$t" in \
+	    *apple-darwin) OS=macos ;; \
+	    *linux-gnu) OS=linux ;; \
+	    *) OS=unknown ;; \
+	  esac; \
+	  ARCH="$${t%%-*}"; \
+	  BINPATH="target/$$t/release/$$BIN"; \
+	  [ -f "$$BINPATH" ] || { echo "Skipping $$t (binary not found)"; continue; }; \
+	  PKG="$$BIN-$$VERSION-$$OS-$$ARCH"; \
+	  STAGE="$$DIST/$$PKG"; \
+	  rm -rf "$$STAGE"; mkdir -p "$$STAGE"; \
+	  install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"; \
+	  [ -f README.md ] && cp README.md "$$STAGE/"; \
+	  [ -d examples ] && cp -a examples "$$STAGE/"; \
+	  tar -C "$$DIST" -czf "$$DIST/$$PKG.tar.gz" "$$PKG"; \
+	  echo "Wrote $$DIST/$$PKG.tar.gz"; \
+	  if [ "$$OS" = "linux" ]; then \
+	    for distro in ubuntu arch; do \
+	      cp "$$DIST/$$PKG.tar.gz" "$$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
+	      echo "Wrote $$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
+	    done; \
+	  fi; \
+	done

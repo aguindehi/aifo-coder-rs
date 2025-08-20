@@ -4,6 +4,7 @@
 .env
 build
 build.session
+dist
 ISSUES
 /target
 Cargo.lock
