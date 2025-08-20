@@ -465,7 +465,7 @@ fn acquire_lock() -> io::Result<File> {
                 if res == 0 {
                     return Ok(f);
                 } else {
-                    let errno = nix::errno::Errno::last_raw();
+                    let errno = io::Error::last_os_error().raw_os_error().unwrap_or(0);
                     if errno == libc::EWOULDBLOCK || errno == libc::EAGAIN {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
