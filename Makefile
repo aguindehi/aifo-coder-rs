@@ -345,7 +345,7 @@ release:
 	    PLATFORM_ARG=""; [ -n "$$PLATFORM" ] && PLATFORM_ARG="--platform $$PLATFORM"; \
 	    echo "Building for $$t inside $$IMAGE with $$RUNTIME $$PLATFORM_ARG (no host rustup/toolchains) ..."; \
 	    "$$RUNTIME" run $$PLATFORM_ARG --rm -v "$$(pwd)":/project -w /project "$$IMAGE" \
-	      bash -lc "cargo build --release --target '$$t'" || echo "Warning: build failed for $$t"; \
+	      bash -lc "export PATH=/usr/local/cargo/bin:/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin:$$PATH; cargo build --release --target '$$t'" || echo "Warning: build failed for $$t"; \
 	  elif [ "$$HOST_OK" -eq 1 ]; then \
 	    echo "Building with cargo for host target $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
 	  elif command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
