@@ -279,18 +279,43 @@ release:
 	DIST="$(DIST_DIR)"; \
 	mkdir -p "$$DIST"; \
 	echo "Building release version: $$VERSION"; \
-	if command -v cross >/dev/null 2>&1; then BUILD="cross build --release --target"; else BUILD="cargo build --release --target"; fi; \
+	# Prefer cross from ~/.cargo/bin; fall back to PATH if present; otherwise empty \
+	if [ -x "$$HOME/.cargo/bin/cross" ]; then CROSS_BIN="$$HOME/.cargo/bin/cross"; \
+	elif command -v cross >/dev/null 2>&1; then CROSS_BIN="$$(command -v cross)"; \
+	else CROSS_BIN=""; fi; \
+	HOST_OS="$$(uname -s)"; \
 	TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin"; \
-	for t in $$TARGETS; do \
-	  if command -v cross >/dev/null 2>&1; then \
-	    echo "Building with cross for $$t ..."; $$BUILD "$$t" || echo "Warning: build failed for $$t"; \
-	  elif command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
-	    echo "Building with cargo for $$t ..."; $$BUILD "$$t" || echo "Warning: build failed for $$t"; \
-	  else \
-	    echo "Target $$t not installed. Skipping (install with: rustup target add $$t)"; \
-	    continue; \
-	  fi; \
-	done; \
+	# 1) Build Linux targets with cross if available; never attempt Darwin with cross \
+	if [ -n "$$CROSS_BIN" ]; then \
+	  for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do \
+	    echo "Building with $$CROSS_BIN for $$t ..."; \
+	    "$$CROSS_BIN" build --release --target "$$t" || echo "Warning: build failed for $$t"; \
+	  done; \
+	else \
+	  echo "cross not found; attempting cargo only for installed Linux targets"; \
+	  for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do \
+	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
+	      echo "Building with cargo for $$t ..."; \
+	      cargo build --release --target "$$t" || echo "Warning: build failed for $$t"; \
+	    else \
+	      echo "Skipping $$t (toolchain/target not installed and cross not available)"; \
+	    fi; \
+	  done; \
+	fi; \
+	# 2) Darwin targets: only build on macOS host with cargo if installed; skip elsewhere \
+	if [ "$$HOST_OS" = "Darwin" ]; then \
+	  for t in x86_64-apple-darwin aarch64-apple-darwin; do \
+	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
+	      echo "Building with cargo (macOS host) for $$t ..."; \
+	      cargo build --release --target "$$t" || echo "Warning: build failed for $$t"; \
+	    else \
+	      echo "Darwin target $$t not installed on macOS host. Skipping."; \
+	    fi; \
+	  done; \
+	else \
+	  echo "Non-macOS host detected; skipping Darwin targets (no cross images available)."; \
+	fi; \
+	# 3) Package any successfully built binaries \
 	echo "Packaging artifacts into $$DIST ..."; \
 	for t in $$TARGETS; do \
 	  case "$$t" in \
