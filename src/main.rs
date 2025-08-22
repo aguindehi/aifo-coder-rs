@@ -145,12 +145,9 @@ fn container_runtime_path() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
         return Ok(p);
     }
-    if let Ok(p) = which("podman") {
-        return Ok(p);
-    }
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        "Docker or Podman is required but was not found in PATH.",
+        "Docker is required but was not found in PATH.",
     ))
 }
 
@@ -159,11 +156,6 @@ fn docker_supports_apparmor() -> bool {
         Ok(p) => p,
         Err(_) => return false,
     };
-    // Podman reports security differently; conservatively disable AppArmor flag to avoid errors.
-    let rt_name = runtime.file_name().and_then(|s| s.to_str()).unwrap_or("");
-    if rt_name.contains("podman") {
-        return false;
-    }
     let output = Command::new(runtime)
         .args(["info", "--format", "{{json .SecurityOptions}}"])
         .output();

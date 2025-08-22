@@ -59,7 +59,7 @@ aifo‑coder takes a “contain what matters, nothing more” approach:
 
 ## Requirements
 
-- Docker or Podman installed and running
+- Docker installed and running
 - GNU Make for the provided Makefile targets
 - Optional: Rust stable toolchain (only needed if you build the CLI locally via Makefile)
 
@@ -154,7 +154,7 @@ Recommended approach:
 - Use the Makefile’s release target for reproducible cross-builds and packaging:
   - `make release`
 - Builds run in containerized toolchains (based on cross-rs images), as configured in Cross.toml.
-- Only a container runtime (Docker/Podman) is required for cross builds.
+- Only Docker is required for cross builds.
 
 If you insist on native cross-compilation (macOS):
 - Install rustup (manages Rust toolchains):
@@ -228,7 +228,7 @@ Override the image used by the launcher (use a specific per‑agent image):
 When you run `aifo-coder ...` it will:
 
 1. Acquire a lock to ensure only one agent runs at a time (prefers `~/.aifo-coder.lock`, falls back to XDG_RUNTIME_DIR or `/tmp`).
-2. Locate the container runtime (`docker` preferred, falls back to `podman`).
+2. Locate Docker.
 3. Build a `docker run` command with:
    - `--rm` removal after exit
    - Interactive TTY (`-it`) if connected to a terminal; otherwise `-i`
@@ -251,7 +251,7 @@ When you run `aifo-coder ...` it will:
      - `~/.gitconfig` → `/home/coder/.gitconfig`
    - Timezone passthrough (if present):
      - `/etc/localtime` and `/etc/timezone` mounted read‑only
-   - AppArmor (optional): adds `--security-opt apparmor=<profile>` if supported by Docker; automatically disabled for Podman
+   - AppArmor (optional): adds `--security-opt apparmor=<profile>` if supported by Docker
    - Per‑agent image selection:
      - Defaults to `AIFO_CODER_IMAGE` if set; otherwise `IMAGE_PREFIX-<agent>:TAG` (e.g., `aifo-coder-codex:latest`)
 4. Execute the agent and return its exit code.
@@ -329,7 +329,7 @@ Crush example config:
 
 - CLI parsing is powered by Clap; subcommands are `codex`, `crush`, and `aider`. Trailing arguments are passed through to the agent unchanged.
 - TTY detection uses `atty` to select `-it` vs `-i` for interactive runs.
-- The launcher discovers `docker` or `podman` at runtime and falls back appropriately; AppArmor is disabled automatically for Podman.
+- The launcher uses Docker; ensure it is installed and available in PATH.
 - The default image selection can be overridden via `AIFO_CODER_IMAGE`, or computed from `AIFO_CODER_IMAGE_PREFIX` and `AIFO_CODER_IMAGE_TAG`.
 - A lock file is used to avoid concurrent runs against the same workspace; candidate locations include `$HOME`, `$XDG_RUNTIME_DIR`, and `/tmp`.
 - Arguments are shell-escaped conservatively before passing to the container.

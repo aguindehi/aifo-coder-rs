@@ -352,7 +352,7 @@ release:
 	    IMAGE="repository.migros.net/ghcr.io/cross-rs/$$t:latest"; \
 	    RUNTIME="$${CONTAINER_RUNTIME:-docker}"; \
 	    if ! command -v "$$RUNTIME" >/dev/null 2>&1; then \
-	      echo "No container runtime found; install Docker or Podman to cross-compile $$t"; \
+	      echo "No container runtime found; install Docker to cross-compile $$t"; \
 	      continue; \
 	    fi; \
 	    case "$$t" in \
