@@ -326,7 +326,7 @@ release:
 	for t in $$TARGETS; do \
 	  HOST_OK=0; \
 	  if [ -n "$$RUSTC_HOST" ] && [ "$$t" = "$$RUSTC_HOST" ]; then HOST_OK=1; fi; \
-	  if [ -n "$$CROSS_BIN" ] && printf "%s" "$$t" | grep -Eq -- '-linux-gnu|-linux-musl'; then \
+	  if printf "%s" "$$t" | grep -Eq -- '-linux-gnu|-linux-musl'; then \
 	    VARNAME="$$(echo "$$t" | tr '[:lower:]-' '[:upper:]_')"; \
 	    IMAGE="repository.migros.net/ghcr.io/cross-rs/$$t:latest"; \
 	    RUNTIME="$${CONTAINER_RUNTIME:-docker}"; \
