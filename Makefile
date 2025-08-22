@@ -385,13 +385,6 @@ release:
 	  tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
 	  chmod 0644 "$$D/$$PKG.tar.gz" || true; \
 	  echo "Wrote $$D/$$PKG.tar.gz"; \
-	  if [ "$$OS" = "linux" ]; then \
-	    for distro in ubuntu arch; do \
-	      cp "$$D/$$PKG.tar.gz" "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
-	      chmod 0644 "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz" || true; \
-	      echo "Wrote $$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
-	    done; \
-	  fi; \
 	  rm -rf "$$STAGE"; \
 	  PACKED=1; \
 	done; \
@@ -419,13 +412,6 @@ release:
 	      tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
 	      chmod 0644 "$$D/$$PKG.tar.gz" || true; \
 	      echo "Wrote $$D/$$PKG.tar.gz"; \
-	      if [ "$$OS" = "linux" ]; then \
-	        for distro in ubuntu arch; do \
-	          cp "$$D/$$PKG.tar.gz" "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
-	          chmod 0644 "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz" || true; \
-	          echo "Wrote $$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
-	        done; \
-	      fi; \
 	      rm -rf "$$STAGE"; \
 	      PACKED=1; \
 	    done; \
