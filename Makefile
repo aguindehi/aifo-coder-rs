@@ -275,74 +275,153 @@ endif
 # Requires: cargo (and optionally cross), appropriate targets installed for non-native builds
 .PHONY: release
 release:
-	@( \
-	  set -e; \
-	  BIN="$(BIN_NAME)"; \
-	  VERSION="$(VERSION)"; \
-	  DIST="$(DIST_DIR)"; \
-	  mkdir -p "$$DIST"; \
-	  echo "Building release version: $$VERSION"; \
-	  # Detect cross (optional) \
-	  CROSS_BIN=""; \
-	  if [ -x "$$HOME/.cargo/bin/cross" ]; then \
-	    CROSS_BIN="$$HOME/.cargo/bin/cross"; \
-	  elif command -v cross >/dev/null 2>&1; then \
-	    CROSS_BIN="$$(command -v cross)"; \
-	  fi; \
-	  HOST_OS="$$(uname -s)"; \
-	  echo "Host OS: $$HOST_OS"; \
-	  # Build x86_64-unknown-linux-gnu \
-	  if [ -n "$$CROSS_BIN" ]; then \
-	    echo "Building with $$CROSS_BIN for x86_64-unknown-linux-gnu ..."; \
-	    "$$CROSS_BIN" build --release --target x86_64-unknown-linux-gnu || echo "Warning: build failed for x86_64-unknown-linux-gnu"; \
+	@set -e; \
+	BIN="$(BIN_NAME)"; \
+	VERSION="$(VERSION)"; \
+	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
+	echo "Building release version: $$VERSION"; \
+	rm -f Cargo.lock || true; \
+	PATH="$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
+	CROSS_BIN=""; \
+	if [ -x "/Users/m0565460/.cargo/bin/cross" ]; then CROSS_BIN="/Users/m0565460/.cargo/bin/cross"; \
+	elif [ -x "$$HOME/.cargo/bin/cross" ]; then CROSS_BIN="$$HOME/.cargo/bin/cross"; \
+	elif command -v cross >/dev/null 2>&1; then CROSS_BIN="cross"; fi; \
+	CHANNEL="$${AIFO_CODER_RUST_CHANNEL:-stable}"; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  BUILD_HOST="rustup run $$CHANNEL cargo build --release --target"; \
+	else \
+	  BUILD_HOST="cargo build --release --target"; \
+	fi; \
+	if [ -n "$$RELEASE_TARGETS" ]; then \
+	  TARGETS="$$RELEASE_TARGETS"; \
+	  echo "Using RELEASE_TARGETS from environment: $$TARGETS"; \
+	else \
+	  RUSTC_HOST="$$(rustc -vV 2>/dev/null | awk '/^host:/{print $$2}')"; \
+	  if [ -n "$$RUSTC_HOST" ]; then \
+	    TARGETS="$$RUSTC_HOST"; \
 	  else \
-	    echo "cross not found; attempting cargo for x86_64-unknown-linux-gnu if installed"; \
-	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx x86_64-unknown-linux-gnu; then \
-	      cargo build --release --target x86_64-unknown-linux-gnu || echo "Warning: build failed for x86_64-unknown-linux-gnu"; \
-	    else \
-	      echo "Skipping x86_64-unknown-linux-gnu (target not installed and cross not available)"; \
-	    fi; \
+	    UNAME_S="$$(uname -s 2>/dev/null || echo unknown)"; \
+	    UNAME_M="$$(uname -m 2>/dev/null || echo unknown)"; \
+	    case "$$UNAME_S" in \
+	      Linux) \
+	        case "$$UNAME_M" in \
+	          x86_64) TARGETS="x86_64-unknown-linux-gnu" ;; \
+	          aarch64|arm64) TARGETS="aarch64-unknown-linux-gnu" ;; \
+	          armv7l) TARGETS="armv7-unknown-linux-gnueabihf" ;; \
+	          *) TARGETS="" ;; \
+	        esac ;; \
+	      Darwin) \
+	        case "$$UNAME_M" in \
+	          x86_64) TARGETS="x86_64-apple-darwin" ;; \
+	          arm64) TARGETS="aarch64-apple-darwin" ;; \
+	          *) TARGETS="" ;; \
+	        esac ;; \
+	      *) TARGETS="" ;; \
+	    esac; \
 	  fi; \
-	  # Build aarch64-apple-darwin (only on macOS) \
-	  if [ "$$HOST_OS" = "Darwin" ]; then \
-	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx aarch64-apple-darwin; then \
-	      echo "Building with cargo for aarch64-apple-darwin ..."; \
-	      cargo build --release --target aarch64-apple-darwin || echo "Warning: build failed for aarch64-apple-darwin"; \
-	    else \
-	      echo "Skipping aarch64-apple-darwin (target not installed)"; \
+	  case "$$TARGETS" in *apple-darwin) echo "macOS detected: not auto-adding Linux cross targets. Set RELEASE_TARGETS to build additional targets." ;; esac; \
+	  echo "No RELEASE_TARGETS specified; defaulting to: $$TARGETS"; \
+	fi; \
+	for t in $$TARGETS; do \
+	  HOST_OK=0; \
+	  if [ -n "$$RUSTC_HOST" ] && [ "$$t" = "$$RUSTC_HOST" ]; then HOST_OK=1; fi; \
+	  if [ -n "$$CROSS_BIN" ] && printf "%s" "$$t" | grep -Eq -- '-linux-gnu|-linux-musl'; then \
+	    VARNAME="$$(echo "$$t" | tr '[:lower:]-' '[:upper:]_')"; \
+	    IMAGE="repository.migros.net/ghcr.io/cross-rs/$$t:edge"; \
+	    RUNTIME="$${CONTAINER_RUNTIME:-docker}"; \
+	    if ! command -v "$$RUNTIME" >/dev/null 2>&1; then \
+	      echo "No container runtime found; install Docker or Podman to cross-compile $$t"; \
+	      continue; \
 	    fi; \
+	    echo "Building for $$t inside $$IMAGE with $$RUNTIME (no host rustup/toolchains) ..."; \
+	    "$$RUNTIME" run --rm -v "$$(pwd)":/project -w /project "$$IMAGE" \
+	      bash -lc "cargo build --release --target '$$t'" || echo "Warning: build failed for $$t"; \
+	  elif [ "$$HOST_OK" -eq 1 ]; then \
+	    echo "Building with cargo for host target $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
+	  elif command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
+	    echo "Building with cargo for $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
 	  else \
-	    echo "Non-macOS host; skipping aarch64-apple-darwin."; \
+	    echo "Target $$t not installed. Skipping (install with: rustup target add $$t)"; \
+	    continue; \
 	  fi; \
-	  # Package only the selected targets \
-	  TARGETS="x86_64-unknown-linux-gnu aarch64-apple-darwin"; \
-	  echo "Packaging artifacts into $$DIST ..."; \
-	  for t in $$TARGETS; do \
+	done; \
+	[ -n "$$BIN" ] || BIN="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	D="$${DIST:-$(DIST_DIR)}"; \
+	V="$${VERSION:-$(VERSION)}"; \
+	mkdir -p "$$D"; \
+	echo "Packaging artifacts into $$D (binary: $$BIN, version: $$V) ..."; \
+	PACKED=0; \
+	for t in $$TARGETS; do \
+	  case "$$t" in \
+	    *apple-darwin) OS=macos ;; \
+	    *linux-gnu) OS=linux ;; \
+	    *) OS=unknown ;; \
+	  esac; \
+	  ARCH="$${t%%-*}"; \
+	  BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
+	  BINPATH="target/$$t/release/$$BIN"; \
+	  [ -f "$$BINPATH" ] || BINPATH="target/$$t/release/$$BIN_US"; \
+	  if [ ! -f "$$BINPATH" ]; then \
+	    echo "Skipping $$t (binary not found at $$BINPATH)"; \
+	    continue; \
+	  fi; \
+	  PKG="$$BIN-$$V-$$OS-$$ARCH"; \
+	  STAGE="$$D/$$PKG"; \
+	  rm -rf "$$STAGE"; install -d -m 0755 "$$STAGE"; \
+	  install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"; \
+	  [ -f README.md ] && install -m 0644 README.md "$$STAGE/"; \
+	  [ -d examples ] && cp -a examples "$$STAGE/"; \
+	  chmod -R u=rwX,go=rX "$$STAGE" || true; \
+	  tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
+	  chmod 0644 "$$D/$$PKG.tar.gz" || true; \
+	  echo "Wrote $$D/$$PKG.tar.gz"; \
+	  if [ "$$OS" = "linux" ]; then \
+	    for distro in ubuntu arch; do \
+	      cp "$$D/$$PKG.tar.gz" "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
+	      chmod 0644 "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz" || true; \
+	      echo "Wrote $$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
+	    done; \
+	  fi; \
+	  rm -rf "$$STAGE"; \
+	  PACKED=1; \
+	done; \
+	if [ "$$PACKED" -eq 0 ]; then \
+	  echo "TARGETS were empty or mismatched; scanning target/*/release ..."; \
+	  BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
+	  for dir in target/*/release; do \
+	    [ -d "$$dir" ] || continue; \
+	    t="$$(basename "$$(dirname "$$dir")")"; \
 	    case "$$t" in \
 	      *apple-darwin) OS=macos ;; \
 	      *linux-gnu) OS=linux ;; \
 	      *) OS=unknown ;; \
 	    esac; \
 	    ARCH="$${t%%-*}"; \
-	    BINPATH="target/$$t/release/$$BIN"; \
-	    if [ ! -f "$$BINPATH" ]; then \
-	      echo "Skipping $$t (binary not found)"; \
-	      continue; \
-	    fi; \
-	    PKG="$$BIN-$$VERSION-$$OS-$$ARCH"; \
-	    STAGE="$$DIST/$$PKG"; \
-	    rm -rf "$$STAGE"; \
-	    mkdir -p "$$STAGE"; \
-	    install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"; \
-	    [ -f README.md ] && cp README.md "$$STAGE/"; \
-	    [ -d examples ] && cp -a examples "$$STAGE/"; \
-	    tar -C "$$DIST" -czf "$$DIST/$$PKG.tar.gz" "$$PKG"; \
-	    echo "Wrote $$DIST/$$PKG.tar.gz"; \
-	    if [ "$$OS" = "linux" ]; then \
-	      for distro in ubuntu arch; do \
-	        cp "$$DIST/$$PKG.tar.gz" "$$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
-	        echo "Wrote $$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
-	      done; \
-	    fi; \
+	    for f in "$$dir/$$BIN" "$$dir/$$BIN_US"; do \
+	      [ -f "$$f" ] || continue; \
+	      PKG="$$BIN-$$V-$$OS-$$ARCH"; \
+	      STAGE="$$D/$$PKG"; \
+	      rm -rf "$$STAGE"; install -d -m 0755 "$$STAGE"; \
+	      install -m 0755 "$$f" "$$STAGE/$$BIN"; \
+	      [ -f README.md ] && install -m 0644 README.md "$$STAGE/"; \
+	      [ -d examples ] && cp -a examples "$$STAGE/"; \
+	      chmod -R u=rwX,go=rX "$$STAGE" || true; \
+	      tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
+	      chmod 0644 "$$D/$$PKG.tar.gz" || true; \
+	      echo "Wrote $$D/$$PKG.tar.gz"; \
+	      if [ "$$OS" = "linux" ]; then \
+	        for distro in ubuntu arch; do \
+	          cp "$$D/$$PKG.tar.gz" "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
+	          chmod 0644 "$$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz" || true; \
+	          echo "Wrote $$D/$$BIN-$$V-$$distro-$$ARCH.tar.gz"; \
+	        done; \
+	      fi; \
+	      rm -rf "$$STAGE"; \
+	      PACKED=1; \
+	    done; \
 	  done; \
-	)
+	fi; \
+	if [ "$$PACKED" -eq 0 ]; then \
+	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
+	fi
