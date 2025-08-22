@@ -282,7 +282,6 @@ release:
 	  DIST="$(DIST_DIR)"; \
 	  mkdir -p "$$DIST"; \
 	  echo "Building release version: $$VERSION"; \
-	  \
 	  # Detect cross (optional) \
 	  CROSS_BIN=""; \
 	  if [ -x "$$HOME/.cargo/bin/cross" ]; then \
@@ -290,10 +289,8 @@ release:
 	  elif command -v cross >/dev/null 2>&1; then \
 	    CROSS_BIN="$$(command -v cross)"; \
 	  fi; \
-	  \
 	  HOST_OS="$$(uname -s)"; \
 	  echo "Host OS: $$HOST_OS"; \
-	  \
 	  # Build x86_64-unknown-linux-gnu \
 	  if [ -n "$$CROSS_BIN" ]; then \
 	    echo "Building with $$CROSS_BIN for x86_64-unknown-linux-gnu ..."; \
@@ -306,7 +303,6 @@ release:
 	      echo "Skipping x86_64-unknown-linux-gnu (target not installed and cross not available)"; \
 	    fi; \
 	  fi; \
-	  \
 	  # Build aarch64-apple-darwin (only on macOS) \
 	  if [ "$$HOST_OS" = "Darwin" ]; then \
 	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx aarch64-apple-darwin; then \
@@ -318,7 +314,6 @@ release:
 	  else \
 	    echo "Non-macOS host; skipping aarch64-apple-darwin."; \
 	  fi; \
-	  \
 	  # Package only the selected targets \
 	  TARGETS="x86_64-unknown-linux-gnu aarch64-apple-darwin"; \
 	  echo "Packaging artifacts into $$DIST ..."; \
