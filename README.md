@@ -83,17 +83,17 @@ make build-launcher
 
 - Run the launcher:
 ```bash
-./target/release/aifo-coder --help
+./aifo-coder --help
 ```
 
 - Launch an agent:
 ```bash
-./target/release/aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
+./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
 ```
 
 - Disable AppArmor for a run:
 ```bash
-./target/release/aifo-coder --no-apparmor aider --model o3-mini --yes
+./aifo-coder --no-apparmor aider --model o3-mini --yes
 ```
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
@@ -196,29 +196,29 @@ Summary:
 Use the Rust launcher:
 
 ```bash
-./target/release/aifo-coder {codex|crush|aider} [agent-args...]
+./aifo-coder {codex|crush|aider} [agent-args...]
 ```
 
 Examples:
 
 - Run Codex with a profile and safe sandbox:
 ```bash
-./target/release/aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
+./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
 ```
 
 - Run Crush with debug:
 ```bash
-./target/release/aifo-coder crush --debug
+./aifo-coder crush --debug
 ```
 
 - Run Aider with a specific model:
 ```bash
-./target/release/aifo-coder aider --model o3-mini --yes
+./aifo-coder aider --model o3-mini --yes
 ```
 
 Override the image used by the launcher (use a specific per‑agent image):
 ```bash
-./target/release/aifo-coder --image myrepo/aifo-coder-codex:dev codex --version
+./aifo-coder --image myrepo/aifo-coder-codex:dev codex --version
 ```
 
 ---
@@ -320,7 +320,7 @@ The launcher mounts common config/state from your host to make the tools behave 
 
 Crush example config:
 ```bash
-./target/release/aifo-coder crush --config /workspace/examples/sandbox/crush/crush.json
+./aifo-coder crush --config /workspace/examples/sandbox/crush/crush.json
 ```
 
 ---
