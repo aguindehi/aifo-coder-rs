@@ -1,3 +1,5 @@
+.ONESHELL:
+
 .PHONY: help
 help:
 	@echo ""
@@ -273,71 +275,77 @@ endif
 # Requires: cargo (and optionally cross), appropriate targets installed for non-native builds
 .PHONY: release
 release:
-	@set -e; \
-	BIN="$(BIN_NAME)"; \
-	VERSION="$(VERSION)"; \
-	DIST="$(DIST_DIR)"; \
-	mkdir -p "$$DIST"; \
-	echo "Building release version: $$VERSION"; \
-	# Prefer cross from ~/.cargo/bin; fall back to PATH if present; otherwise empty \
-	if [ -x "$$HOME/.cargo/bin/cross" ]; then CROSS_BIN="$$HOME/.cargo/bin/cross"; \
-	elif command -v cross >/dev/null 2>&1; then CROSS_BIN="$$(command -v cross)"; \
-	else CROSS_BIN=""; fi; \
-	HOST_OS="$$(uname -s)"; \
-	TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin"; \
-	# 1) Build Linux targets with cross if available; never attempt Darwin with cross \
-	if [ -n "$$CROSS_BIN" ]; then \
-	  for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do \
-	    echo "Building with $$CROSS_BIN for $$t ..."; \
-	    "$$CROSS_BIN" build --release --target "$$t" || echo "Warning: build failed for $$t"; \
-	  done; \
-	else \
-	  echo "cross not found; attempting cargo only for installed Linux targets"; \
-	  for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do \
-	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
-	      echo "Building with cargo for $$t ..."; \
-	      cargo build --release --target "$$t" || echo "Warning: build failed for $$t"; \
-	    else \
-	      echo "Skipping $$t (toolchain/target not installed and cross not available)"; \
-	    fi; \
-	  done; \
-	fi; \
-	# 2) Darwin targets: only build on macOS host with cargo if installed; skip elsewhere \
-	if [ "$$HOST_OS" = "Darwin" ]; then \
-	  for t in x86_64-apple-darwin aarch64-apple-darwin; do \
-	    if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
-	      echo "Building with cargo (macOS host) for $$t ..."; \
-	      cargo build --release --target "$$t" || echo "Warning: build failed for $$t"; \
-	    else \
-	      echo "Darwin target $$t not installed on macOS host. Skipping."; \
-	    fi; \
-	  done; \
-	else \
-	  echo "Non-macOS host detected; skipping Darwin targets (no cross images available)."; \
-	fi; \
-	# 3) Package any successfully built binaries \
-	echo "Packaging artifacts into $$DIST ..."; \
-	for t in $$TARGETS; do \
-	  case "$$t" in \
-	    *apple-darwin) OS=macos ;; \
-	    *linux-gnu) OS=linux ;; \
-	    *) OS=unknown ;; \
-	  esac; \
-	  ARCH="$${t%%-*}"; \
-	  BINPATH="target/$$t/release/$$BIN"; \
-	  [ -f "$$BINPATH" ] || { echo "Skipping $$t (binary not found)"; continue; }; \
-	  PKG="$$BIN-$$VERSION-$$OS-$$ARCH"; \
-	  STAGE="$$DIST/$$PKG"; \
-	  rm -rf "$$STAGE"; mkdir -p "$$STAGE"; \
-	  install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"; \
-	  [ -f README.md ] && cp README.md "$$STAGE/"; \
-	  [ -d examples ] && cp -a examples "$$STAGE/"; \
-	  tar -C "$$DIST" -czf "$$DIST/$$PKG.tar.gz" "$$PKG"; \
-	  echo "Wrote $$DIST/$$PKG.tar.gz"; \
-	  if [ "$$OS" = "linux" ]; then \
-	    for distro in ubuntu arch; do \
-	      cp "$$DIST/$$PKG.tar.gz" "$$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
-	      echo "Wrote $$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"; \
-	    done; \
-	  fi; \
+	@set -e
+	BIN="$(BIN_NAME)"
+	VERSION="$(VERSION)"
+	DIST="$(DIST_DIR)"
+	mkdir -p "$$DIST"
+	echo "Building release version: $$VERSION"
+
+	# Detect cross (optional)
+	CROSS_BIN=""
+	if [ -x "$$HOME/.cargo/bin/cross" ]; then
+	  CROSS_BIN="$$HOME/.cargo/bin/cross"
+	elif command -v cross >/dev/null 2>&1; then
+	  CROSS_BIN="$$(command -v cross)"
+	fi
+
+	HOST_OS="$$(uname -s)"
+	echo "Host OS: $$HOST_OS"
+
+	# Build x86_64-unknown-linux-gnu
+	if [ -n "$$CROSS_BIN" ]; then
+	  echo "Building with $$CROSS_BIN for x86_64-unknown-linux-gnu ..."
+	  "$$CROSS_BIN" build --release --target x86_64-unknown-linux-gnu || echo "Warning: build failed for x86_64-unknown-linux-gnu"
+	else
+	  echo "cross not found; attempting cargo for x86_64-unknown-linux-gnu if installed"
+	  if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx x86_64-unknown-linux-gnu; then
+	    cargo build --release --target x86_64-unknown-linux-gnu || echo "Warning: build failed for x86_64-unknown-linux-gnu"
+	  else
+	    echo "Skipping x86_64-unknown-linux-gnu (target not installed and cross not available)"
+	  fi
+	fi
+
+	# Build aarch64-apple-darwin (only on macOS)
+	if [ "$$HOST_OS" = "Darwin" ]; then
+	  if command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx aarch64-apple-darwin; then
+	    echo "Building with cargo for aarch64-apple-darwin ..."
+	    cargo build --release --target aarch64-apple-darwin || echo "Warning: build failed for aarch64-apple-darwin"
+	  else
+	    echo "Skipping aarch64-apple-darwin (target not installed)"
+	  fi
+	else
+	  echo "Non-macOS host; skipping aarch64-apple-darwin."
+	fi
+
+	# Package only the selected targets
+	TARGETS="x86_64-unknown-linux-gnu aarch64-apple-darwin"
+	echo "Packaging artifacts into $$DIST ..."
+	for t in $$TARGETS; do
+	  case "$$t" in
+	    *apple-darwin) OS=macos ;;
+	    *linux-gnu) OS=linux ;;
+	    *) OS=unknown ;;
+	  esac
+	  ARCH="$${t%%-*}"
+	  BINPATH="target/$$t/release/$$BIN"
+	  if [ ! -f "$$BINPATH" ]; then
+	    echo "Skipping $$t (binary not found)"
+	    continue
+	  fi
+	  PKG="$$BIN-$$VERSION-$$OS-$$ARCH"
+	  STAGE="$$DIST/$$PKG"
+	  rm -rf "$$STAGE"
+	  mkdir -p "$$STAGE"
+	  install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"
+	  [ -f README.md ] && cp README.md "$$STAGE/"
+	  [ -d examples ] && cp -a examples "$$STAGE/"
+	  tar -C "$$DIST" -czf "$$DIST/$$PKG.tar.gz" "$$PKG"
+	  echo "Wrote $$DIST/$$PKG.tar.gz"
+	  if [ "$$OS" = "linux" ]; then
+	    for distro in ubuntu arch; do
+	      cp "$$DIST/$$PKG.tar.gz" "$$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"
+	      echo "Wrote $$DIST/$$BIN-$$VERSION-$$distro-$$ARCH.tar.gz"
+	    done
+	  fi
 	done
