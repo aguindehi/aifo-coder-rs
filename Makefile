@@ -334,8 +334,17 @@ release:
 	      echo "No container runtime found; install Docker or Podman to cross-compile $$t"; \
 	      continue; \
 	    fi; \
-	    echo "Building for $$t inside $$IMAGE with $$RUNTIME (no host rustup/toolchains) ..."; \
-	    "$$RUNTIME" run --rm -v "$$(pwd)":/project -w /project "$$IMAGE" \
+	    case "$$t" in \
+	      x86_64-*) PLATFORM="linux/amd64" ;; \
+	      aarch64-*|arm64-*) PLATFORM="linux/arm64" ;; \
+	      armv7-*) PLATFORM="linux/arm/v7" ;; \
+	      i686-*) PLATFORM="linux/386" ;; \
+	      riscv64-*) PLATFORM="linux/riscv64" ;; \
+	      *) PLATFORM="" ;; \
+	    esac; \
+	    PLATFORM_ARG=""; [ -n "$$PLATFORM" ] && PLATFORM_ARG="--platform $$PLATFORM"; \
+	    echo "Building for $$t inside $$IMAGE with $$RUNTIME $$PLATFORM_ARG (no host rustup/toolchains) ..."; \
+	    "$$RUNTIME" run $$PLATFORM_ARG --rm -v "$$(pwd)":/project -w /project "$$IMAGE" \
 	      bash -lc "cargo build --release --target '$$t'" || echo "Warning: build failed for $$t"; \
 	  elif [ "$$HOST_OK" -eq 1 ]; then \
 	    echo "Building with cargo for host target $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
