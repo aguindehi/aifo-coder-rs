@@ -116,7 +116,31 @@ fn run_doctor(_verbose: bool) {
         } else {
             pstr
         };
-        eprintln!("  {:14} {}", label, shown);
+        let exists = path.exists();
+        let use_color = atty::is(atty::Stream::Stderr);
+        let (icon, status) = if exists { ("✅", "found") } else { ("❌", "missing") };
+
+        let colored_path = if use_color {
+            if exists {
+                format!("\x1b[32m{}\x1b[0m", shown) // green
+            } else {
+                format!("\x1b[31m{}\x1b[0m", shown) // red
+            }
+        } else {
+            shown
+        };
+
+        let colored_status = if use_color {
+            if exists {
+                format!("\x1b[32m{}\x1b[0m", status) // green
+            } else {
+                format!("\x1b[31m{}\x1b[0m", status) // red
+            }
+        } else {
+            status.to_string()
+        };
+
+        eprintln!("  {:14} {:<40} {} {}", label, colored_path, icon, colored_status);
     };
 
     // Aider files
