@@ -176,7 +176,7 @@ Notes about linkers:
   linker = "x86_64-unknown-linux-gnu-gcc"
 
 Summary:
-- Prefer make release with rustup-installed targets.
+- Prefer make release-for-target with rustup-installed targets.
 - Use make build-launcher for a quick host-only build.
 
 ---
