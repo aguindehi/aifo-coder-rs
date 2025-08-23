@@ -6,6 +6,9 @@ set -e
 IMAGE="${AIFO_DEV_IMAGE:-rust:1-bookworm}"
 WORKDIR="/workspace"
 
+# Ensure common PATHs for rustup and Homebrew on macOS
+export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Detect available tooling on host
 if command -v docker >/dev/null 2>&1; then HAVE_DOCKER=1; else HAVE_DOCKER=0; fi
 if command -v cargo >/dev/null 2>&1; then HAVE_CARGO=1; else HAVE_CARGO=0; fi
