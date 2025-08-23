@@ -51,7 +51,7 @@ help:
 	@echo ""
 	@echo "Install:"
 	@echo ""
-	@echo "  install ..................... Install binary, man page, LICENSE/README and examples"
+	@echo "  install ..................... Install binary, man page, LICENSE/README and examples, then build Docker images locally"
 	@echo ""
 	@echo "Build images:"
 	@echo ""
@@ -492,7 +492,7 @@ release-for-linux:
 release: build-launcher build-app build-dmg release-for-mac release-for-linux
 
 .PHONY: install
-install: build-launcher
+install: build build-launcher
 	@set -e; \
 	BIN="$(BIN_NAME)"; \
 	BINPATH="target/release/$$BIN"; \
