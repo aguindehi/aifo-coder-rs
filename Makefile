@@ -134,7 +134,7 @@ build-codex:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target codex -t $(CODEX_IMAGE) -t "$$RP$(CODEX_IMAGE)" .; \
+	  docker build --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
 	  docker build --target codex -t $(CODEX_IMAGE) .; \
 	fi
@@ -150,7 +150,7 @@ build-crush:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target crush -t $(CRUSH_IMAGE) -t "$$RP$(CRUSH_IMAGE)" .; \
+	  docker build --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
 	  docker build --target crush -t $(CRUSH_IMAGE) .; \
 	fi
@@ -166,7 +166,7 @@ build-aider:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target aider -t $(AIDER_IMAGE) -t "$$RP$(AIDER_IMAGE)" .; \
+	  docker build --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
 	  docker build --target aider -t $(AIDER_IMAGE) .; \
 	fi
@@ -188,7 +188,7 @@ rebuild-codex:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target codex -t $(CODEX_IMAGE) -t "$$RP$(CODEX_IMAGE)" .; \
+	  docker build --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
 	  docker build --no-cache --target codex -t $(CODEX_IMAGE) .; \
 	fi
@@ -204,7 +204,7 @@ rebuild-crush:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) -t "$$RP$(CRUSH_IMAGE)" .; \
+	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
 	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) .; \
 	fi
@@ -220,7 +220,7 @@ rebuild-aider:
 	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target aider -t $(AIDER_IMAGE) -t "$$RP$(AIDER_IMAGE)" .; \
+	  docker build --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
 	  docker build --no-cache --target aider -t $(AIDER_IMAGE) .; \
 	fi
