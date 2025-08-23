@@ -437,7 +437,7 @@ release:
 ifeq ($(shell uname -s),Darwin)
 
 build-app:
-	( \
+	@( \
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
 	DIST="$(DIST_DIR)"; \
@@ -504,7 +504,7 @@ build-app:
 	)
 
 build-dmg: build-app
-	( \
+	@( \
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
 	DIST="$(DIST_DIR)"; \
