@@ -31,6 +31,11 @@ if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder" ]; then
   BIN="./target/debug/aifo-coder"
 fi
 
+# Helper: check if a binary is runnable on this host (avoids Exec format error)
+can_run() {
+  "$1" --version >/dev/null 2>&1
+}
+
 # If cargo is available, rebuild if sources are newer than the current binary
 if command -v cargo >/dev/null 2>&1; then
   NEED_BUILD=0
@@ -48,21 +53,35 @@ if command -v cargo >/dev/null 2>&1; then
   fi
 fi
 
-if [ -x "$BIN" ]; then
+if [ -x "$BIN" ] && can_run "$BIN"; then
   exec "$BIN" "$@"
 fi
 
 if command -v cargo >/dev/null 2>&1; then
   echo "Building aifo-coder (release)..." >&2
   cargo build --release
-  exec ./target/release/aifo-coder "$@"
+  BIN="./target/release/aifo-coder"
+  if [ -x "$BIN" ] && can_run "$BIN"; then
+    exec "$BIN" "$@"
+  fi
 fi
 
 # Try to build inside a container using Docker
 if command -v docker >/dev/null 2>&1; then
   echo "Building aifo-coder (release) using docker and rust:1-bookworm ..." >&2
-  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -v "$HOME/.cargo/registry:/root/.cargo/registry" -v "$HOME/.cargo/git:/root/.cargo/git" -v "$PWD/target:/workspace/target" -w /workspace rust:1-bookworm cargo build --release
-  exec ./target/release/aifo-coder "$@"
+  docker run --rm -u "$(id -u):$(id -g)" \
+    -v "$PWD:/workspace" \
+    -v "$HOME/.cargo/registry:/root/.cargo/registry" \
+    -v "$HOME/.cargo/git:/root/.cargo/git" \
+    -v "$PWD/target:/workspace/target" \
+    -w /workspace rust:1-bookworm cargo build --release
+  BIN="./target/release/aifo-coder"
+  if [ -x "$BIN" ] && can_run "$BIN"; then
+    exec "$BIN" "$@"
+  else
+    echo "Error: built binary at $BIN is not executable on this host (architecture mismatch?)." >&2
+    echo "Try: rm -rf ./target && re-run this script, or install Rust (https://rustup.rs) to build natively." >&2
+  fi
 fi
 
 echo "Error: compiled launcher not found and neither cargo nor Docker is installed." >&2
