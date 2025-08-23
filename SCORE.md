@@ -1,23 +1,23 @@
 # aifo-coder Source Code Scorecard
 
 Date: 2025-08-23
-Time: 13:55
+Time: 14:20
 Author: Amir Guindehi <amir.guindehi@mgb.ch>
 Scope: Rust CLI launcher, Makefile, Dockerfile, AppArmor template, wrapper script, README, packaging targets, CI workflow, unit tests.
 
-Overall grade: A (92/100)
+Overall grade: A (93/100)
 
 Grade summary (category — grade [score/10]):
 - Architecture & Design — A- [9]
-- Rust Code Quality — A- [9]
+- Rust Code Quality — A [10]
 - Security Posture (AppArmor, least privilege) — A- [9]
 - Containerization & Dockerfile — A- [9]
-- Build & Release (Makefile, packaging) — A- [9]
+- Build & Release (Makefile, packaging) — A [10]
 - Cross-Platform Support (macOS/Linux) — A- [9]
 - Documentation — A [10]
 - User Experience (CLI, wrapper) — A [10]
 - Performance & Footprint — B+ [8]
-- Testing & CI — B+ [8]
+- Testing & CI — A- [9]
 
 What improved since last score
 - Unit tests added for helper functions and wired into CI; GitHub Actions now runs cargo test on macOS and Linux.
