@@ -126,43 +126,43 @@ build: build-codex build-crush build-aider
 build-codex:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --target codex -t $(CODEX_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 build-crush:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --target crush -t $(CRUSH_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 build-aider:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --target aider -t $(AIDER_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 build-launcher:
@@ -174,43 +174,43 @@ rebuild: rebuild-codex rebuild-crush rebuild-aider
 rebuild-codex:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 rebuild-crush:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 rebuild-aider:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache

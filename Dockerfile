@@ -2,7 +2,8 @@
 # sharing identical parent layers for maximum cache and storage reuse.
 
 # Base layer: Node image + common OS tools used by all agents
-FROM repository.migros.net/node:22-bookworm-slim AS base
+ARG REGISTRY_PREFIX=
+FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
