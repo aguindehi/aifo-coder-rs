@@ -149,6 +149,7 @@ fn main() -> ExitCode {
         Agent::Codex { args } => ("codex", args.clone()),
         Agent::Crush { args } => ("crush", args.clone()),
         Agent::Aider { args } => ("aider", args.clone()),
+        Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
     };
 
     // Print startup banner before any further diagnostics
