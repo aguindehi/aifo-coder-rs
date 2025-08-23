@@ -30,7 +30,7 @@ help:
 	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
 	@echo "  release-for-mac ............. Build release for the current host (calls release-for-target)"
 	@echo "  release-for-linux ........... Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)"
-	@echo "  release ..................... Aggregate: build both mac (host) and Linux"
+	@echo "  release ..................... Aggregate: build launcher, mac .app + .dmg, and both mac (host) and Linux"
 	@echo "                                Hints: set RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu'"
 	@echo ""
 	@echo "Build launcher:"
@@ -442,8 +442,8 @@ release-for-mac: release-for-target
 release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
-# Build both mac (host) and Linux
-release: release-for-mac release-for-linux
+# Build both mac (host) and Linux, and also build launcher and mac app/dmg
+release: build-launcher build-app build-dmg release-for-mac release-for-linux
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
