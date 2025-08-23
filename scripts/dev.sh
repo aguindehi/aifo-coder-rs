@@ -9,6 +9,11 @@ WORKDIR="/workspace"
 # Ensure common PATHs for rustup and Homebrew on macOS
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# Initialize macOS default PATH with path_helper if available
+if [ -x /usr/libexec/path_helper ]; then
+  eval "$(/usr/libexec/path_helper -s)"
+fi
+
 # Initialize Homebrew environment (helps when non-interactive shells miss brew paths)
 if [ -x /opt/homebrew/bin/brew ]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
