@@ -140,7 +140,14 @@ fn run_doctor(_verbose: bool) {
             status.to_string()
         };
 
-        eprintln!("  {:14} {:<40} {} {}", label, colored_path, icon, colored_status);
+        // Align icons/status in a fixed column independent of ANSI color codes.
+        let label_width: usize = 14;
+        let path_col: usize = 40; // visible width target for the displayed path
+        let visible_len = shown.chars().count(); // approximate display width without ANSI
+        let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
+        let padding = " ".repeat(pad_spaces);
+
+        eprintln!("  {:label_width$} {}{} {} {}", label, colored_path, padding, icon, colored_status, label_width=label_width);
     };
 
     // Aider files
