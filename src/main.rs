@@ -109,7 +109,7 @@ fn run_doctor(_verbose: bool) {
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
-    let mut show = |label: &str, path: std::path::PathBuf| {
+    let show = |label: &str, path: std::path::PathBuf| {
         let pstr = path.display().to_string();
         let shown = if pstr.starts_with(&home_str) {
             format!("~{}", &pstr[home_str.len()..])
@@ -119,6 +119,13 @@ fn run_doctor(_verbose: bool) {
         let exists = path.exists();
         let use_color = atty::is(atty::Stream::Stderr);
         let (icon, status) = if exists { ("✅", "found") } else { ("❌", "missing") };
+
+        // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
+        let label_width: usize = 14;
+        let path_col: usize = 40; // visible width target for the displayed path
+        let visible_len = shown.chars().count(); // approximate display width without ANSI
+        let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
+        let padding = " ".repeat(pad_spaces);
 
         let colored_path = if use_color {
             if exists {
@@ -139,13 +146,6 @@ fn run_doctor(_verbose: bool) {
         } else {
             status.to_string()
         };
-
-        // Align icons/status in a fixed column independent of ANSI color codes.
-        let label_width: usize = 14;
-        let path_col: usize = 40; // visible width target for the displayed path
-        let visible_len = shown.chars().count(); // approximate display width without ANSI
-        let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
-        let padding = " ".repeat(pad_spaces);
 
         eprintln!("  {:label_width$} {}{} {} {}", label, colored_path, padding, icon, colored_status, label_width=label_width);
     };
