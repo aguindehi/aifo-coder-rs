@@ -77,15 +77,49 @@ pub fn preferred_registry_prefix() -> String {
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
+            eprintln!("aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
             return String::new();
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
+        eprintln!("aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'", s);
         return s;
     }
+
+    // Prefer probing with curl for HTTPS reachability using short timeouts.
+    if which("curl").is_ok() {
+        eprintln!("aifo-coder: checking https://repository.migros.net availability with: curl --connect-timeout 3 --max-time 2 -sSfI ...");
+        let status = Command::new("curl")
+            .args([
+                "--connect-timeout",
+                "3",
+                "--max-time",
+                "2",
+                "-sSfI",
+                "https://repository.migros.net",
+            ])
+            .status();
+        if let Ok(st) = status {
+            if st.success() {
+                eprintln!("aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
+                return "repository.migros.net/".to_string();
+            } else {
+                eprintln!("aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
+                return String::new();
+            }
+        } else {
+            eprintln!("aifo-coder: curl invocation failed; falling back to TCP reachability check.");
+        }
+    } else {
+        eprintln!("aifo-coder: curl not found; falling back to TCP reachability check.");
+    }
+
+    // Fallback quick TCP probe (short timeout).
     if is_host_port_reachable("repository.migros.net", 443, 300) {
+        eprintln!("aifo-coder: repository.migros.net appears reachable via TCP; using registry prefix 'repository.migros.net/'.");
         "repository.migros.net/".to_string()
     } else {
+        eprintln!("aifo-coder: repository.migros.net not reachable via TCP; using Docker Hub (no prefix).");
         String::new()
     }
 }
