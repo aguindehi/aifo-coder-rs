@@ -36,6 +36,13 @@ can_run() {
   "$1" --version >/dev/null 2>&1
 }
 
+# If an installed system binary exists (not this script), prefer it
+SYS_BIN="$(command -v aifo-coder 2>/dev/null || true)"
+THIS_BIN="$(command -v -- "$0" 2>/dev/null || echo "$0")"
+if [ -n "$SYS_BIN" ] && [ "$SYS_BIN" != "$THIS_BIN" ] && can_run "$SYS_BIN"; then
+  exec "$SYS_BIN" "$@"
+fi
+
 # If cargo is available, rebuild if sources are newer than the current binary
 if command -v cargo >/dev/null 2>&1; then
   NEED_BUILD=0
@@ -69,7 +76,15 @@ fi
 # Try to build inside a container using Docker
 if command -v docker >/dev/null 2>&1; then
   echo "Building aifo-coder (release) using docker and rust:1-bookworm ..." >&2
-  docker run --rm -u "$(id -u):$(id -g)" \
+  PLAT=""
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$arch" in
+    x86_64|amd64) PLAT="linux/amd64" ;;
+    aarch64|arm64) PLAT="linux/arm64" ;;
+    *) PLAT="" ;;
+  endac
+  if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
+  docker run $DOCKER_PLATFORM_ARGS --rm -u "$(id -u):$(id -g)" \
     -v "$PWD:/workspace" \
     -v "$HOME/.cargo/registry:/root/.cargo/registry" \
     -v "$HOME/.cargo/git:/root/.cargo/git" \
