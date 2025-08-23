@@ -112,7 +112,8 @@ fn main() -> ExitCode {
         .clone()
         .unwrap_or_else(|| default_image_for(agent));
 
-    match build_docker_cmd(agent, &args, &image) {
+    let apparmor_profile = desired_apparmor_profile();
+    match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok(mut cmd) => {
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting
@@ -164,7 +165,27 @@ fn docker_supports_apparmor() -> bool {
     s.contains("apparmor")
 }
 
-fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str) -> io::Result<Command> {
+/// Choose the AppArmor profile to use, if any.
+/// - If Docker supports AppArmor, prefer an explicit override via AIFO_CODER_APPARMOR_PROFILE.
+/// - On macOS/Windows hosts (Docker-in-VM), default to docker-default to avoid requiring a host-installed custom profile.
+/// - On native Linux hosts, default to the custom "aifo-coder" profile.
+fn desired_apparmor_profile() -> Option<String> {
+    if !docker_supports_apparmor() {
+        return None;
+    }
+    if let Ok(p) = env::var("AIFO_CODER_APPARMOR_PROFILE") {
+        if !p.trim().is_empty() {
+            return Some(p);
+        }
+    }
+    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+        Some("docker-default".to_string())
+    } else {
+        Some("aifo-coder".to_string())
+    }
+}
+
+fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_profile: Option<&str>) -> io::Result<Command> {
     let runtime = container_runtime_path()?;
 
     // TTY flags
