@@ -10,7 +10,7 @@ use std::process::{Command, ExitCode};
 // use which::which; // now in aifo_coder lib
 use libc;
 use aifo_coder::{
-    container_runtime_path, docker_supports_apparmor, desired_apparmor_profile, path_pair,
+    container_runtime_path, docker_supports_apparmor, desired_apparmor_profile, preferred_registry_prefix, path_pair,
     ensure_file_exists, shell_join, shell_escape, candidate_lock_paths,
 };
 
@@ -159,9 +159,15 @@ fn default_image_for(agent: &str) -> String {
             return img;
         }
     }
-    let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+    let name_prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
-    format!("{prefix}-{agent}:{tag}")
+    let image_name = format!("{name_prefix}-{agent}:{tag}");
+    let registry = preferred_registry_prefix();
+    if registry.is_empty() {
+        image_name
+    } else {
+        format!("{registry}{image_name}")
+    }
 }
 
 

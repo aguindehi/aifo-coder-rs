@@ -81,6 +81,13 @@ Tag used to construct default image references when
 is not set. Defaults to
 .BR latest .
 .TP
+.B AIFO_CODER_REGISTRY_PREFIX
+Override the Docker registry prefix for image pulls. If unset, the launcher tests connectivity to
+https://repository.migros.net
+and uses
+.B repository.migros.net/
+when reachable; otherwise no registry prefix is used and Docker Hub is assumed. Set to an empty string to force Docker Hub.
+.TP
 .B AIFO_CODER_APPARMOR_PROFILE
 If set to a non\-empty string on Linux hosts whose Docker daemon reports
 AppArmor support, this value is applied as the container's AppArmor profile

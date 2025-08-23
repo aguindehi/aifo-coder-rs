@@ -51,9 +51,8 @@ aifo‑coder takes a “contain what matters, nothing more” approach:
 - Principle of least privilege
   - UID/GID mapping ensures any files written inside `/workspace` are owned by your host user—no unexpected root‑owned files.
   - No additional host devices, sockets or secrets are mounted.
-- AppArmor (optional, via Docker only)
-  - When supported by Docker and not disabled, the launcher adds `--security-opt apparmor=<profile>`.
-  - Disable via the `--no-apparmor` flag on the Rust CLI.
+- AppArmor (via Docker)
+  - When supported by Docker, the launcher adds `--security-opt apparmor=<profile>`.
 
 ---
 
@@ -99,10 +98,6 @@ make build-launcher
 ./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
 ```
 
-- Disable AppArmor for a run:
-```bash
-./aifo-coder --no-apparmor aider --model o3-mini --yes
-```
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
 
@@ -268,6 +263,8 @@ When you run `aifo-coder ...` it will:
    - AppArmor (optional): adds `--security-opt apparmor=<profile>` if supported by Docker
    - Per‑agent image selection:
      - Defaults to `AIFO_CODER_IMAGE` if set; otherwise `IMAGE_PREFIX-<agent>:TAG` (e.g., `aifo-coder-codex:latest`)
+     - Registry auto-selection: tries `repository.migros.net/` first; if reachable, images are referenced as `repository.migros.net/IMAGE_PREFIX-<agent>:TAG`; otherwise no registry prefix is used and Docker Hub is assumed
+     - Override the registry choice by setting `AIFO_CODER_REGISTRY_PREFIX` (set to empty to force Docker Hub)
 4. Execute the agent and return its exit code.
 
 ---
@@ -320,10 +317,10 @@ Launcher control variables (read by the Rust launcher):
 | AIFO_CODER_IMAGE          | If set, overrides the full image reference for all agents     |
 | AIFO_CODER_IMAGE_PREFIX   | Default: `aifo-coder`                                         |
 | AIFO_CODER_IMAGE_TAG      | Default: `latest`                                             |
-| AIFO_CODER_NO_APPARMOR    | force disable AppArmor (same effect as `--no-apparmor`)       |
 | AIFO_CODER_CONTAINER_NAME | If set, assigns the container name                            |
 | AIFO_CODER_HOSTNAME       | If set, assigns the container hostname                        |
 | AIFO_CODER_APPARMOR_PROFILE | Override AppArmor profile; defaults: docker-default on Docker-in-VM (macOS/Windows), aifo-coder on native Linux |
+| AIFO_CODER_REGISTRY_PREFIX | If set, prepended to image refs (e.g., `repository.migros.net/`). If unset, the launcher tests reachability of `repository.migros.net` and uses it when available; set to empty to force Docker Hub |
 
 ---
 

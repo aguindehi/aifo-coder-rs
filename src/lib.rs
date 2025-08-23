@@ -4,6 +4,8 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 use which::which;
 
 /// Locate the Docker runtime binary.
@@ -48,6 +50,43 @@ pub fn desired_apparmor_profile() -> Option<String> {
         Some("docker-default".to_string())
     } else {
         Some("aifo-coder".to_string())
+    }
+}
+
+fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
+    let addrs = (host, port).to_socket_addrs();
+    if let Ok(addrs) = addrs {
+        let timeout = Duration::from_millis(timeout_ms);
+        for addr in addrs {
+            if TcpStream::connect_timeout(&addr, timeout).is_ok() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Determine the preferred registry prefix for image references.
+/// Precedence:
+/// 1) If AIFO_CODER_REGISTRY_PREFIX is set:
+///    - empty string forces Docker Hub (no prefix)
+///    - non-empty is normalized to end with a single '/' and used as-is
+/// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
+/// 3) Fallback: empty string (Docker Hub)
+pub fn preferred_registry_prefix() -> String {
+    if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
+        let trimmed = pref.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let mut s = trimmed.trim_end_matches('/').to_string();
+        s.push('/');
+        return s;
+    }
+    if is_host_port_reachable("repository.migros.net", 443, 300) {
+        "repository.migros.net/".to_string()
+    } else {
+        String::new()
     }
 }
 

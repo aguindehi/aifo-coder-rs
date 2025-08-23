@@ -124,13 +124,37 @@ AIDER_IMAGE ?= $(IMAGE_PREFIX)-aider:$(TAG)
 build: build-codex build-crush build-aider
 
 build-codex:
-	docker build --target codex -t $(CODEX_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --target codex -t $(CODEX_IMAGE) -t "$$RP$(CODEX_IMAGE)" .; \
+	else \
+	  docker build --target codex -t $(CODEX_IMAGE) .; \
+	fi
 
 build-crush:
-	docker build --target crush -t $(CRUSH_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --target crush -t $(CRUSH_IMAGE) -t "$$RP$(CRUSH_IMAGE)" .; \
+	else \
+	  docker build --target crush -t $(CRUSH_IMAGE) .; \
+	fi
 
 build-aider:
-	docker build --target aider -t $(AIDER_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --target aider -t $(AIDER_IMAGE) -t "$$RP$(AIDER_IMAGE)" .; \
+	else \
+	  docker build --target aider -t $(AIDER_IMAGE) .; \
+	fi
 
 build-launcher:
 	cargo build --release
@@ -139,13 +163,37 @@ build-launcher:
 rebuild: rebuild-codex rebuild-crush rebuild-aider
 
 rebuild-codex:
-	docker build --no-cache --target codex -t $(CODEX_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --no-cache --target codex -t $(CODEX_IMAGE) -t "$$RP$(CODEX_IMAGE)" .; \
+	else \
+	  docker build --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	fi
 
 rebuild-crush:
-	docker build --no-cache --target crush -t $(CRUSH_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) -t "$$RP$(CRUSH_IMAGE)" .; \
+	else \
+	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	fi
 
 rebuild-aider:
-	docker build --no-cache --target aider -t $(AIDER_IMAGE) .
+	@RP=""; \
+	if command -v curl >/dev/null 2>&1 && curl -sSfI https://repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then RP="repository.migros.net/"; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --no-cache --target aider -t $(AIDER_IMAGE) -t "$$RP$(AIDER_IMAGE)" .; \
+	else \
+	  docker build --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache
 .PHONY: rebuild-existing
