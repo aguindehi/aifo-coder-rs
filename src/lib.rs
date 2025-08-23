@@ -45,15 +45,20 @@ pub fn docker_supports_apparmor() -> bool {
 /// Best-effort detection of AppArmor being enabled in the Linux kernel.
 /// Returns true if the kernel facility appears available/enabled.
 fn kernel_apparmor_enabled() -> bool {
-    // Common indicator: /sys/module/apparmor/parameters/enabled contains "Y", "enforce", or "complain"
+    // Prefer authoritative kernel knob when present
     if let Ok(content) = fs::read_to_string("/sys/module/apparmor/parameters/enabled") {
         let c = content.trim().to_lowercase();
         if c.starts_with('y') || c.contains("enforce") || c.contains("complain") || c == "1" || c == "yes" || c == "true" {
-            return true;
+            // Double-check proc LSM interface presence
+            return Path::new("/proc/self/attr/apparmor/current").exists()
+                && Path::new("/proc/self/attr/apparmor/exec").exists();
+        } else {
+            return false;
         }
     }
-    // Fallback: presence of per-process AppArmor attr
+    // Fallback: require both current and exec proc attributes to exist
     Path::new("/proc/self/attr/apparmor/current").exists()
+        && Path::new("/proc/self/attr/apparmor/exec").exists()
 }
 
 /// Choose the AppArmor profile to use, if any.
@@ -65,9 +70,13 @@ pub fn desired_apparmor_profile() -> Option<String> {
         return None;
     }
     if let Ok(p) = env::var("AIFO_CODER_APPARMOR_PROFILE") {
-        if !p.trim().is_empty() {
-            return Some(p);
+        let trimmed = p.trim();
+        let lower = trimmed.to_lowercase();
+        // Allow explicit disabling via env var
+        if trimmed.is_empty() || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str()) {
+            return None;
         }
+        return Some(trimmed.to_string());
     }
     if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
         Some("docker-default".to_string())
