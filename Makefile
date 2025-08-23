@@ -443,6 +443,7 @@ build-app:
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
 	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
 	APP="$(APP_NAME)"; \
 	BUNDLE_ID="$(APP_BUNDLE_ID)"; \
 	arch="$$(uname -m)"; \
@@ -473,40 +474,34 @@ build-app:
 	rm -rf "$$APPROOT"; \
 	install -d -m 0755 "$$MACOS" "$$RES"; \
 	install -m 0755 "$$BINPATH" "$$MACOS/$$BIN"; \
-	ICON_LINE=""; \
 	if [ -n "$$APP_ICON" ] && [ -f "$$APP_ICON" ]; then \
 	  ICON_DST="$$RES/AppIcon.icns"; \
 	  cp "$$APP_ICON" "$$ICON_DST"; \
-	  ICON_LINE="  <key>CFBundleIconFile</key>\n  <string>AppIcon</string>\n"; \
 	fi; \
-	/usr/bin/env printf '%s\n' \
-'<?xml version="1.0" encoding="UTF-8"?>' \
-'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-'<plist version="1.0">' \
-'<dict>' \
-'  <key>CFBundleName</key>' \
-"  <string>$$APP</string>" \
-'  <key>CFBundleDisplayName</key>' \
-"  <string>$$APP</string>" \
-'  <key>CFBundleIdentifier</key>' \
-"  <string>$$BUNDLE_ID</string>" \
-'  <key>CFBundleVersion</key>' \
-"  <string>$$VERSION</string>" \
-'  <key>CFBundleShortVersionString</key>' \
-"  <string>$$VERSION</string>" \
-'  <key>CFBundleExecutable</key>' \
-"  <string>$$BIN</string>" \
-'  <key>LSMinimumSystemVersion</key>' \
-'  <string>11.0</string>' \
-'</dict>' \
-'</plist>' > "$$CONTENTS/Info.plist"; \
-	if [ -n "$$ICON_LINE" ]; then \
-	  awk -v add="$$ICON_LINE" '1;/<dict>/{p=1;print;next}p&&/<key>CFBundleName/{print;next}END{}' "$$CONTENTS/Info.plist" >/dev/null 2>&1 || true; \
-	  # Re-open and insert icon line above closing dict \
-	  tmpfile="$$CONTENTS/Info.plist.tmp"; \
-	  awk -v add="$$ICON_LINE" 'BEGIN{inserted=0} {if(!inserted && $$0 ~ /<\/dict>/){print add; inserted=1} print} END{}' "$$CONTENTS/Info.plist" > "$$tmpfile"; \
-	  mv "$$tmpfile" "$$CONTENTS/Info.plist"; \
-	fi; \
+	cat > "$$CONTENTS/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>$$APP</string>
+  <key>CFBundleDisplayName</key>
+  <string>$$APP</string>
+  <key>CFBundleIdentifier</key>
+  <string>$$BUNDLE_ID</string>
+  <key>CFBundleVersion</key>
+  <string>$$VERSION</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$$VERSION</string>
+  <key>CFBundleExecutable</key>
+  <string>$$BIN</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+</dict>
+</plist>
+EOF
 	echo "Built $$APPROOT"
 
 build-dmg: build-app
