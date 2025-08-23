@@ -476,39 +476,30 @@ build-app:
 	  ICON_DST="$$RES/AppIcon.icns"
 	  cp "$$APP_ICON" "$$ICON_DST"
 	fi
-	cat > "$$CONTENTS/Info.plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleName</key>
-  <string>${APP}</string>
-  <key>CFBundleDisplayName</key>
-  <string>${APP}</string>
-  <key>CFBundleIdentifier</key>
-  <string>${BUNDLE_ID}</string>
-  <key>CFBundleVersion</key>
-  <string>${VERSION}</string>
-  <key>CFBundleShortVersionString</key>
-  <string>${VERSION}</string>
-  <key>CFBundleExecutable</key>
-  <string>${BIN}</string>
-  <key>CFBundleIconFile</key>
-  <string>AppIcon</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>11.0</string>
-</dict>
-</plist>
-EOF
-	# Replace placeholders in Info.plist safely
-	sed -i '' -e "s|\$$${APP}|$${APP}|g" \
-	          -e "s|\$$${BUNDLE_ID}|$${BUNDLE_ID}|g" \
-	          -e "s|\$$${VERSION}|$${VERSION}|g" \
-	          -e "s|\$$${BIN}|$${BIN}|g" "$$CONTENTS/Info.plist" 2>/dev/null || \
-	sed -i -e "s|\$$${APP}|$${APP}|g" \
-	       -e "s|\$$${BUNDLE_ID}|$${BUNDLE_ID}|g" \
-	       -e "s|\$$${VERSION}|$${VERSION}|g" \
-	       -e "s|\$$${BIN}|$${BIN}|g" "$$CONTENTS/Info.plist"
+	cat > "$$CONTENTS/Info.plist" <<-EOF
+	<?xml version="1.0" encoding="UTF-8"?>
+	<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+	<plist version="1.0">
+	<dict>
+	  <key>CFBundleName</key>
+	  <string>$$APP</string>
+	  <key>CFBundleDisplayName</key>
+	  <string>$$APP</string>
+	  <key>CFBundleIdentifier</key>
+	  <string>$$BUNDLE_ID</string>
+	  <key>CFBundleVersion</key>
+	  <string>$$VERSION</string>
+	  <key>CFBundleShortVersionString</key>
+	  <string>$$VERSION</string>
+	  <key>CFBundleExecutable</key>
+	  <string>$$BIN</string>
+	  <key>CFBundleIconFile</key>
+	  <string>AppIcon</string>
+	  <key>LSMinimumSystemVersion</key>
+	  <string>11.0</string>
+	</dict>
+	</plist>
+	EOF
 	echo "Built $$APPROOT"
 
 build-dmg: build-app
