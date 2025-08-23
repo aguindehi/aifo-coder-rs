@@ -9,6 +9,19 @@ WORKDIR="/workspace"
 # Ensure common PATHs for rustup and Homebrew on macOS
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# Initialize Homebrew environment (helps when non-interactive shells miss brew paths)
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif command -v brew >/dev/null 2>&1; then
+  eval "$(brew shellenv)"
+fi
+
+# Source rustup environment if available (ensures cargo in PATH)
+if [ -f "$HOME/.cargo/env" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.cargo/env"
+fi
+
 # Detect available tooling on host
 if command -v docker >/dev/null 2>&1; then HAVE_DOCKER=1; else HAVE_DOCKER=0; fi
 if command -v cargo >/dev/null 2>&1; then HAVE_CARGO=1; else HAVE_CARGO=0; fi
