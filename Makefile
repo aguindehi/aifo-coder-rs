@@ -437,86 +437,87 @@ release:
 ifeq ($(shell uname -s),Darwin)
 
 build-app:
-	sh -lc 'set -e
-	BIN="$(BIN_NAME)"
-	VERSION="$(VERSION)"
-	DIST="$(DIST_DIR)"
-	APP="$(APP_NAME)"
-	BUNDLE_ID="$(APP_BUNDLE_ID)"
-	APP_ICON="$(APP_ICON)"
-	mkdir -p "$DIST"
-	arch="$$(uname -m)"
-	case "$$arch" in
-	  arm64|aarch64) TGT="aarch64-apple-darwin" ;;
-	  x86_64) TGT="x86_64-apple-darwin" ;;
-	  *) echo "Unsupported macOS architecture: $$arch" >&2; exit 1 ;;
-	esac
-	if command -v rustup >/dev/null 2>&1; then
-	  rustup target add "$$TGT" >/dev/null 2>&1 || true
-	  BUILD="rustup run stable cargo build --release --target $$TGT"
-	else
-	  BUILD="cargo build --release --target $$TGT"
-	fi
-	echo "Building $$BIN for $$TGT ..."
-	eval "$$BUILD"
-	BINPATH="target/$$TGT/release/$$BIN"
-	BIN_US="$${BIN//-/_}"
-	[ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"
-	if [ ! -f "$$BINPATH" ]; then
-	  echo "Binary not found at $$BINPATH" >&2
-	  exit 1
-	fi
-	APPROOT="$$DIST/$$APP.app"
-	CONTENTS="$$APPROOT/Contents"
-	MACOS="$$CONTENTS/MacOS"
-	RES="$$CONTENTS/Resources"
-	rm -rf "$$APPROOT"
-	install -d -m 0755 "$$MACOS" "$$RES"
-	install -m 0755 "$$BINPATH" "$$MACOS/$$BIN"
-	if [ -n "$$APP_ICON" ] && [ -f "$$APP_ICON" ]; then
-	  ICON_DST="$$RES/AppIcon.icns"
-	  cp "$$APP_ICON" "$$ICON_DST"
-	fi
-	cat > "$$CONTENTS/Info.plist" <<-EOF
-	<?xml version="1.0" encoding="UTF-8"?>
-	<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-	<plist version="1.0">
-	<dict>
-	  <key>CFBundleName</key>
-	  <string>$$APP</string>
-	  <key>CFBundleDisplayName</key>
-	  <string>$$APP</string>
-	  <key>CFBundleIdentifier</key>
-	  <string>$$BUNDLE_ID</string>
-	  <key>CFBundleVersion</key>
-	  <string>$$VERSION</string>
-	  <key>CFBundleShortVersionString</key>
-	  <string>$$VERSION</string>
-	  <key>CFBundleExecutable</key>
-	  <string>$$BIN</string>
-	  <key>CFBundleIconFile</key>
-	  <string>AppIcon</string>
-	  <key>LSMinimumSystemVersion</key>
-	  <string>11.0</string>
-	</dict>
-	</plist>
-	EOF
-	echo "Built $$APPROOT"'
+	( \
+	BIN="$(BIN_NAME)"; \
+	VERSION="$(VERSION)"; \
+	DIST="$(DIST_DIR)"; \
+	APP="$(APP_NAME)"; \
+	BUNDLE_ID="$(APP_BUNDLE_ID)"; \
+	APP_ICON="$(APP_ICON)"; \
+	mkdir -p "$$DIST"; \
+	arch="$$(uname -m)"; \
+	case "$$arch" in \
+	  arm64|aarch64) TGT="aarch64-apple-darwin" ;; \
+	  x86_64) TGT="x86_64-apple-darwin" ;; \
+	  *) echo "Unsupported macOS architecture: $$arch" >&2; exit 1 ;; \
+	esac; \
+	echo "Building $$BIN for $$TGT ..."; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  rustup target add "$$TGT" >/dev/null 2>&1 || true; \
+	  rustup run stable cargo build --release --target "$$TGT"; \
+	else \
+	  cargo build --release --target "$$TGT"; \
+	fi; \
+	BINPATH="target/$$TGT/release/$$BIN"; \
+	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
+	[ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"; \
+	if [ ! -f "$$BINPATH" ]; then \
+	  echo "Binary not found at $$BINPATH" >&2; \
+	  exit 1; \
+	fi; \
+	APPROOT="$$DIST/$$APP.app"; \
+	CONTENTS="$$APPROOT/Contents"; \
+	MACOS="$$CONTENTS/MacOS"; \
+	RES="$$CONTENTS/Resources"; \
+	rm -rf "$$APPROOT"; \
+	install -d -m 0755 "$$MACOS" "$$RES"; \
+	install -m 0755 "$$BINPATH" "$$MACOS/$$BIN"; \
+	if [ -n "$$APP_ICON" ] && [ -f "$$APP_ICON" ]; then \
+	  ICON_DST="$$RES/AppIcon.icns"; \
+	  cp "$$APP_ICON" "$$ICON_DST"; \
+	fi; \
+	printf '%s\n' \
+'<?xml version="1.0" encoding="UTF-8"?>' \
+'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+'<plist version="1.0">' \
+'<dict>' \
+'  <key>CFBundleName</key>' \
+"  <string>$$APP</string>" \
+'  <key>CFBundleDisplayName</key>' \
+"  <string>$$APP</string>" \
+'  <key>CFBundleIdentifier</key>' \
+"  <string>$$BUNDLE_ID</string>" \
+'  <key>CFBundleVersion</key>' \
+"  <string>$$VERSION</string>" \
+'  <key>CFBundleShortVersionString</key>' \
+"  <string>$$VERSION</string>" \
+'  <key>CFBundleExecutable</key>' \
+"  <string>$$BIN</string>" \
+'  <key>CFBundleIconFile</key>' \
+'  <string>AppIcon</string>' \
+'  <key>LSMinimumSystemVersion</key>' \
+'  <string>11.0</string>' \
+'</dict>' \
+'</plist>' \
+> "$$CONTENTS/Info.plist"; \
+	echo "Built $$APPROOT"; \
+	)
 
 build-dmg: build-app
-	sh -lc 'set -e
-	BIN="$(BIN_NAME)"
-	VERSION="$(VERSION)"
-	DIST="$(DIST_DIR)"
-	APP="$(APP_NAME)"
-	DMG="$(DMG_NAME)"
-	APPROOT="$$DIST/$$APP.app"
-	[ -d "$$APPROOT" ] || { echo "App bundle not found at $$APPROOT; run '\''make build-app'\'' first." >&2; exit 1; }
-	DMG_PATH="$$DIST/$$DMG.dmg"
-	command -v hdiutil >/dev/null 2>&1 || { echo "hdiutil not found; cannot build DMG." >&2; exit 1; }
-	echo "Creating $$DMG_PATH ..."
-	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"
-	echo "Wrote $$DMG_PATH"'
+	( \
+	BIN="$(BIN_NAME)"; \
+	VERSION="$(VERSION)"; \
+	DIST="$(DIST_DIR)"; \
+	APP="$(APP_NAME)"; \
+	DMG="$(DMG_NAME)"; \
+	APPROOT="$$DIST/$$APP.app"; \
+	if [ ! -d "$$APPROOT" ]; then echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; fi; \
+	DMG_PATH="$$DIST/$$DMG.dmg"; \
+	if ! command -v hdiutil >/dev/null 2>&1; then echo "hdiutil not found; cannot build DMG." >&2; exit 1; fi; \
+	echo "Creating $$DMG_PATH ..."; \
+	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"; \
+	echo "Wrote $$DMG_PATH"; \
+	)
 
 else
 
