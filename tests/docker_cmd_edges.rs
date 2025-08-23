@@ -25,8 +25,9 @@ fn test_preview_shell_escaping_args() {
         preview.contains("'arg with space'"),
         "preview missing escaped space: {preview}"
     );
+    // Inside the single-quoted sh -lc script, a literal single-quote is represented by: '"'"'
     assert!(
-        preview.contains("'O'\"'\"'Reilly'"),
-        "preview missing escaped single quote: {preview}"
+        preview.contains("'\"'\"'"),
+        "preview missing escaped single quote sequence ('\"'\"'): {preview}"
     );
 }

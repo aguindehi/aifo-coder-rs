@@ -1,3 +1,9 @@
+2025-08-24 11:15 Amir Guindehi <amir.guindehi@mgb.ch>
+
+test: relax preview assert for single-quote escaping
+
+- tests/docker_cmd_edges.rs: Adjust assertion to look for the POSIX single-quote escape sequence ('\"'\"') within the sh -lc script, making the test robust to nested quoting in the preview.
+
 2025-08-24 10:22 Amir Guindehi <amir.guindehi@mgb.ch>
 
 score: update scorecard; reflect Linux smoke and new tests
