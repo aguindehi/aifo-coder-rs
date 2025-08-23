@@ -321,23 +321,16 @@ fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_p
 
     // AppArmor security flags
     let mut security_flags: Vec<OsString> = Vec::new();
-    let no_aa = env::var("AIFO_CODER_NO_APPARMOR").ok().filter(|v| v == "1").is_some();
-    let env_profile = env::var("AIFO_CODER_APPARMOR_PROFILE").ok();
-    let use_aa = (!no_aa) && (env_profile.is_some() || env::var("AIFO_CODER_USE_APPARMOR").ok().as_deref() == Some("1"));
-    let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
-    let _default_profile = "aifo-coder".to_string();
-    let profile = env_profile.unwrap_or_else(|| if use_aa { _default_profile } else { String::new() });
-    if !profile.is_empty() {
+    if let Some(profile) = apparmor_profile {
         if docker_supports_apparmor() {
             security_flags.push(OsString::from("--security-opt"));
             security_flags.push(OsString::from(format!("apparmor={profile}")));
         } else {
-            eprintln!(
-                "Warning: AppArmor profile '{}' requested but not supported by the Docker daemon. Continuing without AppArmor.",
-                profile
-            );
+            eprintln!("Warning: Docker daemon does not report AppArmor support. Continuing without AppArmor.");
         }
     }
+    // Image prefix used for container naming
+    let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
 
     // Container name/hostname
     let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
