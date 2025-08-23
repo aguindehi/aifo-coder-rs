@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::env;
 use std::process::ExitCode;
+use std::io;
 use aifo_coder::{desired_apparmor_profile, preferred_registry_prefix, build_docker_cmd, acquire_lock};
 
 

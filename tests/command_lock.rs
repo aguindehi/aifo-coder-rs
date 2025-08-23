@@ -1,5 +1,4 @@
 use std::io;
-use std::path::PathBuf;
 use aifo_coder as aifo;
 
 #[test]
