@@ -117,7 +117,10 @@ A quick reference of all Makefile targets.
 | rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
-| release                   | Release    | Build multi‑platform release archives into dist/ (native rustup toolchains)                   |
+| release-for-target        | Release    | Build release archives into dist/ for targets in RELEASE_TARGETS or host default              |
+| release-for-mac           | Release    | Build release for the current host (calls release-for-target)                                 |
+| release-for-linux         | Release    | Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)                                |
+| release                   | Release    | Aggregate: build both mac (host) and Linux                                                    |
 | build-app                 | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
 | build-dmg                 | Release    | Build macOS .dmg image from the .app (Darwin hosts only)                                     |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
@@ -155,10 +158,14 @@ Variables used by these targets:
 This repository uses native rustup toolchains for all builds. No cross-rs containers or Cross.toml are used.
 
 Recommended approach:
-- Use the Makefile’s release target to build and package binaries:
+- Use release-for-target to build and package binaries for the current host or selected targets:
+  - make release-for-target
+- Build Linux artifacts from macOS quickly:
+  - make release-for-linux
+- Build both macOS (host) and Linux:
   - make release
-- Optionally specify multiple targets:
-  - RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu' make release
+- Specify multiple targets explicitly:
+  - RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu' make release-for-target
 - Ensure required Rust targets are installed:
   - rustup target add <triple> for each target you build
 

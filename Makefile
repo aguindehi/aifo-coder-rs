@@ -14,7 +14,7 @@ help:
 	@echo "  DIST_DIR (dist) ............. Output directory for release archives"
 	@echo "  BIN_NAME (aifo-coder) ....... Binary name used in release packaging"
 	@echo "  VERSION ..................... Version inferred from Cargo.toml or git describe"
-	@echo "  RELEASE_TARGETS ............. Space-separated Rust targets for 'make release' (overrides auto-detect)"
+	@echo "  RELEASE_TARGETS ............. Space-separated Rust targets for 'make release-for-target' (overrides auto-detect)"
 	@echo "  CONTAINER ................... Container name for docker-enter (optional)"
 	@echo "  CODEX_IMAGE ................. Full image ref for Codex ($${IMAGE_PREFIX}-codex:$${TAG})"
 	@echo "  CRUSH_IMAGE ................. Full image ref for Crush ($${IMAGE_PREFIX}-crush:$${TAG})"
@@ -27,7 +27,10 @@ help:
 	@echo ""
 	@echo "Release and cross-compile:"
 	@echo ""
-	@echo "  release ..................... Build multi-platform release archives into dist/"
+	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
+	@echo "  release-for-mac ............. Build release for the current host (calls release-for-target)"
+	@echo "  release-for-linux ........... Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)"
+	@echo "  release ..................... Aggregate: build both mac (host) and Linux"
 	@echo "                                Hints: set RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu'"
 	@echo ""
 	@echo "Build launcher:"
@@ -306,8 +309,8 @@ APP_ICON ?=
 
 # Build release binaries and package archives for macOS and Linux (Ubuntu/Arch)
 # Requires: cargo; install non-native targets via rustup and any required linkers
-.PHONY: release
-release:
+.PHONY: release-for-target release-for-mac release-for-linux release
+release-for-target:
 	@set -e; \
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
@@ -432,6 +435,15 @@ release:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi
+
+# Convenience targets wrapping release-for-target
+release-for-mac: release-for-target
+
+release-for-linux:
+	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
+
+# Build both mac (host) and Linux
+release: release-for-mac release-for-linux
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
