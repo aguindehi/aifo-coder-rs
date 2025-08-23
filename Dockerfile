@@ -8,7 +8,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano libnss-wrapper \
-    build-essential pkg-config libssl-dev cargo rustc \
  && rm -rf /var/lib/apt/lists/*
 
 # Default working directory; the host project will be mounted here
@@ -56,11 +55,10 @@ FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
 RUN npm install -g @charmland/crush
 
-# --- Aider image (adds Python + uv + aider-chat on top of base) ---
-FROM base AS aider
-# Install Python only for the Aider variant
+# --- Aider builder stage (with build tools, not shipped in final) ---
+FROM base AS aider-builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip \
+    python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
@@ -68,4 +66,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
     uv pip install --python /opt/venv/bin/python aider-chat
+
+# --- Aider runtime stage (no compilers; only Python runtime + venv) ---
+FROM base AS aider
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
