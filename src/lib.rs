@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use which::which;
@@ -121,6 +121,8 @@ pub fn preferred_registry_prefix() -> String {
                 "-sSI",
                 "https://repository.migros.net/v2/",
             ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status();
         if let Ok(st) = status {
             if st.success() {
