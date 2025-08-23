@@ -27,12 +27,24 @@ if [ -f "$HOME/.cargo/env" ]; then
   . "$HOME/.cargo/env"
 fi
 
-# Detect available tooling on host
-if command -v docker >/dev/null 2>&1; then HAVE_DOCKER=1; else HAVE_DOCKER=0; fi
-if command -v cargo >/dev/null 2>&1; then HAVE_CARGO=1; else HAVE_CARGO=0; fi
+# Robust detection of host docker and cargo binaries
+DOCKER_BIN="$(command -v docker 2>/dev/null || true)"
+if [ -z "$DOCKER_BIN" ]; then
+  for p in /opt/homebrew/bin/docker /usr/local/bin/docker; do
+    [ -x "$p" ] && DOCKER_BIN="$p" && break
+  done
+fi
+CARGO_BIN="$(command -v cargo 2>/dev/null || true)"
+if [ -z "$CARGO_BIN" ]; then
+  for p in "$HOME/.cargo/bin/cargo" /opt/homebrew/bin/cargo /usr/local/bin/cargo; do
+    [ -x "$p" ] && CARGO_BIN="$p" && break
+  done
+fi
+if [ -n "$DOCKER_BIN" ]; then HAVE_DOCKER=1; else HAVE_DOCKER=0; fi
+if [ -n "$CARGO_BIN" ]; then HAVE_CARGO=1; else HAVE_CARGO=0; fi
 
 run_in_container() {
-  docker run --rm \
+  "$DOCKER_BIN" run --rm \
     -u "$(id -u):$(id -g)" \
     -e CARGO_HOME=/root/.cargo \
     -v "$PWD:${WORKDIR}" \
@@ -50,7 +62,7 @@ case "$cmd" in
     if [ "$HAVE_DOCKER" -eq 1 ]; then
       run_in_container cargo test --all-targets "$@"
     elif [ "$HAVE_CARGO" -eq 1 ]; then
-      cargo test --all-targets "$@"
+      "$CARGO_BIN" test --all-targets "$@"
     else
       echo "Neither Docker nor cargo are installed." >&2
       echo "Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y" >&2
@@ -67,7 +79,7 @@ case "$cmd" in
     if [ "$HAVE_DOCKER" -eq 1 ]; then
       run_in_container cargo "$@"
     elif [ "$HAVE_CARGO" -eq 1 ]; then
-      cargo "$@"
+      "$CARGO_BIN" "$@"
     else
       echo "Neither Docker nor cargo are installed." >&2
       echo "Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y" >&2
@@ -94,13 +106,13 @@ case "$cmd" in
       '
       echo "Wrote dist/SBOM.cdx.json"
     elif [ "$HAVE_CARGO" -eq 1 ]; then
-      if cargo cyclonedx -h >/dev/null 2>&1; then
-        cargo cyclonedx -o dist/SBOM.cdx.json
+      if "$CARGO_BIN" cyclonedx -h >/dev/null 2>&1; then
+        "$CARGO_BIN" cyclonedx -o dist/SBOM.cdx.json
         chmod 0644 dist/SBOM.cdx.json 2>/dev/null || true
         echo "Wrote dist/SBOM.cdx.json"
       else
         echo "cargo-cyclonedx not installed. Install with:" >&2
-        echo "  cargo install cargo-cyclonedx" >&2
+        echo "  $CARGO_BIN install cargo-cyclonedx" >&2
         exit 1
       fi
     else
