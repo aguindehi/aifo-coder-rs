@@ -120,8 +120,8 @@ fn run_doctor(_verbose: bool) {
         let use_color = atty::is(atty::Stream::Stderr);
 
         // Column widths
-        let label_width: usize = 14;
-        let path_col: usize = 40;    // target visible width for path column
+        let label_width: usize = 16;
+        let path_col: usize = 52;    // target visible width for path column
         let status_col: usize = 14;  // target width for each status cell (icon + text)
 
         // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
