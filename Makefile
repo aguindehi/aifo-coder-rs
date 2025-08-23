@@ -437,18 +437,19 @@ release:
 ifeq ($(shell uname -s),Darwin)
 
 build-app:
-	@set -e
+	sh -lc 'set -e
 	BIN="$(BIN_NAME)"
 	VERSION="$(VERSION)"
 	DIST="$(DIST_DIR)"
-	mkdir -p "$$DIST"
 	APP="$(APP_NAME)"
 	BUNDLE_ID="$(APP_BUNDLE_ID)"
+	APP_ICON="$(APP_ICON)"
+	mkdir -p "$DIST"
 	arch="$$(uname -m)"
-	case "$$arch" in \
-	  arm64|aarch64) TGT="aarch64-apple-darwin" ;; \
-	  x86_64) TGT="x86_64-apple-darwin" ;; \
-	  *) echo "Unsupported macOS architecture: $$arch" >&2; exit 1 ;; \
+	case "$$arch" in
+	  arm64|aarch64) TGT="aarch64-apple-darwin" ;;
+	  x86_64) TGT="x86_64-apple-darwin" ;;
+	  *) echo "Unsupported macOS architecture: $$arch" >&2; exit 1 ;;
 	esac
 	if command -v rustup >/dev/null 2>&1; then
 	  rustup target add "$$TGT" >/dev/null 2>&1 || true
@@ -457,9 +458,9 @@ build-app:
 	  BUILD="cargo build --release --target $$TGT"
 	fi
 	echo "Building $$BIN for $$TGT ..."
-	$$BUILD
+	eval "$$BUILD"
 	BINPATH="target/$$TGT/release/$$BIN"
-	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"
+	BIN_US="$${BIN//-/_}"
 	[ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"
 	if [ ! -f "$$BINPATH" ]; then
 	  echo "Binary not found at $$BINPATH" >&2
@@ -500,22 +501,22 @@ build-app:
 	</dict>
 	</plist>
 	EOF
-	echo "Built $$APPROOT"
+	echo "Built $$APPROOT"'
 
 build-dmg: build-app
-	@set -e
-	command -v hdiutil >/dev/null 2>&1 || { echo "hdiutil not found; cannot build DMG." >&2; exit 1; }
+	sh -lc 'set -e
 	BIN="$(BIN_NAME)"
 	VERSION="$(VERSION)"
 	DIST="$(DIST_DIR)"
 	APP="$(APP_NAME)"
 	DMG="$(DMG_NAME)"
 	APPROOT="$$DIST/$$APP.app"
-	[ -d "$$APPROOT" ] || { echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; }
+	[ -d "$$APPROOT" ] || { echo "App bundle not found at $$APPROOT; run '\''make build-app'\'' first." >&2; exit 1; }
 	DMG_PATH="$$DIST/$$DMG.dmg"
+	command -v hdiutil >/dev/null 2>&1 || { echo "hdiutil not found; cannot build DMG." >&2; exit 1; }
 	echo "Creating $$DMG_PATH ..."
 	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"
-	echo "Wrote $$DMG_PATH"
+	echo "Wrote $$DMG_PATH"'
 
 else
 
