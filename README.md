@@ -118,6 +118,8 @@ A quick reference of all Makefile targets.
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
 | release                   | Release    | Build multi‑platform release archives into dist/ (native rustup toolchains)                   |
+| build-app                 | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
+| build-dmg                 | Release    | Build macOS .dmg image from the .app (Darwin hosts only)                                     |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
 | docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
 | gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
@@ -141,6 +143,10 @@ Variables used by these targets:
 | IMAGE_PREFIX            | aifo-coder    | Image name prefix for per‑agent images                  |
 | TAG                     | latest        | Tag for images                                          |
 | APPARMOR_PROFILE_NAME   | aifo-coder    | Rendered AppArmor profile name                          |
+| APP_NAME                | aifo-coder    | App bundle name used for macOS .app                     |
+| APP_BUNDLE_ID           | ch.migros.aifo-coder | macOS bundle identifier for the .app              |
+| DMG_NAME                | aifo-coder-<version> | DMG file base name (macOS)                         |
+| APP_ICON                | (none)        | Path to a .icns icon to include in the .app (optional)  |
 
 ---
 
