@@ -31,6 +31,23 @@ if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder" ]; then
   BIN="./target/debug/aifo-coder"
 fi
 
+# If cargo is available, rebuild if sources are newer than the current binary
+if command -v cargo >/dev/null 2>&1; then
+  NEED_BUILD=0
+  if [ ! -x "$BIN" ]; then
+    NEED_BUILD=1
+  elif [ -f Cargo.toml ] && [ Cargo.toml -nt "$BIN" ]; then
+    NEED_BUILD=1
+  elif [ -d src ] && find src -type f -newer "$BIN" -print -quit | grep -q .; then
+    NEED_BUILD=1
+  fi
+  if [ "$NEED_BUILD" -eq 1 ]; then
+    echo "Building aifo-coder (release)..." >&2
+    cargo build --release
+    BIN="./target/release/aifo-coder"
+  fi
+fi
+
 if [ -x "$BIN" ]; then
   exec "$BIN" "$@"
 fi
