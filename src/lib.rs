@@ -240,6 +240,48 @@ pub fn preferred_registry_prefix() -> String {
     }
 }
 
+/// Quiet variant for preferred registry prefix resolution without emitting any logs.
+/// Behavior is identical to preferred_registry_prefix(), but with no eprintln! output.
+pub fn preferred_registry_prefix_quiet() -> String {
+    if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
+        let trimmed = pref.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let mut s = trimmed.trim_end_matches('/').to_string();
+        s.push('/');
+        return s;
+    }
+
+    if which("curl").is_ok() {
+        let status = Command::new("curl")
+            .args([
+                "--connect-timeout",
+                "1",
+                "--max-time",
+                "2",
+                "-sSI",
+                "https://repository.migros.net/v2/",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        if let Ok(st) = status {
+            if st.success() {
+                return "repository.migros.net/".to_string();
+            } else {
+                return String::new();
+            }
+        }
+    }
+
+    if is_host_port_reachable("repository.migros.net", 443, 300) {
+        "repository.migros.net/".to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// Render a docker -v host:container pair.
 pub fn path_pair(host: &Path, container: &str) -> OsString {
     OsString::from(format!("{}:{container}", host.display()))

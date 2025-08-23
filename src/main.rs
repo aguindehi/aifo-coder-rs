@@ -41,42 +41,98 @@ fn print_startup_banner() {
 fn run_doctor(_verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
+    eprintln!();
     eprintln!("  version: v{}", version);
-    eprintln!("  host: {} / {}", std::env::consts::OS, std::env::consts::ARCH);
+    eprintln!("  host:    {} / {}", std::env::consts::OS, std::env::consts::ARCH);
+    eprintln!();
 
-    match aifo_coder::container_runtime_path() {
-        Ok(p) => {
-            eprintln!("  docker: {}", p.display());
-            if let Ok(out) = Command::new(&p).arg("--version").output() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !s.is_empty() {
-                    eprintln!("  docker --version: {}", s);
+    // Virtualization environment
+    let virtualization = if cfg!(target_os = "macos") {
+        match Command::new("colima").arg("status").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).output() {
+            Ok(out) => {
+                let s = String::from_utf8_lossy(&out.stdout).to_lowercase();
+                if s.contains("running") {
+                    "Colima VM"
+                } else {
+                    "Docker Desktop or other"
                 }
             }
+            Err(_) => "Docker Desktop or other",
         }
-        Err(e) => {
-            eprintln!("  docker: not found ({e})");
-        }
-    }
+    } else {
+        "native"
+    };
+    eprintln!("  virtualization: {}", virtualization);
 
+    // Docker/AppArmor capabilities
     let apparmor_supported = aifo_coder::docker_supports_apparmor();
     eprintln!(
         "  docker AppArmor support: {}",
         if apparmor_supported { "yes" } else { "no" }
     );
+    eprintln!();
 
+    // Desired AppArmor profile
     let profile = desired_apparmor_profile();
     eprintln!(
         "  desired AppArmor profile: {}",
         profile.as_deref().unwrap_or("(disabled)")
     );
+    eprintln!();
 
-    let reg = preferred_registry_prefix();
-    if reg.is_empty() {
-        eprintln!("  registry: Docker Hub (no prefix)");
-    } else {
-        eprintln!("  registry: {}", reg);
+    // Docker command and version
+    match aifo_coder::container_runtime_path() {
+        Ok(p) => {
+            eprintln!("  docker command:  {}", p.display());
+            if let Ok(out) = Command::new(&p).arg("--version").output() {
+                let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                // Typical: "Docker version 28.3.3, build 980b856816"
+                let pretty = raw.strip_prefix("Docker version ").unwrap_or(&raw).to_string();
+                eprintln!("  docker version:  {}", pretty);
+            }
+        }
+        Err(_) => {
+            eprintln!("  docker command:  (not found)");
+        }
     }
+
+    // Registry (quiet probe; no intermediate logs)
+    let rp = aifo_coder::preferred_registry_prefix_quiet();
+    let reg_display = if rp.is_empty() {
+        "Docker Hub".to_string()
+    } else {
+        rp.trim_end_matches('/').to_string()
+    };
+    eprintln!("  docker registry: {}", reg_display);
+    eprintln!();
+
+    // Helpful config/state locations (display with ~)
+    let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
+    let home_str = home.to_string_lossy().to_string();
+    let mut show = |label: &str, path: std::path::PathBuf| {
+        let pstr = path.display().to_string();
+        let shown = if pstr.starts_with(&home_str) {
+            format!("~{}", &pstr[home_str.len()..])
+        } else {
+            pstr
+        };
+        eprintln!("  {:14} {}", label, shown);
+    };
+
+    // Aider files
+    show("aider config:",   home.join(".aider.conf.yml"));
+    show("aider metadata:", home.join(".aider.model.metadata.json"));
+    show("aider settings:", home.join(".aider.model.settings.yml"));
+    eprintln!();
+
+    // Crush paths
+    show("crush config:", home.join(".local").join("share").join("crush"));
+    show("crush state:",  home.join(".crush"));
+    eprintln!();
+
+    // Codex path (requested as ~/codex)
+    show("codex config:", home.join("codex"));
+    eprintln!();
 
     eprintln!("doctor: completed diagnostics.");
 }
