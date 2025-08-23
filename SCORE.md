@@ -1,14 +1,14 @@
 # aifo-coder Source Code Scorecard
 
-Date: 2025-08-23
-Time: 14:20
+Date: 2025-08-24
+Time: 10:22
 Author: Amir Guindehi <amir.guindehi@mgb.ch>
 Scope: Rust CLI launcher, Makefile, Dockerfile, AppArmor template, wrapper script, README, packaging targets, CI workflow, unit tests.
 
-Overall grade: A (93/100)
+Overall grade: A (95/100)
 
 Grade summary (category — grade [score/10]):
-- Architecture & Design — A- [9]
+- Architecture & Design — A [10]
 - Rust Code Quality — A [10]
 - Security Posture (AppArmor, least privilege) — A- [9]
 - Containerization & Dockerfile — A- [9]
@@ -17,83 +17,79 @@ Grade summary (category — grade [score/10]):
 - Documentation — A [10]
 - User Experience (CLI, wrapper) — A [10]
 - Performance & Footprint — B+ [8]
-- Testing & CI — A- [9]
+- Testing & CI — A [10]
 
 What improved since last score
-- Unit tests added for helper functions and wired into CI; GitHub Actions now runs cargo test on macOS and Linux.
-- Docker command preview implemented and printed on --verbose/--dry-run to aid diagnostics.
-- SBOM generation target added (cargo-cyclonedx) and integrated into the release flow when available.
-- Developer helper script and wrapper hardened for macOS with Colima: robust PATH initialization and tool discovery.
+- Added Linux CI smoke workflow to build and exercise the launcher and the Crush image on ubuntu-latest runners.
+- Expanded unit tests: added docker command escaping edges and threaded lock behavior tests.
+- Added cross-compiling examples under examples/cross with linker configuration snippets for common Linux targets.
+- Refined UX: --dry-run no longer requires or blocks on the process lock; it prints the docker preview and exits 0.
 
 Key strengths
-- Clear, cohesive architecture with strict least-privilege runtime and curated mounts/env.
-- Strong developer ergonomics: full docker command preview, verbose diagnostics, dry-run safety.
-- Multi-stage Dockerfile keeps runtime images lean; per-agent layering maximizes cache efficiency.
-- Release process produces checksums; optional SBOM generation increases supply-chain transparency.
-- Cross-platform coverage in CI; macOS packaging targets available.
+- Clear separation between CLI, docker assembly, and environment probing; helpers are testable in src/lib.rs.
+- Strong security defaults with AppArmor when available, strict mounts, no privileged flags or host docker socket.
+- Excellent developer ergonomics: verbose diagnostics, dry-run preview, and doctor subcommand for quick environment checks.
+- Efficient Dockerfiles with multi-stage builds; final images avoid shipping compilers and heavy toolchains.
+- Reproducible packaging flow with checksums and optional SBOM; convenient Makefile targets and wrapper.
 
 Current gaps and risks
-- No integration smoke tests that actually execute the launcher inside CI with Docker on Linux runners.
-- AppArmor profile usage depends on daemon support; macOS/Colima still relies on docker-default unless the VM is configured.
-- macOS app is not code signed/notarized; DMG lacks visual polish (background, symlinks).
-- Cross-compile path still relies on local toolchains; example .cargo/config.toml/linker hints would help.
-- Limited unit test breadth (e.g., lock behavior, command assembly edge cases, env/mount filtering).
+- AppArmor availability still depends on host daemon/kernel; consider documenting known-good Colima config profiles.
+- macOS packaging is unsigned/un-notarized; DMG lacks branding polish.
+- No “-slim” image variants yet; could reduce footprint for CI/CD users.
+- Registry selection logic is best-effort; consider caching probe result during a run to avoid repeated curl calls.
 
 Detailed assessment
 
-1) Architecture & Design — A- [9/10]
-- Responsibilities well-isolated; helpers extracted into lib for testability.
+1) Architecture & Design — A [10/10]
+- Responsibilities are well-factored; docker command construction returns both a Command and a shell-preview string.
 
-2) Rust Code Quality — A- [9/10]
-- Clap/atty/once_cell/which usage is idiomatic; errors surfaced consistently; preview generation uses safe escaping.
+2) Rust Code Quality — A [10/10]
+- Idiomatic use of clap/atty/which/once_cell; careful shell escaping and preview building; good error kinds and messages.
 
 3) Security Posture — A- [9/10]
-- AppArmor defaults sensible; clear opt-out; profile template provides good baseline restrictions.
+- Sensible AppArmor selection strategy; least-privilege mounts; maps uid:gid; avoids privileged or device mounts.
 
 4) Containerization & Dockerfile — A- [9/10]
-- Runtime-only layers for agents; Python toolchain confined to builder for Aider; minimal packages in final images.
+- Multi-stage pipelines; Python only in builder for Aider; minimal base; shared base for per-agent images.
 
-5) Build & Release — A- [9/10]
-- Checksums and optional SBOM; packaging flows are documented; CI artifacts uploaded.
+5) Build & Release — A [10/10]
+- Cross-host support via Make targets; checksums and SBOM; install target stages examples and man page.
 
 6) Cross-Platform Support — A- [9/10]
-- CI covers macOS and Linux; mac PATH/bootstrap improvements reduce host friction; Colima notes documented.
+- CI on macOS and Linux; wrapper makes local and containerized builds smooth; examples for Linux cross-targets.
 
 7) Documentation — A [10/10]
-- README comprehensive (AppArmor, variables, packaging, CI); examples and troubleshooting guidance.
+- README and examples are comprehensive; doctor output is clear and quiet when probing registry.
 
 8) User Experience — A [10/10]
-- Verbose/dry-run plus command preview remove guesswork; clear error messages and exit codes.
+- Startup banner and helpful logs; --dry-run does not require the lock; docker preview string is copy-pastable.
 
 9) Performance & Footprint — B+ [8/10]
-- Cache mounts on containerized builds; opportunity remains for slimmer “-slim” variants.
+- Good cache usage; opportunity for slim images and build-time ARGs to toggle editor inclusion.
 
-10) Testing & CI — B+ [8/10]
-- Unit tests added; CI runs them on both OSes. Next step: Linux-only smoke tests invoking docker run.
+10) Testing & CI — A [10/10]
+- Unit tests cover helpers and edge cases; Linux smoke workflow validates docker invocation and images.
 
 Actionable next steps (prioritized)
 
-1) CI smoke tests (Linux)
-- Add a job that runs the launcher with a trivial agent invocation (e.g., echo) or minimal image, asserting successful docker run and mount presence.
+1) Image variants
+- Provide “-slim” tags with minimal editors and optionally alpine-based variants; document trade-offs.
 
-2) Test coverage
-- Add tests for: docker command assembly edge cases (env with spaces/quotes), lock acquisition/failure paths, apparmor flag behavior given env overrides.
+2) Packaging polish (macOS)
+- Add optional signing/notarization notes and automate DMG branding (background, symlinks) in Makefile.
 
-3) Packaging polish (macOS)
-- Optional code signing and notarization; add DMG background and Applications symlink for better UX.
+3) AppArmor documentation
+- Add Colima/Docker Desktop guidance for loading or relying on docker-default; include troubleshooting tips.
 
-4) Cross-compile ergonomics
-- Provide .cargo/config.toml examples with linker settings for common Linux targets from macOS; link in README.
+4) Probe caching
+- Cache registry reachability within a run (env var or once_cell) to avoid repeated curl invocations.
 
-5) Image variants
-- Consider “-slim” tags without editors; document trade-offs; keep a “-full” variant for convenience.
-
-6) Diagnostics
-- Optional doctor subcommand to print environment checks (docker version, apparmor support, profile selection, mounts that will be created).
+5) CI enhancements
+- Add an additional smoke step that runs aider and codex --version to validate all images.
 
 Proposed next steps for the user
 - Would you like me to:
-  - Add a Linux-only CI smoke test that runs the launcher against a tiny image?
-  - Expand unit tests for command assembly and locking?
-  - Add a doctor subcommand for diagnostics?
-  - Prepare .cargo/config.toml examples for cross-linkers?
+  - Add “-slim” image variants and corresponding Makefile targets?
+  - Add macOS DMG polish and optional signing/notarization steps?
+  - Extend CI smoke to exercise aider and codex as well?
+  - Document AppArmor profile handling for Colima and Docker Desktop in README?

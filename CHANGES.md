@@ -1,3 +1,11 @@
+2025-08-24 10:22 Amir Guindehi <amir.guindehi@mgb.ch>
+
+score: update scorecard; reflect Linux smoke and new tests
+
+- Moved previous SCORE.md to SCORE-before.md (overwrite)
+- Re-scored and rewrote SCORE.md (A 95/100) reflecting Linux CI smoke, edge tests, and cross-compiling examples
+- No functional source changes; documentation/scorecard updates only
+
 2025-08-23 13:55 Amir Guindehi <amir.guindehi@mgb.ch>
 
 chore: score per AGENT.md; archive previous score
