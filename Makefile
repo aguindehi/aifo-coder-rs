@@ -64,6 +64,7 @@ help:
 	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
+	@echo "  sbom ........................ Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
@@ -447,6 +448,15 @@ release-for-target:
 	  done; \
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
+	fi; \
+	# Generate SBOM if cargo-cyclonedx is available
+	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
+	  OUT_SBOM="$$D/SBOM.cdx.json"; \
+	  cargo cyclonedx -o "$$OUT_SBOM"; \
+	  chmod 0644 "$$OUT_SBOM" || true; \
+	  echo "Wrote $$OUT_SBOM"; \
+	else \
+	  echo "cargo-cyclonedx not installed; skipping SBOM. Install with: cargo install cargo-cyclonedx" >&2; \
 	fi
 
 # Convenience targets wrapping release-for-target
@@ -472,6 +482,21 @@ checksums:
 	  else echo "Warning: no shasum/sha256sum found; skipping $$f" >&2; fi; \
 	done; \
 	if [ "$$FOUND" -eq 1 ]; then chmod 0644 "$$OUT" || true; echo "Wrote $$OUT"; else echo "No artifacts found in $$D"; fi
+
+.PHONY: sbom
+sbom:
+	@set -e; \
+	D="$(DIST_DIR)"; \
+	mkdir -p "$$D"; \
+	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
+	  OUT="$$D/SBOM.cdx.json"; \
+	  cargo cyclonedx -o "$$OUT"; \
+	  chmod 0644 "$$OUT" || true; \
+	  echo "Wrote $$OUT"; \
+	else \
+	  echo "cargo-cyclonedx not installed; install with: cargo install cargo-cyclonedx" >&2; \
+	  exit 1; \
+	fi
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)

@@ -1,3 +1,12 @@
+2025-08-23 13:15 Amir Guindehi <amir.guindehi@mgb.ch>
+
+feat: tests; docker command preview; SBOM target
+
+- src/main.rs: implement docker command preview and print on --verbose/--dry-run
+- tests: add helpers tests for shell escaping, path pairing, file creation and lock paths
+- CI: run cargo test on macOS and Linux
+- Makefile: add sbom target; generate SBOM during release when cargo-cyclonedx is available
+
 2025-08-23 12:30 Amir Guindehi <amir.guindehi@mgb.ch>
 
 feat: verbose/dry-run; checksums; wrapper cache; docs; CI

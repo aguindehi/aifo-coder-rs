@@ -122,7 +122,7 @@ fn main() -> ExitCode {
 
     let apparmor_profile = desired_apparmor_profile();
     match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
-        Ok(mut cmd) => {
+        Ok((mut cmd, preview)) => {
             if cli.verbose {
                 eprintln!(
                     "aifo-coder: effective AppArmor profile: {}",
@@ -130,6 +130,9 @@ fn main() -> ExitCode {
                 );
                 eprintln!("aifo-coder: image: {image}");
                 eprintln!("aifo-coder: agent: {agent}");
+            }
+            if cli.verbose || cli.dry_run {
+                eprintln!("aifo-coder: docker: {preview}");
             }
             if cli.dry_run {
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
@@ -173,7 +176,7 @@ fn container_runtime_path() -> io::Result<PathBuf> {
     ))
 }
 
-fn docker_supports_apparmor() -> bool {
+pub(crate) fn docker_supports_apparmor() -> bool {
     let runtime = match container_runtime_path() {
         Ok(p) => p,
         Err(_) => return false,
@@ -190,7 +193,7 @@ fn docker_supports_apparmor() -> bool {
 /// - If Docker supports AppArmor, prefer an explicit override via AIFO_CODER_APPARMOR_PROFILE.
 /// - On macOS/Windows hosts (Docker-in-VM), default to docker-default to avoid requiring a host-installed custom profile.
 /// - On native Linux hosts, default to the custom "aifo-coder" profile.
-fn desired_apparmor_profile() -> Option<String> {
+pub(crate) fn desired_apparmor_profile() -> Option<String> {
     if !docker_supports_apparmor() {
         return None;
     }
@@ -206,7 +209,7 @@ fn desired_apparmor_profile() -> Option<String> {
     }
 }
 
-fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_profile: Option<&str>) -> io::Result<Command> {
+fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_profile: Option<&str>) -> io::Result<(Command, String)> {
     let runtime = container_runtime_path()?;
 
     // TTY flags
@@ -419,38 +422,88 @@ fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_p
 
     // docker run command
     let mut cmd = Command::new(runtime);
+    let mut preview_args: Vec<String> = Vec::new();
+
+    // program
+    preview_args.push("docker".to_string());
+
+    // subcommand and common flags
     cmd.arg("run").arg("--rm");
+    preview_args.push("run".to_string());
+    preview_args.push("--rm".to_string());
+
+    // TTY flags
     for f in tty_flags {
         cmd.arg(f);
+        preview_args.push(f.to_string());
     }
-    for f in name_flags {
-        cmd.arg(f);
-    }
-    for f in &volume_flags {
-        cmd.arg(f);
-    }
-    cmd.arg("-v").arg(format!("{}:/workspace", pwd.display()));
-    cmd.arg("-w").arg("/workspace");
-    for f in &env_flags {
-        cmd.arg(f);
-    }
-    for f in &user_flags {
-        cmd.arg(f);
-    }
-    for f in &security_flags {
-        cmd.arg(f);
-    }
-    cmd.arg(image);
-    cmd.arg("/bin/sh").arg("-lc").arg(sh_cmd);
 
-    Ok(cmd)
+    // name/hostname
+    for f in name_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+        cmd.arg(f);
+    }
+
+    // volumes
+    for f in &volume_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+        cmd.arg(f);
+    }
+    let workspace_mount = format!("{}:/workspace", pwd.display());
+    cmd.arg("-v").arg(&workspace_mount);
+    preview_args.push("-v".to_string());
+    preview_args.push(workspace_mount);
+
+    // workdir
+    cmd.arg("-w").arg("/workspace");
+    preview_args.push("-w".to_string());
+    preview_args.push("/workspace".to_string());
+
+    // env flags
+    for f in &env_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+        cmd.arg(f);
+    }
+
+    // user flags
+    for f in &user_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+        cmd.arg(f);
+    }
+
+    // security flags
+    for f in &security_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+        cmd.arg(f);
+    }
+
+    // image
+    cmd.arg(image);
+    preview_args.push(image.to_string());
+
+    // shell and command
+    cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);
+    preview_args.push("/bin/sh".to_string());
+    preview_args.push("-lc".to_string());
+    preview_args.push(sh_cmd.clone());
+
+    // Render preview string with conservative shell escaping
+    let preview = {
+        let mut parts = Vec::with_capacity(preview_args.len());
+        for p in preview_args {
+            parts.push(shell_escape(&p));
+        }
+        parts.join(" ")
+    };
+
+    Ok((cmd, preview))
 }
 
-fn path_pair(host: &Path, container: &str) -> OsString {
+pub(crate) fn path_pair(host: &Path, container: &str) -> OsString {
     OsString::from(format!("{}:{container}", host.display()))
 }
 
-fn ensure_file_exists(p: &Path) -> io::Result<()> {
+pub(crate) fn ensure_file_exists(p: &Path) -> io::Result<()> {
     if !p.exists() {
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent)?;
@@ -460,11 +513,11 @@ fn ensure_file_exists(p: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn shell_join(args: &[String]) -> String {
+pub(crate) fn shell_join(args: &[String]) -> String {
     args.iter().map(|a| shell_escape(a)).collect::<Vec<_>>().join(" ")
 }
 
-fn shell_escape(s: &str) -> String {
+pub(crate) fn shell_escape(s: &str) -> String {
     if s.is_empty() {
         "''".to_string()
     } else if s.chars().all(|c| c.is_ascii_alphanumeric() || "-_=./:@".contains(c)) {
@@ -525,7 +578,7 @@ fn acquire_lock() -> io::Result<File> {
     Err(io::Error::new(io::ErrorKind::Other, msg))
 }
 
-fn candidate_lock_paths() -> Vec<PathBuf> {
+pub(crate) fn candidate_lock_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Some(home) = home::home_dir() {
         paths.push(home.join(".aifo-coder.lock"));
