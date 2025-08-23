@@ -186,6 +186,10 @@ build-aider:
 build-launcher:
 	cargo build --release
 
+.PHONY: test
+test:
+	cargo test
+
 .PHONY: rebuild rebuild-codex rebuild-crush rebuild-aider
 rebuild: rebuild-codex rebuild-crush rebuild-aider
 
