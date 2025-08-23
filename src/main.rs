@@ -51,6 +51,39 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     ]
 });
 
+fn print_startup_banner() {
+    let version = env!("CARGO_PKG_VERSION");
+    println!();
+    println!("─────────────────────────────────────────────────────────────────────────────────────────────────");
+    println!(" 🚀  Welcome to AIFO-Coder v{}  🚀 ", version);
+    println!("─────────────────────────────────────────────────────────────────────────────────────────────────");
+    println!(" 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust");
+    println!();
+    println!(" ✨ Features:");
+    println!("    - Linux: Coding agents run securely inside Docker containers with AppArmor.");
+    println!("    - macOS: Transparent VM with Docker ensures isolated and secure agent execution.");
+    println!();
+    println!(" ⚙️  Starting up coding agents...");
+    println!("    - Environment: [Secure Containerization Enabled]");
+    println!("    - Platform: [Adaptive Security for Linux & macOS]");
+    println!("    - Version: {}", version);
+    println!();
+    println!(" 🔧 Building a safer future for coding automation in Migros Group...");
+    println!("    - Container isolation on Linux & macOS");
+    println!("    - Agents run inside a container, not on your host runtimes");
+    println!("    - No privileged Docker mode; no host Docker socket is mounted");
+    println!("    - Minimal attack surface area");
+    println!("    - Only the current project folder and essential per‑tool config/state paths are mounted");
+    println!("    - Nothing else from your home directory is exposed by default");
+    println!("    - Principle of least privilege");
+    println!("    - AppArmor Support (via Docker)");
+    println!("    - No additional host devices, sockets or secrets are mounted");
+    println!("─────────────────────────────────────────────────────────────────────────────────────────────────");
+    println!(" 📜 Copyright (c) 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of the Migros AI Foundation");
+    println!("─────────────────────────────────────────────────────────────────────────────────────────────────");
+    println!();
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "aifo-coder", version, about = "Run Codex, Crush or Aider inside Docker with current directory mounted.")]
 struct Cli {
@@ -113,10 +146,15 @@ fn main() -> ExitCode {
         Agent::Aider { args } => ("aider", args.clone()),
     };
 
+    // Print startup banner before any further diagnostics
+    print_startup_banner();
+
     let image = cli
         .image
         .clone()
         .unwrap_or_else(|| default_image_for(agent));
+
+    println!("Analytics have been permanently disabled.");
 
     let apparmor_profile = desired_apparmor_profile();
     match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
