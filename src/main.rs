@@ -87,7 +87,7 @@ fn run_doctor(_verbose: bool) {
             if let Ok(out) = Command::new(&p).arg("--version").output() {
                 let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 // Typical: "Docker version 28.3.3, build 980b856816"
-                let pretty = raw.strip_prefix("Docker version ").unwrap_or(&raw).to_string();
+                let pretty = raw.trim_start_matches("Docker version ").to_string();
                 eprintln!("  docker version:  {}", pretty);
             }
         }
