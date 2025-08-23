@@ -130,6 +130,12 @@ build-codex:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
@@ -144,6 +150,12 @@ build-crush:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
@@ -158,6 +170,12 @@ build-aider:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
@@ -178,6 +196,12 @@ rebuild-codex:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
@@ -192,6 +216,12 @@ rebuild-crush:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
@@ -206,6 +236,12 @@ rebuild-aider:
 	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
