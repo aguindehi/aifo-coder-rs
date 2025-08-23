@@ -102,47 +102,45 @@ All trailing arguments after the agent subcommand are passed through to the agen
 
 ## Makefile targets
 
-Build images:
-- build — Build all per‑agent images (codex, crush, aider)
-- build-codex — Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)
-- build-crush — Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)
-- build-aider — Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)
+A quick reference of all Makefile targets.
 
-Rebuild images:
-- rebuild — Rebuild all images without cache
-- rebuild-codex — Rebuild only Codex, no cache
-- rebuild-crush — Rebuild only Crush, no cache
-- rebuild-aider — Rebuild only Aider, no cache
+| Target                     | Category   | Description                                                                                   |
+|---------------------------|------------|-----------------------------------------------------------------------------------------------|
+| build                     | Build      | Build all per‑agent images (codex, crush, aider)                                              |
+| build-codex               | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
+| build-crush               | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
+| build-aider               | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
+| rebuild                   | Rebuild    | Rebuild all images without cache                                                              |
+| rebuild-codex             | Rebuild    | Rebuild only Codex, no cache                                                                  |
+| rebuild-crush             | Rebuild    | Rebuild only Crush, no cache                                                                  |
+| rebuild-aider             | Rebuild    | Rebuild only Aider, no cache                                                                  |
+| rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
+| rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
+| build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
+| release                   | Release    | Containerized, cross‑platform builds and packaging into dist/                                 |
+| clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
+| docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
+| gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
+| gpg-enable-signing        | GPG        | Enable GPG commit signing for the current repo                                                |
+| gpg-show-config           | GPG        | Show effective GPG/Git signing configuration                                                  |
+| gpg-disable-signing-global| GPG        | Disable GPG commit signing globally                                                           |
+| gpg-unset-signing         | GPG        | Unset repo signing configuration                                                              |
+| git-check-signatures      | GPG        | Check signatures of recent commits                                                            |
+| git-commit-no-sign        | GPG        | Make a commit without signing                                                                 |
+| git-amend-no-sign         | GPG        | Amend the last commit without signing                                                         |
+| git-commit-no-sign-all    | GPG        | Commit all staged changes without signing                                                     |
+| scrub-coauthors           | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)       |
+| apparmor                  | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)               |
+| apparmor-load-colima      | AppArmor   | Load the generated profile into the Colima VM (macOS)                                         |
+| apparmor-log-colima       | AppArmor   | Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log                  |
 
-Rebuild existing images by prefix:
-- rebuild-existing — Rebuild any existing local images with `IMAGE_PREFIX` (using cache)
-- rebuild-existing-nocache — Same, but without cache
+Variables used by these targets:
 
-Launcher and release:
-- build-launcher — Build the Rust host launcher (release build)
-- release — Containerized, cross-platform builds and packaging into dist/
-
-Utilities:
-- clean — Remove built images (ignores errors if not present)
-- docker-enter — Enter a running container via docker exec with GPG runtime prepared
-
-GPG helpers:
-- gpg-disable-signing, gpg-enable-signing, gpg-show-config
-- gpg-disable-signing-global, gpg-unset-signing
-- git-check-signatures, git-commit-no-sign, git-amend-no-sign, git-commit-no-sign-all
-
-History rewrite helper:
-- scrub-coauthors — Remove a specific “Co‑authored‑by” line from all commit messages (uses git-filter-repo)
-
-AppArmor (security):
-- apparmor — Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)
-- apparmor-load-colima — Load the generated profile into the Colima VM (macOS)
-- apparmor-log-colima — Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log
-
-Variables:
-- IMAGE_PREFIX (default: aifo-coder) — Image name prefix for per‑agent images
-- TAG (default: latest) — Tag for images
-- APPARMOR_PROFILE_NAME (default: aifo-coder) — Rendered AppArmor profile name
+| Variable                | Default       | Purpose                                                 |
+|-------------------------|---------------|---------------------------------------------------------|
+| IMAGE_PREFIX            | aifo-coder    | Image name prefix for per‑agent images                  |
+| TAG                     | latest        | Tag for images                                          |
+| APPARMOR_PROFILE_NAME   | aifo-coder    | Rendered AppArmor profile name                          |
 
 ---
 
@@ -260,41 +258,55 @@ When you run `aifo-coder ...` it will:
 
 ## Environment variables
 
-Forwarded to the container (if set in your host shell):
-- Generic & Codex:
-  - `OPENAI_API_KEY`, `OPENAI_ORG`, `OPENAI_BASE_URL`
-  - `CODEX_OSS_BASE_URL`, `CODEX_OSS_PORT`, `CODEX_HOME` (also set inside the container to `/home/coder/.codex`)
-- Google / Vertex / Gemini:
-  - `GEMINI_API_KEY`, `VERTEXAI_PROJECT`, `VERTEXAI_LOCATION`
-- Azure (per agent needs):
-  - `AZURE_OPENAI_API_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_ENDPOINT`
-  - `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`
-- Git author/committer (optional overrides):
-  - `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`
-- GPG signing:
-  - `GIT_SIGNING_KEY` (if you want to specify a particular key)
-- Timezone:
-  - `TZ`
-- Editor preferences:
-  - `EDITOR`, `VISUAL`
+Forwarded from host to container (only if set in your shell):
+
+| Variable                   | Forwarded | Notes                                                                                 |
+|---------------------------|-----------|---------------------------------------------------------------------------------------|
+| OPENAI_API_KEY            | Yes       | Generic & Codex                                                                       |
+| OPENAI_ORG                | Yes       | Generic & Codex                                                                       |
+| OPENAI_BASE_URL           | Yes       | Generic & Codex                                                                       |
+| CODEX_OSS_BASE_URL        | Yes       | Codex OSS                                                                             |
+| CODEX_OSS_PORT            | Yes       | Codex OSS                                                                             |
+| CODEX_HOME                | Yes       | Also set in container to `/home/coder/.codex`; forwarded value may influence behavior |
+| GEMINI_API_KEY            | Yes       | Google / Vertex / Gemini                                                              |
+| VERTEXAI_PROJECT          | Yes       | Google / Vertex / Gemini                                                              |
+| VERTEXAI_LOCATION         | Yes       | Google / Vertex / Gemini                                                              |
+| AZURE_OPENAI_API_ENDPOINT | Yes       | Azure                                                                                 |
+| AZURE_OPENAI_API_KEY      | Yes       | Azure                                                                                 |
+| AZURE_OPENAI_API_VERSION  | Yes       | Azure                                                                                 |
+| AZURE_OPENAI_ENDPOINT     | Yes       | Azure                                                                                 |
+| AZURE_API_KEY             | Yes       | Azure                                                                                 |
+| AZURE_API_BASE            | Yes       | Azure                                                                                 |
+| AZURE_API_VERSION         | Yes       | Azure                                                                                 |
+| GIT_AUTHOR_NAME           | Yes       | Optional override                                                                     |
+| GIT_AUTHOR_EMAIL          | Yes       | Optional override                                                                     |
+| GIT_COMMITTER_NAME        | Yes       | Optional override                                                                     |
+| GIT_COMMITTER_EMAIL       | Yes       | Optional override                                                                     |
+| GIT_SIGNING_KEY           | Yes       | Select a specific GPG key for signing                                                 |
+| TZ                        | Yes       | Timezone passthrough                                                                  |
+| EDITOR                    | Yes       | Editor preference                                                                     |
+| VISUAL                    | Yes       | Editor preference                                                                     |
 
 Always set inside the container:
-- `HOME=/home/coder`
-- `USER=coder`
-- `CODEX_HOME=/home/coder/.codex`
-- `GNUPGHOME=/home/coder/.gnupg`
-- `XDG_RUNTIME_DIR=/tmp/runtime-<uid>` (computed by the launcher)
+
+| Variable         | Value                       | Notes                          |
+|------------------|-----------------------------|--------------------------------|
+| HOME             | /home/coder                 | Canonical container home       |
+| USER             | coder                       | Runtime user                   |
+| CODEX_HOME       | /home/coder/.codex          | Ensures consistent Codex home  |
+| GNUPGHOME        | /home/coder/.gnupg          | GPG runtime location           |
+| XDG_RUNTIME_DIR  | /tmp/runtime-<uid>          | Computed by the launcher       |
 
 Launcher control variables (read by the Rust launcher):
-- Image selection:
-  - `AIFO_CODER_IMAGE` — override the full image reference used for all agents
-  - `AIFO_CODER_IMAGE_PREFIX` — default: `aifo-coder`
-  - `AIFO_CODER_IMAGE_TAG` — default: `latest`
-- AppArmor control:
-  - `AIFO_CODER_NO_APPARMOR=1` — force disable AppArmor (same effect as `--no-apparmor` flag)
-- Container identity:
-  - `AIFO_CODER_CONTAINER_NAME` — set the container name
-  - `AIFO_CODER_HOSTNAME` — set the container hostname
+
+| Variable                  | Default/Behavior                                              |
+|---------------------------|---------------------------------------------------------------|
+| AIFO_CODER_IMAGE          | If set, overrides the full image reference for all agents     |
+| AIFO_CODER_IMAGE_PREFIX   | Default: `aifo-coder`                                         |
+| AIFO_CODER_IMAGE_TAG      | Default: `latest`                                             |
+| AIFO_CODER_NO_APPARMOR    | force disable AppArmor (same effect as `--no-apparmor`)       |
+| AIFO_CODER_CONTAINER_NAME | If set, assigns the container name                            |
+| AIFO_CODER_HOSTNAME       | If set, assigns the container hostname                        |
 
 ---
 
