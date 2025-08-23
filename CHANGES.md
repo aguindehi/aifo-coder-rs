@@ -1,3 +1,13 @@
+2025-08-23 12:30 Amir Guindehi <amir.guindehi@mgb.ch>
+
+feat: verbose/dry-run; checksums; wrapper cache; docs; CI
+
+- README: document AIFO_CODER_APPARMOR_PROFILE and default behaviors
+- aifo-coder: mount cargo registry/git and target caches when building via Docker
+- src/main.rs: add --verbose and --dry-run; print effective AppArmor profile in verbose mode
+- Makefile: generate SHA256SUMS.txt in release-for-target; add checksums target
+- CI: add GitHub Actions workflow for macOS and Ubuntu to build and upload dist artifacts
+
 2025-08-23 12:00 Amir Guindehi <amir.guindehi@mgb.ch>
 
 Scorecard updated; archived previous SCORE.md to SCORE-before.md

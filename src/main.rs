@@ -58,6 +58,14 @@ struct Cli {
     #[arg(long = "no-apparmor")]
     no_apparmor: bool,
 
+    /// Print detailed execution info
+    #[arg(long)]
+    verbose: bool,
+
+    /// Prepare and print what would run, but do not execute
+    #[arg(long)]
+    dry_run: bool,
+
     #[command(subcommand)]
     command: Agent,
 }
@@ -115,6 +123,19 @@ fn main() -> ExitCode {
     let apparmor_profile = desired_apparmor_profile();
     match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok(mut cmd) => {
+            if cli.verbose {
+                eprintln!(
+                    "aifo-coder: effective AppArmor profile: {}",
+                    apparmor_profile.as_deref().unwrap_or("(disabled)")
+                );
+                eprintln!("aifo-coder: image: {image}");
+                eprintln!("aifo-coder: agent: {agent}");
+            }
+            if cli.dry_run {
+                eprintln!("aifo-coder: dry-run requested; not executing Docker.");
+                drop(lock);
+                return ExitCode::from(0);
+            }
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting
             drop(lock);

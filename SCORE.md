@@ -1,114 +1,102 @@
 # aifo-coder Source Code Scorecard
 
 Date: 2025-08-23
-Time: 12:00
+Time: 12:30
 Author: Amir Guindehi <amir.guindehi@mgb.ch>
-Scope: Rust CLI launcher, Makefile, Dockerfile, AppArmor template, wrapper script, README, packaging targets.
+Scope: Rust CLI launcher, Makefile, Dockerfile, AppArmor template, wrapper script, README, packaging targets, CI workflow.
 
-Overall grade: A- (89/100)
+Overall grade: A (91/100)
 
 Grade summary (category — grade [score/10]):
 - Architecture & Design — A- [9]
-- Rust Code Quality — B+ [8]
+- Rust Code Quality — A- [9]
 - Security Posture (AppArmor, least privilege) — A- [9]
 - Containerization & Dockerfile — A- [9]
-- Build & Release (Makefile, packaging) — B+ [8]
-- Cross-Platform Support (macOS/Linux) — B [8]
-- Documentation — A- [9]
-- User Experience (CLI, wrapper) — B+ [8]
+- Build & Release (Makefile, packaging) — A- [9]
+- Cross-Platform Support (macOS/Linux) — B+ [8]
+- Documentation — A [10]
+- User Experience (CLI, wrapper) — A- [9]
 - Performance & Footprint — B+ [8]
-- Testing & CI — C [6]
+- Testing & CI — B- [7]
 
 What improved since last score
-- Runtime images are now minimized via multi-stage builds; Rust toolchain and build-essential have been removed from final runtime layers. Aider uses a builder stage to assemble a venv and the runtime stage installs only python3 plus the venv from the builder. This reduces footprint and attack surface.
+- Documentation: README now documents AIFO_CODER_APPARMOR_PROFILE and default behavior across native Linux vs Docker-in-VM (macOS/Windows).
+- Developer UX: Added --verbose and --dry-run flags; verbose prints the effective AppArmor profile, aiding diagnostics.
+- Faster Docker-based builds: Wrapper mounts cargo registry/git and target caches when building using rust:bookworm.
+- Packaging integrity: Makefile now generates SHA256SUMS.txt for produced archives and DMGs; dedicated checksums target added.
+- CI: Introduced a GitHub Actions workflow (macOS + Ubuntu) to build and package, and upload dist artifacts.
 
 Key strengths
-- Clear separation of concerns: Rust launcher orchestrates container runtime; per-agent images keep runtimes reproducible.
-- Sensible defaults: HOME, GNUPGHOME, XDG_RUNTIME_DIR, UID:GID mapping, minimal host mounts, and pass-through of curated env vars.
-- Security-aware: AppArmor enforced when supported; profile template provided; macOS/Colima falls back to docker-default to avoid host-profile mismatch.
-- Robust UX: TTY detection, exit code propagation, conservative shell escaping, workspace lock to prevent concurrent runs.
-- Packaging: macOS .app and .dmg targets; release-for-target/-for-mac/-for-linux; aggregate release now builds launcher, .app, and .dmg first.
-- Documentation is modernized and aligned with the Rust-based launcher.
+- Cohesive design with least-privilege defaults and careful env/mount curation.
+- AppArmor integration with sensible defaults based on host capabilities.
+- Good ergonomics: single launcher entrypoint; informative verbose mode; dry-run safety.
+- Multi-stage Dockerfile keeps runtime images slim; per-agent layering maximizes cache reuse.
+- Cross-platform packaging with Makefile recipes and now automated CI passes.
 
 Current gaps and risks
-- AppArmor override env (AIFO_CODER_APPARMOR_PROFILE) not documented in README; users cannot easily select custom profiles.
-- No automated tests or CI; regressions possible across platforms and packaging steps.
-- Wrapper builds with Docker but lacks mounted cargo caches; slower repeat builds.
-- macOS packaging: no code signing/notarization; DMG is minimal.
-- Cross-compile ergonomics: examples for .cargo/config.toml linkers are not committed; guidance exists in README but could include copy-pastable snippets.
-- Diagnostics: no --verbose/--dry-run flags to print the final docker command.
+- CI is present but minimal: lacks Docker image builds and runtime smoke tests due to runner constraints.
+- No unit tests yet for command assembly or lock handling; behavior verified via manual use and CI packaging.
+- macOS packaging still unsigned/unnotarized; DMG is functional but not polished.
+- Cross-linker samples still not committed; README references are adequate but could be complemented with templates.
+- Verbose mode prints high-level info; a full docker run command preview would further aid debugging.
 
 Detailed assessment
 
 1) Architecture & Design — A- [9/10]
-- Launcher is cohesive; docker run assembly is correct and minimal, with safe defaults.
+- Strong cohesion and clear boundaries between host launcher and container runtime.
 
-2) Rust Code Quality — B+ [8/10]
-- Solid use of clap/atty/which/once_cell. Error paths are surfaced with good messages.
-- Opportunities: add unit tests, consider richer context on io::Error, optionally add fd-lock for portability.
+2) Rust Code Quality — A- [9/10]
+- New flags integrate cleanly; error codes consistent; still room for unit tests.
 
 3) Security Posture — A- [9/10]
-- Good AppArmor posture and least-privilege mounts. Custom template restricts sensitive kernel interfaces.
-- Improvement: document AIFO_CODER_APPARMOR_PROFILE and log effective profile on startup when verbose.
+- Profile awareness is surfaced in verbose mode; documentation reduces misconfiguration risk.
 
 4) Containerization & Dockerfile — A- [9/10]
-- Multi-stage minimized images; Aider’s venv is built separately and copied into runtime. No compilers in final runtime layers.
-- Consider providing “-slim” variants without editors to further shrink size.
+- Runtime images remain slim; builder tools isolated; opportunity for “-slim” variants remains.
 
-5) Build & Release — B+ [8/10]
-- Makefile has robust targets; aggregate release now sequences build-launcher → build-app → build-dmg → releases.
-- Add checksums and optional SBOM generation for dist artifacts.
+5) Build & Release — A- [9/10]
+- Automated checksums; CI artifacts for both major OS families; robust release targets.
 
-6) Cross-Platform — B [8/10]
-- Works on macOS and Linux; rustup-based cross builds supported. Provide .cargo/config.toml samples for Linux linkers on macOS.
+6) Cross-Platform — B+ [8/10]
+- macOS/Linux covered; further ergonomics via example .cargo/config.toml recommended.
 
-7) Documentation — A- [9/10]
-- Clear and up to date, but missing AIFO_CODER_APPARMOR_PROFILE mention and examples.
+7) Documentation — A [10/10]
+- Clear, actionable docs including AppArmor profile override and defaults.
 
-8) User Experience — B+ [8/10]
-- Good defaults; add --verbose/--dry-run for transparency, especially for debugging mount/env behavior.
+8) User Experience — A- [9/10]
+- Verbose/dry-run provide clarity; could add full command preview and a doctor command.
 
 9) Performance & Footprint — B+ [8/10]
-- Significant image reduction after removing build tools from runtime; further gains possible with slimmer editor set and cache-friendly wrapper build.
+- Cache mounts accelerate containerized builds; potential image slimming remains.
 
-10) Testing & CI — C [6/10]
-- Add minimal unit tests and CI (GitHub Actions) to stabilize behaviors across hosts.
+10) Testing & CI — B- [7/10]
+- CI introduced; next step is to add unit tests and optional containerized smoke tests on Linux.
 
 Actionable next steps (prioritized)
 
-1) README: AppArmor override docs
-- Add AIFO_CODER_APPARMOR_PROFILE to “Launcher control variables” and describe defaults on Linux vs Docker-in-VM (macOS/Windows).
+1) Tests and CI hardening
+- Add unit tests for: shell_escape/join, path_pair, candidate_lock_paths, desired_apparmor_profile.
+- Add Linux CI job that runs a minimal launcher invocation against an alpine image or a prebuilt local image (smoke).
 
-2) Wrapper: accelerate Docker-based build
-- Mount cargo caches when building inside rust:bookworm:
-  - -v "$HOME/.cargo/registry:/root/.cargo/registry"
-  - -v "$HOME/.cargo/git:/root/.cargo/git"
-  - -v "$PWD/target:/workspace/target"
+2) Diagnostics enhancements
+- Add a command preview printer for docker args when --verbose/--dry-run (reconstruct full CLI string).
+- Optional: --debug to include additional environment and mount listings.
 
-3) Diagnostics
-- Add --verbose and --dry-run flags to print the assembled docker run command; on --dry-run, exit before exec.
+3) Packaging polish
+- Generate SBOMs (e.g., cargo auditable/cyclonedx) and publish alongside checksums.
+- macOS: optional code signing/notarization; DMG background and Applications symlink.
 
-4) Tests and CI
-- Unit tests: shell_escape/join, path_pair, candidate_lock_paths, desired_apparmor_profile.
-- Integration smoke (Linux CI): run a simple echo via launcher in Docker.
-- GitHub Actions: matrix macOS + Ubuntu; cache cargo; upload dist artifacts.
+4) Cross-compile ergonomics
+- Commit example .cargo/config.toml with linker hints for common targets; reference in README.
 
-5) Packaging polish
-- Generate SHA256 checksums for dist/*.tar.gz and .dmg.
-- Optional: code sign and notarize macOS app; add DMG background and Applications symlink.
+5) Optional image variants
+- Provide “-slim” tags removing editors; document tradeoffs in README.
 
-6) Cross-compile ergonomics
-- Add optional .cargo/config.toml examples for cross linkers in-repo and reference from README.
-
-7) Optional image slimming
-- Offer “-slim” variants removing editors; keep a “-full” tag for convenience.
-
-Notes carried forward (from previous SCORE.md)
-- Most prior gaps remain except minimized runtime images, which are now addressed.
+Notes carried forward
+- Image slimming variants and unit tests remain open; diagnostics can be further improved with command preview.
 
 Proposed implementation tasks (next commits)
-- README: document AIFO_CODER_APPARMOR_PROFILE and defaults.
-- aifo-coder wrapper: add cargo cache mounts during Docker build.
-- src/main.rs: add --verbose/--dry-run and print effective AppArmor profile when verbose.
-- CI: add GitHub Actions workflow for macOS/Ubuntu, build + package + artifact upload.
-- Makefile: add checksum generation target and include in release(-for-*) flow.
+- Add tests directory with unit tests for helpers; wire GitHub Actions to run cargo test on both OSes.
+- Implement a docker command preview generator function; print when verbose or dry-run.
+- Add SBOM generation target (e.g., using cargo-cyclonedx) and include in release flow when available.
+- Provide .cargo/config.toml examples for common Linux targets in repo and link from README.

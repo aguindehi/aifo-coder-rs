@@ -315,6 +315,7 @@ Launcher control variables (read by the Rust launcher):
 | AIFO_CODER_NO_APPARMOR    | force disable AppArmor (same effect as `--no-apparmor`)       |
 | AIFO_CODER_CONTAINER_NAME | If set, assigns the container name                            |
 | AIFO_CODER_HOSTNAME       | If set, assigns the container hostname                        |
+| AIFO_CODER_APPARMOR_PROFILE | Override AppArmor profile; defaults: docker-default on Docker-in-VM (macOS/Windows), aifo-coder on native Linux |
 
 ---
 

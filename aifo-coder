@@ -23,7 +23,7 @@ fi
 # Try to build inside a container using Docker
 if command -v docker >/dev/null 2>&1; then
   echo "Building aifo-coder (release) using docker and rust:1-bookworm ..." >&2
-  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace rust:1-bookworm cargo build --release
+  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -v "$HOME/.cargo/registry:/root/.cargo/registry" -v "$HOME/.cargo/git:/root/.cargo/git" -v "$PWD/target:/workspace/target" -w /workspace rust:1-bookworm cargo build --release
   exec ./target/release/aifo-coder "$@"
 fi
 

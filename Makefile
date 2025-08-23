@@ -63,6 +63,7 @@ help:
 	@echo "  clean ....................... Remove built images (ignores errors if not present)"
 	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
+	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
@@ -434,6 +435,18 @@ release-for-target:
 	fi; \
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
+	fi; \
+	# Generate checksums for archives (tar.gz, dmg)
+	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
+	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
+	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
+	    [ -f "$$f" ] || continue; \
+	    if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$$f" >> "$$OUT"; \
+	    elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f" >> "$$OUT"; \
+	    else echo "Warning: no shasum/sha256sum found; skipping checksums." >&2; fi; \
+	  done; \
+	  chmod 0644 "$$OUT" || true; \
+	  echo "Wrote $$OUT"; \
 	fi
 
 # Convenience targets wrapping release-for-target
@@ -444,6 +457,21 @@ release-for-linux:
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
 release: build-launcher build-app build-dmg release-for-mac release-for-linux
+
+.PHONY: checksums
+checksums:
+	@set -e; \
+	D="$(DIST_DIR)"; \
+	mkdir -p "$$D"; \
+	OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
+	FOUND=0; \
+	for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
+	  [ -f "$$f" ] || continue; FOUND=1; \
+	  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$$f" >> "$$OUT"; \
+	  elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f" >> "$$OUT"; \
+	  else echo "Warning: no shasum/sha256sum found; skipping $$f" >&2; fi; \
+	done; \
+	if [ "$$FOUND" -eq 1 ]; then chmod 0644 "$$OUT" || true; echo "Wrote $$OUT"; else echo "No artifacts found in $$D"; fi
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
