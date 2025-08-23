@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::env;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::io;
 use aifo_coder::{desired_apparmor_profile, preferred_registry_prefix, build_docker_cmd, acquire_lock};
 
@@ -38,6 +38,49 @@ fn print_startup_banner() {
     println!();
 }
 
+fn run_doctor(_verbose: bool) {
+    let version = env!("CARGO_PKG_VERSION");
+    eprintln!("aifo-coder doctor");
+    eprintln!("  version: v{}", version);
+    eprintln!("  host: {} / {}", std::env::consts::OS, std::env::consts::ARCH);
+
+    match aifo_coder::container_runtime_path() {
+        Ok(p) => {
+            eprintln!("  docker: {}", p.display());
+            if let Ok(out) = Command::new(&p).arg("--version").output() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !s.is_empty() {
+                    eprintln!("  docker --version: {}", s);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("  docker: not found ({e})");
+        }
+    }
+
+    let apparmor_supported = aifo_coder::docker_supports_apparmor();
+    eprintln!(
+        "  docker AppArmor support: {}",
+        if apparmor_supported { "yes" } else { "no" }
+    );
+
+    let profile = desired_apparmor_profile();
+    eprintln!(
+        "  desired AppArmor profile: {}",
+        profile.as_deref().unwrap_or("(disabled)")
+    );
+
+    let reg = preferred_registry_prefix();
+    if reg.is_empty() {
+        eprintln!("  registry: Docker Hub (no prefix)");
+    } else {
+        eprintln!("  registry: {}", reg);
+    }
+
+    eprintln!("doctor: completed diagnostics.");
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "aifo-coder", version, about = "Run Codex, Crush or Aider inside Docker with current directory mounted.")]
 struct Cli {
@@ -60,6 +103,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug, Clone)]
 enum Agent {
+    /// Run diagnostics to check environment and configuration
+    Doctor,
     /// Run OpenAI Codex CLI
     Codex {
         /// Additional arguments passed through to the agent
@@ -83,6 +128,12 @@ enum Agent {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    // Doctor subcommand runs diagnostics without acquiring a lock
+    if let Agent::Doctor = &cli.command {
+        print_startup_banner();
+        run_doctor(cli.verbose);
+        return ExitCode::from(0);
+    }
 
     // Acquire lock to prevent concurrent agent runs
     let lock = match acquire_lock() {
