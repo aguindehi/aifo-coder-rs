@@ -1,0 +1,10 @@
+/drop
+/add       Dockerfile
+/add       Makefile
+/add       README.md
+/add       SCORE-before.md
+/add       SCORE.md
+/add       aifo-coder
+/add       apparmor/aifo-coder.apparmor.tpl
+/add       spec/aifo-coder.spec
+/add       src/main.rs
