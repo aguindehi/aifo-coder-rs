@@ -49,7 +49,7 @@ Run the OpenAI Codex\-based CLI.
 .B crush
 Run the Charmbracelet Crush TUI.
 .P
-See the project README for agent\-specific details.
+Consult the installed documentation for agent\-specific details.
 .SH OPTIONS
 .TP
 .BR \-\-image =IMAGE
@@ -114,8 +114,8 @@ depending on the agent and launcher defaults.
 .SH SECURITY
 On Linux hosts with AppArmor support, the launcher attempts to run agents
 under a constrained AppArmor profile to reduce kernel attack surface and
-limit syscalls and capabilities. The repository includes an AppArmor profile
-template that can be installed system\-wide by administrators. When AppArmor
+limit syscalls and capabilities. An AppArmor profile may be installed
+system\-wide by your distribution or administrator. When AppArmor
 is unavailable (e.g., macOS Docker\-in\-VM) the launcher falls back to the
 Docker default profile.
 .SH FILES
@@ -131,29 +131,8 @@ is set.
 .B /tmp/aifo\-coder.lock
 Fallback lock file candidate.
 .TP
-.B apparmor/aifo\-coder.apparmor.tpl
-Profile template shipped in the source tree for use on AppArmor\-enabled hosts.
-.SH WRAPPER
-The repository provides a tiny shell wrapper named
-.B aifo\-coder
-that prefers an existing compiled binary at
-.B ./target/release/aifo\-coder
-(or
-.BR ./target/debug/aifo\-coder )
-and executes it directly. If not found, it attempts to build with
-.BR cargo " " \-\-release .
-If Cargo is unavailable but Docker is installed, it builds inside a container:
-.P
-.nf
-docker run \-\-rm \-u "$(id \-u):$(id \-g)" \\
-  \-v "$PWD:/workspace" \\
-  \-v "$HOME/.cargo/registry:/root/.cargo/registry" \\
-  \-v "$HOME/.cargo/git:/root/.cargo/git" \\
-  \-v "$PWD/target:/workspace/target" \\
-  \-w /workspace rust:1\-bookworm cargo build \-\-release
-.fi
-.P
-These cache mounts speed up repeat builds by reusing Cargo registry and git data.
+.B /etc/apparmor.d/aifo\-coder
+System AppArmor profile (if installed) used to constrain containerized agents.
 .SH EXIT STATUS
 The launcher propagates the exit status of the agent process running inside
 the container. A non\-zero exit code indicates failure reported by the agent
@@ -185,6 +164,6 @@ aifo\-coder \-\-no\-apparmor codex \-\- \-\-version
 Amir Guindehi <amir.guindehi@mgb.ch> and contributors.
 .SH COPYRIGHT
 Copyright (c) the aifo\-coder authors.
-License terms are provided in the file
-.BR LICENSE
-in the source tree.
+License: Apache License 2.0. See
+.BR /usr/share/licenses/aifo\-coder/LICENSE
+or https://www.apache.org/licenses/LICENSE-2.0.
