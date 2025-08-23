@@ -121,7 +121,7 @@ fn run_doctor(_verbose: bool) {
 
         // Column widths
         let label_width: usize = 16;
-        let path_col: usize = 52;    // target visible width for path column
+        let path_col: usize = 44;    // target visible width for path column (moved left)
         let status_col: usize = 14;  // target width for each status cell (icon + text)
 
         // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
@@ -183,6 +183,24 @@ fn run_doctor(_verbose: bool) {
         );
     };
 
+    // Local time and timezone from host (mounted only if present)
+    show(
+        "local time:",
+        std::path::PathBuf::from("/etc/timezone"),
+        std::path::Path::new("/etc/timezone").exists(),
+    );
+    show(
+        "local timezone:",
+        std::path::PathBuf::from("/etc/localtime"),
+        std::path::Path::new("/etc/localtime").exists(),
+    );
+    eprintln!();
+
+    // Git and GnuPG
+    show("git config:",   home.join(".gitconfig"), true);
+    show("gnupg config:", home.join(".gnupg"), true);
+    eprintln!();
+
     // Aider files
     show("aider config:",   home.join(".aider.conf.yml"), true);
     show("aider metadata:", home.join(".aider.model.metadata.json"), true);
@@ -194,7 +212,7 @@ fn run_doctor(_verbose: bool) {
     show("crush state:",  home.join(".crush"), true);
     eprintln!();
 
-    // Codex path (requested as ~/codex)
+    // Codex path
     show("codex config:", home.join(".codex"), true);
     eprintln!();
 
