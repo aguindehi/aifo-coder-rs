@@ -83,6 +83,11 @@ No Rust or Make installed on your host? Use the Docker-based dev helper:
 make build
 ```
 
+- Build slim variants (smaller images, fewer tools):
+```bash
+make build-slim
+```
+
 - Build the Rust launcher locally (optional if you already have the binary):
 ```bash
 make build-launcher
@@ -197,6 +202,25 @@ Summary:
   - Ensures `$HOME` and `$GNUPGHOME` exist (0700), prepares `$XDG_RUNTIME_DIR`
   - Copies keys from `/home/coder/.gnupg-host` (read‑only mount) into `GNUPGHOME`
   - Configures pinentry to `pinentry-curses` and launches `gpg-agent`
+
+### Slim image variants
+
+For smaller footprints, use the -slim variants of each image:
+
+- aifo-coder-codex-slim:TAG
+- aifo-coder-crush-slim:TAG
+- aifo-coder-aider-slim:TAG
+
+Differences from the full images:
+- Based on the same Debian Bookworm base
+- Editors (emacs/vim/nano) and ripgrep are omitted
+- Otherwise identical behavior and entrypoint
+
+How to use:
+- Build: make build-slim
+- Run via explicit image: ./aifo-coder --image aifo-coder-codex-slim:latest codex --version
+- Or set an environment variable for automatic selection:
+  - export AIFO_CODER_IMAGE_FLAVOR=slim
 
 ---
 
@@ -321,6 +345,7 @@ Launcher control variables (read by the Rust launcher):
 | AIFO_CODER_HOSTNAME       | If set, assigns the container hostname                        |
 | AIFO_CODER_APPARMOR_PROFILE | Override AppArmor profile; defaults: docker-default on Docker-in-VM (macOS/Windows), aifo-coder on native Linux |
 | AIFO_CODER_REGISTRY_PREFIX | If set, prepended to image refs (e.g., `repository.migros.net/`). If unset, the launcher tests reachability of `repository.migros.net` and uses it when available; set to empty to force Docker Hub |
+| AIFO_CODER_IMAGE_FLAVOR     | Optional: set to `slim` to select `-slim` image variants instead of default full images |
 
 ---
 

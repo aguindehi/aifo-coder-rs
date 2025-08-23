@@ -342,7 +342,11 @@ fn default_image_for(agent: &str) -> String {
     }
     let name_prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
-    let image_name = format!("{name_prefix}-{agent}:{tag}");
+    let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
+        Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
+        _ => "",
+    };
+    let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
     let registry = preferred_registry_prefix();
     if registry.is_empty() {
         image_name

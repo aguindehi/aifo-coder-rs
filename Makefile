@@ -59,6 +59,10 @@ help:
 	@echo "  build-codex ................. Build only the Codex image ($${IMAGE_PREFIX}-codex:$${TAG})"
 	@echo "  build-crush ................. Build only the Crush image ($${IMAGE_PREFIX}-crush:$${TAG})"
 	@echo "  build-aider ................. Build only the Aider image ($${IMAGE_PREFIX}-aider:$${TAG})"
+	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim)"
+	@echo "  build-codex-slim ............ Build only the Codex slim image ($${IMAGE_PREFIX}-codex-slim:$${TAG})"
+	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
+	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
@@ -66,6 +70,10 @@ help:
 	@echo "  rebuild-codex ............... Rebuild only the Codex image without cache"
 	@echo "  rebuild-crush ............... Rebuild only the Crush image without cache"
 	@echo "  rebuild-aider ............... Rebuild only the Aider image without cache"
+	@echo "  rebuild-slim ................ Rebuild all slim images without cache"
+	@echo "  rebuild-codex-slim .......... Rebuild only the Codex slim image without cache"
+	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
+	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
 	@echo ""
 	@echo "Rebuild existing images by prefix:"
 	@echo ""
@@ -119,6 +127,9 @@ TAG ?= latest
 CODEX_IMAGE ?= $(IMAGE_PREFIX)-codex:$(TAG)
 CRUSH_IMAGE ?= $(IMAGE_PREFIX)-crush:$(TAG)
 AIDER_IMAGE ?= $(IMAGE_PREFIX)-aider:$(TAG)
+CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
+CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
+AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 
 .PHONY: build build-codex build-crush build-aider build-launcher
 build: build-codex build-crush build-aider
@@ -181,6 +192,69 @@ build-aider:
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) .; \
+	fi
+
+.PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
+build-slim: build-codex-slim build-crush-slim build-aider-slim
+
+build-codex-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	fi
+
+build-crush-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	fi
+
+build-aider-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
 	fi
 
 build-launcher:
@@ -253,6 +327,69 @@ rebuild-aider:
 	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
+.PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim
+rebuild-slim: rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim
+
+rebuild-codex-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	fi
+
+rebuild-crush-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	fi
+
+rebuild-aider-slim:
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	else \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	fi
+
 # Rebuild all existing local images for this prefix (all tags) using cache
 .PHONY: rebuild-existing
 rebuild-existing:
@@ -285,7 +422,7 @@ rebuild-existing-nocache:
 
 .PHONY: clean
 clean:
-	-@docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) 2>/dev/null || true
+	-@docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) 2>/dev/null || true
 
 # AppArmor profile generation (for Docker containers)
 APPARMOR_PROFILE_NAME ?= aifo-coder
