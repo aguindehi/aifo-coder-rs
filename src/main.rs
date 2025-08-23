@@ -273,14 +273,7 @@ fn main() -> ExitCode {
         return ExitCode::from(0);
     }
 
-    // Acquire lock to prevent concurrent agent runs
-    let lock = match acquire_lock() {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::from(1);
-        }
-    };
+    
 
     // Build docker command and run it
     let (agent, args) = match &cli.command {
@@ -316,16 +309,22 @@ fn main() -> ExitCode {
             }
             if cli.dry_run {
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
-                drop(lock);
                 return ExitCode::from(0);
             }
+            // Acquire lock only for real execution
+            let lock = match acquire_lock() {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting
             drop(lock);
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
-            drop(lock);
             eprintln!("{e}");
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
