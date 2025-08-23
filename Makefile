@@ -434,67 +434,65 @@ release:
 	fi
 
 .PHONY: build-app build-dmg
+ifeq ($(shell uname -s),Darwin)
+
 build-app:
-	@set -e; \
-	if [ "$$(uname -s)" != "Darwin" ]; then \
-	  echo "build-app is only supported on macOS (Darwin) hosts." >&2; \
-	  exit 1; \
-	fi; \
-	BIN="$(BIN_NAME)"; \
-	VERSION="$(VERSION)"; \
-	DIST="$(DIST_DIR)"; \
-	mkdir -p "$$DIST"; \
-	APP="$(APP_NAME)"; \
-	BUNDLE_ID="$(APP_BUNDLE_ID)"; \
-	arch="$$(uname -m)"; \
+	@set -e
+	BIN="$(BIN_NAME)"
+	VERSION="$(VERSION)"
+	DIST="$(DIST_DIR)"
+	mkdir -p "$$DIST"
+	APP="$(APP_NAME)"
+	BUNDLE_ID="$(APP_BUNDLE_ID)"
+	arch="$$(uname -m)"
 	case "$$arch" in \
 	  arm64|aarch64) TGT="aarch64-apple-darwin" ;; \
 	  x86_64) TGT="x86_64-apple-darwin" ;; \
 	  *) echo "Unsupported macOS architecture: $$arch" >&2; exit 1 ;; \
-	esac; \
-	if command -v rustup >/dev/null 2>&1; then \
-	  rustup target add "$$TGT" >/dev/null 2>&1 || true; \
-	  BUILD="rustup run stable cargo build --release --target $$TGT"; \
-	else \
-	  BUILD="cargo build --release --target $$TGT"; \
-	fi; \
-	echo "Building $$BIN for $$TGT ..."; \
-	$$BUILD; \
-	BINPATH="target/$$TGT/release/$$BIN"; \
-	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
-	[ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"; \
-	if [ ! -f "$$BINPATH" ]; then \
-	  echo "Binary not found at $$BINPATH" >&2; \
-	  exit 1; \
-	fi; \
-	APPROOT="$$DIST/$$APP.app"; \
-	CONTENTS="$$APPROOT/Contents"; \
-	MACOS="$$CONTENTS/MacOS"; \
-	RES="$$CONTENTS/Resources"; \
-	rm -rf "$$APPROOT"; \
-	install -d -m 0755 "$$MACOS" "$$RES"; \
-	install -m 0755 "$$BINPATH" "$$MACOS/$$BIN"; \
-	if [ -n "$$APP_ICON" ] && [ -f "$$APP_ICON" ]; then \
-	  ICON_DST="$$RES/AppIcon.icns"; \
-	  cp "$$APP_ICON" "$$ICON_DST"; \
-	fi; \
-	cat > "$$CONTENTS/Info.plist" <<EOF
+	esac
+	if command -v rustup >/dev/null 2>&1; then
+	  rustup target add "$$TGT" >/dev/null 2>&1 || true
+	  BUILD="rustup run stable cargo build --release --target $$TGT"
+	else
+	  BUILD="cargo build --release --target $$TGT"
+	fi
+	echo "Building $$BIN for $$TGT ..."
+	$$BUILD
+	BINPATH="target/$$TGT/release/$$BIN"
+	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"
+	[ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"
+	if [ ! -f "$$BINPATH" ]; then
+	  echo "Binary not found at $$BINPATH" >&2
+	  exit 1
+	fi
+	APPROOT="$$DIST/$$APP.app"
+	CONTENTS="$$APPROOT/Contents"
+	MACOS="$$CONTENTS/MacOS"
+	RES="$$CONTENTS/Resources"
+	rm -rf "$$APPROOT"
+	install -d -m 0755 "$$MACOS" "$$RES"
+	install -m 0755 "$$BINPATH" "$$MACOS/$$BIN"
+	if [ -n "$$APP_ICON" ] && [ -f "$$APP_ICON" ]; then
+	  ICON_DST="$$RES/AppIcon.icns"
+	  cp "$$APP_ICON" "$$ICON_DST"
+	fi
+	cat > "$$CONTENTS/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>$$APP</string>
+  <string>${APP}</string>
   <key>CFBundleDisplayName</key>
-  <string>$$APP</string>
+  <string>${APP}</string>
   <key>CFBundleIdentifier</key>
-  <string>$$BUNDLE_ID</string>
+  <string>${BUNDLE_ID}</string>
   <key>CFBundleVersion</key>
-  <string>$$VERSION</string>
+  <string>${VERSION}</string>
   <key>CFBundleShortVersionString</key>
-  <string>$$VERSION</string>
+  <string>${VERSION}</string>
   <key>CFBundleExecutable</key>
-  <string>$$BIN</string>
+  <string>${BIN}</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
@@ -502,23 +500,38 @@ build-app:
 </dict>
 </plist>
 EOF
+	# Replace placeholders in Info.plist safely
+	sed -i '' -e "s|\$$${APP}|$${APP}|g" \
+	          -e "s|\$$${BUNDLE_ID}|$${BUNDLE_ID}|g" \
+	          -e "s|\$$${VERSION}|$${VERSION}|g" \
+	          -e "s|\$$${BIN}|$${BIN}|g" "$$CONTENTS/Info.plist" 2>/dev/null || \
+	sed -i -e "s|\$$${APP}|$${APP}|g" \
+	       -e "s|\$$${BUNDLE_ID}|$${BUNDLE_ID}|g" \
+	       -e "s|\$$${VERSION}|$${VERSION}|g" \
+	       -e "s|\$$${BIN}|$${BIN}|g" "$$CONTENTS/Info.plist"
 	echo "Built $$APPROOT"
 
 build-dmg: build-app
-	@set -e; \
-	if [ "$$(uname -s)" != "Darwin" ]; then \
-	  echo "build-dmg is only supported on macOS (Darwin) hosts." >&2; \
-	  exit 1; \
-	fi; \
-	command -v hdiutil >/dev/null 2>&1 || { echo "hdiutil not found; cannot build DMG." >&2; exit 1; }; \
-	BIN="$(BIN_NAME)"; \
-	VERSION="$(VERSION)"; \
-	DIST="$(DIST_DIR)"; \
-	APP="$(APP_NAME)"; \
-	DMG="$(DMG_NAME)"; \
-	APPROOT="$$DIST/$$APP.app"; \
-	[ -d "$$APPROOT" ] || { echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; }; \
-	DMG_PATH="$$DIST/$$DMG.dmg"; \
-	echo "Creating $$DMG_PATH ..."; \
-	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"; \
+	@set -e
+	command -v hdiutil >/dev/null 2>&1 || { echo "hdiutil not found; cannot build DMG." >&2; exit 1; }
+	BIN="$(BIN_NAME)"
+	VERSION="$(VERSION)"
+	DIST="$(DIST_DIR)"
+	APP="$(APP_NAME)"
+	DMG="$(DMG_NAME)"
+	APPROOT="$$DIST/$$APP.app"
+	[ -d "$$APPROOT" ] || { echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; }
+	DMG_PATH="$$DIST/$$DMG.dmg"
+	echo "Creating $$DMG_PATH ..."
+	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"
 	echo "Wrote $$DMG_PATH"
+
+else
+
+build-app:
+	@echo "build-app is only supported on macOS (Darwin) hosts." >&2; exit 1
+
+build-dmg:
+	@echo "build-dmg is only supported on macOS (Darwin) hosts." >&2; exit 1
+
+endif
