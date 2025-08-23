@@ -1,0 +1,8 @@
+[target.aarch64-unknown-linux-gnu]
+# Ensure a suitable cross-linker is installed on your host.
+# macOS (Homebrew): brew install aarch64-unknown-linux-gnu
+# Linux (Debian/Ubuntu): sudo apt-get install -y gcc-aarch64-linux-gnu
+linker = "aarch64-linux-gnu-gcc"
+
+[build]
+target = "aarch64-unknown-linux-gnu"

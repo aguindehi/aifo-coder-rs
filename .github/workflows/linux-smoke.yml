@@ -1,0 +1,31 @@
+name: Linux smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    name: Linux Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build launcher (release)
+        run: cargo build --release
+
+      - name: Docker info
+        run: docker info
+
+      - name: Build Crush image
+        run: make build-crush
+
+      - name: Doctor diagnostics
+        run: ./target/release/aifo-coder doctor
+
+      - name: Run Crush --version via launcher
+        run: ./target/release/aifo-coder crush --version
