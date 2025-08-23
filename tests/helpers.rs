@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use aifo_coder as crate;
 
 #[test]
 fn test_shell_escape_simple() {
