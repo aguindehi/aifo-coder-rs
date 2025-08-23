@@ -73,7 +73,7 @@ fn run_doctor(_verbose: bool) {
     eprintln!();
 
     // Desired AppArmor profile
-    let profile = desired_apparmor_profile();
+    let profile = aifo_coder::desired_apparmor_profile_quiet();
     eprintln!(
         "  desired AppArmor profile: {}",
         profile.as_deref().unwrap_or("(disabled)")

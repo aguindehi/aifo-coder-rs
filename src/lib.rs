@@ -167,6 +167,40 @@ pub fn desired_apparmor_profile() -> Option<String> {
     }
 }
 
+/// Quiet variant of desired_apparmor_profile() for diagnostic contexts (no logging).
+pub fn desired_apparmor_profile_quiet() -> Option<String> {
+    if !docker_supports_apparmor() {
+        return None;
+    }
+    if let Ok(p) = env::var("AIFO_CODER_APPARMOR_PROFILE") {
+        let trimmed = p.trim();
+        let lower = trimmed.to_lowercase();
+        // Allow explicit disabling via env var
+        if trimmed.is_empty() || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str()) {
+            return None;
+        }
+        if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
+            if apparmor_profile_available("docker-default") {
+                return Some("docker-default".to_string());
+            } else {
+                return None;
+            }
+        }
+        return Some(trimmed.to_string());
+    }
+    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+        Some("docker-default".to_string())
+    } else {
+        if apparmor_profile_available("aifo-coder") {
+            Some("aifo-coder".to_string())
+        } else if apparmor_profile_available("docker-default") {
+            Some("docker-default".to_string())
+        } else {
+            None
+        }
+    }
+}
+
 fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
     let addrs = (host, port).to_socket_addrs();
     if let Ok(addrs) = addrs {
