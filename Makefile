@@ -15,7 +15,6 @@ help:
 	@echo "  BIN_NAME (aifo-coder) ....... Binary name used in release packaging"
 	@echo "  VERSION ..................... Version inferred from Cargo.toml or git describe"
 	@echo "  RELEASE_TARGETS ............. Space-separated Rust targets for 'make release' (overrides auto-detect)"
-	@echo "  CONTAINER_RUNTIME ........... Container runtime for cross builds (default: docker)"
 	@echo "  CONTAINER ................... Container name for docker-enter (optional)"
 	@echo "  CODEX_IMAGE ................. Full image ref for Codex ($${IMAGE_PREFIX}-codex:$${TAG})"
 	@echo "  CRUSH_IMAGE ................. Full image ref for Crush ($${IMAGE_PREFIX}-crush:$${TAG})"
@@ -293,7 +292,7 @@ VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
 # Build release binaries and package archives for macOS and Linux (Ubuntu/Arch)
-# Requires: cargo (and optionally cross), appropriate targets installed for non-native builds
+# Requires: cargo; install non-native targets via rustup and any required linkers
 .PHONY: release
 release:
 	@set -e; \
@@ -304,10 +303,6 @@ release:
 	echo "Building release version: $$VERSION"; \
 	rm -f Cargo.lock || true; \
 	PATH="$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
-	CROSS_BIN=""; \
-	if [ -x "/Users/m0565460/.cargo/bin/cross" ]; then CROSS_BIN="/Users/m0565460/.cargo/bin/cross"; \
-	elif [ -x "$$HOME/.cargo/bin/cross" ]; then CROSS_BIN="$$HOME/.cargo/bin/cross"; \
-	elif command -v cross >/dev/null 2>&1; then CROSS_BIN="cross"; fi; \
 	CHANNEL="$${AIFO_CODER_RUST_CHANNEL:-stable}"; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  BUILD_HOST="rustup run $$CHANNEL cargo build --release --target"; \
@@ -347,33 +342,16 @@ release:
 	for t in $$TARGETS; do \
 	  HOST_OK=0; \
 	  if [ -n "$$RUSTC_HOST" ] && [ "$$t" = "$$RUSTC_HOST" ]; then HOST_OK=1; fi; \
-	  if printf "%s" "$$t" | grep -Eq -- '-linux-gnu|-linux-musl'; then \
-	    VARNAME="$$(echo "$$t" | tr '[:lower:]-' '[:upper:]_')"; \
-	    IMAGE="repository.migros.net/ghcr.io/cross-rs/$$t:latest"; \
-	    RUNTIME="$${CONTAINER_RUNTIME:-docker}"; \
-	    if ! command -v "$$RUNTIME" >/dev/null 2>&1; then \
-	      echo "No container runtime found; install Docker to cross-compile $$t"; \
-	      continue; \
-	    fi; \
-	    case "$$t" in \
-	      x86_64-*) PLATFORM="linux/amd64" ;; \
-	      aarch64-*|arm64-*) PLATFORM="linux/arm64" ;; \
-	      armv7-*) PLATFORM="linux/arm/v7" ;; \
-	      i686-*) PLATFORM="linux/386" ;; \
-	      riscv64-*) PLATFORM="linux/riscv64" ;; \
-	      *) PLATFORM="" ;; \
-	    esac; \
-	    PLATFORM_ARG=""; [ -n "$$PLATFORM" ] && PLATFORM_ARG="--platform $$PLATFORM"; \
-	    echo "Building for $$t inside $$IMAGE with $$RUNTIME $$PLATFORM_ARG (no host rustup/toolchains) ..."; \
-	    "$$RUNTIME" run $$PLATFORM_ARG --rm -e TARGET="$$t" -v "$$(pwd)":/project -w /project --entrypoint /bin/sh "$$IMAGE" \
-	      -c "set -eu; export DEBIAN_FRONTEND=noninteractive; export HOME=\$${HOME:-/root}; export CARGO_HOME=\$${CARGO_HOME:-\$${HOME}/.cargo}; export RUSTUP_HOME=\$${RUSTUP_HOME:-\$${HOME}/.rustup}; export PATH=\$${CARGO_HOME}/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin:\$${PATH}; if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config file && update-ca-certificates || true; elif command -v dnf >/dev/null 2>&1; then dnf install -y curl ca-certificates gcc gcc-c++ make pkgconfig file || true; elif command -v apk >/dev/null 2>&1; then apk add --no-cache curl ca-certificates build-base pkgconfig file || true; fi; if ! command -v cargo >/dev/null 2>&1; then if command -v rustup >/dev/null 2>&1; then rustup set profile minimal || true; rustup toolchain install stable -c rust-src; rustup default stable; else curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable; . \"\$${HOME}/.cargo/env\"; fi; fi; if command -v rustup >/dev/null 2>&1; then rustup target add \"\$${TARGET}\" || true; fi; if ! command -v cc >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1; then ln -sf \"\`command -v gcc\`\" /usr/local/bin/cc 2>/dev/null || ln -sf /usr/bin/gcc /usr/local/bin/cc 2>/dev/null || true; fi; if ! command -v clang >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1; then ln -sf \"\`command -v gcc\`\" /usr/local/bin/clang 2>/dev/null || true; fi; export CC=gcc CXX=g++ HOST_CC=gcc TARGET_CC=gcc AR=ar RANLIB=ranlib PKG_CONFIG_ALLOW_CROSS=1; TRIPLE_UPPER=\$$(printf '%s' \"\$${TARGET}\" | tr '[:lower:]-' '[:upper:]_'); eval export CARGO_TARGET_\$${TRIPLE_UPPER}_LINKER=gcc; export RUSTFLAGS=\"\$${RUSTFLAGS:-}\"; CARGOBIN=\"\$$(command -v cargo || echo \"\$${CARGO_HOME}/bin/cargo\" || echo \"/root/.cargo/bin/cargo\")\"; \"\$${CARGOBIN}\" --version; \"\$${CARGOBIN}\" build --release --target \"\$${TARGET}\"" || echo "Warning: build failed for $$t"; \
-	  elif [ "$$HOST_OK" -eq 1 ]; then \
-	    echo "Building with cargo for host target $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
-	  elif command -v rustup >/dev/null 2>&1 && rustup target list --installed | grep -qx "$$t"; then \
-	    echo "Building with cargo for $$t ..."; $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
+	  if [ "$$HOST_OK" -eq 1 ]; then \
+	    echo "Building with cargo for host target $$t ..."; \
+	    $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
+	  elif command -v rustup >/dev/null 2>&1; then \
+	    echo "Ensuring rustup target $$t is installed ..."; \
+	    rustup target add "$$t" || true; \
+	    echo "Building with cargo for $$t ..."; \
+	    $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
 	  else \
-	    echo "Target $$t not installed. Skipping (install with: rustup target add $$t)"; \
-	    continue; \
+	    echo "rustup not available and target != host; skipping $$t"; \
 	  fi; \
 	done; \
 	[ -n "$$BIN" ] || BIN="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \

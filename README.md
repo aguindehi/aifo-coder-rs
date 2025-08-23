@@ -117,7 +117,7 @@ A quick reference of all Makefile targets.
 | rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
-| release                   | Release    | Containerized, cross‑platform builds and packaging into dist/                                 |
+| release                   | Release    | Build multi‑platform release archives into dist/ (native rustup toolchains)                   |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
 | docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
 | gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
@@ -146,30 +146,25 @@ Variables used by these targets:
 
 ## Cross-compiling and Rust specifics
 
-The repository supports containerized cross-compilation via the Makefile, without installing platform linkers on your host.
+This repository uses native rustup toolchains for all builds. No cross-rs containers or Cross.toml are used.
 
 Recommended approach:
-- Use the Makefile’s release target for reproducible cross-builds and packaging:
-  - `make release`
-- Builds run in containerized toolchains (based on cross-rs images), as configured in Cross.toml.
-- Only Docker is required for cross builds.
+- Use the Makefile’s release target to build and package binaries:
+  - make release
+- Optionally specify multiple targets:
+  - RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu' make release
+- Ensure required Rust targets are installed:
+  - rustup target add <triple> for each target you build
 
-If you insist on native cross-compilation (macOS):
-- Install rustup (manages Rust toolchains):
-  - Homebrew: `brew install rustup` then initialize with `rustup-init`
-- Add Linux GNU targets (only if you’re compiling natively, not needed for Makefile container builds):
-  - `rustup target add aarch64-unknown-linux-gnu`
-  - `rustup target add x86_64-unknown-linux-gnu`
-- You generally do NOT need to install a host linker when using the Makefile’s containerized builds.
-  - The Homebrew package `SergioBenitez/osxct/x86_64-unknown-linux-gnu` is unnecessary when using containerized builds and often unnecessary overall.
-- Advanced (native only): configure a linker if you’re compiling x86_64-unknown-linux-gnu on macOS without containers:
-  - .cargo/config.toml
-    [target.x86_64-unknown-linux-gnu]
-    linker = "x86_64-unknown-linux-gnu-gcc"
+Notes about linkers:
+- For host builds, no special setup is needed.
+- For non-host Linux targets on macOS, you may need a linker toolchain. One option is to install osxct toolchains (by SergioBenitez) via Homebrew; another is to use a system-provided gcc. You can also point cargo to a linker via .cargo/config.toml:
+  [target.x86_64-unknown-linux-gnu]
+  linker = "x86_64-unknown-linux-gnu-gcc"
 
 Summary:
-- Prefer `make release` to build for multiple platforms in containers.
-- Use `make build-launcher` for a quick local release build of the CLI for your host.
+- Prefer make release with rustup-installed targets.
+- Use make build-launcher for a quick host-only build.
 
 ---
 
