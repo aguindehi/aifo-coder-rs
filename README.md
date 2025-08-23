@@ -67,6 +67,14 @@ If you need to access a private base image:
 - Base image used: `repository.migros.net/node:22-bookworm-slim`
 - If you cannot access this, replace the `FROM` line in the Dockerfile with an accessible equivalent.
 
+No Rust or Make installed on your host? Use the Docker-based dev helper:
+- Make the script executable once:
+  chmod +x scripts/dev.sh
+- Run tests via Docker:
+  ./scripts/dev.sh test
+- Generate a CycloneDX SBOM via Docker:
+  ./scripts/dev.sh sbom
+
 ---
 
 ## Quick start
