@@ -19,7 +19,8 @@ pub fn container_runtime_path() -> io::Result<PathBuf> {
     ))
 }
 
-/// Probe whether the Docker daemon reports AppArmor support.
+/// Probe whether the Docker daemon reports AppArmor support, and (on Linux)
+/// that the kernel AppArmor facility is enabled.
 pub fn docker_supports_apparmor() -> bool {
     let runtime = match container_runtime_path() {
         Ok(p) => p,
@@ -30,7 +31,29 @@ pub fn docker_supports_apparmor() -> bool {
         .output();
     let Ok(out) = output else { return false };
     let s = String::from_utf8_lossy(&out.stdout).to_lowercase();
-    s.contains("apparmor")
+    let docker_reports_apparmor = s.contains("apparmor");
+    if !docker_reports_apparmor {
+        return false;
+    }
+    // On Linux hosts, also require kernel AppArmor to be enabled.
+    if cfg!(target_os = "linux") && !kernel_apparmor_enabled() {
+        return false;
+    }
+    true
+}
+
+/// Best-effort detection of AppArmor being enabled in the Linux kernel.
+/// Returns true if the kernel facility appears available/enabled.
+fn kernel_apparmor_enabled() -> bool {
+    // Common indicator: /sys/module/apparmor/parameters/enabled contains "Y", "enforce", or "complain"
+    if let Ok(content) = fs::read_to_string("/sys/module/apparmor/parameters/enabled") {
+        let c = content.trim().to_lowercase();
+        if c.starts_with('y') || c.contains("enforce") || c.contains("complain") || c == "1" || c == "yes" || c == "true" {
+            return true;
+        }
+    }
+    // Fallback: presence of per-process AppArmor attr
+    Path::new("/proc/self/attr/apparmor/current").exists()
 }
 
 /// Choose the AppArmor profile to use, if any.
@@ -88,15 +111,15 @@ pub fn preferred_registry_prefix() -> String {
 
     // Prefer probing with curl for HTTPS reachability using short timeouts.
     if which("curl").is_ok() {
-        eprintln!("aifo-coder: checking https://repository.migros.net availability with: curl --connect-timeout 3 --max-time 2 -sSfI ...");
+        eprintln!("aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
         let status = Command::new("curl")
             .args([
                 "--connect-timeout",
-                "3",
+                "1",
                 "--max-time",
                 "2",
-                "-sSfI",
-                "https://repository.migros.net",
+                "-sSI",
+                "https://repository.migros.net/v2/",
             ])
             .status();
         if let Ok(st) = status {
