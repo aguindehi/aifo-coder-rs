@@ -1,3 +1,11 @@
+2025-08-23 13:55 Amir Guindehi <amir.guindehi@mgb.ch>
+
+chore: score per AGENT.md; archive previous score
+
+- Archived previous SCORE.md content to SCORE-before.md
+- Wrote an updated comprehensive SCORE.md reflecting current repo state
+- Proposed next steps per the new scoring recommendations
+
 2025-08-23 13:15 Amir Guindehi <amir.guindehi@mgb.ch>
 
 feat: tests; docker command preview; SBOM target
