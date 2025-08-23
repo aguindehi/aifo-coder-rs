@@ -1,0 +1,190 @@
+.TH AIFO-CODER 1 "2025-08-23" "aifo-coder" "User Commands"
+.SH NAME
+aifo-coder \- secure Docker-based launcher for coding assistant agents
+.SH SYNOPSIS
+.B aifo-coder
+.RB [ \-\-image " " IMAGE ]
+.RB [ \-\-no\-apparmor ]
+.I AGENT
+.RI [ " -- " ARGS ...]
+.P
+.B aifo-coder
+.RB [ \-h | \-\-help ]
+.P
+.B aifo-coder
+.RB [ \-V | \-\-version ]
+.SH DESCRIPTION
+.B aifo-coder
+is a small Rust CLI that launches developer "agent" tools inside Docker
+containers with safe defaults. It assembles a
+.B docker run
+command with:
+.IP \[bu] 2
+TTY detection for interactive sessions.
+.IP \[bu]
+UID:GID mapping to the invoking user.
+.IP \[bu]
+Conservative environment pass\-through.
+.IP \[bu]
+Minimal host mounts.
+.IP \[bu]
+An AppArmor profile on hosts that support it.
+.P
+To prevent concurrent runs that might contend for the same workspace,
+.B aifo-coder
+creates a lock file at a candidate location (see
+.BR FILES ).
+.P
+Different agents are selected via the positional
+.I AGENT
+argument. Additional arguments after
+.B --
+are passed through unchanged to the agent process inside the container.
+.SH AGENTS
+The set of available agents is build\-dependent. Common agents include:
+.TP
+.B codex
+Run the OpenAI Codex\-based CLI.
+.TP
+.B crush
+Run the Charmbracelet Crush TUI.
+.P
+See the project README for agent\-specific details.
+.SH OPTIONS
+.TP
+.BR \-\-image =IMAGE
+Override the Docker image reference used for the selected agent. If unset,
+the image is derived from
+.BR AIFO_CODER_IMAGE ,
+.BR AIFO_CODER_IMAGE_PREFIX " and " AIFO_CODER_IMAGE_TAG
+(see ENVIRONMENT).
+.TP
+.B \-\-no\-apparmor
+Disable application of an AppArmor profile even if the host supports AppArmor
+or the environment requests a profile. This is equivalent to setting
+.BR AIFO_CODER_NO_APPARMOR =1.
+.TP
+.BR \-h ", " \-\-help
+Print help and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version information and exit.
+.SH ENVIRONMENT
+.TP
+.B AIFO_CODER_IMAGE
+If set to a non\-empty string, use this Docker image reference for all agents,
+overriding per\-agent defaults and \-\-image.
+.TP
+.B AIFO_CODER_IMAGE_PREFIX
+Prefix used to construct default image references when
+.BR AIFO_CODER_IMAGE
+is not set. Defaults to
+.BR aifo\-coder .
+.TP
+.B AIFO_CODER_IMAGE_TAG
+Tag used to construct default image references when
+.BR AIFO_CODER_IMAGE
+is not set. Defaults to
+.BR latest .
+.TP
+.B AIFO_CODER_APPARMOR_PROFILE
+If set to a non\-empty string on Linux hosts whose Docker daemon reports
+AppArmor support, this value is applied as the container's AppArmor profile
+(via
+.BR \-\-security\-opt " " apparmor=PROFILE ).
+When unset, the launcher chooses a sensible default (a custom profile on
+native Linux; docker\-default on macOS/Windows Docker\-in\-VM).
+.TP
+.B AIFO_CODER_NO_APPARMOR
+If set to
+.BR 1 ,
+do not apply any AppArmor profile (equivalent to \-\-no\-apparmor).
+.TP
+.B XDG_RUNTIME_DIR
+Considered as a higher\-priority location for the lock file. If set to a
+non\-empty directory, the lock may be created at
+.BR $XDG_RUNTIME_DIR/aifo\-coder.lock .
+.TP
+.B HOME
+Used for default paths and may influence host mounts inside the container.
+.TP
+.B GNUPGHOME
+May be passed through to the container environment to enable GPG operations,
+depending on the agent and launcher defaults.
+.SH SECURITY
+On Linux hosts with AppArmor support, the launcher attempts to run agents
+under a constrained AppArmor profile to reduce kernel attack surface and
+limit syscalls and capabilities. The repository includes an AppArmor profile
+template that can be installed system\-wide by administrators. When AppArmor
+is unavailable (e.g., macOS Docker\-in\-VM) the launcher falls back to the
+Docker default profile.
+.SH FILES
+.TP
+.B ~/.aifo\-coder.lock
+Per\-user lock file candidate.
+.TP
+.B $XDG_RUNTIME_DIR/aifo\-coder.lock
+Per\-session lock file candidate when
+.B XDG_RUNTIME_DIR
+is set.
+.TP
+.B /tmp/aifo\-coder.lock
+Fallback lock file candidate.
+.TP
+.B apparmor/aifo\-coder.apparmor.tpl
+Profile template shipped in the source tree for use on AppArmor\-enabled hosts.
+.SH WRAPPER
+The repository provides a tiny shell wrapper named
+.B aifo\-coder
+that prefers an existing compiled binary at
+.B ./target/release/aifo\-coder
+(or
+.BR ./target/debug/aifo\-coder )
+and executes it directly. If not found, it attempts to build with
+.BR cargo " " \-\-release .
+If Cargo is unavailable but Docker is installed, it builds inside a container:
+.P
+.nf
+docker run \-\-rm \-u "$(id \-u):$(id \-g)" \\
+  \-v "$PWD:/workspace" \\
+  \-v "$HOME/.cargo/registry:/root/.cargo/registry" \\
+  \-v "$HOME/.cargo/git:/root/.cargo/git" \\
+  \-v "$PWD/target:/workspace/target" \\
+  \-w /workspace rust:1\-bookworm cargo build \-\-release
+.fi
+.P
+These cache mounts speed up repeat builds by reusing Cargo registry and git data.
+.SH EXIT STATUS
+The launcher propagates the exit status of the agent process running inside
+the container. A non\-zero exit code indicates failure reported by the agent
+or the container runtime.
+.SH EXAMPLES
+.TP
+Run the Codex agent with default image:
+.P
+.nf
+aifo\-coder codex \-\- \-\-help
+.fi
+.TP
+Run the Crush agent with a custom image:
+.P
+.nf
+aifo\-coder \-\-image aifo\-coder\-crush:nightly crush
+.fi
+.TP
+Disable AppArmor for a one\-off run:
+.P
+.nf
+aifo\-coder \-\-no\-apparmor codex \-\- \-\-version
+.fi
+.SH SEE ALSO
+.BR docker (1),
+.BR apparmor (7),
+.BR sh (1)
+.SH AUTHORS
+Amir Guindehi <amir.guindehi@mgb.ch> and contributors.
+.SH COPYRIGHT
+Copyright (c) the aifo\-coder authors.
+License terms are provided in the file
+.BR LICENSE
+in the source tree.
