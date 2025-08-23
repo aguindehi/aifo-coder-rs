@@ -61,10 +61,32 @@ fn kernel_apparmor_enabled() -> bool {
         && Path::new("/proc/self/attr/apparmor/exec").exists()
 }
 
+#[cfg(target_os = "linux")]
+fn apparmor_profile_available(name: &str) -> bool {
+    if let Ok(list) = fs::read_to_string("/sys/kernel/security/apparmor/profiles") {
+        for line in list.lines() {
+            let l = line.trim();
+            if l.is_empty() {
+                continue;
+            }
+            if l.starts_with(&format!("{name} (")) || l.starts_with(&format!("{name} ")) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(target_os = "linux"))]
+fn apparmor_profile_available(_name: &str) -> bool {
+    true
+}
+
 /// Choose the AppArmor profile to use, if any.
 /// - If Docker supports AppArmor, prefer an explicit override via AIFO_CODER_APPARMOR_PROFILE.
 /// - On macOS/Windows hosts (Docker-in-VM), default to docker-default to avoid requiring a host-installed custom profile.
-/// - On native Linux hosts, default to the custom "aifo-coder" profile.
+/// - On native Linux hosts, prefer the custom "aifo-coder" profile if it is loaded; otherwise fall back to "docker-default"
+///   if available; otherwise omit an explicit profile (Docker will choose its default).
 pub fn desired_apparmor_profile() -> Option<String> {
     if !docker_supports_apparmor() {
         return None;
@@ -76,12 +98,29 @@ pub fn desired_apparmor_profile() -> Option<String> {
         if trimmed.is_empty() || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str()) {
             return None;
         }
+        if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
+            eprintln!("aifo-coder: AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.", trimmed);
+            if apparmor_profile_available("docker-default") {
+                return Some("docker-default".to_string());
+            } else {
+                eprintln!("aifo-coder: 'docker-default' profile not found; continuing without explicit AppArmor profile.");
+                return None;
+            }
+        }
         return Some(trimmed.to_string());
     }
     if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
         Some("docker-default".to_string())
     } else {
-        Some("aifo-coder".to_string())
+        if apparmor_profile_available("aifo-coder") {
+            Some("aifo-coder".to_string())
+        } else if apparmor_profile_available("docker-default") {
+            eprintln!("aifo-coder: AppArmor profile 'aifo-coder' not loaded; using 'docker-default'.");
+            Some("docker-default".to_string())
+        } else {
+            eprintln!("aifo-coder: No known AppArmor profile loaded; continuing without explicit profile.");
+            None
+        }
     }
 }
 
