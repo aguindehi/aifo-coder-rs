@@ -82,7 +82,7 @@ if command -v docker >/dev/null 2>&1; then
     x86_64|amd64) PLAT="linux/amd64" ;;
     aarch64|arm64) PLAT="linux/arm64" ;;
     *) PLAT="" ;;
-  endac
+  esac
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
   docker run $DOCKER_PLATFORM_ARGS --rm -u "$(id -u):$(id -g)" \
     -v "$PWD:/workspace" \
