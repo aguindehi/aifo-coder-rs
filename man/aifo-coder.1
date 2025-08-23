@@ -4,7 +4,6 @@ aifo-coder \- secure Docker-based launcher for coding assistant agents
 .SH SYNOPSIS
 .B aifo-coder
 .RB [ \-\-image " " IMAGE ]
-.RB [ \-\-no\-apparmor ]
 .I AGENT
 .RI [ " -- " ARGS ...]
 .P
@@ -59,11 +58,6 @@ the image is derived from
 .BR AIFO_CODER_IMAGE_PREFIX " and " AIFO_CODER_IMAGE_TAG
 (see ENVIRONMENT).
 .TP
-.B \-\-no\-apparmor
-Disable application of an AppArmor profile even if the host supports AppArmor
-or the environment requests a profile. This is equivalent to setting
-.BR AIFO_CODER_NO_APPARMOR =1.
-.TP
 .BR \-h ", " \-\-help
 Print help and exit.
 .TP
@@ -94,11 +88,6 @@ AppArmor support, this value is applied as the container's AppArmor profile
 .BR \-\-security\-opt " " apparmor=PROFILE ).
 When unset, the launcher chooses a sensible default (a custom profile on
 native Linux; docker\-default on macOS/Windows Docker\-in\-VM).
-.TP
-.B AIFO_CODER_NO_APPARMOR
-If set to
-.BR 1 ,
-do not apply any AppArmor profile (equivalent to \-\-no\-apparmor).
 .TP
 .B XDG_RUNTIME_DIR
 Considered as a higher\-priority location for the lock file. If set to a
@@ -149,12 +138,6 @@ Run the Crush agent with a custom image:
 .P
 .nf
 aifo\-coder \-\-image aifo\-coder\-crush:nightly crush
-.fi
-.TP
-Disable AppArmor for a one\-off run:
-.P
-.nf
-aifo\-coder \-\-no\-apparmor codex \-\- \-\-version
 .fi
 .SH SEE ALSO
 .BR docker (1),

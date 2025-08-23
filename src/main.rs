@@ -58,9 +58,6 @@ struct Cli {
     #[arg(long)]
     image: Option<String>,
 
-    /// Disable applying AppArmor profile even if configured via environment
-    #[arg(long = "no-apparmor")]
-    no_apparmor: bool,
 
     /// Print detailed execution info
     #[arg(long)]
@@ -99,9 +96,6 @@ enum Agent {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    if cli.no_apparmor {
-        env::set_var("AIFO_CODER_NO_APPARMOR", "1");
-    }
 
     // Acquire lock to prevent concurrent agent runs
     let lock = match acquire_lock() {
