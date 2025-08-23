@@ -126,12 +126,10 @@ build: build-codex build-crush build-aider
 build-codex:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
@@ -142,12 +140,10 @@ build-codex:
 build-crush:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
@@ -158,12 +154,10 @@ build-crush:
 build-aider:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
@@ -180,12 +174,10 @@ rebuild: rebuild-codex rebuild-crush rebuild-aider
 rebuild-codex:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
@@ -196,12 +188,10 @@ rebuild-codex:
 rebuild-crush:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
@@ -212,12 +202,10 @@ rebuild-crush:
 rebuild-aider:
 	@RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 3 --max-time 2 -sSfI https://repository.migros.net >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	elif command -v getent >/dev/null 2>&1 && getent hosts repository.migros.net >/dev/null 2>&1; then \
-	  echo "DNS for repository.migros.net resolves; assuming reachable (no HTTPS confirmation)."; RP="repository.migros.net/"; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
 	else \
-	  echo "repository.migros.net not reachable; using Docker Hub (no prefix)."; \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	fi; \
 	if [ -n "$$RP" ]; then \
 	  docker build --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
