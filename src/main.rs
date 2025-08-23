@@ -154,7 +154,7 @@ fn main() -> ExitCode {
         .clone()
         .unwrap_or_else(|| default_image_for(agent));
 
-    println!("Analytics have been permanently disabled.");
+    println!();
 
     let apparmor_profile = desired_apparmor_profile();
     match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
