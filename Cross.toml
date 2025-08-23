@@ -1,9 +1,0 @@
-# Custom Cross configuration to control Docker images for Linux targets
-# We explicitly set images for GNU/Linux targets and do not configure any
-# apple-darwin target images (those should be built on macOS with cargo).
-
-[target.x86_64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
-
-[target.aarch64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
