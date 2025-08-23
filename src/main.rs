@@ -109,7 +109,7 @@ fn run_doctor(_verbose: bool) {
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
-    let show = |label: &str, path: std::path::PathBuf| {
+    let show = |label: &str, path: std::path::PathBuf, mounted: bool| {
         let pstr = path.display().to_string();
         let shown = if pstr.starts_with(&home_str) {
             format!("~{}", &pstr[home_str.len()..])
@@ -118,15 +118,18 @@ fn run_doctor(_verbose: bool) {
         };
         let exists = path.exists();
         let use_color = atty::is(atty::Stream::Stderr);
-        let (icon, status) = if exists { ("✅", "found") } else { ("❌", "missing") };
+
+        // Column widths
+        let label_width: usize = 14;
+        let path_col: usize = 40;    // target visible width for path column
+        let status_col: usize = 14;  // target width for each status cell (icon + text)
 
         // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
-        let label_width: usize = 14;
-        let path_col: usize = 40; // visible width target for the displayed path
-        let visible_len = shown.chars().count(); // approximate display width without ANSI
+        let visible_len = shown.chars().count();
         let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
         let padding = " ".repeat(pad_spaces);
 
+        // Colorize the path itself based on existence
         let colored_path = if use_color {
             if exists {
                 format!("\x1b[32m{}\x1b[0m", shown) // green
@@ -137,32 +140,62 @@ fn run_doctor(_verbose: bool) {
             shown
         };
 
-        let colored_status = if use_color {
+        // Build status cells (plain)
+        let (icon1, text1) = if exists { ("✅", "found") } else { ("❌", "missing") };
+        let (icon2, text2) = if mounted { ("✅", "mounted") } else { ("❌", "unmounted") };
+        let cell1_plain = format!("{} {}", icon1, text1);
+        let cell2_plain = format!("{} {}", icon2, text2);
+
+        // Colorize statuses
+        let colored_cell1 = if use_color {
             if exists {
-                format!("\x1b[32m{}\x1b[0m", status) // green
+                format!("\x1b[32m{}\x1b[0m", cell1_plain)
             } else {
-                format!("\x1b[31m{}\x1b[0m", status) // red
+                format!("\x1b[31m{}\x1b[0m", cell1_plain)
             }
         } else {
-            status.to_string()
+            cell1_plain.clone()
+        };
+        let colored_cell2 = if use_color {
+            if mounted {
+                format!("\x1b[32m{}\x1b[0m", cell2_plain)
+            } else {
+                format!("\x1b[31m{}\x1b[0m", cell2_plain)
+            }
+        } else {
+            cell2_plain.clone()
         };
 
-        eprintln!("  {:label_width$} {}{} {} {}", label, colored_path, padding, icon, colored_status, label_width=label_width);
+        // Pad the first status cell to a fixed width (based on plain text, not ANSI)
+        let s1_visible_len = cell1_plain.chars().count();
+        let s1_pad = if s1_visible_len < status_col { status_col - s1_visible_len } else { 1 };
+        let s1_padding = " ".repeat(s1_pad);
+
+        eprintln!(
+            "  {:label_width$} {}{} {}{} {}",
+            label,
+            colored_path,
+            padding,
+            colored_cell1,
+            s1_padding,
+            colored_cell2,
+            label_width = label_width
+        );
     };
 
     // Aider files
-    show("aider config:",   home.join(".aider.conf.yml"));
-    show("aider metadata:", home.join(".aider.model.metadata.json"));
-    show("aider settings:", home.join(".aider.model.settings.yml"));
+    show("aider config:",   home.join(".aider.conf.yml"), true);
+    show("aider metadata:", home.join(".aider.model.metadata.json"), true);
+    show("aider settings:", home.join(".aider.model.settings.yml"), true);
     eprintln!();
 
     // Crush paths
-    show("crush config:", home.join(".local").join("share").join("crush"));
-    show("crush state:",  home.join(".crush"));
+    show("crush config:", home.join(".local").join("share").join("crush"), true);
+    show("crush state:",  home.join(".crush"), true);
     eprintln!();
 
     // Codex path (requested as ~/codex)
-    show("codex config:", home.join("codex"));
+    show("codex config:", home.join(".codex"), true);
     eprintln!();
 
     eprintln!("doctor: completed diagnostics.");

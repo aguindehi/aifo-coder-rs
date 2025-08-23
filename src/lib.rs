@@ -404,6 +404,11 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     fs::create_dir_all(&crush_dir).ok();
     volume_flags.push(OsString::from("-v"));
     volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+    // Additional Crush state directory (~/.crush)
+    let crush_state_dir = host_home.join(".crush");
+    fs::create_dir_all(&crush_state_dir).ok();
+    volume_flags.push(OsString::from("-v"));
+    volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
 
     // Codex state
     let codex_dir = host_home.join(".codex");
