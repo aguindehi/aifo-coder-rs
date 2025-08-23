@@ -25,6 +25,16 @@ help:
 	@echo "  APP_ICON .................... Path to a .icns icon to include in the .app (optional)"
 	@echo "  DMG_NAME .................... DMG filename base (default: $${APP_NAME}-$${VERSION})"
 	@echo ""
+	@echo "Install paths (for 'make install'):"
+	@echo ""
+	@echo "  PREFIX (/usr/local) ......... Install prefix"
+	@echo "  DESTDIR () .................. Staging root for packaging"
+	@echo "  BIN_DIR ($${PREFIX}/bin) ..... Binary install dir"
+	@echo "  MAN_DIR ($${PREFIX}/share/man) Manpages root"
+	@echo "  MAN1_DIR ($${MAN_DIR}/man1) .. Section 1 manpages"
+	@echo "  DOC_DIR ($${PREFIX}/share/doc/$${BIN_NAME}) ......... Documentation dir"
+	@echo "  EXAMPLES_DIR ($${DOC_DIR}/examples) ................. Examples dir"
+	@echo ""
 	@echo "Release and cross-compile:"
 	@echo ""
 	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
@@ -38,6 +48,10 @@ help:
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
 	@echo "  build-app ................... Build macOS .app bundle into dist/ (Darwin hosts only)"
 	@echo "  build-dmg ................... Build macOS .dmg image from the .app (Darwin hosts only)"
+	@echo ""
+	@echo "Install:"
+	@echo ""
+	@echo "  install ..................... Install binary, man page, LICENSE/README and examples"
 	@echo ""
 	@echo "Build images:"
 	@echo ""
@@ -309,6 +323,15 @@ APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
 
+# Install locations (override as needed)
+PREFIX ?= /usr/local
+DESTDIR ?=
+BIN_DIR ?= $(DESTDIR)$(PREFIX)/bin
+MAN_DIR ?= $(DESTDIR)$(PREFIX)/share/man
+MAN1_DIR ?= $(MAN_DIR)/man1
+DOC_DIR ?= $(DESTDIR)$(PREFIX)/share/doc/$(BIN_NAME)
+EXAMPLES_DIR ?= $(DOC_DIR)/examples
+
 # Build release binaries and package archives for macOS and Linux (Ubuntu/Arch)
 # Requires: cargo; install non-native targets via rustup and any required linkers
 .PHONY: release-for-target release-for-mac release-for-linux release
@@ -467,6 +490,32 @@ release-for-linux:
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
 release: build-launcher build-app build-dmg release-for-mac release-for-linux
+
+.PHONY: install
+install: build-launcher
+	@set -e; \
+	BIN="$(BIN_NAME)"; \
+	BINPATH="target/release/$$BIN"; \
+	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
+	[ -f "$$BINPATH" ] || BINPATH="target/release/$$BIN_US"; \
+	if [ ! -f "$$BINPATH" ]; then echo "Error: binary not found at $$BINPATH. Build failed?" >&2; exit 1; fi; \
+	install -d -m 0755 "$(BIN_DIR)" "$(MAN1_DIR)" "$(DOC_DIR)"; \
+	install -m 0755 "$$BINPATH" "$(BIN_DIR)/$$BIN"; \
+	if [ -f man/$$BIN.1 ]; then \
+	  if command -v gzip >/dev/null 2>&1; then \
+	    TMP="$$(mktemp)"; cp "man/$$BIN.1" "$$TMP"; gzip -c "$$TMP" > "$(MAN1_DIR)/$$BIN.1.gz"; rm -f "$$TMP"; \
+	  else \
+	    install -m 0644 "man/$$BIN.1" "$(MAN1_DIR)/$$BIN.1"; \
+	  fi; \
+	fi; \
+	[ -f README.md ] && install -m 0644 README.md "$(DOC_DIR)/" || true; \
+	[ -f LICENSE ] && install -m 0644 LICENSE "$(DOC_DIR)/" || true; \
+	if [ -d examples ]; then \
+	  install -d -m 0755 "$(EXAMPLES_DIR)"; \
+	  cp -a examples/. "$(EXAMPLES_DIR)/"; \
+	  chmod -R u=rwX,go=rX "$(EXAMPLES_DIR)" || true; \
+	fi; \
+	echo "Installed $$BIN to $(BIN_DIR), man page to $(MAN1_DIR), docs to $(DOC_DIR)"
 
 .PHONY: checksums
 checksums:
