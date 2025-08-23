@@ -3,7 +3,7 @@
 .crush*
 .env
 build
-build.session
+build.*
 dist
 ISSUES
 /target
