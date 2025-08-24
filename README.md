@@ -22,6 +22,57 @@
 - AppArmor Support (via Docker)
 - No additional host devices, sockets or secrets are mounted
 
+## Prerequisites and installation
+
+Requirements:
+- Docker installed and running
+- GNU Make (recommended for the provided Makefile targets)
+- Optional: Rust stable toolchain (only needed if you build the CLI locally)
+
+Quick install:
+```bash
+make build
+./aifo-coder --help
+```
+
+Optional:
+```bash
+make build-slim
+make build-launcher
+./scripts/build-images.sh
+```
+
+Notes:
+- By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
+- The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
+
+## CLI usage and arguments
+
+Synopsis:
+```bash
+./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [--] [agent-args...]
+```
+
+Global flags:
+- --image <ref>                Override full image reference for all agents
+- --flavor <full|slim>         Select image flavor; default is full
+- --verbose                    Increase logging verbosity
+- --dry-run                    Print the docker run command without executing it
+- --invalidate-registry-cache  Invalidate on-disk registry probe cache and re-probe
+- -h, --help                   Show help
+
+Subcommands:
+- codex [args...]              Run OpenAI Codex CLI inside container
+- crush [args...]              Run Charmbracelet Crush inside container
+- aider [args...]              Run Aider inside container
+- doctor                       Run environment diagnostics (Docker/AppArmor/UID mapping)
+- images                       Print effective image references (honoring flavor/registry)
+- cache-clear                  Clear the on-disk registry probe cache (alias: cache-invalidate)
+
+Tips:
+- Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.
+- To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
+
 # The aifo-coder
 
 Containerized launcher and Docker images bundling three terminal AI coding agents:
@@ -165,6 +216,15 @@ All trailing arguments after the agent subcommand are passed through to the agen
 
 A quick reference of all Makefile targets.
 
+Additional/updated targets and behavior:
+- build-slim, build-*-slim: Build slim image variants (-slim targets for codex, crush, aider)
+- rebuild-slim, rebuild-*-slim: Rebuild slim images without cache
+- release: Runs rebuild and rebuild-slim before packaging to ensure fresh images
+- docker-images: List local Docker images
+- checksums: Generate dist/SHA256SUMS.txt for release artifacts
+- sbom: Generate CycloneDX SBOM (dist/SBOM.cdx.json) when cargo-cyclonedx is installed
+- loc: Count lines of code across key file types
+
 | Target                     | Category   | Description                                                                                   |
 |---------------------------|------------|-----------------------------------------------------------------------------------------------|
 | build                     | Build      | Build all per‑agent images (codex, crush, aider)                                              |
@@ -211,6 +271,7 @@ Variables used by these targets:
 | APP_BUNDLE_ID           | ch.migros.aifo-coder | macOS bundle identifier for the .app              |
 | DMG_NAME                | aifo-coder-<version> | DMG file base name (macOS)                         |
 | APP_ICON                | (none)        | Path to a .icns icon to include in the .app (optional)  |
+| KEEP_APT                | 0             | If 1, keep apt/procps in final images; 0 (default) drops them after install |
 
 ---
 
@@ -300,6 +361,28 @@ How to use:
 - Or pass a CLI flag or set an environment variable for automatic selection:
   - ./aifo-coder --flavor slim codex --version
   - export AIFO_CODER_IMAGE_FLAVOR=slim
+
+## Image build options and package dropping
+
+During image builds, the final runtime stages drop apt and procps by default to minimize attack surface. You can opt out by setting KEEP_APT=1.
+
+Default removal sequence (applied when KEEP_APT=0):
+```bash
+# Remove apt and clean up
+apt-get remove --purge -y apt apt-get
+apt-get autoremove -y
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+```
+Additionally, procps is removed when present.
+
+How to keep apt/procps:
+```bash
+make KEEP_APT=1 build
+make KEEP_APT=1 build-slim
+```
+
+These options propagate as Docker build-args so you can also pass them directly when invoking docker build manually.
 
 ---
 
