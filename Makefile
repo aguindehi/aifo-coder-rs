@@ -984,29 +984,33 @@ release-dmg: release-app
 	hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$$MNT" "$$TMP_DMG" >/dev/null; \
 	echo Configure Finder window via AppleScript \(best-effort\) >/dev/null; \
 	if command -v osascript >/dev/null 2>&1; then \
-	  if [ -n "$$BG_NAME" ]; then BG_LINE="set background picture of opts to POSIX file \"$$MNT/.background/$$BG_NAME\""; else BG_LINE=""; fi; \
-	  osascript <<EOF || true
-tell application "Finder"
-  tell disk "$$APP"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set bounds of container window to {100, 100, 680, 480}
-    set opts to the icon view options of container window
-    set arrangement of opts to not arranged
-    set icon size of opts to 96
-    $${BG_LINE}
-    delay 1
-    set position of item "$$APP.app" of container window to {120, 260}
-    set position of item "Applications" of container window to {360, 260}
-    close
-    open
-    update without registering applications
-    delay 1
-  end tell
-end tell
-EOF
+	  BG_LINE=""; \
+	  osascript <<EOF || true \
+tell application "Finder" \
+  tell disk "$$APP" \
+    open \
+    set current view of container window to icon view \
+    set toolbar visible of container window to false \
+    set statusbar visible of container window to false \
+    set bounds of container window to {100, 100, 680, 480} \
+    set opts to the icon view options of container window \
+    set arrangement of opts to not arranged \
+    set icon size of opts to 96 \
+    if "$$BG_NAME" is not "" then \
+      try \
+        set background picture of opts to POSIX file "$$MNT/.background/$$BG_NAME" \
+      end try \
+    end if \
+    delay 1 \
+    set position of item "$$APP.app" of container window to {120, 260} \
+    set position of item "Applications" of container window to {360, 260} \
+    close \
+    open \
+    update without registering applications \
+    delay 1 \
+  end tell \
+end tell \
+EOF \
 	else \
 	  echo "osascript not available; skipping Finder customization." >&2; \
 	fi; \
@@ -1015,7 +1019,7 @@ EOF
 	rm -rf "$$MNT"; \
 	hdiutil convert "$$TMP_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$$DMG_PATH" >/dev/null; \
 	rm -f "$$TMP_DMG"; \
-	echo "Wrote $$DMG_PATH (unsigned)"; 
+	echo "Wrote $$DMG_PATH (unsigned)";
 
 # Sign the .app and .dmg (and optionally notarize). This target signs the app first,
 # then rebuilds the DMG so it contains the signed app, then signs the DMG.
