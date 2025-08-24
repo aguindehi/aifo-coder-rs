@@ -489,6 +489,8 @@ fn main() -> ExitCode {
         Agent::Crush { args } => ("crush", args.clone()),
         Agent::Aider { args } => ("aider", args.clone()),
         Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
+        Agent::Images => unreachable!("Images subcommand is handled earlier and returns immediately"),
+        Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
     };
 
     // Print startup banner before any further diagnostics
