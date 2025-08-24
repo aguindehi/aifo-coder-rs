@@ -1,3 +1,11 @@
+2025-08-25 10:55 Amir Guindehi <amir.guindehi@mgb.ch>
+
+score: archive previous SCORE to SCORE-before and update scorecard
+
+- SCORE-before.md: updated to contain previous SCORE.md contents
+- SCORE.md: refreshed comprehensive scoring per AGENT.md workflow
+- CHANGES.md: recorded scoring update
+
 2025-08-24 20:45 Amir Guindehi <amir.guindehi@mgb.ch>
 
 assets: add new images/ folder
