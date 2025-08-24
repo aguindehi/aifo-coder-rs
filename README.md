@@ -250,12 +250,16 @@ A quick reference of all Makefile targets.
 | release-for-mac           | Release    | Build release for the current host (calls release-for-target)                                 |
 | release-for-linux         | Release    | Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)                                |
 | release                   | Release    | Aggregate: build both mac (host) and Linux                                                    |
-| build-app                 | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
-| build-dmg                 | Release    | Build macOS .dmg image from the .app (Darwin hosts only)                                     |
+| release-app               | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
+| release-dmg               | Release    | Create a macOS .dmg from the .app (Darwin hosts only)                                        |
+| release-dmg-sign          | Release    | Sign the .app and .dmg (and notarize if configured); produces a signed DMG                   |
+| build-app                 | Release    | Deprecated wrapper; use 'make release-app'                                                   |
+| build-dmg                 | Release    | Deprecated wrapper; use 'make release-dmg'                                                   |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
 | loc                       | Utility    | Count lines of code across key file types                                                     |
 | docker-images             | Utility    | Show the available images in the local Docker registry                                        |
 | docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
+| test                      | Utility    | Run the Rust test suite (cargo test)                                                          |
 | checksums                 | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                            |
 | sbom                      | Utility    | Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)                   |
 | gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
@@ -263,7 +267,7 @@ A quick reference of all Makefile targets.
 | gpg-show-config           | GPG        | Show effective GPG/Git signing configuration                                                  |
 | gpg-disable-signing-global| GPG        | Disable GPG commit signing globally                                                           |
 | gpg-unset-signing         | GPG        | Unset repo signing configuration                                                              |
-| git-check-signatures      | GPG        | Check signatures of recent commits                                                            |
+| git-show-signatures       | GPG        | Show commit signature status (git log %h %G? %s)                                              |
 | git-commit-no-sign        | GPG        | Make a commit without signing                                                                 |
 | git-amend-no-sign         | GPG        | Amend the last commit without signing                                                         |
 | git-commit-no-sign-all    | GPG        | Commit all staged changes without signing                                                     |
@@ -315,24 +319,66 @@ Summary:
 
 ### macOS signing and notarization (optional)
 
-Codesign locally (ad-hoc) for the .app:
+There are two common paths to sign macOS artifacts:
+
+1) Apple Developer identity (Apple Distribution / Developer ID Application):
+- Produces artifacts eligible for notarization.
+- The Makefile target release-dmg-sign will detect an Apple identity and use hardened runtime flags and timestamps automatically.
+- Notarization requires Xcode CLT and a stored notary profile.
+
+2) Self‑signed Code Signing certificate (no Apple account):
+- Useful for internal testing or distribution within a trusted environment.
+- Not notarizable; Gatekeeper prompts may appear on other machines unless the certificate is trusted on those hosts.
+
+Self‑signed certificate via Keychain Access (login keychain):
+- Open Keychain Access.
+- Ensure “login” is the active keychain.
+- Menu: Keychain Access → Certificate Assistant → Create a Certificate…
+  - Name: choose a clear name (e.g., Migros AI Foundation Code Signer)
+  - Identity Type: Self Signed Root
+  - Certificate Type: Code Signing (ensures Extended Key Usage includes Code Signing)
+  - Key Size: 2048 (or 4096)
+  - Location: login keychain
+- Finish, then verify a private key exists under the certificate.
+- Optional: In the certificate’s Trust settings, set Code Signing to “Always Trust” for smoother codesign usage.
+
+Build and sign with your chosen identity name:
 ```bash
-codesign --deep --force --sign - "dist/aifo-coder.app"
+make release-app
+make release-dmg-sign SIGN_IDENTITY="Migros AI Foundation Code Signer"
 ```
 
-Notarize with Apple (requires Xcode CLT and credentials set up):
+Notes for self‑signed usage:
+- The release-dmg-sign target will:
+  - Clear extended attributes on the app if needed.
+  - Sign the inner executable and the .app bundle with basic flags for non‑Apple identities.
+  - Rebuild the DMG from the signed app and sign the DMG.
+  - Skip notarization automatically if the identity is not an Apple Developer identity.
+- If prompted for key access, allow codesign to use the private key.
+- If your login keychain is locked, you may need to unlock it first:
 ```bash
-xcrun notarytool submit "dist/aifo-coder.dmg" --keychain-profile "AC_NOTARY" --wait
+security unlock-keychain -p "<your-password>" login.keychain-db
+```
+- If you previously signed artifacts or see quarantine issues:
+```bash
+xattr -cr "dist/aifo-coder.app" "dist/aifo-coder.dmg"
 ```
 
-Staple notarization ticket:
+Apple notarization workflow (requires Apple Developer identity and profile):
 ```bash
+# Store credentials once (example)
+xcrun notarytool store-credentials AC_NOTARY --apple-id "<apple-id>" --team-id "<team-id>" --password "<app-specific-password>"
+
+# Create a signed DMG (Makefile will sign app and DMG, then rebuild DMG)
+make release-dmg-sign NOTARY_PROFILE="AC_NOTARY"
+
+# If needed, staple tickets (usually release-dmg-sign already staples)
 xcrun stapler staple "dist/aifo-coder.dmg"
+xcrun stapler staple "dist/aifo-coder.app"
 ```
 
-Notes:
-- Create a keychain profile with: xcrun notarytool store-credentials AC_NOTARY --apple-id "<your-apple-id>" --team-id "<team-id>" --password "<app-specific-password>"
-- The DMG includes an /Applications symlink for drag-and-drop install; you can further customize a background image.
+Tip:
+- The DMG includes an /Applications symlink for drag‑and‑drop install; you can further customize a background image.
 
 ---
 
