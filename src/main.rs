@@ -388,6 +388,10 @@ struct Cli {
     #[arg(long)]
     verbose: bool,
 
+    /// Choose image flavor: full or slim (overrides AIFO_CODER_IMAGE_FLAVOR)
+    #[arg(long, value_enum)]
+    flavor: Option<Flavor>,
+
     /// Invalidate on-disk registry cache before probing
     #[arg(long)]
     invalidate_registry_cache: bool,
@@ -398,6 +402,12 @@ struct Cli {
 
     #[command(subcommand)]
     command: Agent,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
+enum Flavor {
+    Full,
+    Slim,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -437,6 +447,14 @@ fn main() -> ExitCode {
     // Optional: invalidate on-disk registry cache before any probes
     if cli.invalidate_registry_cache {
         aifo_coder::invalidate_registry_cache();
+    }
+
+    // Apply CLI flavor override by setting the environment variable the launcher uses
+    if let Some(flavor) = cli.flavor {
+        match flavor {
+            Flavor::Full => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "full"),
+            Flavor::Slim => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim"),
+        }
     }
 
     // Doctor subcommand runs diagnostics without acquiring a lock

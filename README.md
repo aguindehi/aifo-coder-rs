@@ -273,7 +273,8 @@ Editors installed:
 How to use:
 - Build: make build-slim
 - Run via explicit image: ./aifo-coder --image aifo-coder-codex-slim:latest codex --version
-- Or set an environment variable for automatic selection:
+- Or pass a CLI flag or set an environment variable for automatic selection:
+  - ./aifo-coder --flavor slim codex --version
   - export AIFO_CODER_IMAGE_FLAVOR=slim
 
 ---
