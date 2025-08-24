@@ -27,12 +27,12 @@ fn print_startup_banner() {
     println!(" 🔧 Building a safer future for coding automation in Migros Group...");
     println!("    - Container isolation on Linux & macOS");
     println!("    - Agents run inside a container, not on your host runtimes");
+    println!("    - AppArmor Support (via Docker or Colima)");
     println!("    - No privileged Docker mode; no host Docker socket is mounted");
     println!("    - Minimal attack surface area");
     println!("    - Only the current project folder and essential per‑tool config/state paths are mounted");
     println!("    - Nothing else from your home directory is exposed by default");
     println!("    - Principle of least privilege");
-    println!("    - AppArmor Support (via Docker)");
     println!("    - No additional host devices, sockets or secrets are mounted");
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
     println!(" 📜 Copyright (c) 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation");
