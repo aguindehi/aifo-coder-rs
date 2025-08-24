@@ -213,8 +213,12 @@ For smaller footprints, use the -slim variants of each image:
 
 Differences from the full images:
 - Based on the same Debian Bookworm base
-- Editors (emacs/vim/nano) and ripgrep are omitted
+- Heavy editors (emacs-nox, vim, nano) and ripgrep are omitted; lightweight editors mg and nvi are included
 - Otherwise identical behavior and entrypoint
+
+Editors installed:
+- Full images: emacs-nox, vim, nano, mg, nvi
+- Slim images: mg, nvi
 
 How to use:
 - Build: make build-slim
