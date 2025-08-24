@@ -222,17 +222,6 @@ All trailing arguments after the agent subcommand are passed through to the agen
 
 A quick reference of all Makefile targets.
 
-Additional/updated targets and behavior:
-- build: Build both slim and fat images (all agents)
-- build-fat: Build fat images (codex, crush, aider)
-- build-slim, build-*-slim: Build slim image variants (-slim targets for codex, crush, aider)
-- rebuild: Rebuild both slim and fat images without cache
-- rebuild-fat: Rebuild fat images without cache
-- release: Runs rebuild before packaging (rebuild covers both slim and fat)
-- docker-images: List local Docker images
-- checksums: Generate dist/SHA256SUMS.txt for release artifacts
-- sbom: Generate CycloneDX SBOM (dist/SBOM.cdx.json) when cargo-cyclonedx is installed
-- loc: Count lines of code across key file types
 
 | Target                     | Category   | Description                                                                                   |
 |---------------------------|------------|-----------------------------------------------------------------------------------------------|
@@ -241,11 +230,19 @@ Additional/updated targets and behavior:
 | build-codex               | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
 | build-crush               | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
 | build-aider               | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
+| build-slim                | Build      | Build all slim images (codex-slim, crush-slim, aider-slim)                                    |
+| build-codex-slim          | Build      | Build only the Codex slim image (`${IMAGE_PREFIX}-codex-slim:${TAG}`)                         |
+| build-crush-slim          | Build      | Build only the Crush slim image (`${IMAGE_PREFIX}-crush-slim:${TAG}`)                         |
+| build-aider-slim          | Build      | Build only the Aider slim image (`${IMAGE_PREFIX}-aider-slim:${TAG}`)                         |
 | rebuild                   | Rebuild    | Rebuild both slim and fat images without cache                                                |
 | rebuild-fat               | Rebuild    | Rebuild all fat images without cache                                                          |
 | rebuild-codex             | Rebuild    | Rebuild only Codex, no cache                                                                  |
 | rebuild-crush             | Rebuild    | Rebuild only Crush, no cache                                                                  |
 | rebuild-aider             | Rebuild    | Rebuild only Aider, no cache                                                                  |
+| rebuild-slim              | Rebuild    | Rebuild all slim images without cache                                                         |
+| rebuild-codex-slim        | Rebuild    | Rebuild only Codex slim, no cache                                                             |
+| rebuild-crush-slim        | Rebuild    | Rebuild only Crush slim, no cache                                                             |
+| rebuild-aider-slim        | Rebuild    | Rebuild only Aider slim, no cache                                                             |
 | rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
@@ -256,7 +253,11 @@ Additional/updated targets and behavior:
 | build-app                 | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
 | build-dmg                 | Release    | Build macOS .dmg image from the .app (Darwin hosts only)                                     |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
+| loc                       | Utility    | Count lines of code across key file types                                                     |
+| docker-images             | Utility    | Show the available images in the local Docker registry                                        |
 | docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
+| checksums                 | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                            |
+| sbom                      | Utility    | Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)                   |
 | gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
 | gpg-enable-signing        | GPG        | Enable GPG commit signing for the current repo                                                |
 | gpg-show-config           | GPG        | Show effective GPG/Git signing configuration                                                  |
