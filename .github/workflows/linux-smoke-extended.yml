@@ -35,3 +35,18 @@ jobs:
 
       - name: Run aider --version via launcher - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder aider --version; else ./aifo-coder aider --version; fi
+
+      - name: Validate workspace mounts and UID mapping (crush) - ${{ matrix.flavor }}
+        run: |
+          if [ "${{ matrix.flavor }}" = "slim" ]; then suffix="-slim"; else suffix=""; fi
+          img="aifo-coder-crush${suffix}:latest"
+          rm -f _aifo_doctor.txt _aifo_uid.txt
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace "$img" sh -lc "echo ok > /workspace/_aifo_doctor.txt && id -u > /workspace/_aifo_uid.txt"
+          test -f _aifo_doctor.txt
+          test "$(cat _aifo_uid.txt)" = "$(id -u)"
+          if stat -c %u _aifo_doctor.txt >/dev/null 2>&1; then
+            test "$(stat -c %u _aifo_doctor.txt)" = "$(id -u)"
+          elif stat -f %u _aifo_doctor.txt >/dev/null 2>&1; then
+            test "$(stat -f %u _aifo_doctor.txt)" = "$(id -u)"
+          fi
+          rm -f _aifo_doctor.txt _aifo_uid.txt

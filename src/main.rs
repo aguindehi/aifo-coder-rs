@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 use std::env;
 use std::process::{Command, ExitCode};
 use std::io;
+use std::fs;
+use std::path::PathBuf;
 use aifo_coder::{desired_apparmor_profile, preferred_registry_prefix, build_docker_cmd, acquire_lock};
 
 
@@ -232,6 +234,61 @@ fn run_doctor(_verbose: bool) {
         }
     }
 
+    // Workspace write test to validate mounts and UID mapping
+    if aifo_coder::container_runtime_path().is_ok() {
+        let image = default_image_for("crush");
+        let tmpname = format!(".aifo-coder-doctor-{}-{}.tmp",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        );
+        let pwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let uid = String::from_utf8_lossy(
+            &Command::new("id").arg("-u").output().unwrap_or_else(|_| std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: b"0".to_vec(), stderr: Vec::new() })
+                .stdout
+        ).trim().to_string();
+        let gid = String::from_utf8_lossy(
+            &Command::new("id").arg("-g").output().unwrap_or_else(|_| std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: b"0".to_vec(), stderr: Vec::new() })
+                .stdout
+        ).trim().to_string();
+
+        let _ = Command::new("docker")
+            .args([
+                "run", "--rm",
+                "--user", &format!("{uid}:{gid}"),
+                "-v", &format!("{}:/workspace", pwd.display()),
+                "-w", "/workspace",
+                &image,
+                "sh", "-lc",
+                &format!("echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid", tmp = tmpname),
+            ])
+            .status();
+
+        let host_file = pwd.join(&tmpname);
+        let host_uid_file = pwd.join(format!("{tmp}.uid", tmp = tmpname));
+        if host_file.exists() && host_uid_file.exists() {
+            let file_uid_str = fs::read_to_string(&host_uid_file).unwrap_or_default();
+            let file_uid = file_uid_str.trim();
+            let mut ownership_ok = false;
+            // Try GNU stat (-c) or BSD stat (-f) to get uid
+            let stat_c = Command::new("stat").args(["-c", "%u", host_file.to_string_lossy().as_ref()]).output();
+            if let Ok(out) = stat_c {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                ownership_ok = s == uid;
+            } else {
+                let stat_f = Command::new("stat").args(["-f", "%u", host_file.to_string_lossy().as_ref()]).output();
+                if let Ok(out) = stat_f {
+                    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    ownership_ok = s == uid;
+                }
+            }
+            eprintln!("  workspace write test: {}", if ownership_ok && file_uid == uid { "ok (uid match, owned by host user)" } else { "check failed (uid mismatch or ownership issue)" });
+            let _ = fs::remove_file(&host_file);
+            let _ = fs::remove_file(&host_uid_file);
+        } else {
+            eprintln!("  workspace write test: (skipped or failed to create test files)");
+        }
+    }
+
     eprintln!("doctor: completed diagnostics.");
 }
 
@@ -246,6 +303,10 @@ struct Cli {
     /// Print detailed execution info
     #[arg(long)]
     verbose: bool,
+
+    /// Invalidate on-disk registry cache before probing
+    #[arg(long)]
+    invalidate_registry_cache: bool,
 
     /// Prepare and print what would run, but do not execute
     #[arg(long)]
@@ -282,6 +343,11 @@ enum Agent {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    // Optional: invalidate on-disk registry cache before any probes
+    if cli.invalidate_registry_cache {
+        aifo_coder::invalidate_registry_cache();
+    }
+
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
@@ -317,6 +383,11 @@ fn main() -> ExitCode {
                     "aifo-coder: effective AppArmor profile: {}",
                     apparmor_profile.as_deref().unwrap_or("(disabled)")
                 );
+                // Show chosen registry and source for transparency
+                let rp = aifo_coder::preferred_registry_prefix_quiet();
+                let reg_display = if rp.is_empty() { "Docker Hub".to_string() } else { rp.trim_end_matches('/').to_string() };
+                let reg_src = aifo_coder::preferred_registry_source();
+                eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
                 eprintln!("aifo-coder: image: {image}");
                 eprintln!("aifo-coder: agent: {agent}");
             }

@@ -246,6 +246,14 @@ fn write_registry_cache_disk(s: &str) {
     }
 }
 
+/// Public helper to invalidate the on-disk registry cache before probing.
+/// Does not affect the in-process OnceCell cache for this run.
+pub fn invalidate_registry_cache() {
+    if let Some(path) = registry_cache_path() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 /// Determine the preferred registry prefix for image references.
 /// Precedence:
 /// 1) If AIFO_CODER_REGISTRY_PREFIX is set:
