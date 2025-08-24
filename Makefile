@@ -55,7 +55,8 @@ help:
 	@echo ""
 	@echo "Build images:"
 	@echo ""
-	@echo "  build ....................... Build all per-agent images (codex, crush, aider)"
+	@echo "  build ....................... Build both slim and fat images (all agents)"
+	@echo "  build-fat ................... Build all fat images (codex, crush, aider)"
 	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim)"
 	@echo ""
 	@echo "  build-codex ................. Build only the Codex image ($${IMAGE_PREFIX}-codex:$${TAG})"
@@ -67,9 +68,10 @@ help:
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
-	@echo "  rebuild ..................... Rebuild all images without cache"
+	@echo "  rebuild ..................... Rebuild both slim and fat images without cache"
+	@echo "  rebuild-fat ................. Rebuild all fat images without cache"
 	@echo "  rebuild-slim ................ Rebuild all slim images without cache"
-@echo ""
+	@echo ""
 	@echo "  rebuild-codex ............... Rebuild only the Codex image without cache"
 	@echo "  rebuild-crush ............... Rebuild only the Crush image without cache"
 	@echo "  rebuild-aider ............... Rebuild only the Aider image without cache"
@@ -137,8 +139,10 @@ CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
 CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 
-.PHONY: build build-codex build-crush build-aider build-launcher
-build: build-codex build-crush build-aider
+.PHONY: build build-fat build-codex build-crush build-aider build-launcher
+build-fat: build-codex build-crush build-aider
+
+build: build-slim build-fat
 
 build-codex:
 	@RP=""; \
@@ -270,8 +274,10 @@ build-launcher:
 test:
 	cargo test
 
-.PHONY: rebuild rebuild-codex rebuild-crush rebuild-aider
-rebuild: rebuild-codex rebuild-crush rebuild-aider
+.PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider
+rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
+
+rebuild: rebuild-slim rebuild-fat
 
 rebuild-codex:
 	@RP=""; \
@@ -743,7 +749,7 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
-release: rebuild rebuild-slim build-launcher build-app build-dmg release-for-mac release-for-linux
+release: rebuild build-launcher build-app build-dmg release-for-mac release-for-linux
 
 .PHONY: install
 install: build build-launcher

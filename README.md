@@ -37,6 +37,7 @@ make build
 
 Optional:
 ```bash
+make build-fat
 make build-slim
 make build-launcher
 ./scripts/build-images.sh
@@ -177,7 +178,7 @@ No Rust or Make installed on your host? Use the Docker-based dev helper:
 
 ## Quick start
 
-- Build all agent images:
+- Build both slim and fat images:
 ```bash
 make build
 ```
@@ -187,9 +188,14 @@ make build
 ./scripts/build-images.sh
 ```
 
-- Build slim variants (smaller images, fewer tools):
+- Build only slim variants (smaller images, fewer tools):
 ```bash
 make build-slim
+```
+
+- Build only fat (full) variants:
+```bash
+make build-fat
 ```
 
 - Build the Rust launcher locally (optional if you already have the binary):
@@ -217,9 +223,12 @@ All trailing arguments after the agent subcommand are passed through to the agen
 A quick reference of all Makefile targets.
 
 Additional/updated targets and behavior:
+- build: Build both slim and fat images (all agents)
+- build-fat: Build fat images (codex, crush, aider)
 - build-slim, build-*-slim: Build slim image variants (-slim targets for codex, crush, aider)
-- rebuild-slim, rebuild-*-slim: Rebuild slim images without cache
-- release: Runs rebuild and rebuild-slim before packaging to ensure fresh images
+- rebuild: Rebuild both slim and fat images without cache
+- rebuild-fat: Rebuild fat images without cache
+- release: Runs rebuild before packaging (rebuild covers both slim and fat)
 - docker-images: List local Docker images
 - checksums: Generate dist/SHA256SUMS.txt for release artifacts
 - sbom: Generate CycloneDX SBOM (dist/SBOM.cdx.json) when cargo-cyclonedx is installed
@@ -227,11 +236,13 @@ Additional/updated targets and behavior:
 
 | Target                     | Category   | Description                                                                                   |
 |---------------------------|------------|-----------------------------------------------------------------------------------------------|
-| build                     | Build      | Build all per‑agent images (codex, crush, aider)                                              |
+| build                     | Build      | Build both slim and fat images (all agents)                                                   |
+| build-fat                 | Build      | Build all fat images (codex, crush, aider)                                                    |
 | build-codex               | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
 | build-crush               | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
 | build-aider               | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
-| rebuild                   | Rebuild    | Rebuild all images without cache                                                              |
+| rebuild                   | Rebuild    | Rebuild both slim and fat images without cache                                                |
+| rebuild-fat               | Rebuild    | Rebuild all fat images without cache                                                          |
 | rebuild-codex             | Rebuild    | Rebuild only Codex, no cache                                                                  |
 | rebuild-crush             | Rebuild    | Rebuild only Crush, no cache                                                                  |
 | rebuild-aider             | Rebuild    | Rebuild only Aider, no cache                                                                  |
@@ -356,7 +367,9 @@ Editors installed:
 - Slim images: mg, nvi
 
 How to use:
-- Build: make build-slim
+- Build slim only: make build-slim
+- Build fat only: make build-fat
+- Build both: make build
 - Run via explicit image: ./aifo-coder --image aifo-coder-codex-slim:latest codex --version
 - Or pass a CLI flag or set an environment variable for automatic selection:
   - ./aifo-coder --flavor slim codex --version
