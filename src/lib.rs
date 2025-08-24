@@ -48,6 +48,7 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         // Editor preferences
         "EDITOR",
         "VISUAL",
+        "TERM",
     ]
 });
  
@@ -520,6 +521,11 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     {
         env_flags.push(OsString::from("-e"));
         env_flags.push(OsString::from(format!("XDG_RUNTIME_DIR=/tmp/runtime-{uid}")));
+    }
+    // Ensure pinentry can bind to the terminal when interactive sessions are used
+    if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
+        env_flags.push(OsString::from("-e"));
+        env_flags.push(OsString::from("GPG_TTY=/dev/tty"));
     }
 
     // Disable commit signing for Aider if requested
