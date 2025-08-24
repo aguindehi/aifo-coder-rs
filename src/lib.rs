@@ -408,6 +408,14 @@ pub fn preferred_registry_prefix_quiet() -> String {
     v
 }
 
+/// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
+pub fn preferred_registry_source() -> String {
+    REGISTRY_PREFIX_SOURCE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 /// Render a docker -v host:container pair.
 pub fn path_pair(host: &Path, container: &str) -> OsString {
     OsString::from(format!("{}:{container}", host.display()))
