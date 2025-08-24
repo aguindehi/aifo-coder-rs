@@ -9,5 +9,5 @@
 3. If the source code has been changed, Move the file SCORE.md to SCORE-before.md, overwriting it. Do not use -f with mv, it overwrites anyway.
 4. If the source code has been changed, score the source code and write a comprehensive scoring, inclusive grades and grade summary, to the file SCORE.md in Markdown.
 5. Consider the next steps according to the notes in the fresh SCORE.md.
-6. Propose next steps to the user.
+6. Propose next steps to the user and add them last to SCORE.md.
 7. Ask the user: "Shall I proceed with these next steps?".
