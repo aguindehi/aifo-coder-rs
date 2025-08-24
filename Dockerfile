@@ -51,11 +51,29 @@ CMD ["bash"]
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
 RUN npm install -g @openai/codex
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # --- Crush image (adds only Crush CLI on top of base) ---
 FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
 RUN npm install -g @charmland/crush
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
@@ -76,6 +94,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
@@ -125,10 +152,28 @@ CMD ["bash"]
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
 RUN npm install -g @openai/codex
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
 RUN npm install -g @charmland/crush
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
@@ -146,3 +191,12 @@ FROM base-slim AS aider-slim
 RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ARG KEEP_APT=0
+# Optionally drop apt/procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get remove --purge -y apt apt-get; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi

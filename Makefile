@@ -124,6 +124,8 @@ help:
 
 IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
+# Set to 1 to keep apt/procps in final images (default drops them in final stages)
+KEEP_APT ?= 0
 
 CODEX_IMAGE ?= $(IMAGE_PREFIX)-codex:$(TAG)
 CRUSH_IMAGE ?= $(IMAGE_PREFIX)-crush:$(TAG)
@@ -150,9 +152,9 @@ build-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex -t $(CODEX_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 build-crush:
@@ -170,9 +172,9 @@ build-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush -t $(CRUSH_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 build-aider:
@@ -190,9 +192,9 @@ build-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider -t $(AIDER_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
@@ -213,9 +215,9 @@ build-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
 	fi
 
 build-crush-slim:
@@ -233,9 +235,9 @@ build-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
 	fi
 
 build-aider-slim:
@@ -253,9 +255,9 @@ build-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
 	fi
 
 build-launcher:
@@ -283,9 +285,9 @@ rebuild-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 rebuild-crush:
@@ -303,9 +305,9 @@ rebuild-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 rebuild-aider:
@@ -323,9 +325,9 @@ rebuild-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 .PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim
@@ -346,9 +348,9 @@ rebuild-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
 	fi
 
 rebuild-crush-slim:
@@ -366,9 +368,9 @@ rebuild-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
 	fi
 
 rebuild-aider-slim:
@@ -386,9 +388,9 @@ rebuild-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
 	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache
@@ -733,7 +735,7 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
-release: build-launcher build-app build-dmg release-for-mac release-for-linux
+release: rebuild rebuild-slim build-launcher build-app build-dmg release-for-mac release-for-linux
 
 .PHONY: install
 install: build build-launcher
