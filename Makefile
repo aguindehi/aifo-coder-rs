@@ -984,32 +984,29 @@ release-dmg: release-app
 	hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$$MNT" "$$TMP_DMG" >/dev/null; \
 	echo Configure Finder window via AppleScript \(best-effort\) >/dev/null; \
 	if command -v osascript >/dev/null 2>&1; then \
-	  AS="tell application \"Finder\" \
-tell disk \"$$APP\" \
-open \
-set current view of container window to icon view \
-set toolbar visible of container window to false \
-set statusbar visible of container window to false \
-set bounds of container window to {100, 100, 680, 480} \
-set opts to the icon view options of container window \
-set arrangement of opts to not arranged \
-set icon size of opts to 96 \
-"; \
-	  if [ -n "$$BG_NAME" ]; then \
-	    AS="$$AS set background picture of opts to POSIX file \"$$MNT/.background/$$BG_NAME\" \
-"; \
-	  fi; \
-	  AS="$$AS \
-delay 1 \
-set position of item \"$$APP.app\" of container window to {120, 260} \
-set position of item \"Applications\" of container window to {360, 260} \
-close \
-open \
-update without registering applications \
-delay 1 \
-end tell \
-end tell"; \
-	  osascript -e "$$AS" || true; \
+	  if [ -n "$$BG_NAME" ]; then BG_LINE="set background picture of opts to POSIX file \"$$MNT/.background/$$BG_NAME\""; else BG_LINE=""; fi; \
+	  osascript <<EOF || true
+tell application "Finder"
+  tell disk "$$APP"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to {100, 100, 680, 480}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 96
+    $${BG_LINE}
+    delay 1
+    set position of item "$$APP.app" of container window to {120, 260}
+    set position of item "Applications" of container window to {360, 260}
+    close
+    open
+    update without registering applications
+    delay 1
+  end tell
+end tell
+EOF
 	else \
 	  echo "osascript not available; skipping Finder customization." >&2; \
 	fi; \
@@ -1076,29 +1073,35 @@ release-dmg-sign: release-app
 	echo "Clearing extended attributes on app bundle (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$APPROOT" || true; fi; \
 	echo "Signing inner executable: $$BIN_EXEC"; \
-	if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$BIN_EXEC"; then \
+	if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
 	  echo "Signed inner executable with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$BIN_EXEC"; then \
+	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$BIN_EXEC" >/dev/null 2>&1; then \
 	  echo "Signed inner executable with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS -s "$$SIGN_ID_NAME" "$$BIN_EXEC"; then \
+	elif codesign $$SIGN_FLAGS -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
 	  echo "Signed inner executable with identity name (no explicit keychain)."; \
-	elif codesign $$SIGN_FLAGS -s - "$$BIN_EXEC"; then \
-	  echo "Ad-hoc signed inner executable (no identity)."; \
 	else \
-	  echo "codesign inner executable failed" >&2; exit 1; \
+	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for inner executable; falling back to ad-hoc." >&2; \
+	  if codesign $$SIGN_FLAGS -s - "$$BIN_EXEC"; then \
+	    echo "Ad-hoc signed inner executable (no identity)."; \
+	  else \
+	    echo "codesign inner executable failed" >&2; exit 1; \
+	  fi; \
 	fi; \
 	echo "Signing app bundle: $$APPROOT"; \
 	echo "Use --deep to ensure nested components are signed if present" >/dev/null; \
-	if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT"; then \
+	if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
 	  echo "Signed app bundle with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT"; then \
+	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT" >/dev/null 2>&1; then \
 	  echo "Signed app bundle with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS --deep -s "$$SIGN_ID_NAME" "$$APPROOT"; then \
+	elif codesign $$SIGN_FLAGS --deep -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
 	  echo "Signed app bundle with identity name (no explicit keychain)."; \
-	elif codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; then \
-	  echo "Ad-hoc signed app bundle (no identity)."; \
 	else \
-	  echo "codesign app bundle failed" >&2; exit 1; \
+	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for app bundle; falling back to ad-hoc." >&2; \
+	  if codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; then \
+	    echo "Ad-hoc signed app bundle (no identity)."; \
+	  else \
+	    echo "codesign app bundle failed" >&2; exit 1; \
+	  fi; \
 	fi; \
 	echo "Verifying app signature (deep/strict) ..."; \
 	if ! codesign --verify --deep --strict --verbose=4 "$$APPROOT"; then \
@@ -1110,16 +1113,19 @@ release-dmg-sign: release-app
 	echo "Clearing extended attributes on DMG (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$DMG_PATH" || true; fi; \
 	echo "Signing DMG at $$DMG_PATH ..."; \
-	if codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$DMG_PATH"; then \
+	if codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
 	  echo "Signed DMG with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$DMG_PATH"; then \
+	elif [ -n "$$SIG_SHA1" ] && codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$DMG_PATH" >/dev/null 2>&1; then \
 	  echo "Signed DMG with certificate SHA-1 via default keychain."; \
-	elif codesign --force --verbose=4 -s "$$SIGN_ID_NAME" "$$DMG_PATH"; then \
+	elif codesign --force --verbose=4 -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
 	  echo "Signed DMG with identity name (no explicit keychain)."; \
-	elif codesign --force --verbose=4 -s - "$$DMG_PATH"; then \
-	  echo "Ad-hoc signed DMG (no identity)."; \
 	else \
-	  echo "codesign DMG failed" >&2; exit 1; \
+	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for DMG; falling back to ad-hoc." >&2; \
+	  if codesign --force --verbose=4 -s - "$$DMG_PATH"; then \
+	    echo "Ad-hoc signed DMG (no identity)."; \
+	  else \
+	    echo "codesign DMG failed" >&2; exit 1; \
+	  fi; \
 	fi; \
 	NOTARY="$(NOTARY_PROFILE)"; \
 	if [ "$$APPLE_DEV" -eq 1 ] && [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
