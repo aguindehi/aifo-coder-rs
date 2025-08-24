@@ -15,6 +15,22 @@ jobs:
       - name: Set up Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build target
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+
       - name: Build launcher (release)
         run: cargo build --release
 
@@ -22,10 +38,13 @@ jobs:
         run: docker info
 
       - name: Build Crush image
-        run: make build-crush
+        run: DOCKER_BUILDKIT=1 make build-crush
 
       - name: Doctor diagnostics
         run: ./target/release/aifo-coder doctor
+
+      - name: Lightweight help smoke (crush --help)
+        run: ./target/release/aifo-coder crush --help
 
       - name: Run Crush --version via launcher
         run: ./target/release/aifo-coder crush --version

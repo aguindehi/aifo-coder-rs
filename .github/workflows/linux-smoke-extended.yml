@@ -21,11 +21,27 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build target
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+
       - name: Build launcher (release)
         run: cargo build --release
 
       - name: Build required images (codex, crush, aider) - ${{ matrix.flavor }}
-        run: if [ "${{ matrix.flavor }}" = "slim" ]; then make build-codex-slim build-crush-slim build-aider-slim; else make build-codex build-crush build-aider; fi
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then DOCKER_BUILDKIT=1 make build-codex-slim build-crush-slim build-aider-slim; else DOCKER_BUILDKIT=1 make build-codex build-crush build-aider; fi
 
       - name: Run codex --version via launcher - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder codex --version; else ./aifo-coder codex --version; fi
@@ -35,6 +51,15 @@ jobs:
 
       - name: Run aider --version via launcher - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder aider --version; else ./aifo-coder aider --version; fi
+
+      - name: Lightweight help smoke (codex --help) - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder codex --help; else ./aifo-coder codex --help; fi
+
+      - name: Lightweight help smoke (crush --help) - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder crush --help; else ./aifo-coder crush --help; fi
+
+      - name: Lightweight help smoke (aider --help) - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder aider --help; else ./aifo-coder aider --help; fi
 
       - name: Validate workspace mounts and UID mapping (crush) - ${{ matrix.flavor }}
         run: |
