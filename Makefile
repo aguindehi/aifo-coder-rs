@@ -49,8 +49,8 @@ help:
 	@echo "Build launcher:"
 	@echo ""
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
-	@echo "  build-app ................... Build macOS .app bundle into dist/ (Darwin hosts only)"
-	@echo "  build-dmg ................... Build macOS .dmg image from the .app (Darwin hosts only)"
+	@echo "  release-app ................. Build macOS .app bundle into dist/ (Darwin hosts only)"
+	@echo "  release-dmg ................. Build macOS .dmg image from the .app (Darwin hosts only)"
 	@echo ""
 	@echo "Install:"
 	@echo ""
@@ -580,6 +580,14 @@ ifeq ($(strip $(VERSION)),)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
+# Backwards compatibility wrappers (deprecated)
+.PHONY: build-app build-dmg
+build-app: release-app
+	@echo "Warning: 'build-app' is deprecated; use 'make release-app' instead." >&2
+
+build-dmg: release-dmg
+	@echo "Warning: 'build-dmg' is deprecated; use 'make release-dmg' instead." >&2
+
 # macOS app packaging variables
 APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
@@ -766,7 +774,7 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
-release: rebuild build-launcher build-app build-dmg release-for-mac release-for-linux
+release: rebuild build-launcher release-app release-dmg release-for-mac release-for-linux
 
 .PHONY: install
 install: build build-launcher
@@ -867,10 +875,10 @@ loc:
 	printf "  -------------------------\n"; \
 	printf "  Total:           %8d\n\n" "$$total"
 
-.PHONY: build-app build-dmg
+.PHONY: release-app release-dmg build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
 
-build-app:
+release-app:
 	@( \
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
@@ -945,7 +953,7 @@ build-app:
 	echo "Built $$APPROOT"; \
 	)
 
-build-dmg: build-app
+release-dmg: release-app
 	@( \
 	BIN="$(BIN_NAME)"; \
 	VERSION="$(VERSION)"; \
@@ -953,7 +961,7 @@ build-dmg: build-app
 	APP="$(APP_NAME)"; \
 	DMG="$(DMG_NAME)"; \
 	APPROOT="$$DIST/$$APP.app"; \
-	if [ ! -d "$$APPROOT" ]; then echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; fi; \
+	if [ ! -d "$$APPROOT" ]; then echo "App bundle not found at $$APPROOT; run 'make release-app' first." >&2; exit 1; fi; \
 	DMG_PATH="$$DIST/$$DMG.dmg"; \
 	BG_SRC="$(DMG_BG)"; \
 	if ! command -v hdiutil >/dev/null 2>&1; then echo "hdiutil not found; cannot build DMG." >&2; exit 1; fi; \
@@ -1040,10 +1048,10 @@ end tell"; \
 
 else
 
-build-app:
-	@echo "build-app is only supported on macOS (Darwin) hosts." >&2; exit 1
+release-app:
+	@echo "release-app is only supported on macOS (Darwin) hosts." >&2; exit 1
 
-build-dmg:
-	@echo "build-dmg is only supported on macOS (Darwin) hosts." >&2; exit 1
+release-dmg:
+	@echo "release-dmg is only supported on macOS (Darwin) hosts." >&2; exit 1
 
 endif
