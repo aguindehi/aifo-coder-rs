@@ -24,6 +24,9 @@ help:
 	@echo "  APP_BUNDLE_ID .............. macOS bundle identifier (default: ch.migros.aifo-coder)"
 	@echo "  APP_ICON .................... Path to a .icns icon to include in the .app (optional)"
 	@echo "  DMG_NAME .................... DMG filename base (default: $${APP_NAME}-$${VERSION})"
+	@echo "  SIGN_IDENTITY ............... macOS code signing identity (default: Migros AI Foundation Code Signer)"
+	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
+	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
 	@echo "Install paths (for 'make install'):"
 	@echo ""
@@ -582,6 +585,9 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
+SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+NOTARY_PROFILE ?=
+DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
 
 # Install locations (override as needed)
 PREFIX ?= /usr/local
@@ -928,6 +934,14 @@ build-app:
 '</dict>' \
 '</plist>' \
 > "$$CONTENTS/Info.plist"; \
+	SIGN_ID="$(SIGN_IDENTITY)"; \
+	if [ -n "$$SIGN_ID" ] && command -v codesign >/dev/null 2>&1; then \
+	  echo "Signing app with identity: $$SIGN_ID"; \
+	  codesign --force --deep --options runtime --timestamp -s "$$SIGN_ID" "$$APPROOT"; \
+	  codesign --verify --deep --strict "$$APPROOT" || { echo "codesign verification failed"; exit 1; }; \
+	else \
+	  echo "Skipping code signing (SIGN_IDENTITY empty or codesign not available)"; \
+	fi; \
 	echo "Built $$APPROOT"; \
 	)
 
@@ -941,13 +955,86 @@ build-dmg: build-app
 	APPROOT="$$DIST/$$APP.app"; \
 	if [ ! -d "$$APPROOT" ]; then echo "App bundle not found at $$APPROOT; run 'make build-app' first." >&2; exit 1; fi; \
 	DMG_PATH="$$DIST/$$DMG.dmg"; \
+	BG_SRC="$(DMG_BG)"; \
 	if ! command -v hdiutil >/dev/null 2>&1; then echo "hdiutil not found; cannot build DMG." >&2; exit 1; fi; \
-	echo "Creating $$DMG_PATH ..."; \
-	STAGE="$$DIST/.dmg-root"; rm -rf "$$STAGE"; mkdir -p "$$STAGE"; \
+	echo "Creating $$DMG_PATH (with background and layout) ..."; \
+	STAGE="$$DIST/.dmg-root"; rm -rf "$$STAGE"; mkdir -p "$$STAGE/.background"; \
 	ln -s /Applications "$$STAGE/Applications"; \
 	cp -a "$$APPROOT" "$$STAGE/"; \
-	hdiutil create -volname "$$APP" -srcfolder "$$STAGE" -ov -format UDZO "$$DMG_PATH"; \
+	if [ -f "$$BG_SRC" ]; then \
+	  BG_NAME="$$(basename "$$BG_SRC")"; \
+	  cp "$$BG_SRC" "$$STAGE/.background/$$BG_NAME"; \
+	else \
+	  echo "Warning: DMG background not found at $$BG_SRC; proceeding without background." >&2; \
+	  BG_NAME=""; \
+	fi; \
+	# Create temporary read-write DMG to customize Finder view \
+	TMP_DMG="$$DIST/.tmp-$$DMG.dmg"; \
+	MNT="$$DIST/.mnt-$$APP"; \
+	rm -f "$$TMP_DMG"; \
+	hdiutil create -ov -fs HFS+J -srcfolder "$$STAGE" -volname "$$APP" -format UDRW "$$TMP_DMG"; \
 	rm -rf "$$STAGE"; \
+	mkdir -p "$$MNT"; \
+	hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$$MNT" "$$TMP_DMG" >/dev/null; \
+	# Configure Finder window via AppleScript (best-effort) \
+	if command -v osascript >/dev/null 2>&1; then \
+	  AS="tell application \"Finder\" \
+tell disk \"$$APP\" \
+open \
+set current view of container window to icon view \
+set toolbar visible of container window to false \
+set statusbar visible of container window to false \
+set bounds of container window to {100, 100, 680, 480} \
+set opts to the icon view options of container window \
+set arrangement of opts to not arranged \
+set icon size of opts to 96 \
+"; \
+	  if [ -n "$$BG_NAME" ]; then \
+	    AS="$$AS set background picture of opts to POSIX file \"$$MNT/.background/$$BG_NAME\" \
+"; \
+	  fi; \
+	  AS="$$AS \
+delay 1 \
+set position of item \"$$APP.app\" of container window to {120, 260} \
+set position of item \"Applications\" of container window to {360, 260} \
+close \
+open \
+update without registering applications \
+delay 1 \
+end tell \
+end tell"; \
+	  osascript -e "$$AS" || true; \
+	else \
+	  echo "osascript not available; skipping Finder customization." >&2; \
+	fi; \
+	# Detach and convert to compressed DMG \
+	hdiutil detach "$$MNT" -quiet || hdiutil detach "$$MNT" -force -quiet || true; \
+	rm -rf "$$MNT"; \
+	hdiutil convert "$$TMP_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$$DMG_PATH" >/dev/null; \
+	rm -f "$$TMP_DMG"; \
+	# Sign DMG if identity provided \
+	SIGN_ID="$(SIGN_IDENTITY)"; \
+	if [ -n "$$SIGN_ID" ] && command -v codesign >/dev/null 2>&1; then \
+	  echo "Signing DMG with identity: $$SIGN_ID"; \
+	  codesign --force --timestamp -s "$$SIGN_ID" "$$DMG_PATH"; \
+	else \
+	  echo "Skipping DMG signing (SIGN_IDENTITY empty or codesign not available)"; \
+	fi; \
+	# Notarize and staple if notary profile configured \
+	NOTARY="$(NOTARY_PROFILE)"; \
+	if [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1; then \
+	  if xcrun notarytool --help >/dev/null 2>&1; then \
+	    echo "Submitting $$DMG_PATH for notarization with profile '$$NOTARY' (this may take a while) ..."; \
+	    xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait || { echo "Notarization failed" >&2; exit 1; }; \
+	    echo "Stapling notarization ticket ..."; \
+	    xcrun stapler staple "$$DMG_PATH" || true; \
+	    xcrun stapler staple "$$APPROOT" || true; \
+	  else \
+	    echo "xcrun notarytool not available; skipping notarization." >&2; \
+	  fi; \
+	else \
+	  echo "NOTARY_PROFILE not set or xcrun not available; skipping notarization." >&2; \
+	fi; \
 	echo "Wrote $$DMG_PATH"; \
 	)
 
