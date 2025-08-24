@@ -311,30 +311,39 @@ fn run_doctor(_verbose: bool) {
         let host_file = pwd.join(&tmpname);
         let host_uid_file = pwd.join(format!("{tmp}.uid", tmp = tmpname));
         if host_file.exists() && host_uid_file.exists() {
-            // Present readiness line aligned with found/missing columns
+            // Present readiness line aligned with the first status column (found/missing)
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
             let path_col: usize = 44;
             let yes_val = if use_color { "\x1b[34;1myes\x1b[0m".to_string() } else { "yes".to_string() };
-            // visible width of "yes" is 3
-            let pad_spaces = if 3 < path_col { path_col - 3 } else { 1 };
-            let padding = " ".repeat(pad_spaces);
             let status_plain = "✅ workspace ready".to_string();
             let status_colored = if use_color { format!("\x1b[32m{}\x1b[0m", status_plain) } else { status_plain };
-            eprintln!("  {:label_width$} {}{} {}", "workspace writable:", yes_val, padding, status_colored, label_width = label_width);
+            eprintln!(
+                "  {:label_width$} {:<path_col$} {}",
+                "workspace writable:",
+                yes_val,
+                status_colored,
+                label_width = label_width,
+                path_col = path_col
+            );
             let _ = fs::remove_file(&host_file);
             let _ = fs::remove_file(&host_uid_file);
         } else {
-            // Even if skipped/failed to create files, present an aligned readiness line (doctor is best-effort)
+            // Even if skipped/failed to create files, present a readiness line aligned with the first status column
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
             let path_col: usize = 44;
             let yes_val = if use_color { "\x1b[34;1myes\x1b[0m".to_string() } else { "yes".to_string() };
-            let pad_spaces = if 3 < path_col { path_col - 3 } else { 1 };
-            let padding = " ".repeat(pad_spaces);
             let status_plain = "✅ workspace ready".to_string();
             let status_colored = if use_color { format!("\x1b[32m{}\x1b[0m", status_plain) } else { status_plain };
-            eprintln!("  {:label_width$} {}{} {}", "workspace writable:", yes_val, padding, status_colored, label_width = label_width);
+            eprintln!(
+                "  {:label_width$} {:<path_col$} {}",
+                "workspace writable:",
+                yes_val,
+                status_colored,
+                label_width = label_width,
+                path_col = path_col
+            );
         }
     }
 
