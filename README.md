@@ -107,6 +107,11 @@ No Rust or Make installed on your host? Use the Docker-based dev helper:
 make build
 ```
 
+- If make is not installed on your host, use the Docker-only helper script:
+```bash
+./scripts/build-images.sh
+```
+
 - Build slim variants (smaller images, fewer tools):
 ```bash
 make build-slim
