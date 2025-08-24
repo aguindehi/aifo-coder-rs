@@ -463,6 +463,7 @@ fn main() -> ExitCode {
         run_doctor(cli.verbose);
         return ExitCode::from(0);
     } else if let Agent::Images = &cli.command {
+        print_startup_banner();
         eprintln!("aifo-coder images");
         eprintln!();
 
