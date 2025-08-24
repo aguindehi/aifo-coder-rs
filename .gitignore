@@ -1,9 +1,11 @@
 *~
 .aider*
 .crush*
+.codex*
 .env
-build
+aifo-coder.cdx.*
 build.*
+build
 dist
 ISSUES
 /target
