@@ -331,7 +331,9 @@ fn run_doctor(_verbose: bool) {
         }
     }
 
+    eprintln!();
     eprintln!("doctor: completed diagnostics.");
+    eprintln!();
 }
 
 #[derive(Parser, Debug)]
@@ -397,7 +399,7 @@ fn main() -> ExitCode {
         return ExitCode::from(0);
     }
 
-    
+
 
     // Build docker command and run it
     let (agent, args) = match &cli.command {
@@ -483,13 +485,3 @@ fn default_image_for(agent: &str) -> String {
         format!("{registry}{image_name}")
     }
 }
-
-
-
-
-
-
-
-
-
-
