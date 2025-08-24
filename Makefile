@@ -732,12 +732,23 @@ release-for-target:
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
 	fi; \
-	# Generate SBOM if cargo-cyclonedx is available
+	# Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root)
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  OUT_SBOM="$$D/SBOM.cdx.json"; \
-	  cargo cyclonedx -o "$$OUT_SBOM"; \
-	  chmod 0644 "$$OUT_SBOM" || true; \
-	  echo "Wrote $$OUT_SBOM"; \
+	  PKG="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
+	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
+	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
+	    cargo cyclonedx --format json || true; \
+	    if [ -s "$$PKG.cdx.json" ]; then cp "$$PKG.cdx.json" "$$OUT_JSON"; fi; \
+	  fi; \
+	  if [ ! -s "$$OUT_JSON" ]; then \
+	    cargo cyclonedx || true; \
+	    if [ -s "$$PKG.cdx.json" ]; then cp "$$PKG.cdx.json" "$$OUT_JSON"; \
+	    elif [ -s "$$PKG.cdx.xml" ]; then cp "$$PKG.cdx.xml" "$$OUT_XML"; fi; \
+	  fi; \
+	  if [ -s "$$OUT_JSON" ]; then chmod 0644 "$$OUT_JSON" || true; echo "Wrote $$OUT_JSON"; \
+	  elif [ -s "$$OUT_XML" ]; then chmod 0644 "$$OUT_XML" || true; echo "Wrote $$OUT_XML"; \
+	  else echo "Warning: cargo-cyclonedx did not produce output files; no SBOM written" >&2; fi; \
 	else \
 	  echo "cargo-cyclonedx not installed; skipping SBOM. Install with: cargo install cargo-cyclonedx" >&2; \
 	fi
@@ -798,10 +809,21 @@ sbom:
 	D="$(DIST_DIR)"; \
 	mkdir -p "$$D"; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  OUT="$$D/SBOM.cdx.json"; \
-	  cargo cyclonedx -o "$$OUT"; \
-	  chmod 0644 "$$OUT" || true; \
-	  echo "Wrote $$OUT"; \
+	  PKG="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
+	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
+	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
+	    cargo cyclonedx --format json; \
+	    if [ -s "$$PKG.cdx.json" ]; then cp "$$PKG.cdx.json" "$$OUT_JSON"; fi; \
+	  fi; \
+	  if [ ! -s "$$OUT_JSON" ]; then \
+	    cargo cyclonedx; \
+	    if [ -s "$$PKG.cdx.json" ]; then cp "$$PKG.cdx.json" "$$OUT_JSON"; \
+	    elif [ -s "$$PKG.cdx.xml" ]; then cp "$$PKG.cdx.xml" "$$OUT_XML"; fi; \
+	  fi; \
+	  if [ -s "$$OUT_JSON" ]; then chmod 0644 "$$OUT_JSON" || true; echo "Wrote $$OUT_JSON"; \
+	  elif [ -s "$$OUT_XML" ]; then chmod 0644 "$$OUT_XML" || true; echo "Wrote $$OUT_XML"; \
+	  else echo "SBOM generation failed: cargo-cyclonedx produced no files" >&2; exit 1; fi; \
 	else \
 	  echo "cargo-cyclonedx not installed; install with: cargo install cargo-cyclonedx" >&2; \
 	  exit 1; \
