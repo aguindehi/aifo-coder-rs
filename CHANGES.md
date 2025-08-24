@@ -1,3 +1,19 @@
+2025-08-24 19:25 Amir Guindehi <amir.guindehi@mgb.ch>
+
+docs: re-commit AGENT.md checklist
+
+- AGENT.md: commit contributor checklist and workflow file to the repo
+- CHANGES.md: record this documentation-only change
+- Documentation-only change; no source code modifications
+
+2025-08-24 19:05 Amir Guindehi <amir.guindehi@mgb.ch>
+
+score: archive previous SCORE to SCORE-before and update scorecard
+
+- SCORE-before.md: updated to contain previous SCORE.md contents
+- SCORE.md: refreshed comprehensive scoring per AGENT.md workflow
+- CHANGES.md: recorded scoring update
+
 2025-08-24 18:55 Amir Guindehi <amir.guindehi@mgb.ch>
 
 docs: commit AGENT.md contributor checklist and workflow

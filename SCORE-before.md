@@ -1,9 +1,9 @@
 # aifo-coder Source Code Scorecard
 
 Date: 2025-08-24
-Time: 14:05
+Time: 14:35
 Author: Amir Guindehi <amir.guindehi@mgb.ch>
-Scope: Rust CLI launcher, Makefile, Dockerfile, AppArmor template, wrapper script, README, packaging targets, CI workflow, unit tests.
+Scope: Rust CLI launcher, Dockerfile multi-stage images (full and slim), Makefile and helper scripts, AppArmor template, README, CI workflows.
 
 Overall grade: A (98/100)
 
@@ -20,75 +20,77 @@ Grade summary (category — grade [score/10]):
 - Testing & CI — A+ [10]
 
 What improved since last score
-- Registry UX: Added a new CLI flag --invalidate-registry-cache and surfaced both chosen registry and probe source during normal verbose runs (not just in doctor).
-- Doctor diagnostics: Added a workspace write test using the crush image to validate mounts and UID mapping; reports success and cleans up.
-- CI expansions: Extended Linux smoke workflow now builds both full and slim flavors and includes a write/ownership validation in a mounted workspace for crush images.
-- Packaging: Prior macOS DMG improvement retained (/Applications symlink) to support drag-and-drop install.
+- Added slim image variants and included lightweight editors mg and nvi across images.
+- Implemented registry probe caching (in-memory and on-disk TTL) plus a --invalidate-registry-cache flag.
+- Surfaced registry selection and probe source in verbose output; added doctor checks for editor availability.
+- Added Docker-only build script to support hosts without GNU make or Rust.
+- Extended Linux smoke workflow: matrix over full/slim, exercised all agents, and validated UID/ownership on mounted workspace.
+- DMG packaging improved to include an /Applications symlink for drag-and-drop install on macOS.
 
 Key strengths
-- Cohesive architecture with clear separation of concerns; helpers encapsulate environment probing, escaping, and docker command assembly.
-- Strong default security posture: AppArmor when available, strict mounts, uid:gid mapping, and no privileged flags.
-- Excellent developer ergonomics: verbose preview, dry-run, doctor checks, and now explicit registry source and cache-busting control.
-- Efficient multi-stage Dockerfiles with slim variants; lightweight editors available in all images; Python toolchain remains in builder.
-- Robust build and release ergonomics across platforms with Makefile targets and Docker-only helper scripts.
+- Cohesive, testable architecture; helpers encapsulate environment probing, shell escaping, and docker command building.
+- Strong security defaults: AppArmor integration when available, strict mounts, no privileged flags, uid:gid mapping.
+- Excellent UX: startup banner, verbose/dry-run with copy-pasteable docker preview, doctor diagnostics, registry visibility.
+- Efficient multi-stage Dockerfiles; clear separation of builder/runtime; slim variants reduce pull sizes for CI.
+- Robust build/release ergonomics: comprehensive Makefile targets, helper scripts, SBOM/checksum support.
 
 Current gaps and risks
-- Alpine-based variants are not yet provided; require careful validation for Node CLIs and Python (musl vs glibc).
-- macOS DMG branding/signing is still optional and manual; automated notarization would improve UX for Mac users.
-- Registry auto-detection can still be affected by restrictive hosts lacking curl; TCP fallback mitigates but does not fully solve.
+- Alpine-based variants not yet explored; potential size wins require validating Node CLIs and Python/tooling compatibility.
+- macOS DMG branding and automated signing/notarization remain optional/manual.
+- Registry auto-detection can still be impacted on restricted hosts; TCP fallback mitigates but does not eliminate first-run latency.
 
 Detailed assessment
 
 1) Architecture & Design — A [10/10]
-- Responsibilities cleanly divided; docker command builder returns both Command and a safe shell-preview string.
+- Clear separation of concerns; docker command assembly returns both Command and a safe, escaped preview string.
 
 2) Rust Code Quality — A [10/10]
-- Clap usage is idiomatic; safe shell escaping; precise error kinds. Caching via OnceCell and on-disk TTL is thread-safe and practical.
+- Idiomatic Clap usage; careful error kinds; OnceCell/Lazy used for efficient caching; shell escaping covers tricky inputs.
 
 3) Security Posture — A [10/10]
-- Least-privileged runtime; AppArmor integration; uid:gid mapping; minimal mounts; no docker.sock exposure.
+- Least privilege by default; AppArmor profile selection with sensible fallbacks; no docker.sock; explicit uid:gid mapping.
 
 4) Containerization & Dockerfile — A [10/10]
-- Multi-stage builds; slim and full variants; mg/nvi small editors included; Python limited to builder and runtime venv.
+- Multi-stage builds keep runtime lean; Python confined to builder; slim variants for CI; mg/nvi provide minimal editor coverage.
 
 5) Build & Release — A+ [10/10]
-- Comprehensive Makefile; helper scripts for Docker-only hosts; checksums/SBOM support; macOS packaging steps well-documented.
+- Makefile covers build/rebuild (full and slim), packaging, SBOM, checksums; Docker-only helper supports constrained hosts.
 
 6) Cross-Platform Support — A [10/10]
-- Linux and macOS well-supported; Colima guidance for AppArmor; CI validates both flavors.
+- Linux and macOS supported; Colima guidance; CI validates agents and flavors.
 
 7) Documentation — A+ [10/10]
-- Clear README; AppArmor and editor details; slim variants; signed/notarization guidance; troubleshooting tips.
+- README is comprehensive: security model, AppArmor notes, editors, slim variants, macOS signing/notarization, troubleshooting.
 
 8) User Experience — A+ [10/10]
-- Strong diagnostics; copy-pasteable docker preview; new registry visibility and cache-busting improve transparency.
+- Strong diagnostics; dry-run safety; visible registry selection/source; doctor checks include editor availability and workspace ownership.
 
 9) Performance & Footprint — A- [9/10]
-- Slim variants and caching reduce overhead; Alpine exploration could further reduce size but requires compatibility work.
+- Slim images and caching reduce overhead; further gains possible via Alpine variants or build ARG-controlled tool inclusion.
 
 10) Testing & CI — A+ [10/10]
-- Unit tests and Linux smoke with agent invocations; now includes a workspace ownership test for crush; good safety net for regressions.
+- Unit tests plus Linux smoke across full/slim; workspace mount/ownership validation improves confidence in runtime behavior.
 
 Actionable next steps (prioritized)
 
 1) Alpine exploration
-- Prototype alpine-based images for codex/crush; validate function and measure size/pull time improvements; document any trade-offs. Keep aider on Debian for Python wheels compatibility.
+- Prototype alpine-based images for codex/crush; validate functionality and measure size/pull time; document musl/glibc trade-offs. Keep aider on Debian to retain Python wheel compatibility.
 
 2) macOS packaging automation
-- Add an optional Makefile target to sign and notarize when a keychain profile is present. Consider adding DMG background for branding.
+- Add optional Makefile targets for signing/notarization when a keychain profile exists; consider DMG background branding.
 
 3) Diagnostics depth
-- Expand doctor to fetch and display docker info security options JSON and confirm AppArmor profile application by running a short container with --security-opt and parsing /proc/self/attr/apparmor/current.
+- Enhance doctor to confirm active AppArmor profile inside a short-lived container by reading /proc/self/attr/apparmor/current and to print docker security options JSON.
 
 4) CI enhancements
-- Add a short integration step to run aider --help and codex --help to validate help paths; consider caching npm/pip layers between jobs for speed.
+- Add aider/codex --help smoke to validate help paths; consider caching npm and uv/pip layers between jobs to speed builds.
 
 5) UX refinements
-- Add a CLI subcommand to clear on-disk caches (registry, etc.) and to print current effective image references with flavor support, aiding debugging.
+- Add a CLI subcommand to show effective image references (including flavor/registry) and to clear on-disk caches.
 
 Proposed next steps for the user
-- Would you like me to:
-  - Prototype and benchmark Alpine-based codex/crush images?
-  - Automate macOS DMG signing/notarization in the Makefile?
-  - Enhance doctor to confirm the active AppArmor profile inside a short-lived container?
-  - Extend CI to include aider/codex help checks and shared caches for faster builds?
+- Shall I:
+  - Prototype and benchmark Alpine-based codex/crush variants?
+  - Automate macOS DMG signing/notarization and add a branded background?
+  - Extend doctor to confirm the active AppArmor profile from inside the container?
+  - Expand CI to include aider/codex help checks and shared caches for faster runs?
