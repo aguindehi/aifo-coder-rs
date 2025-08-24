@@ -44,8 +44,10 @@ fn run_doctor(_verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
     eprintln!();
-    eprintln!("  version: v{}", version);
-    eprintln!("  host:    {} / {}", std::env::consts::OS, std::env::consts::ARCH);
+    let val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1mv{}\x1b[0m", version) } else { format!("v{}", version) };
+    eprintln!("  version: {}", val);
+    let host_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{} / {}\x1b[0m", std::env::consts::OS, std::env::consts::ARCH) } else { format!("{} / {}", std::env::consts::OS, std::env::consts::ARCH) };
+    eprintln!("  host:    {}", host_val);
     eprintln!();
 
     // Virtualization environment
@@ -64,33 +66,34 @@ fn run_doctor(_verbose: bool) {
     } else {
         "native"
     };
-    eprintln!("  virtualization: {}", virtualization);
+    let virt_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", virtualization) } else { virtualization.to_string() };
+    eprintln!("  virtualization: {}", virt_val);
 
     // Docker/AppArmor capabilities
     let apparmor_supported = aifo_coder::docker_supports_apparmor();
-    eprintln!(
-        "  docker AppArmor support: {}",
-        if apparmor_supported { "yes" } else { "no" }
-    );
+    let das = if apparmor_supported { "yes" } else { "no" };
+    let das_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", das) } else { das.to_string() };
+    eprintln!("  docker AppArmor support: {}", das_val);
     eprintln!();
 
     // Desired AppArmor profile
     let profile = aifo_coder::desired_apparmor_profile_quiet();
-    eprintln!(
-        "  desired AppArmor profile: {}",
-        profile.as_deref().unwrap_or("(disabled)")
-    );
+    let prof_str = profile.as_deref().unwrap_or("(disabled)");
+    let prof_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", prof_str) } else { prof_str.to_string() };
+    eprintln!("  desired AppArmor profile: {}", prof_val);
     eprintln!();
 
     // Docker command and version
     match aifo_coder::container_runtime_path() {
         Ok(p) => {
-            eprintln!("  docker command:  {}", p.display());
+            let dc_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", p.display()) } else { format!("{}", p.display()) };
+            eprintln!("  docker command:  {}", dc_val);
             if let Ok(out) = Command::new(&p).arg("--version").output() {
                 let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 // Typical: "Docker version 28.3.3, build 980b856816"
                 let pretty = raw.trim_start_matches("Docker version ").to_string();
-                eprintln!("  docker version:  {}", pretty);
+                let dv_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", pretty) } else { pretty };
+                eprintln!("  docker version:  {}", dv_val);
             }
         }
         Err(_) => {
@@ -105,9 +108,11 @@ fn run_doctor(_verbose: bool) {
     } else {
         rp.trim_end_matches('/').to_string()
     };
-    eprintln!("  docker registry: {}", reg_display);
+    let reg_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", reg_display) } else { reg_display };
+    eprintln!("  docker registry: {}", reg_val);
     let reg_src = aifo_coder::preferred_registry_source();
-    eprintln!("  registry source: {}", reg_src);
+    let reg_src_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", reg_src) } else { reg_src };
+    eprintln!("  registry source: {}", reg_src_val);
     eprintln!();
 
     // Helpful config/state locations (display with ~)
@@ -133,13 +138,9 @@ fn run_doctor(_verbose: bool) {
         let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
         let padding = " ".repeat(pad_spaces);
 
-        // Colorize the path itself based on existence
+        // Colorize the path itself as a value (strong blue)
         let colored_path = if use_color {
-            if exists {
-                format!("\x1b[32m{}\x1b[0m", shown) // green
-            } else {
-                format!("\x1b[31m{}\x1b[0m", shown) // red
-            }
+            format!("\x1b[34;1m{}\x1b[0m", shown) // strong blue
         } else {
             shown
         };
@@ -201,23 +202,30 @@ fn run_doctor(_verbose: bool) {
     eprintln!();
 
     // Git and GnuPG
-    show("git config:",   home.join(".gitconfig"), true);
-    show("gnupg config:", home.join(".gnupg"), true);
+    let agent_ctx = std::env::var("AIFO_CODER_DOCTOR_AGENT").unwrap_or_else(|_| "aider".to_string());
+    let mount_git = true;
+    let mount_gnupg = true;
+    let mount_aider = agent_ctx.eq_ignore_ascii_case("aider");
+    let mount_crush = agent_ctx.eq_ignore_ascii_case("crush");
+    let mount_codex = agent_ctx.eq_ignore_ascii_case("codex");
+
+    show("git config:",   home.join(".gitconfig"), mount_git);
+    show("gnupg config:", home.join(".gnupg"), mount_gnupg);
     eprintln!();
 
     // Aider files
-    show("aider config:",   home.join(".aider.conf.yml"), true);
-    show("aider metadata:", home.join(".aider.model.metadata.json"), true);
-    show("aider settings:", home.join(".aider.model.settings.yml"), true);
+    show("aider config:",   home.join(".aider.conf.yml"), mount_aider);
+    show("aider metadata:", home.join(".aider.model.metadata.json"), mount_aider);
+    show("aider settings:", home.join(".aider.model.settings.yml"), mount_aider);
     eprintln!();
 
     // Crush paths
-    show("crush config:", home.join(".local").join("share").join("crush"), true);
-    show("crush state:",  home.join(".crush"), true);
+    show("crush config:", home.join(".local").join("share").join("crush"), mount_crush);
+    show("crush state:",  home.join(".crush"), mount_crush);
     eprintln!();
 
     // Codex path
-    show("codex config:", home.join(".codex"), true);
+    show("codex config:", home.join(".codex"), mount_codex);
     eprintln!();
 
     // Editor availability for installed images (full and/or slim) via crush image
@@ -270,6 +278,7 @@ fn run_doctor(_verbose: bool) {
         }
     }
 
+    eprintln!();
     // Workspace write test to validate mounts and UID mapping
     if aifo_coder::container_runtime_path().is_ok() {
         let image = default_image_for("crush");
@@ -304,22 +313,7 @@ fn run_doctor(_verbose: bool) {
         let host_file = pwd.join(&tmpname);
         let host_uid_file = pwd.join(format!("{tmp}.uid", tmp = tmpname));
         if host_file.exists() && host_uid_file.exists() {
-            let file_uid_str = fs::read_to_string(&host_uid_file).unwrap_or_default();
-            let file_uid = file_uid_str.trim();
-            let mut ownership_ok = false;
-            // Try GNU stat (-c) or BSD stat (-f) to get uid
-            let stat_c = Command::new("stat").args(["-c", "%u", host_file.to_string_lossy().as_ref()]).output();
-            if let Ok(out) = stat_c {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                ownership_ok = s == uid;
-            } else {
-                let stat_f = Command::new("stat").args(["-f", "%u", host_file.to_string_lossy().as_ref()]).output();
-                if let Ok(out) = stat_f {
-                    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    ownership_ok = s == uid;
-                }
-            }
-            // Always present a positive readiness line; do not emit mismatch warnings here
+            // Present a positive readiness line
             let use_color = atty::is(atty::Stream::Stderr);
             let blue_on = if use_color { "\x1b[34;1m" } else { "" };
             let reset = if use_color { "\x1b[0m" } else { "" };
