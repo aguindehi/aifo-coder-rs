@@ -83,6 +83,7 @@ help:
 	@echo "Utilities:"
 	@echo ""
 	@echo "  clean ....................... Remove built images (ignores errors if not present)"
+	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -789,6 +790,38 @@ sbom:
 	  echo "cargo-cyclonedx not installed; install with: cargo install cargo-cyclonedx" >&2; \
 	  exit 1; \
 	fi
+
+.PHONY: loc
+loc:
+	@set -e; \
+	echo "Counting lines of source in repository..."; \
+	count() { \
+	  pat="$$1"; \
+	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
+	    | xargs -0 wc -l 2>/dev/null | awk 'END{print ($$1+0)}'; \
+	}; \
+	rust=$$(count "-name '*.rs'"); \
+	shell=$$(count "-name '*.sh' -o -name '*.bash' -o -name '*.zsh'"); \
+	makef=$$(count "-name 'Makefile' -o -name '*.mk'"); \
+	docker=$$(count "-name 'Dockerfile' -o -name '*.dockerfile'"); \
+	yaml=$$(count "-name '*.yml' -o -name '*.yaml'"); \
+	toml=$$(count "-name '*.toml'"); \
+	json=$$(count "-name '*.json'"); \
+	md=$$(count "-name '*.md'"); \
+	other=$$(count "-name '*.conf'"); \
+	total=$$((rust+shell+makef+docker+yaml+toml+json+md+other)); \
+	printf "Lines of code (excluding .git, target, dist, build, node_modules):\n"; \
+	printf "  Rust (.rs):            %8d\n" "$$rust"; \
+	printf "  Shell scripts:         %8d\n" "$$shell"; \
+	printf "  Makefiles:             %8d\n" "$$makef"; \
+	printf "  Dockerfiles:           %8d\n" "$$docker"; \
+	printf "  YAML:                  %8d\n" "$$yaml"; \
+	printf "  TOML:                  %8d\n" "$$toml"; \
+	printf "  JSON:                  %8d\n" "$$json"; \
+	printf "  Markdown:              %8d\n" "$$md"; \
+	printf "  Other (.conf):         %8d\n" "$$other"; \
+	printf "  -------------------------------\n"; \
+	printf "  Total:                 %8d\n" "$$total"
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
