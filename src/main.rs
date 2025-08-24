@@ -81,6 +81,30 @@ fn run_doctor(_verbose: bool) {
     let prof_str = profile.as_deref().unwrap_or("(disabled)");
     let prof_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", prof_str) } else { prof_str.to_string() };
     eprintln!("  docker AppArmor profile: {}", prof_val);
+
+    // Confirm active AppArmor profile from inside a short-lived container
+    if aifo_coder::container_runtime_path().is_ok() {
+        let image = default_image_for("crush");
+        let mut args = vec!["run".to_string(), "--rm".to_string()];
+        if aifo_coder::docker_supports_apparmor() {
+            if let Some(p) = profile.as_deref() {
+                args.push("--security-opt".to_string());
+                args.push(format!("apparmor={}", p));
+            }
+        }
+        args.push("--entrypoint".to_string());
+        args.push("sh".to_string());
+        args.push(image);
+        args.push("-lc".to_string());
+        args.push("cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined".to_string());
+        let mut cmd = Command::new("docker");
+        for a in &args {
+            cmd.arg(a);
+        }
+        let current = cmd.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|| "(unknown)".to_string());
+        let current_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", current) } else { current };
+        eprintln!("  apparmor in-container: {}", current_val);
+    }
     eprintln!();
 
     // Docker command and version
@@ -380,6 +404,13 @@ struct Cli {
 enum Agent {
     /// Run diagnostics to check environment and configuration
     Doctor,
+
+    /// Show effective image references (including flavor/registry)
+    Images,
+
+    /// Clear on-disk caches (e.g., registry probe cache)
+    CacheClear,
+
     /// Run OpenAI Codex CLI
     Codex {
         /// Additional arguments passed through to the agent
@@ -412,6 +443,41 @@ fn main() -> ExitCode {
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
         run_doctor(cli.verbose);
+        return ExitCode::from(0);
+    } else if let Agent::Images = &cli.command {
+        eprintln!("aifo-coder images");
+        eprintln!();
+
+        // Flavor and registry display
+        let flavor_env = std::env::var("AIFO_CODER_IMAGE_FLAVOR").unwrap_or_default();
+        let flavor = if flavor_env.trim().eq_ignore_ascii_case("slim") { "slim" } else { "full" };
+        let rp = aifo_coder::preferred_registry_prefix_quiet();
+        let reg_display = if rp.is_empty() { "Docker Hub".to_string() } else { rp.trim_end_matches('/').to_string() };
+
+        let use_color = atty::is(atty::Stream::Stderr);
+        let flavor_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", flavor) } else { flavor.to_string() };
+        let reg_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", reg_display) } else { reg_display };
+
+        eprintln!("  flavor:   {}", flavor_val);
+        eprintln!("  registry: {}", reg_val);
+        eprintln!();
+
+        // Effective image references
+        let codex_img = default_image_for("codex");
+        let crush_img = default_image_for("crush");
+        let aider_img = default_image_for("aider");
+        let codex_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", codex_img) } else { codex_img };
+        let crush_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", crush_img) } else { crush_img };
+        let aider_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", aider_img) } else { aider_img };
+        eprintln!("  codex: {}", codex_val);
+        eprintln!("  crush: {}", crush_val);
+        eprintln!("  aider: {}", aider_val);
+        eprintln!();
+
+        return ExitCode::from(0);
+    } else if let Agent::CacheClear = &cli.command {
+        aifo_coder::invalidate_registry_cache();
+        eprintln!("aifo-coder: cleared on-disk registry cache.");
         return ExitCode::from(0);
     }
 
