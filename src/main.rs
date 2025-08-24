@@ -73,14 +73,14 @@ fn run_doctor(_verbose: bool) {
     let apparmor_supported = aifo_coder::docker_supports_apparmor();
     let das = if apparmor_supported { "yes" } else { "no" };
     let das_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", das) } else { das.to_string() };
-    eprintln!("  docker AppArmor support: {}", das_val);
+    eprintln!("  docker apparmor support: {}", das_val);
     eprintln!();
 
     // Desired AppArmor profile
     let profile = aifo_coder::desired_apparmor_profile_quiet();
     let prof_str = profile.as_deref().unwrap_or("(disabled)");
     let prof_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", prof_str) } else { prof_str.to_string() };
-    eprintln!("  docker AppArmor profile: {}", prof_val);
+    eprintln!("  docker apparmor profile: {}", prof_val);
 
     // Confirm active AppArmor profile from inside a short-lived container
     if aifo_coder::container_runtime_path().is_ok() {
@@ -526,7 +526,7 @@ fn main() -> ExitCode {
         Ok((mut cmd, preview)) => {
             if cli.verbose {
                 eprintln!(
-                    "aifo-coder: effective AppArmor profile: {}",
+                    "aifo-coder: effective apparmor profile: {}",
                     apparmor_profile.as_deref().unwrap_or("(disabled)")
                 );
                 // Show chosen registry and source for transparency
