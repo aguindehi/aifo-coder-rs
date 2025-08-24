@@ -242,14 +242,14 @@ fn run_doctor(_verbose: bool) {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
         );
         let pwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let uid = String::from_utf8_lossy(
-            &Command::new("id").arg("-u").output().unwrap_or_else(|_| std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: b"0".to_vec(), stderr: Vec::new() })
-                .stdout
-        ).trim().to_string();
-        let gid = String::from_utf8_lossy(
-            &Command::new("id").arg("-g").output().unwrap_or_else(|_| std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: b"0".to_vec(), stderr: Vec::new() })
-                .stdout
-        ).trim().to_string();
+        let uid = Command::new("id").arg("-u").output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "0".to_string());
+        let gid = Command::new("id").arg("-g").output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "0".to_string());
 
         let _ = Command::new("docker")
             .args([
