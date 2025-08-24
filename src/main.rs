@@ -84,7 +84,7 @@ fn run_doctor(_verbose: bool) {
 
     // Confirm active AppArmor profile from inside a short-lived container
     if aifo_coder::container_runtime_path().is_ok() {
-        let image = default_image_for("crush");
+        let image = default_image_for_quiet("crush");
         let mut args = vec!["run".to_string(), "--rm".to_string()];
         if aifo_coder::docker_supports_apparmor() {
             if let Some(p) = profile.as_deref() {
@@ -287,7 +287,7 @@ fn run_doctor(_verbose: bool) {
 
         // Fallback: if neither full nor slim is installed locally, show the default image result once
         if !printed_any {
-            let image = default_image_for("crush");
+            let image = default_image_for_quiet("crush");
             if let Ok(out) = Command::new("docker")
                 .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
                 .output()
@@ -303,7 +303,7 @@ fn run_doctor(_verbose: bool) {
     eprintln!();
     // Workspace write test to validate mounts and UID mapping
     if aifo_coder::container_runtime_path().is_ok() {
-        let image = default_image_for("crush");
+        let image = default_image_for_quiet("crush");
         let tmpname = format!(".aifo-coder-doctor-{}-{}.tmp",
             std::process::id(),
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
@@ -563,6 +563,27 @@ fn default_image_for(agent: &str) -> String {
     };
     let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
     let registry = preferred_registry_prefix();
+    if registry.is_empty() {
+        image_name
+    } else {
+        format!("{registry}{image_name}")
+    }
+}
+
+fn default_image_for_quiet(agent: &str) -> String {
+    if let Ok(img) = env::var("AIFO_CODER_IMAGE") {
+        if !img.trim().is_empty() {
+            return img;
+        }
+    }
+    let name_prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+    let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
+    let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
+        Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
+        _ => "",
+    };
+    let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
+    let registry = aifo_coder::preferred_registry_prefix_quiet();
     if registry.is_empty() {
         image_name
     } else {
