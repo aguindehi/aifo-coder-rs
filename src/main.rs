@@ -104,6 +104,8 @@ fn run_doctor(_verbose: bool) {
         rp.trim_end_matches('/').to_string()
     };
     eprintln!("  docker registry: {}", reg_display);
+    let reg_src = aifo_coder::preferred_registry_source();
+    eprintln!("  registry source: {}", reg_src);
     eprintln!();
 
     // Helpful config/state locations (display with ~)
@@ -215,6 +217,20 @@ fn run_doctor(_verbose: bool) {
     // Codex path
     show("codex config:", home.join(".codex"), true);
     eprintln!();
+
+    // Editor availability inside the image (check via crush image)
+    if aifo_coder::container_runtime_path().is_ok() {
+        let image = default_image_for("crush");
+        let check = "for e in emacs-nox vim nano mg nvi; do command -v \"$e\" >/dev/null 2>&1 && printf \"%s \" \"$e\"; done";
+        if let Ok(out) = Command::new("docker")
+            .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
+            .output()
+        {
+            let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let show = if list.is_empty() { "(none)".to_string() } else { list };
+            eprintln!("  editors in image: {}", show);
+        }
+    }
 
     eprintln!("doctor: completed diagnostics.");
 }

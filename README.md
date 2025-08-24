@@ -235,7 +235,7 @@ xcrun stapler staple "dist/aifo-coder.dmg"
 
 Notes:
 - Create a keychain profile with: xcrun notarytool store-credentials AC_NOTARY --apple-id "<your-apple-id>" --team-id "<team-id>" --password "<app-specific-password>"
-- To automate branding, add a DMG background and /Applications symlink in the Makefile’s build-dmg target.
+- The DMG includes an /Applications symlink for drag-and-drop install; you can further customize a background image.
 
 ---
 

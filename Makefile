@@ -872,7 +872,11 @@ build-dmg: build-app
 	DMG_PATH="$$DIST/$$DMG.dmg"; \
 	if ! command -v hdiutil >/dev/null 2>&1; then echo "hdiutil not found; cannot build DMG." >&2; exit 1; fi; \
 	echo "Creating $$DMG_PATH ..."; \
-	hdiutil create -volname "$$APP" -srcfolder "$$APPROOT" -ov -format UDZO "$$DMG_PATH"; \
+	STAGE="$$DIST/.dmg-root"; rm -rf "$$STAGE"; mkdir -p "$$STAGE"; \
+	ln -s /Applications "$$STAGE/Applications"; \
+	cp -a "$$APPROOT" "$$STAGE/"; \
+	hdiutil create -volname "$$APP" -srcfolder "$$STAGE" -ov -format UDZO "$$DMG_PATH"; \
+	rm -rf "$$STAGE"; \
 	echo "Wrote $$DMG_PATH"; \
 	)
 

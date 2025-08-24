@@ -8,6 +8,9 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [full, slim]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,11 +24,14 @@ jobs:
       - name: Build launcher (release)
         run: cargo build --release
 
-      - name: Build required images (codex, aider)
-        run: make build-codex build-aider
+      - name: Build required images (codex, crush, aider) - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then make build-codex-slim build-crush-slim build-aider-slim; else make build-codex build-crush build-aider; fi
 
-      - name: Run codex --version via launcher
-        run: ./aifo-coder codex --version
+      - name: Run codex --version via launcher - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder codex --version; else ./aifo-coder codex --version; fi
 
-      - name: Run aider --version via launcher
-        run: ./aifo-coder aider --version
+      - name: Run crush --version via launcher - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder crush --version; else ./aifo-coder crush --version; fi
+
+      - name: Run aider --version via launcher - ${{ matrix.flavor }}
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder aider --version; else ./aifo-coder aider --version; fi

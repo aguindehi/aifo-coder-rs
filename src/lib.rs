@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
 use std::os::fd::AsRawFd;
@@ -49,9 +49,12 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "EDITOR",
         "VISUAL",
     ]
+});
+ 
 // Cache for preferred registry prefix resolution within a single process run.
 static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
-});
+// Record how the registry prefix was determined this run.
+static REGISTRY_PREFIX_SOURCE: OnceCell<String> = OnceCell::new();
 
 /// Locate the Docker runtime binary.
 pub fn container_runtime_path() -> io::Result<PathBuf> {
@@ -216,6 +219,33 @@ fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
     false
 }
 
+fn registry_cache_path() -> Option<PathBuf> {
+    let base = env::var("XDG_RUNTIME_DIR").ok().filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
+    Some(base.join("aifo-coder.regprefix"))
+}
+
+fn read_registry_cache_disk(max_age_secs: u64) -> Option<String> {
+    let path = registry_cache_path()?;
+    let meta = fs::metadata(&path).ok()?;
+    let modified = meta.modified().ok()?;
+    let now = SystemTime::now();
+    let age = now.duration_since(modified).ok()?.as_secs();
+    if age <= max_age_secs {
+        let v = fs::read_to_string(&path).ok()?;
+        Some(v.trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn write_registry_cache_disk(s: &str) {
+    if let Some(path) = registry_cache_path() {
+        let _ = fs::write(path, s);
+    }
+}
+
 /// Determine the preferred registry prefix for image references.
 /// Precedence:
 /// 1) If AIFO_CODER_REGISTRY_PREFIX is set:
@@ -233,6 +263,8 @@ pub fn preferred_registry_prefix() -> String {
             eprintln!("aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
             let v = String::new();
             let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+            let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
+            write_registry_cache_disk(&v);
             return v;
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
@@ -240,10 +272,26 @@ pub fn preferred_registry_prefix() -> String {
         eprintln!("aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'", s);
         let v = s;
         let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
+        write_registry_cache_disk(&v);
+        return v;
+    }
+
+    // Try on-disk cache across invocations (5 minutes TTL).
+    if let Some(cached) = read_registry_cache_disk(300) {
+        let v = cached;
+        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = REGISTRY_PREFIX_SOURCE.set("disk".to_string());
         return v;
     }
 
     // Prefer probing with curl for HTTPS reachability using short timeouts.
+    if let Some(cached) = read_registry_cache_disk(300) {
+        let v = cached;
+        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = REGISTRY_PREFIX_SOURCE.set("disk".to_string());
+        return v;
+    }
     if which("curl").is_ok() {
         eprintln!("aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
         let status = Command::new("curl")
@@ -263,11 +311,15 @@ pub fn preferred_registry_prefix() -> String {
                 eprintln!("aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
                 let v = "repository.migros.net/".to_string();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                write_registry_cache_disk(&v);
                 return v;
             } else {
                 eprintln!("aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
                 let v = String::new();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                write_registry_cache_disk(&v);
                 return v;
             }
         } else {
@@ -286,6 +338,8 @@ pub fn preferred_registry_prefix() -> String {
         String::new()
     };
     let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+    let _ = REGISTRY_PREFIX_SOURCE.set("tcp".to_string());
+    write_registry_cache_disk(&v);
     v
 }
 
@@ -298,12 +352,18 @@ pub fn preferred_registry_prefix_quiet() -> String {
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
-            return String::new();
+            let v = String::new();
+            let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+            let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
+            write_registry_cache_disk(&v);
+            return v;
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
         let v = s;
         let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
+        write_registry_cache_disk(&v);
         return v;
     }
 
@@ -324,10 +384,14 @@ pub fn preferred_registry_prefix_quiet() -> String {
             if st.success() {
                 let v = "repository.migros.net/".to_string();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                write_registry_cache_disk(&v);
                 return v;
             } else {
                 let v = String::new();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                write_registry_cache_disk(&v);
                 return v;
             }
         }
@@ -339,6 +403,8 @@ pub fn preferred_registry_prefix_quiet() -> String {
         String::new()
     };
     let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+    let _ = REGISTRY_PREFIX_SOURCE.set("tcp".to_string());
+    write_registry_cache_disk(&v);
     v
 }
 
