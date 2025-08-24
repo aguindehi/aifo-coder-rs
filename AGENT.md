@@ -2,7 +2,7 @@
 
 # Explicit wishes of the user
 
-## Last, after having finished the current interation do this:
+## After having commited your changes always do the following step by step:
 
 1. Remember the current date, time and default user. Make sure to insert these informations wherever appropriate. If unsure use the shell command `date` to fetch the current date and time.
 2. Insert an entry at the top of the file CHANGES.md and describe the implemented changes. The entry begins with the date (YYYY-MM-DD), the time (HH:MM) and the author with email. Use the current date and time and the default users's email address for these. Next follows an empty line, followed by a short concise summary not longer than 80 characters. Then follows an empty line and below that the list of changes gets described.

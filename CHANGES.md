@@ -1,3 +1,10 @@
+2025-08-24 18:55 Amir Guindehi <amir.guindehi@mgb.ch>
+
+docs: commit AGENT.md contributor checklist and workflow
+
+- AGENT.md: add explicit post-commit steps, CHANGES.md update, and scoring workflow
+- Documentation-only change; no source code modifications
+
 2025-08-24 11:15 Amir Guindehi <amir.guindehi@mgb.ch>
 
 test: relax preview assert for single-quote escaping
