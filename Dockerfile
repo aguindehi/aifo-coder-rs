@@ -17,7 +17,8 @@ WORKDIR /workspace
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'if [ -n "$HOME" ] && [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
+ 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
+ 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
  'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
  'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
  '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \
@@ -91,7 +92,8 @@ WORKDIR /workspace
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'if [ -n "$HOME" ] && [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
+ 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
+ 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
  'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
  'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
  '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \

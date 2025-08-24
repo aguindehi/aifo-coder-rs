@@ -257,6 +257,8 @@ fn run_doctor(_verbose: bool) {
                 "--user", &format!("{uid}:{gid}"),
                 "-v", &format!("{}:/workspace", pwd.display()),
                 "-w", "/workspace",
+                "-e", "HOME=/home/coder",
+                "-e", "GNUPGHOME=/home/coder/.gnupg",
                 &image,
                 "sh", "-lc",
                 &format!("echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid", tmp = tmpname),
