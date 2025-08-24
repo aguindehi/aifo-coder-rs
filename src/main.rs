@@ -314,7 +314,7 @@ fn run_doctor(_verbose: bool) {
             // Present readiness line aligned with the first status column (found/missing)
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
-            let path_col: usize = 44;
+            let path_col: usize = 52;
             let yes_val = if use_color { "\x1b[34;1myes\x1b[0m".to_string() } else { "yes".to_string() };
             let status_plain = "✅ workspace ready".to_string();
             let status_colored = if use_color { format!("\x1b[32m{}\x1b[0m", status_plain) } else { status_plain };
