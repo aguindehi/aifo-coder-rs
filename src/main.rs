@@ -74,6 +74,74 @@ fn run_doctor(_verbose: bool) {
     let das = if apparmor_supported { "yes" } else { "no" };
     let das_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", das) } else { das.to_string() };
     eprintln!("  docker apparmor support: {}", das_val);
+
+    // Parse and display Docker security options (from `docker info`)
+    if let Ok(rt) = aifo_coder::container_runtime_path() {
+        if let Ok(out) = Command::new(&rt)
+            .args(["info", "--format", "{{json .SecurityOptions}}"])
+            .output()
+        {
+            let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            // Extract JSON string array items without external deps
+            let mut items: Vec<String> = Vec::new();
+            let mut in_str = false;
+            let mut esc = false;
+            let mut buf = String::new();
+            for ch in raw.chars() {
+                if in_str {
+                    if esc {
+                        buf.push(ch);
+                        esc = false;
+                    } else if ch == '\\' {
+                        esc = true;
+                    } else if ch == '"' {
+                        items.push(buf.clone());
+                        buf.clear();
+                        in_str = false;
+                    } else {
+                        buf.push(ch);
+                    }
+                } else if ch == '"' {
+                    in_str = true;
+                }
+            }
+            let pretty: Vec<String> = items
+                .into_iter()
+                .map(|s| {
+                    let mut name: Option<String> = None;
+                    let mut attrs: Vec<String> = Vec::new();
+                    for part in s.split(',') {
+                        if let Some(v) = part.strip_prefix("name=") {
+                            name = Some(v.to_string());
+                        } else {
+                            attrs.push(part.to_string());
+                        }
+                    }
+                    match name {
+                        Some(n) => {
+                            if attrs.is_empty() {
+                                n
+                            } else {
+                                format!("{} ({})", n, attrs.join(", "))
+                            }
+                        }
+                        None => s,
+                    }
+                })
+                .collect();
+            let joined = if pretty.is_empty() {
+                "(none)".to_string()
+            } else {
+                pretty.join(", ")
+            };
+            let joined_val = if atty::is(atty::Stream::Stderr) {
+                format!("\x1b[34;1m{}\x1b[0m", joined)
+            } else {
+                joined
+            };
+            eprintln!("  docker security options: {}", joined_val);
+        }
+    }
     eprintln!();
 
     // Desired AppArmor profile
@@ -102,8 +170,46 @@ fn run_doctor(_verbose: bool) {
             cmd.arg(a);
         }
         let current = cmd.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|| "(unknown)".to_string());
-        let current_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", current) } else { current };
+        let current_trim = current.trim().to_string();
+        let current_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", current_trim) } else { current_trim.clone() };
         eprintln!("  apparmor in-container: {}", current_val);
+
+        // Validate AppArmor status against expectations
+        let expected = profile.as_deref();
+        let expected_disp = expected.unwrap_or("(none)");
+        let expected_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", expected_disp) } else { expected_disp.to_string() };
+
+        let (status_plain, status_colored) = {
+            let use_color = atty::is(atty::Stream::Stderr);
+            if !apparmor_supported {
+                let s = "skipped";
+                let c = if use_color { "\x1b[90m(skipped)\x1b[0m".to_string() } else { "(skipped)".to_string() };
+                (s.to_string(), c)
+            } else if current_trim == "(unknown)" || current_trim.is_empty() {
+                let s = "unknown";
+                let c = if use_color { "\x1b[90munknown\x1b[0m".to_string() } else { s.to_string() };
+                (s.to_string(), c)
+            } else if current_trim == "unconfined" {
+                let s = "FAIL";
+                let c = if use_color { "\x1b[31mFAIL\x1b[0m".to_string() } else { s.to_string() };
+                (s.to_string(), c)
+            } else if let Some(p) = expected {
+                if current_trim.starts_with(p) {
+                    let s = "PASS";
+                    let c = if use_color { "\x1b[32mPASS\x1b[0m".to_string() } else { s.to_string() };
+                    (s.to_string(), c)
+                } else {
+                    let s = "WARN";
+                    let c = if use_color { "\x1b[33mWARN\x1b[0m".to_string() } else { s.to_string() };
+                    (s.to_string(), c)
+                }
+            } else {
+                let s = "PASS";
+                let c = if use_color { "\x1b[32mPASS\x1b[0m".to_string() } else { s.to_string() };
+                (s.to_string(), c)
+            }
+        };
+        eprintln!("  apparmor validation: {} (expected: {})", status_colored, expected_val);
     }
     eprintln!();
 
