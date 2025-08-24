@@ -1,3 +1,11 @@
+2025-08-24 20:45 Amir Guindehi <amir.guindehi@mgb.ch>
+
+assets: add new images/ folder
+
+- images/: add repository image assets
+- CHANGES.md: record this non-code repository content change
+- No source code modifications
+
 2025-08-24 19:25 Amir Guindehi <amir.guindehi@mgb.ch>
 
 docs: re-commit AGENT.md checklist
