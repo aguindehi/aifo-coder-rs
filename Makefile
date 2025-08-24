@@ -21,7 +21,7 @@ help:
 	@echo "  AIDER_IMAGE ................. Full image ref for Aider ($${IMAGE_PREFIX}-aider:$${TAG})"
 	@echo ""
 	@echo "  APP_NAME .................... App bundle name for macOS .app (default: aifo-coder)"
-	@echo "  APP_BUNDLE_ID .............. macOS bundle identifier (default: ch.migros.aifo-coder)"
+	@echo "  APP_BUNDLE_ID ............... macOS bundle identifier (default: ch.migros.aifo-coder)"
 	@echo "  APP_ICON .................... Path to a .icns icon to include in the .app (optional)"
 	@echo "  DMG_NAME .................... DMG filename base (default: $${APP_NAME}-$${VERSION})"
 	@echo "  SIGN_IDENTITY ............... macOS code signing identity (default: Migros AI Foundation Code Signer)"
@@ -30,27 +30,27 @@ help:
 	@echo ""
 	@echo "Install paths (for 'make install'):"
 	@echo ""
-	@echo "  PREFIX (/usr/local) ......... Install prefix"
-	@echo "  DESTDIR () .................. Staging root for packaging"
-	@echo "  BIN_DIR ($${PREFIX}/bin) ..... Binary install dir"
-	@echo "  MAN_DIR ($${PREFIX}/share/man) Manpages root"
-	@echo "  MAN1_DIR ($${MAN_DIR}/man1) .. Section 1 manpages"
-	@echo "  DOC_DIR ($${PREFIX}/share/doc/$${BIN_NAME}) ......... Documentation dir"
-	@echo "  EXAMPLES_DIR ($${DOC_DIR}/examples) ................. Examples dir"
+	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
+	@echo "  DESTDIR ..................... Staging root for packaging ()"
+	@echo "  BIN_DIR ..................... Binary install dir ($${PREFIX}/bin)"
+	@echo "  MAN_DIR ..................... Manpages root ($${PREFIX}/share/man)"
+	@echo "  MAN1_DIR .................... Section 1 manpages ($${MAN_DIR}/man1)"
+	@echo "  DOC_DIR ..................... Documentation dir ($${PREFIX}/share/doc/$${BIN_NAME})"
+	@echo "  EXAMPLES_DIR ................ Examples directory ($${DOC_DIR}/examples)"
 	@echo ""
 	@echo "Release and cross-compile:"
 	@echo ""
 	@echo "  release ..................... Aggregate: build launcher, mac .app + .dmg, and both mac (host) and Linux"
-	@echo "  release-for-mac ............. Build release for the current host (calls release-for-target)"
 	@echo "  release-for-linux ........... Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)"
+	@echo "  release-for-mac ............. Build macOS release (RELEASE_TARGETS=aarch64-apple-darwin)"
+	@echo "  release-app ................. Build macOS .app bundle into dist/ (Darwin hosts only)"
+	@echo "  release-dmg ................. Build macOS .dmg image from the .app (Darwin hosts only)"
 	@echo "                                Hints: set RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu'"
 	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
 	@echo ""
 	@echo "Build launcher:"
 	@echo ""
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
-	@echo "  release-app ................. Build macOS .app bundle into dist/ (Darwin hosts only)"
-	@echo "  release-dmg ................. Build macOS .dmg image from the .app (Darwin hosts only)"
 	@echo ""
 	@echo "Install:"
 	@echo ""
@@ -100,16 +100,17 @@ help:
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
 	@echo "  gpg-show-config ............. Show current git GPG signing-related configuration"
-	@echo "  git-check-signatures ........ Show commit signature status (git log %h %G? %s)"
 	@echo ""
 	@echo "  gpg-enable-signing .......... Re-enable GPG signing for commits and tags in this repo"
 	@echo "  gpg-disable-signing ......... Disable GPG signing for commits and tags in this repo (use if commits fail to sign)"
 	@echo "  gpg-disable-signing-global .. Disable GPG signing globally (in your ~/.gitconfig)"
 	@echo "  gpg-unset-signing ........... Unset local signing config for this repo (return to defaults)"
 	@echo ""
+	@echo "  git-show-signatures ........ Show commit signature status (git log %h %G? %s)"
+	@echo ""
 	@echo "  git-commit-no-sign .......... Commit staged changes without GPG signing (MESSAGE='your message')"
-	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
 	@echo "  git-commit-no-sign-all ...... Stage all and commit without signing (MESSAGE='your message' optional)"
+	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -527,8 +528,8 @@ gpg-show-config:
 	@echo "user.signingkey=$$(git config --get user.signingkey || echo unset)"
 	@echo "gpg.program=$$(git config --get gpg.program || echo unset)"
 
-.PHONY: git-check-signatures
-git-check-signatures:
+.PHONY: git-show-signatures
+git-show-signatures:
 	@printf '%s\n' \
 'G – A good (valid) signature.' \
 'B – A bad signature.' \
@@ -734,7 +735,7 @@ release-for-target:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi; \
-	# Generate checksums for archives (tar.gz, dmg)
+	echo Generate checksums for archives (tar.gz, dmg) > /dev/null \
 	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
 	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
 	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
@@ -746,7 +747,7 @@ release-for-target:
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
 	fi; \
-	# Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root)
+	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
 	  PKG="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
@@ -767,8 +768,8 @@ release-for-target:
 	  echo "cargo-cyclonedx not installed; skipping SBOM. Install with: cargo install cargo-cyclonedx" >&2; \
 	fi
 
-# Convenience targets wrapping release-for-target
-release-for-mac: release-for-target
+release-for-mac:
+	@$(MAKE) RELEASE_TARGETS=aarch64-apple-darwin release-for-target
 
 release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
@@ -976,7 +977,7 @@ release-dmg: release-app
 	  echo "Warning: DMG background not found at $$BG_SRC; proceeding without background." >&2; \
 	  BG_NAME=""; \
 	fi; \
-	# Create temporary read-write DMG to customize Finder view \
+	echo Create temporary read-write DMG to customize Finder view >/dev/null \
 	TMP_DMG="$$DIST/.tmp-$$DMG.dmg"; \
 	MNT="$$DIST/.mnt-$$APP"; \
 	rm -f "$$TMP_DMG"; \
@@ -984,7 +985,7 @@ release-dmg: release-app
 	rm -rf "$$STAGE"; \
 	mkdir -p "$$MNT"; \
 	hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$$MNT" "$$TMP_DMG" >/dev/null; \
-	# Configure Finder window via AppleScript (best-effort) \
+	echo Configure Finder window via AppleScript (best-effort) >/dev/null \
 	if command -v osascript >/dev/null 2>&1; then \
 	  AS="tell application \"Finder\" \
 tell disk \"$$APP\" \
@@ -1015,12 +1016,12 @@ end tell"; \
 	else \
 	  echo "osascript not available; skipping Finder customization." >&2; \
 	fi; \
-	# Detach and convert to compressed DMG \
+	echo Detach and convert to compressed DMG >/dev/null \
 	hdiutil detach "$$MNT" -quiet || hdiutil detach "$$MNT" -force -quiet || true; \
 	rm -rf "$$MNT"; \
 	hdiutil convert "$$TMP_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$$DMG_PATH" >/dev/null; \
 	rm -f "$$TMP_DMG"; \
-	# Sign DMG if identity provided \
+	echo Sign DMG if identity provided >/dev/null \
 	SIGN_ID="$(SIGN_IDENTITY)"; \
 	if [ -n "$$SIGN_ID" ] && command -v codesign >/dev/null 2>&1; then \
 	  echo "Signing DMG with identity: $$SIGN_ID"; \
@@ -1028,7 +1029,7 @@ end tell"; \
 	else \
 	  echo "Skipping DMG signing (SIGN_IDENTITY empty or codesign not available)"; \
 	fi; \
-	# Notarize and staple if notary profile configured \
+	echo Notarize and staple if notary profile configured >/dev/null \
 	NOTARY="$(NOTARY_PROFILE)"; \
 	if [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1; then \
 	  if xcrun notarytool --help >/dev/null 2>&1; then \
