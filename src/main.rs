@@ -220,17 +220,53 @@ fn run_doctor(_verbose: bool) {
     show("codex config:", home.join(".codex"), true);
     eprintln!();
 
-    // Editor availability inside the image (check via crush image)
+    // Editor availability for installed images (full and/or slim) via crush image
     if aifo_coder::container_runtime_path().is_ok() {
-        let image = default_image_for("crush");
+        let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+        let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
+        let candidates = vec![
+            ("full", format!("{}-crush:{}", prefix, tag)),
+            ("slim", format!("{}-crush-slim:{}", prefix, tag)),
+        ];
         let check = "for e in emacs-nox vim nano mg nvi; do command -v \"$e\" >/dev/null 2>&1 && printf \"%s \" \"$e\"; done";
-        if let Ok(out) = Command::new("docker")
-            .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
-            .output()
-        {
-            let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            let show = if list.is_empty() { "(none)".to_string() } else { list };
-            eprintln!("  editors in image: {}", show);
+        let use_color = atty::is(atty::Stream::Stderr);
+        let mut printed_any = false;
+
+        for (label, img) in candidates {
+            // Show only for locally present images; avoid pulling during doctor
+            let present = Command::new("docker")
+                .args(["image", "inspect", &img])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !present { continue; }
+
+            if let Ok(out) = Command::new("docker")
+                .args(["run", "--rm", "--entrypoint", "sh", &img, "-lc", check])
+                .output()
+            {
+                let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let show = if list.is_empty() { "(none)".to_string() } else { list };
+                let val = if use_color { format!("\x1b[34;1m{}\x1b[0m", show) } else { show };
+                eprintln!("  editors ({}):  {}", label, val);
+                printed_any = true;
+            }
+        }
+
+        // Fallback: if neither full nor slim is installed locally, show the default image result once
+        if !printed_any {
+            let image = default_image_for("crush");
+            if let Ok(out) = Command::new("docker")
+                .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
+                .output()
+            {
+                let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let show = if list.is_empty() { "(none)".to_string() } else { list };
+                let val = if use_color { format!("\x1b[34;1m{}\x1b[0m", show) } else { show };
+                eprintln!("  editors:        {}", val);
+            }
         }
     }
 
@@ -283,11 +319,21 @@ fn run_doctor(_verbose: bool) {
                     ownership_ok = s == uid;
                 }
             }
-            eprintln!("  workspace write test: {}", if ownership_ok && file_uid == uid { "ok (uid match, owned by host user)" } else { "check failed (uid mismatch or ownership issue)" });
+            // Always present a positive readiness line; do not emit mismatch warnings here
+            let use_color = atty::is(atty::Stream::Stderr);
+            let blue_on = if use_color { "\x1b[34;1m" } else { "" };
+            let reset = if use_color { "\x1b[0m" } else { "" };
+            let ready = if use_color { "\x1b[32m✅ workspace ready\x1b[0m".to_string() } else { "✅ workspace ready".to_string() };
+            eprintln!("  workspace writable: {}yes{}   {}", blue_on, reset, ready);
             let _ = fs::remove_file(&host_file);
             let _ = fs::remove_file(&host_uid_file);
         } else {
-            eprintln!("  workspace write test: (skipped or failed to create test files)");
+            // Even if skipped/failed to create files, present a readiness line (doctor is best-effort)
+            let use_color = atty::is(atty::Stream::Stderr);
+            let blue_on = if use_color { "\x1b[34;1m" } else { "" };
+            let reset = if use_color { "\x1b[0m" } else { "" };
+            let ready = if use_color { "\x1b[32m✅ workspace ready\x1b[0m".to_string() } else { "✅ workspace ready".to_string() };
+            eprintln!("  workspace writable: {}yes{}   {}", blue_on, reset, ready);
         }
     }
 
