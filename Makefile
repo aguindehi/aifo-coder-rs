@@ -84,6 +84,7 @@ help:
 	@echo ""
 	@echo "  clean ....................... Remove built images (ignores errors if not present)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
+	@echo "  docker-images ............... Show the available images in the local Docker registry"
 	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -463,6 +464,11 @@ apparmor-log-colima:
 		echo "Unable to locate AppArmor logs. On macOS, ensure Colima is running; on Linux, ensure journalctl/syslog available." >&2; \
 		exit 1; \
 	fi
+
+.PHONY: docker-enter
+docker-images:
+	@set -e; \
+	docker images | head -1; docker images | sort | grep -v REPOSITORY
 
 .PHONY: docker-enter
 docker-enter:
