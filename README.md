@@ -195,7 +195,7 @@ Summary:
   - `@openai/codex`
   - `@charmland/crush`
 - Python-based Aider installed via `uv` into `/opt/venv` (PEP 668‑safe)
-- `dumb-init`, `git`, `ripgrep`, `curl`, `emacs-nox`, `vim`, `nano`
+- `dumb-init`, `git`, `ripgrep`, `curl`, `emacs-nox`, `vim`, `nano`, `mg`, `nvi`
 - GnuPG (`gnupg`, `pinentry-curses`) and NSS wrapper (`libnss-wrapper`)
 - Default working directory: `/workspace`
 - Entrypoint `/usr/local/bin/aifo-entrypoint`:
