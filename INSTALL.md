@@ -7,7 +7,8 @@ Prerequisites:
 Quick install:
 ```bash
 make build
-./aifo-coder --help
+make install
+aifo-coder --help
 ```
 
 Notes:
