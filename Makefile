@@ -794,7 +794,7 @@ sbom:
 .PHONY: loc
 loc:
 	@set -e; \
-	echo "Counting lines of source in repository..."; \
+	echo "\nCounting lines of source in repository...\n"; \
 	count() { \
 	  pat="$$1"; \
 	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
@@ -810,18 +810,18 @@ loc:
 	md=$$(count "-name '*.md'"); \
 	other=$$(count "-name '*.conf'"); \
 	total=$$((rust+shell+makef+docker+yaml+toml+json+md+other)); \
-	printf "Lines of code (excluding .git, target, dist, build, node_modules):\n"; \
-	printf "  Rust (.rs):            %8d\n" "$$rust"; \
-	printf "  Shell scripts:         %8d\n" "$$shell"; \
-	printf "  Makefiles:             %8d\n" "$$makef"; \
-	printf "  Dockerfiles:           %8d\n" "$$docker"; \
-	printf "  YAML:                  %8d\n" "$$yaml"; \
-	printf "  TOML:                  %8d\n" "$$toml"; \
-	printf "  JSON:                  %8d\n" "$$json"; \
-	printf "  Markdown:              %8d\n" "$$md"; \
-	printf "  Other (.conf):         %8d\n" "$$other"; \
-	printf "  -------------------------------\n"; \
-	printf "  Total:                 %8d\n" "$$total"
+	printf "Lines of code (excluding .git, target, dist, build, node_modules):\n\n"; \
+	printf "  Rust (.rs):      %8d\n" "$$rust"; \
+	printf "  Shell scripts:   %8d\n" "$$shell"; \
+	printf "  Makefiles:       %8d\n" "$$makef"; \
+	printf "  Dockerfiles:     %8d\n" "$$docker"; \
+	printf "  YAML:            %8d\n" "$$yaml"; \
+	printf "  TOML:            %8d\n" "$$toml"; \
+	printf "  JSON:            %8d\n" "$$json"; \
+	printf "  Markdown:        %8d\n" "$$md"; \
+	printf "  Other (.conf):   %8d\n" "$$other"; \
+	printf "  -------------------------\n"; \
+	printf "  Total:           %8d\n\n" "$$total"
 
 .PHONY: build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
