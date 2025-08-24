@@ -11,15 +11,15 @@
 - Environment with Secure Containerization Enabled
 - Platform with Adaptive Security for Linux & macOS
 
-## 🔧 Building a safer future for coding automation in Migros Group:
+## 🔧 Building a safer future for coding automation in Migros Group
 - Container isolation on Linux & macOS
 - Agents run inside a container, not on your host runtimes
+- AppArmor Support (via Docker or Colima)
 - No privileged Docker mode; no host Docker socket is mounted
 - Minimal attack surface area
 - Only the current project folder and essential per‑tool config/state paths are mounted
 - Nothing else from your home directory is exposed by default
 - Principle of least privilege
-- AppArmor Support (via Docker)
 - No additional host devices, sockets or secrets are mounted
 
 ## Prerequisites and installation
