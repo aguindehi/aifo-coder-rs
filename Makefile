@@ -1026,6 +1026,7 @@ end tell"; \
 release-dmg-sign: release-app
 	@( \
 	APP="$(APP_NAME)"; \
+	BIN="$(BIN_NAME)"; \
 	DIST="$(DIST_DIR)"; \
 	APPROOT="$$DIST/$$APP.app"; \
 	DMG_NAME="$(DMG_NAME)"; \
@@ -1038,24 +1039,30 @@ release-dmg-sign: release-app
 	echo "Using signing identity name: '$$SIGN_ID_NAME'"; \
 	echo "Keychains (user):"; security list-keychains -d user || true; \
 	echo "Default keychain (user):"; security default-keychain -d user || true; \
-	echo "Available code signing identities:"; \
+	echo "Available code signing identities (may be empty for self-signed certs):"; \
 	security find-identity -p codesigning -v || true; \
-	SIG_HASH="$$(security find-identity -p codesigning -v 2>/dev/null | grep -F \"$$SIGN_ID_NAME\" | head -n1 | awk '{print $$2}')" ; \
-	if [ -z "$$SIG_HASH" ]; then \
-	  echo "Error: Could not find a code signing identity matching '$$SIGN_ID_NAME' in your keychains." >&2; \
-	  echo "Hint: Ensure the certificate and its private key are in the login keychain and unlocked, or set SIGN_IDENTITY to the exact name." >&2; \
+	echo "Searching for certificate by common name (including self-signed/untrusted):"; \
+	security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | sed -n '1,8p' || true; \
+	CERT_MATCH_COUNT="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | grep -c '^SHA-256 hash:' || true)"; \
+	if [ "$$CERT_MATCH_COUNT" -eq 0 ]; then \
+	  echo "Error: No certificate with common name '$$SIGN_ID_NAME' found in your keychains." >&2; \
+	  echo "Hint: Ensure the certificate AND its private key are in the login keychain and unlocked, or override SIGN_IDENTITY." >&2; \
 	  exit 1; \
 	fi; \
-	echo "Found signing identity hash: $$SIG_HASH"; \
-	echo "Signing app bundle at $$APPROOT ..."; \
-	codesign --force --verbose=4 --options runtime --timestamp -s "$$SIG_HASH" "$$APPROOT" || { echo "codesign app failed"; exit 1; }; \
-	echo "Verifying app signature ..."; \
+	ID_SPEC="$$SIGN_ID_NAME"; \
+	BIN_EXEC="$$APPROOT/Contents/MacOS/$$BIN"; \
+	if [ ! -x "$$BIN_EXEC" ]; then echo "Error: app executable not found at $$BIN_EXEC" >&2; exit 1; fi; \
+	echo "Signing inner executable: $$BIN_EXEC"; \
+	codesign --force --verbose=4 --options runtime --timestamp -s "$$ID_SPEC" "$$BIN_EXEC" || { echo "codesign inner executable failed"; exit 1; }; \
+	echo "Signing app bundle: $$APPROOT"; \
+	codesign --force --verbose=4 --options runtime --timestamp -s "$$ID_SPEC" "$$APPROOT" || { echo "codesign app bundle failed"; exit 1; }; \
+	echo "Verifying app signature (deep/strict) ..."; \
 	codesign --verify --deep --strict --verbose=4 "$$APPROOT" || { echo "codesign verification failed for app"; exit 1; }; \
 	echo "Building DMG from signed app ..."; \
 	$(MAKE) release-dmg; \
 	if [ ! -f "$$DMG_PATH" ]; then echo "Error: DMG not found at $$DMG_PATH"; exit 1; fi; \
 	echo "Signing DMG at $$DMG_PATH ..."; \
-	codesign --force --verbose=4 --timestamp -s "$$SIG_HASH" "$$DMG_PATH" || { echo "codesign DMG failed"; exit 1; }; \
+	codesign --force --verbose=4 --timestamp -s "$$ID_SPEC" "$$DMG_PATH" || { echo "codesign DMG failed"; exit 1; }; \
 	NOTARY="$(NOTARY_PROFILE)"; \
 	if [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
 	  echo "Submitting $$DMG_PATH for notarization with profile '$$NOTARY' ..."; \
