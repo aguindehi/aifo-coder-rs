@@ -3,9 +3,9 @@
 aifo-coder \- secure Docker-based launcher for coding assistant agents
 .SH SYNOPSIS
 .B aifo-coder
-.RB [ \-\-image " " IMAGE ]
-.I AGENT
-.RI [ " -- " ARGS ...]
+.RB [ OPTIONS ]
+.I COMMAND
+.RI [ " -- " "AGENT-OPTIONS" ]
 .P
 .B aifo-coder
 .RB [ \-h | \-\-help ]
@@ -35,9 +35,10 @@ creates a lock file at a candidate location (see
 .BR FILES ).
 .P
 Different agents are selected via the positional
-.I AGENT
-argument. Additional arguments after
+.I COMMAND
+subcommand. Additional options after
 .B --
+.RI ( AGENT-OPTIONS )
 are passed through unchanged to the agent process inside the container.
 .SH AGENTS
 The set of available agents is build\-dependent. Common agents include:

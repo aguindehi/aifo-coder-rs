@@ -377,7 +377,12 @@ fn run_doctor(_verbose: bool) {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "aifo-coder", version, about = "Run Codex, Crush or Aider inside Docker with current directory mounted.")]
+#[command(
+    name = "aifo-coder",
+    version,
+    about = "Run Codex, Crush or Aider inside Docker with current directory mounted.",
+    override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]"
+)]
 struct Cli {
     /// Override Docker image (full ref). If unset, use per-agent default: {prefix}-{agent}:{tag}
     #[arg(long)]

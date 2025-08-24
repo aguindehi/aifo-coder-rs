@@ -51,7 +51,7 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [--] [agent-args...]
+./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 Global flags:
