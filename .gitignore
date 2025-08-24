@@ -3,6 +3,7 @@
 .crush*
 .codex*
 .env
+.DS_Store
 aifo-coder.cdx.*
 build.*
 build
