@@ -1,4 +1,28 @@
-# aifo-coder
+
+# 🚀  Welcome to the Migros AI Foundaton Coder  🚀
+
+🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO
+
+## ✨ Features:
+- Linux: Coding agents run securely inside Docker containers with AppArmor.
+- macOS: Transparent VM with Docker ensures isolated and secure agent execution.
+
+## ⚙️  Secure Coding Agents
+- Environment with Secure Containerization Enabled
+- Platform with Adaptive Security for Linux & macOS
+
+## 🔧 Building a safer future for coding automation in Migros Group:
+- Container isolation on Linux & macOS
+- Agents run inside a container, not on your host runtimes
+- No privileged Docker mode; no host Docker socket is mounted
+- Minimal attack surface area
+- Only the current project folder and essential per‑tool config/state paths are mounted
+- Nothing else from your home directory is exposed by default
+- Principle of least privilege
+- AppArmor Support (via Docker)
+- No additional host devices, sockets or secrets are mounted
+
+# The aifo-coder
 
 Containerized launcher and Docker images bundling three terminal AI coding agents:
 
