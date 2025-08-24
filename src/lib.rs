@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use which::which;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use std::os::fd::AsRawFd;
 use libc;
 use atty;
@@ -49,6 +49,8 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "EDITOR",
         "VISUAL",
     ]
+// Cache for preferred registry prefix resolution within a single process run.
+static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 });
 
 /// Locate the Docker runtime binary.
@@ -222,16 +224,23 @@ fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
 pub fn preferred_registry_prefix() -> String {
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
+    }
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
             eprintln!("aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
-            return String::new();
+            let v = String::new();
+            let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+            return v;
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
         eprintln!("aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'", s);
-        return s;
+        let v = s;
+        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        return v;
     }
 
     // Prefer probing with curl for HTTPS reachability using short timeouts.
@@ -252,10 +261,14 @@ pub fn preferred_registry_prefix() -> String {
         if let Ok(st) = status {
             if st.success() {
                 eprintln!("aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
-                return "repository.migros.net/".to_string();
+                let v = "repository.migros.net/".to_string();
+                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                return v;
             } else {
                 eprintln!("aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
-                return String::new();
+                let v = String::new();
+                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                return v;
             }
         } else {
             eprintln!("aifo-coder: curl invocation failed; falling back to TCP reachability check.");
@@ -265,18 +278,23 @@ pub fn preferred_registry_prefix() -> String {
     }
 
     // Fallback quick TCP probe (short timeout).
-    if is_host_port_reachable("repository.migros.net", 443, 300) {
+    let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
         eprintln!("aifo-coder: repository.migros.net appears reachable via TCP; using registry prefix 'repository.migros.net/'.");
         "repository.migros.net/".to_string()
     } else {
         eprintln!("aifo-coder: repository.migros.net not reachable via TCP; using Docker Hub (no prefix).");
         String::new()
-    }
+    };
+    let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+    v
 }
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 /// Behavior is identical to preferred_registry_prefix(), but with no eprintln! output.
 pub fn preferred_registry_prefix_quiet() -> String {
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
+    }
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
@@ -284,7 +302,9 @@ pub fn preferred_registry_prefix_quiet() -> String {
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
-        return s;
+        let v = s;
+        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+        return v;
     }
 
     if which("curl").is_ok() {
@@ -302,18 +322,24 @@ pub fn preferred_registry_prefix_quiet() -> String {
             .status();
         if let Ok(st) = status {
             if st.success() {
-                return "repository.migros.net/".to_string();
+                let v = "repository.migros.net/".to_string();
+                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                return v;
             } else {
-                return String::new();
+                let v = String::new();
+                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+                return v;
             }
         }
     }
 
-    if is_host_port_reachable("repository.migros.net", 443, 300) {
+    let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
         "repository.migros.net/".to_string()
     } else {
         String::new()
-    }
+    };
+    let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
+    v
 }
 
 /// Render a docker -v host:container pair.

@@ -54,6 +54,30 @@ aifo‑coder takes a “contain what matters, nothing more” approach:
 - AppArmor (via Docker)
   - When supported by Docker, the launcher adds `--security-opt apparmor=<profile>`.
 
+### AppArmor on macOS (Colima) and Docker Desktop
+
+- macOS (Colima):
+  - Build the profile from the template: make apparmor
+  - Load it into the Colima VM:
+```bash
+colima ssh -- sudo apparmor_parser -r -W "$PWD/build/apparmor/aifo-coder"
+```
+  - If the custom profile is not available, the launcher will fall back to docker-default automatically.
+- Docker Desktop (macOS/Windows):
+  - Docker runs inside a VM; AppArmor support and profiles are managed by the VM. The launcher defaults to docker-default on these platforms.
+- Native Linux:
+  - If the aifo-coder profile is loaded on the host, it will be used; otherwise docker-default is used when available, or no explicit profile.
+
+Troubleshooting:
+- Check Docker AppArmor support:
+```bash
+docker info --format '{{json .SecurityOptions}}'
+```
+- List loaded profiles (Linux):
+```bash
+cat /sys/kernel/security/apparmor/profiles | grep -E 'aifo-coder|docker-default' || true
+```
+
 ---
 
 ## Requirements
@@ -186,6 +210,27 @@ Notes about linkers:
 Summary:
 - Prefer make release-for-target with rustup-installed targets.
 - Use make build-launcher for a quick host-only build.
+
+### macOS signing and notarization (optional)
+
+Codesign locally (ad-hoc) for the .app:
+```bash
+codesign --deep --force --sign - "dist/aifo-coder.app"
+```
+
+Notarize with Apple (requires Xcode CLT and credentials set up):
+```bash
+xcrun notarytool submit "dist/aifo-coder.dmg" --keychain-profile "AC_NOTARY" --wait
+```
+
+Staple notarization ticket:
+```bash
+xcrun stapler staple "dist/aifo-coder.dmg"
+```
+
+Notes:
+- Create a keychain profile with: xcrun notarytool store-credentials AC_NOTARY --apple-id "<your-apple-id>" --team-id "<team-id>" --password "<app-specific-password>"
+- To automate branding, add a DMG background and /Applications symlink in the Makefile’s build-dmg target.
 
 ---
 
