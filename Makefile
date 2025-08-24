@@ -45,6 +45,7 @@ help:
 	@echo "  release-for-mac ............. Build macOS release (RELEASE_TARGETS=aarch64-apple-darwin)"
 	@echo "  release-app ................. Build macOS .app bundle into dist/ (Darwin hosts only)"
 	@echo "  release-dmg ................. Build macOS .dmg image from the .app (Darwin hosts only)"
+	@echo "  release-dmg-sign ............ Sign the .app and .dmg; notarize if configured (Darwin hosts only)"
 	@echo "                                Hints: set RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu'"
 	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
 	@echo ""
@@ -775,7 +776,7 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
-release: rebuild build-launcher release-app release-dmg release-for-mac release-for-linux
+release: rebuild build-launcher release-app release-dmg-sign release-for-mac release-for-linux
 
 .PHONY: install
 install: build build-launcher
@@ -876,7 +877,7 @@ loc:
 	printf "  -------------------------\n"; \
 	printf "  Total:           %8d\n\n" "$$total"
 
-.PHONY: release-app release-dmg build-app build-dmg
+.PHONY: release-app release-dmg release-dmg-sign build-app build-dmg
 ifeq ($(shell uname -s),Darwin)
 
 release-app:
@@ -943,15 +944,11 @@ release-app:
 '</dict>' \
 '</plist>' \
 > "$$CONTENTS/Info.plist"; \
-	SIGN_ID="$(SIGN_IDENTITY)"; \
-	if [ -n "$$SIGN_ID" ] && command -v codesign >/dev/null 2>&1; then \
-	  echo "Signing app with identity: $$SIGN_ID"; \
-	  codesign --force --deep --options runtime --timestamp -s "$$SIGN_ID" "$$APPROOT"; \
-	  codesign --verify --deep --strict "$$APPROOT" || { echo "codesign verification failed"; exit 1; }; \
-	else \
-	  echo "Skipping code signing (SIGN_IDENTITY empty or codesign not available)"; \
-	fi; \
-	echo "Built $$APPROOT"; \
+	echo "Info.plist written. Preview:"; \
+	/usr/libexec/PlistBuddy -c 'Print' "$$CONTENTS/Info.plist" 2>/dev/null || cat "$$CONTENTS/Info.plist"; \
+	echo "App bundle layout:"; \
+	( cd "$$APPROOT" && find . -maxdepth 5 -print | sed -e 's#^\./##' ); \
+	echo "Built $$APPROOT (unsigned). Use 'make release-dmg-sign' to sign and create a signed DMG."; \
 	)
 
 release-dmg: release-app
@@ -1021,30 +1018,55 @@ end tell"; \
 	rm -rf "$$MNT"; \
 	hdiutil convert "$$TMP_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$$DMG_PATH" >/dev/null; \
 	rm -f "$$TMP_DMG"; \
-	echo Sign DMG if identity provided >/dev/null \
-	SIGN_ID="$(SIGN_IDENTITY)"; \
-	if [ -n "$$SIGN_ID" ] && command -v codesign >/dev/null 2>&1; then \
-	  echo "Signing DMG with identity: $$SIGN_ID"; \
-	  codesign --force --timestamp -s "$$SIGN_ID" "$$DMG_PATH"; \
-	else \
-	  echo "Skipping DMG signing (SIGN_IDENTITY empty or codesign not available)"; \
+	echo "Wrote $$DMG_PATH (unsigned)"; \
+	)
+
+# Sign the .app and .dmg (and optionally notarize). This target signs the app first,
+# then rebuilds the DMG so it contains the signed app, then signs the DMG.
+release-dmg-sign: release-app
+	@( \
+	APP="$(APP_NAME)"; \
+	DIST="$(DIST_DIR)"; \
+	APPROOT="$$DIST/$$APP.app"; \
+	DMG_NAME="$(DMG_NAME)"; \
+	DMG_PATH="$$DIST/$$DMG_NAME.dmg"; \
+	SIGN_ID_NAME="$(SIGN_IDENTITY)"; \
+	echo "Preparing to sign macOS app and DMG..."; \
+	if [ ! -d "$$APPROOT" ]; then echo "Error: app bundle not found at $$APPROOT. Run 'make release-app' first." >&2; exit 1; fi; \
+	command -v security >/dev/null 2>&1 || { echo "Error: 'security' tool not found (macOS required)"; exit 1; }; \
+	command -v codesign >/dev/null 2>&1 || { echo "Error: 'codesign' tool not found (Xcode Command Line Tools)"; exit 1; }; \
+	echo "Using signing identity name: '$$SIGN_ID_NAME'"; \
+	echo "Keychains (user):"; security list-keychains -d user || true; \
+	echo "Default keychain (user):"; security default-keychain -d user || true; \
+	echo "Available code signing identities:"; \
+	security find-identity -p codesigning -v || true; \
+	SIG_HASH="$$(security find-identity -p codesigning -v 2>/dev/null | grep -F \"$$SIGN_ID_NAME\" | head -n1 | awk '{print $$2}')" ; \
+	if [ -z "$$SIG_HASH" ]; then \
+	  echo "Error: Could not find a code signing identity matching '$$SIGN_ID_NAME' in your keychains." >&2; \
+	  echo "Hint: Ensure the certificate and its private key are in the login keychain and unlocked, or set SIGN_IDENTITY to the exact name." >&2; \
+	  exit 1; \
 	fi; \
-	echo Notarize and staple if notary profile configured >/dev/null \
+	echo "Found signing identity hash: $$SIG_HASH"; \
+	echo "Signing app bundle at $$APPROOT ..."; \
+	codesign --force --verbose=4 --options runtime --timestamp -s "$$SIG_HASH" "$$APPROOT" || { echo "codesign app failed"; exit 1; }; \
+	echo "Verifying app signature ..."; \
+	codesign --verify --deep --strict --verbose=4 "$$APPROOT" || { echo "codesign verification failed for app"; exit 1; }; \
+	echo "Building DMG from signed app ..."; \
+	$(MAKE) release-dmg; \
+	if [ ! -f "$$DMG_PATH" ]; then echo "Error: DMG not found at $$DMG_PATH"; exit 1; fi; \
+	echo "Signing DMG at $$DMG_PATH ..."; \
+	codesign --force --verbose=4 --timestamp -s "$$SIG_HASH" "$$DMG_PATH" || { echo "codesign DMG failed"; exit 1; }; \
 	NOTARY="$(NOTARY_PROFILE)"; \
-	if [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1; then \
-	  if xcrun notarytool --help >/dev/null 2>&1; then \
-	    echo "Submitting $$DMG_PATH for notarization with profile '$$NOTARY' (this may take a while) ..."; \
-	    xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait || { echo "Notarization failed" >&2; exit 1; }; \
-	    echo "Stapling notarization ticket ..."; \
-	    xcrun stapler staple "$$DMG_PATH" || true; \
-	    xcrun stapler staple "$$APPROOT" || true; \
-	  else \
-	    echo "xcrun notarytool not available; skipping notarization." >&2; \
-	  fi; \
+	if [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "Submitting $$DMG_PATH for notarization with profile '$$NOTARY' ..."; \
+	  xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait || { echo "Notarization failed" >&2; exit 1; }; \
+	  echo "Stapling notarization ticket to DMG and app ..."; \
+	  xcrun stapler staple "$$DMG_PATH" || true; \
+	  xcrun stapler staple "$$APPROOT" || true; \
 	else \
-	  echo "NOTARY_PROFILE not set or xcrun not available; skipping notarization." >&2; \
+	  echo "Skipping notarization (NOTARY_PROFILE not set or notarytool unavailable)."; \
 	fi; \
-	echo "Wrote $$DMG_PATH"; \
+	echo "Signing steps completed: $$APPROOT and $$DMG_PATH"; \
 	)
 
 else
@@ -1054,5 +1076,8 @@ release-app:
 
 release-dmg:
 	@echo "release-dmg is only supported on macOS (Darwin) hosts." >&2; exit 1
+
+release-dmg-sign:
+	@echo "release-dmg-sign is only supported on macOS (Darwin) hosts." >&2; exit 1
 
 endif
