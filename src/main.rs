@@ -40,7 +40,7 @@ fn print_startup_banner() {
     println!();
 }
 
-fn run_doctor(_verbose: bool) {
+fn run_doctor(verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
     eprintln!();
@@ -106,7 +106,8 @@ fn run_doctor(_verbose: bool) {
                 }
             }
             let pretty: Vec<String> = items
-                .into_iter()
+                .iter()
+                .cloned()
                 .map(|s| {
                     let mut name: Option<String> = None;
                     let mut attrs: Vec<String> = Vec::new();
@@ -140,6 +141,57 @@ fn run_doctor(_verbose: bool) {
                 joined
             };
             eprintln!("  docker security options: {}", joined_val);
+            if verbose {
+                let has_apparmor = items.iter().any(|s| s.contains("apparmor"));
+                // Extract seccomp profile if present
+                let mut seccomp = String::from("(unknown)");
+                for s in &items {
+                    if s.contains("name=seccomp") {
+                        for part in s.split(',') {
+                            if let Some(v) = part.strip_prefix("profile=") {
+                                seccomp = v.to_string();
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                // Extract cgroupns mode if present
+                let mut cgroupns = String::from("(unknown)");
+                for s in &items {
+                    if s.contains("name=cgroupns") {
+                        for part in s.split(',') {
+                            if let Some(v) = part.strip_prefix("mode=") {
+                                cgroupns = v.to_string();
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                let rootless = items.iter().any(|s| s.contains("rootless"));
+
+                let use_color = atty::is(atty::Stream::Stderr);
+                let yn = |b: bool| -> String {
+                    if use_color {
+                        if b { "\x1b[32myes\x1b[0m".to_string() } else { "\x1b[31mno\x1b[0m".to_string() }
+                    } else {
+                        if b { "yes".to_string() } else { "no".to_string() }
+                    }
+                };
+                let seccomp_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", seccomp) } else { seccomp.clone() };
+                let cgroupns_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", cgroupns) } else { cgroupns.clone() };
+
+                eprintln!("    details: AppArmor={} | Seccomp={} | cgroupns={} | rootless={}",
+                          yn(has_apparmor), seccomp_disp, cgroupns_disp, yn(rootless));
+
+                if !has_apparmor {
+                    eprintln!("    tip: AppArmor not reported by Docker. On Linux, enable the AppArmor kernel module and ensure Docker is built with AppArmor support.");
+                }
+                if seccomp.eq_ignore_ascii_case("unconfined") {
+                    eprintln!("    tip: Docker daemon seccomp profile is 'unconfined'. Consider switching to the default seccomp profile for better isolation.");
+                }
+            }
         }
     }
     eprintln!();
@@ -210,6 +262,27 @@ fn run_doctor(_verbose: bool) {
             }
         };
         eprintln!("  apparmor validation: {} (expected: {})", status_colored, expected_val);
+        if verbose {
+            match status_plain.as_str() {
+                "FAIL" => {
+                    if cfg!(target_os = "linux") {
+                        eprintln!("    tip: Container is unconfined. Generate and load the profile:");
+                        eprintln!("    tip:   make apparmor");
+                        eprintln!("    tip:   sudo apparmor_parser -r -W \"build/apparmor/aifo-coder\"");
+                        eprintln!("    tip: Then re-run with AppArmor enabled.");
+                    } else {
+                        eprintln!("    tip: Container appears unconfined. Ensure your Docker VM/distribution supports AppArmor and it is enabled.");
+                    }
+                }
+                "WARN" => {
+                    eprintln!("    tip: Active AppArmor profile differs from expected. If you set AIFO_CODER_APPARMOR_PROFILE, verify the profile is loaded on the host ('/sys/kernel/security/apparmor/profiles').");
+                }
+                "unknown" => {
+                    eprintln!("    tip: Unable to read AppArmor status from container. Ensure 'docker run' works and that /proc/self/attr/apparmor/current is accessible.");
+                }
+                _ => {}
+            }
+        }
     }
     eprintln!();
 
@@ -228,6 +301,9 @@ fn run_doctor(_verbose: bool) {
         }
         Err(_) => {
             eprintln!("  docker command:  (not found)");
+            if verbose {
+                eprintln!("    tip: Install Docker and ensure 'docker' is in your PATH. On Linux, install Docker Engine; on macOS, install Docker Desktop or use Colima.");
+            }
         }
     }
 
