@@ -44,10 +44,8 @@ fn run_doctor(verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
     eprintln!();
-    let val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1mv{}\x1b[0m", version) } else { format!("v{}", version) };
-    eprintln!("  version: {}", val);
-    let host_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{} / {}\x1b[0m", std::env::consts::OS, std::env::consts::ARCH) } else { format!("{} / {}", std::env::consts::OS, std::env::consts::ARCH) };
-    eprintln!("  host:    {}", host_val);
+    eprintln!("  version: v{}", version);
+    eprintln!("  host:    {} / {}", std::env::consts::OS, std::env::consts::ARCH);
     eprintln!();
 
     // Virtualization environment
@@ -66,8 +64,8 @@ fn run_doctor(verbose: bool) {
     } else {
         "native"
     };
-    let virt_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", virtualization) } else { virtualization.to_string() };
-    eprintln!("  virtualization: {}", virt_val);
+    eprintln!("  virtualization: {}", virtualization);
+    eprintln!();
 
     // Docker/AppArmor capabilities
     let apparmor_supported = aifo_coder::docker_supports_apparmor();
@@ -135,12 +133,45 @@ fn run_doctor(verbose: bool) {
             } else {
                 pretty.join(", ")
             };
-            let joined_val = if atty::is(atty::Stream::Stderr) {
-                format!("\x1b[34;1m{}\x1b[0m", joined)
-            } else {
-                joined
-            };
+            let joined_val = joined.clone();
             eprintln!("  docker security options: {}", joined_val);
+            {
+                let has_apparmor = items.iter().any(|s| s.contains("apparmor"));
+                // Extract seccomp profile if present
+                let mut seccomp = String::from("(unknown)");
+                for s in &items {
+                    if s.contains("name=seccomp") {
+                        for part in s.split(',') {
+                            if let Some(v) = part.strip_prefix("profile=") {
+                                seccomp = v.to_string();
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                // Extract cgroupns mode if present
+                let mut cgroupns = String::from("(unknown)");
+                for s in &items {
+                    if s.contains("name=cgroupns") {
+                        for part in s.split(',') {
+                            if let Some(v) = part.strip_prefix("mode=") {
+                                cgroupns = v.to_string();
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                let rootless = items.iter().any(|s| s.contains("rootless"));
+                eprintln!(
+                    "  docker security details: AppArmor={}, Seccomp={}, cgroupns={}, rootless={}",
+                    if has_apparmor { "yes" } else { "no" },
+                    seccomp,
+                    cgroupns,
+                    if rootless { "yes" } else { "no" }
+                );
+            }
             if verbose {
                 let has_apparmor = items.iter().any(|s| s.contains("apparmor"));
                 // Extract seccomp profile if present
@@ -182,8 +213,7 @@ fn run_doctor(verbose: bool) {
                 let seccomp_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", seccomp) } else { seccomp.clone() };
                 let cgroupns_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", cgroupns) } else { cgroupns.clone() };
 
-                eprintln!("    details: AppArmor={} | Seccomp={} | cgroupns={} | rootless={}",
-                          yn(has_apparmor), seccomp_disp, cgroupns_disp, yn(rootless));
+                /* details printed above */
 
                 if !has_apparmor {
                     eprintln!("    tip: AppArmor not reported by Docker. On Linux, enable the AppArmor kernel module and ensure Docker is built with AppArmor support.");
@@ -199,8 +229,7 @@ fn run_doctor(verbose: bool) {
     // Desired AppArmor profile
     let profile = aifo_coder::desired_apparmor_profile_quiet();
     let prof_str = profile.as_deref().unwrap_or("(disabled)");
-    let prof_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", prof_str) } else { prof_str.to_string() };
-    eprintln!("  docker apparmor profile: {}", prof_val);
+    eprintln!("  apparmor profile:      {}", prof_str);
 
     // Confirm active AppArmor profile from inside a short-lived container
     if aifo_coder::container_runtime_path().is_ok() {
@@ -223,8 +252,7 @@ fn run_doctor(verbose: bool) {
         }
         let current = cmd.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|| "(unknown)".to_string());
         let current_trim = current.trim().to_string();
-        let current_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", current_trim) } else { current_trim.clone() };
-        eprintln!("  apparmor in-container: {}", current_val);
+        eprintln!("  apparmor in-container: {}", current_trim);
 
         // Validate AppArmor status against expectations
         let expected = profile.as_deref();
@@ -261,7 +289,7 @@ fn run_doctor(verbose: bool) {
                 (s.to_string(), c)
             }
         };
-        eprintln!("  apparmor validation: {} (expected: {})", status_colored, expected_val);
+        eprintln!("  apparmor validation:   {} (expected: {})", status_plain, expected_disp);
         if verbose {
             match status_plain.as_str() {
                 "FAIL" => {
@@ -289,14 +317,12 @@ fn run_doctor(verbose: bool) {
     // Docker command and version
     match aifo_coder::container_runtime_path() {
         Ok(p) => {
-            let dc_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", p.display()) } else { format!("{}", p.display()) };
-            eprintln!("  docker command:  {}", dc_val);
+            eprintln!("  docker command:  {}", p.display());
             if let Ok(out) = Command::new(&p).arg("--version").output() {
                 let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 // Typical: "Docker version 28.3.3, build 980b856816"
                 let pretty = raw.trim_start_matches("Docker version ").to_string();
-                let dv_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", pretty) } else { pretty };
-                eprintln!("  docker version:  {}", dv_val);
+                eprintln!("  docker version:  {}", pretty);
             }
         }
         Err(_) => {
@@ -314,8 +340,7 @@ fn run_doctor(verbose: bool) {
     } else {
         rp.trim_end_matches('/').to_string()
     };
-    let reg_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", reg_display) } else { reg_display };
-    eprintln!("  docker registry: {}", reg_val);
+    eprintln!("  docker registry: {}", reg_display);
     // (registry source suppressed)
     eprintln!();
 
