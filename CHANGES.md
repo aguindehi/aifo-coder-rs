@@ -1,3 +1,11 @@
+2025-08-25 12:20 Amir Guindehi <amir.guindehi@mgb.ch>
+
+score: refresh scorecard after CI smokes and doctor updates
+
+- SCORE-before.md: overwritten with previous SCORE.md contents
+- SCORE.md: updated grading reflecting CI help smokes, caching, and doctor AppArmor/security options
+- CHANGES.md: record this scoring update
+
 2025-08-25 10:55 Amir Guindehi <amir.guindehi@mgb.ch>
 
 score: archive previous SCORE to SCORE-before and update scorecard
