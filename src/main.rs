@@ -187,34 +187,8 @@ fn run_doctor(verbose: bool) {
                         break;
                     }
                 }
-                // Extract cgroupns mode if present
-                let mut cgroupns = String::from("(unknown)");
-                for s in &items {
-                    if s.contains("name=cgroupns") {
-                        for part in s.split(',') {
-                            if let Some(v) = part.strip_prefix("mode=") {
-                                cgroupns = v.to_string();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-                let rootless = items.iter().any(|s| s.contains("rootless"));
 
-                let use_color = atty::is(atty::Stream::Stderr);
-                let yn = |b: bool| -> String {
-                    if use_color {
-                        if b { "\x1b[32myes\x1b[0m".to_string() } else { "\x1b[31mno\x1b[0m".to_string() }
-                    } else {
-                        if b { "yes".to_string() } else { "no".to_string() }
-                    }
-                };
-                let seccomp_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", seccomp) } else { seccomp.clone() };
-                let cgroupns_disp = if use_color { format!("\x1b[34;1m{}\x1b[0m", cgroupns) } else { cgroupns.clone() };
-
-                /* details printed above */
-
+                // security details were printed above in non-verbose section; only show tips here
                 if !has_apparmor {
                     eprintln!("    tip: AppArmor not reported by Docker. On Linux, enable the AppArmor kernel module and ensure Docker is built with AppArmor support.");
                 }
@@ -257,36 +231,22 @@ fn run_doctor(verbose: bool) {
         // Validate AppArmor status against expectations
         let expected = profile.as_deref();
         let expected_disp = expected.unwrap_or("(none)");
-        let expected_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", expected_disp) } else { expected_disp.to_string() };
 
-        let (status_plain, status_colored) = {
-            let use_color = atty::is(atty::Stream::Stderr);
+        let status_plain = {
             if !apparmor_supported {
-                let s = "skipped";
-                let c = if use_color { "\x1b[90m(skipped)\x1b[0m".to_string() } else { "(skipped)".to_string() };
-                (s.to_string(), c)
+                "skipped".to_string()
             } else if current_trim == "(unknown)" || current_trim.is_empty() {
-                let s = "unknown";
-                let c = if use_color { "\x1b[90munknown\x1b[0m".to_string() } else { s.to_string() };
-                (s.to_string(), c)
+                "unknown".to_string()
             } else if current_trim == "unconfined" {
-                let s = "FAIL";
-                let c = if use_color { "\x1b[31mFAIL\x1b[0m".to_string() } else { s.to_string() };
-                (s.to_string(), c)
+                "FAIL".to_string()
             } else if let Some(p) = expected {
                 if current_trim.starts_with(p) {
-                    let s = "PASS";
-                    let c = if use_color { "\x1b[32mPASS\x1b[0m".to_string() } else { s.to_string() };
-                    (s.to_string(), c)
+                    "PASS".to_string()
                 } else {
-                    let s = "WARN";
-                    let c = if use_color { "\x1b[33mWARN\x1b[0m".to_string() } else { s.to_string() };
-                    (s.to_string(), c)
+                    "WARN".to_string()
                 }
             } else {
-                let s = "PASS";
-                let c = if use_color { "\x1b[32mPASS\x1b[0m".to_string() } else { s.to_string() };
-                (s.to_string(), c)
+                "PASS".to_string()
             }
         };
         eprintln!("  apparmor validation:   {} (expected: {})", status_plain, expected_disp);
