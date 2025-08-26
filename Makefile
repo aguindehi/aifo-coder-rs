@@ -7,12 +7,17 @@ help:
 	@echo ""
 	@echo "Variables:"
 	@echo ""
-	@echo "  IMAGE_PREFIX (aifo-coder) ... Image name prefix for per-agent images"
-	@echo "  TAG (default: latest) ....... Tag for images"
+	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
+	@echo "  TAG ......................... Tag for images (default: latest)"
+	@echo ""
+	@echo "  USE_BUILDX .................. Use docker buildx when available; fallback to docker build (default: 1)"
+	@echo "  PLATFORMS ................... Comma-separated platforms for buildx (e.g., linux/amd64,linux/arm64)"
+	@echo "  PUSH ........................ With PLATFORMS set, push multi-arch images instead of loading (default: 0)"
+	@echo "  CACHE_DIR ................... Local buildx cache directory for faster rebuilds (.buildx-cache)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
-	@echo "  DIST_DIR (dist) ............. Output directory for release archives"
-	@echo "  BIN_NAME (aifo-coder) ....... Binary name used in release packaging"
+	@echo "  DIST_DIR .................... Output directory for release archives (dist)"
+	@echo "  BIN_NAME .................... Binary name used in release packaging (aifo-coder)"
 	@echo "  VERSION ..................... Version inferred from Cargo.toml or git describe"
 	@echo "  RELEASE_TARGETS ............. Space-separated Rust targets for 'make release-for-target' (overrides auto-detect)"
 	@echo "  CONTAINER ................... Container name for docker-enter (optional)"
@@ -46,8 +51,9 @@ help:
 	@echo "  release-app ................. Build macOS .app bundle into dist/ (Darwin hosts only)"
 	@echo "  release-dmg ................. Build macOS .dmg image from the .app (Darwin hosts only)"
 	@echo "  release-dmg-sign ............ Sign the .app and .dmg; notarize if configured (Darwin hosts only)"
-	@echo "                                Hints: set RELEASE_TARGETS='x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu'"
 	@echo "  release-for-target .......... Build release archives into dist/ for targets in RELEASE_TARGETS or host default"
+	@echo ""
+	@echo "  Hints: set RELEASE_TARGETS to: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin]"
 	@echo ""
 	@echo "Build launcher:"
 	@echo ""
@@ -137,6 +143,33 @@ TAG ?= latest
 # Set to 1 to keep apt/procps in final images (default drops them in final stages)
 KEEP_APT ?= 0
 
+# BuildKit/Buildx configuration
+USE_BUILDX ?= 1
+PLATFORMS ?=
+PUSH ?= 0
+CACHE_DIR ?= .buildx-cache
+
+# Detect docker buildx availability
+BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || echo 0)
+
+# Select build command (buildx with cache/load/push or classic docker build)
+ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
+  ifneq ($(strip $(PLATFORMS)),)
+    DOCKER_BUILDX_FLAGS := --platform $(PLATFORMS)
+    ifeq ($(PUSH),1)
+      DOCKER_BUILDX_FLAGS += --push
+    endif
+  else
+    DOCKER_BUILDX_FLAGS := --load
+  endif
+  ifneq ($(strip $(CACHE_DIR)),)
+    DOCKER_BUILDX_FLAGS += --cache-from type=local,src=$(CACHE_DIR) --cache-to type=local,dest=$(CACHE_DIR),mode=max
+  endif
+  DOCKER_BUILD = docker buildx build $(DOCKER_BUILDX_FLAGS)
+else
+  DOCKER_BUILD = docker build
+endif
+
 CODEX_IMAGE ?= $(IMAGE_PREFIX)-codex:$(TAG)
 CRUSH_IMAGE ?= $(IMAGE_PREFIX)-crush:$(TAG)
 AIDER_IMAGE ?= $(IMAGE_PREFIX)-aider:$(TAG)
@@ -164,9 +197,9 @@ build-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 build-crush:
@@ -184,9 +217,9 @@ build-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 build-aider:
@@ -204,9 +237,9 @@ build-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
@@ -227,9 +260,9 @@ build-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
 	fi
 
 build-crush-slim:
@@ -247,9 +280,9 @@ build-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
 	fi
 
 build-aider-slim:
@@ -267,9 +300,9 @@ build-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
 	fi
 
 build-launcher:
@@ -299,9 +332,9 @@ rebuild-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) .; \
 	fi
 
 rebuild-crush:
@@ -319,9 +352,9 @@ rebuild-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
 	fi
 
 rebuild-aider:
@@ -339,9 +372,9 @@ rebuild-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) .; \
 	fi
 
 .PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim
@@ -362,9 +395,9 @@ rebuild-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
 	fi
 
 rebuild-crush-slim:
@@ -382,9 +415,9 @@ rebuild-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
 	fi
 
 rebuild-aider-slim:
@@ -402,9 +435,9 @@ rebuild-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
 	else \
-	  docker build --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
 	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache
@@ -419,7 +452,7 @@ rebuild-existing:
 	  base="$$(basename "$$repo")"; \
 	  agent="$$(echo "$$base" | sed -E 's/.*-//')"; \
 	  echo "Rebuilding $$img (target=$$agent) ..."; \
-	  docker build --target "$$agent" -t "$$img" .; \
+	  $(DOCKER_BUILD) --target "$$agent" -t "$$img" .; \
 	done
 
 # Rebuild all existing local images for this prefix (all tags) without cache
@@ -434,7 +467,7 @@ rebuild-existing-nocache:
 	  base="$$(basename "$$repo")"; \
 	  agent="$$(echo "$$base" | sed -E 's/.*-//')"; \
 	  echo "Rebuilding (no cache) $$img (target=$$agent) ..."; \
-	  docker build --no-cache --target "$$agent" -t "$$img" .; \
+	  $(DOCKER_BUILD) --no-cache --target "$$agent" -t "$$img" .; \
 	done
 
 .PHONY: clean
