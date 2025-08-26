@@ -1132,7 +1132,14 @@ release-dmg-sign: release-app
 	  fi; \
 	fi; \
 	NOTARY="$(NOTARY_PROFILE)"; \
-	if [ "$$APPLE_DEV" -eq 1 ] && [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
+	DMG_ADHOC=0; APP_ADHOC=0; \
+	DSIG="$$(codesign -dv --verbose=4 "$$DMG_PATH" 2>&1 || true)"; \
+	ASIG="$$(codesign -dv --verbose=4 "$$APPROOT" 2>&1 || true)"; \
+	echo "$$DSIG" | grep -q "^Authority=" || DMG_ADHOC=1; \
+	echo "$$ASIG" | grep -q "^Authority=" || APP_ADHOC=1; \
+	if [ "$$DMG_ADHOC" -eq 1 ] || [ "$$APP_ADHOC" -eq 1 ]; then \
+	  echo "Skipping notarization: app or DMG were ad-hoc signed (no Apple identity)."; \
+	elif [ "$$APPLE_DEV" -eq 1 ] && [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
 	  echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
 	  if ! xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait; then \
 	    echo "Notarization failed" >&2; exit 1; \
