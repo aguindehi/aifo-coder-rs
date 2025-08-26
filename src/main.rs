@@ -307,7 +307,7 @@ fn run_doctor(verbose: bool) {
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
-    let show = |label: &str, path: std::path::PathBuf, mounted: bool| {
+    let show = |label: &str, path: std::path::PathBuf, _mounted: bool| {
         let pstr = path.display().to_string();
         let shown = if pstr.starts_with(&home_str) {
             format!("~{}", &pstr[home_str.len()..])
@@ -320,7 +320,7 @@ fn run_doctor(verbose: bool) {
         // Column widths
         let label_width: usize = 16;
         let path_col: usize = 44;    // target visible width for path column (moved left)
-        let status_col: usize = 14;  // target width for each status cell (icon + text)
+        let _status_col: usize = 14;  // deprecated: second status column removed
 
         // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
         let visible_len = shown.chars().count();
@@ -336,11 +336,9 @@ fn run_doctor(verbose: bool) {
 
         // Build status cells (plain)
         let (icon1, text1) = if exists { ("✅", "found") } else { ("❌", "missing") };
-        let (icon2, text2) = if mounted { ("✅", "mounted") } else { ("❌", "unmounted") };
         let cell1_plain = format!("{} {}", icon1, text1);
-        let cell2_plain = format!("{} {}", icon2, text2);
 
-        // Colorize statuses
+        // Colorize status
         let colored_cell1 = if use_color {
             if exists {
                 format!("\x1b[32m{}\x1b[0m", cell1_plain)
@@ -350,29 +348,13 @@ fn run_doctor(verbose: bool) {
         } else {
             cell1_plain.clone()
         };
-        let colored_cell2 = if use_color {
-            if mounted {
-                format!("\x1b[32m{}\x1b[0m", cell2_plain)
-            } else {
-                format!("\x1b[31m{}\x1b[0m", cell2_plain)
-            }
-        } else {
-            cell2_plain.clone()
-        };
-
-        // Pad the first status cell to a fixed width (based on plain text, not ANSI)
-        let s1_visible_len = cell1_plain.chars().count();
-        let s1_pad = if s1_visible_len < status_col { status_col - s1_visible_len } else { 1 };
-        let s1_padding = " ".repeat(s1_pad);
 
         eprintln!(
-            "  {:label_width$} {}{} {}{} {}",
+            "  {:label_width$} {}{} {}",
             label,
             colored_path,
             padding,
             colored_cell1,
-            s1_padding,
-            colored_cell2,
             label_width = label_width
         );
     };
