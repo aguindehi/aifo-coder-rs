@@ -1,7 +1,7 @@
 # aifo-coder Source Code Scorecard
 
-Date: 2025-08-25
-Time: 12:20
+Date: 2025-08-27
+Time: 12:35
 Author: Amir Guindehi <amir.guindehi@mgb.ch>
 Scope: Rust CLI launcher, Dockerfile multi-stage images (full and slim), Makefile and helper scripts, AppArmor template, README/man, wrapper, CI workflows, GPG runtime, macOS packaging/signing docs.
 
@@ -19,10 +19,9 @@ Grade summary (category — grade [score/10]):
 - Performance & Footprint — A- [9]
 - Testing & CI — A+ [10]
 
-What improved since last score
-- CI speed and coverage: Added lightweight --help smokes for codex, crush, and aider; enabled cargo registry/target caching for faster runs.
-- Diagnostics depth: Doctor now parses Docker security options from docker info and validates the active AppArmor profile inside a short-lived container.
-- Consistency: Kept README/INSTALL/man usage aligned; extended troubleshooting guidance implicitly via doctor output.
+What changed since last score
+- No functional source changes since 2025-08-25; scorecard refreshed per AGENT.md to confirm stability of security posture, tests, and UX.
+- Previous improvements (doctor deep-dive into Docker security options, in-container AppArmor validation, CI --help smokes and caching) remain in effect.
 
 Key strengths
 - Cohesive, testable architecture; helpers encapsulate environment probing, shell escaping, docker command assembly, and registry detection/caching.
@@ -66,7 +65,7 @@ Detailed assessment
 - Slim images and cargo cache reduce overhead; potential further gains via Alpine variants or additional cache tuning.
 
 10) Testing & CI — A+ [10/10]
-- Unit tests and Linux smokes across flavors; new --help smokes provide fast sanity checks; cargo cache reduces workflow time.
+- Unit tests and Linux smokes across flavors; --help smokes provide fast sanity checks; cargo cache reduces workflow time.
 
 Actionable next steps (prioritized)
 

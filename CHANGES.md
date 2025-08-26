@@ -1,3 +1,11 @@
+2025-08-27 12:35 Amir Guindehi <amir.guindehi@mgb.ch>
+
+score: refresh scorecard per AGENT.md
+
+- SCORE-before.md: overwritten with previous SCORE.md contents
+- SCORE.md: refreshed comprehensive scoring per AGENT.md workflow
+- CHANGES.md: recorded scoring update
+
 2025-08-25 12:20 Amir Guindehi <amir.guindehi@mgb.ch>
 
 score: refresh scorecard after CI smokes and doctor updates
