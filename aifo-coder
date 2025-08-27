@@ -4,6 +4,12 @@
 # otherwise attempts to build with cargo and run it.
 set -e
 
+# Determine executable suffix on Windows environments (Git Bash/MSYS/Cygwin)
+EXE=""
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT) EXE=".exe" ;;
+esac
+
 # Ensure common PATHs for rustup and Homebrew on macOS
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
@@ -25,10 +31,10 @@ if [ -f "$HOME/.cargo/env" ]; then
   . "$HOME/.cargo/env"
 fi
 
-BIN="${AIFO_CODER_BIN:-./target/release/aifo-coder}"
+BIN="${AIFO_CODER_BIN:-./target/release/aifo-coder$EXE}"
 
-if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder" ]; then
-  BIN="./target/debug/aifo-coder"
+if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder$EXE" ]; then
+  BIN="./target/debug/aifo-coder$EXE"
 fi
 
 # Helper: check if a binary is runnable on this host (avoids Exec format error)
@@ -56,7 +62,7 @@ if command -v cargo >/dev/null 2>&1; then
   if [ "$NEED_BUILD" -eq 1 ]; then
     echo "Building aifo-coder (release)..." >&2
     cargo build --release
-    BIN="./target/release/aifo-coder"
+    BIN="./target/release/aifo-coder$EXE"
   fi
 fi
 
@@ -67,7 +73,7 @@ fi
 if command -v cargo >/dev/null 2>&1; then
   echo "Building aifo-coder (release)..." >&2
   cargo build --release
-  BIN="./target/release/aifo-coder"
+  BIN="./target/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     exec "$BIN" "$@"
   fi
@@ -88,14 +94,14 @@ if command -v docker >/dev/null 2>&1; then
   echo "DOCKER 1"
   echo "PWD: $PWD"
   echo "HOME: $HOME"
-  MSYS_NO_PATHCONV=1 RELEASE_TARGETS=x86_64-pc-windows-gnu docker run $DOCKER_PLATFORM_ARGS --rm -u "$(id -u):$(id -g)" \
+  MSYS_NO_PATHCONV=1 RELEASE_TARGETS=x86_64-pc-windows-gnu docker run $DOCKER_PLATFORM_ARGS --rm \
     -v "$PWD:/workspace" \
     -v "$HOME/.cargo/registry:/root/.cargo/registry" \
     -v "$HOME/.cargo/git:/root/.cargo/git" \
     -v "$PWD/target:/workspace/target" \
-    -w /workspace rust:1-bookworm bash -lc "/usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; /usr/local/cargo/bin/cargo build --release --target x86_64-pc-windows-gnu"
+    -w /workspace rust:1-bookworm bash -lc "set -e; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; rm -rf /var/lib/apt/lists/*; /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; /usr/local/cargo/bin/cargo build --release --target x86_64-pc-windows-gnu"
   echo "DOCKER 2"
-  BIN="./target/release/aifo-coder"
+  BIN="./target/x86_64-pc-windows-gnu/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     echo "DOCKER 3"
     exec "$BIN" "$@"
