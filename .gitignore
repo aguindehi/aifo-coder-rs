@@ -4,6 +4,7 @@
 .codex*
 .env
 .DS_Store
+.buildx-cache
 aifo-coder.cdx.*
 build.*
 build

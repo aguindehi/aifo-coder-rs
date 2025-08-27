@@ -207,8 +207,15 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/lib/apt/lists/*; \
   fi
 
-# --- Rust target builder ---
-FROM rust:1-bookworm AS rust-builder
+# Base layer: Rust image
+FROM ${REGISTRY_PREFIX}rust:1-bookworm AS rust-base
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get upgrade \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+
+# --- Rust target builder for Linux, Windows & macOS ---
+FROM rust-base AS rust-builder
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
