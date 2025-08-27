@@ -4,9 +4,7 @@
 # Base layer: Node image + common OS tools used by all agents
 ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
-
 ENV DEBIAN_FRONTEND=noninteractive
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper \
  && rm -rf /var/lib/apt/lists/*
@@ -211,11 +209,9 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Rust target builder ---
 FROM rust:1-bookworm AS rust-builder
-
 WORKDIR /workspace
-
 ENV DEBIAN_FRONTEND=noninteractive
-
+ENV PATH="/usr/local/cargo/bin:${PATH}"
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc-mingw-w64-x86-64 \
@@ -224,5 +220,3 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
-
-ENTRYPOINT [ "/usr/local/cargo/bin/cargo", "build", "--release", "--target", "x86_64-pc-windows-gnu" ]
