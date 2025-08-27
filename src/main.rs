@@ -596,6 +596,8 @@ enum Agent {
 }
 
 fn main() -> ExitCode {
+    // Load environment variables from .env if present (no error if missing)
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
     // Optional: invalidate on-disk registry cache before any probes
