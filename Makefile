@@ -667,8 +667,8 @@ BIN_NAME ?= aifo-coder
 # Cross-platform extraction of version/name without relying on sed on Windows
 ifeq ($(OS),Windows_NT)
   POWERSHELL := powershell
-  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if(\$$_ -match '^\s*version\s*=\s*\"(.*)\"'){ \$$matches[1] } } | Select-Object -First 1"
-  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if(\$$_ -match '^\s*name\s*=\s*\"(.*)\"'){ \$$matches[1] } } | Select-Object -First 1"
+  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match "^\s*version\s*=\s*\"(.*)\""){ $$matches[1] } } | Select-Object -First 1'
+  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match "^\s*name\s*=\s*\"(.*)\""){ $$matches[1] } } | Select-Object -First 1'
 else
   CARGO_VERSION_CMD := sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
   CARGO_NAME_CMD := sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
@@ -681,10 +681,10 @@ endif
 # Backwards compatibility wrappers (deprecated)
 .PHONY: build-app build-dmg
 build-app: release-app
-	@echo "Warning: 'build-app' is deprecated; use 'make release-app' instead." 1>&2
+	@echo "Warning: 'build-app' is deprecated; use 'make release-app' instead." >&2
 
 build-dmg: release-dmg
-	@echo "Warning: 'build-dmg' is deprecated; use 'make release-dmg' instead." 1>&2
+	@echo "Warning: 'build-dmg' is deprecated; use 'make release-dmg' instead." >&2
 
 # macOS app packaging variables
 APP_NAME ?= $(BIN_NAME)
