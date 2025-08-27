@@ -329,11 +329,60 @@ build-aider-slim:
 	fi
 
 build-launcher:
-	cargo build --release
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Darwin" ]; then \
+	  echo "Building launcher with host Rust toolchain on macOS (container cannot target Apple SDK) ..."; \
+	  case "$$ARCH" in \
+	    arm64|aarch64) TGT="aarch64-apple-darwin" ;; \
+	    x86_64) TGT="x86_64-apple-darwin" ;; \
+	    *) TGT="" ;; \
+	  esac; \
+	  if [ -n "$$TGT" ]; then \
+	    if command -v rustup >/dev/null 2>&1; then rustup run stable cargo build --release --target "$$TGT"; else cargo build --release --target "$$TGT"; fi; \
+	  else \
+	    echo "Unsupported macOS architecture: $$ARCH" >&2; exit 1; \
+	  fi; \
+	else \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS=""; TGT="x86_64-pc-windows-gnu" ;; \
+	    *) case "$$ARCH" in \
+	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64"; TGT="x86_64-unknown-linux-gnu" ;; \
+	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64"; TGT="aarch64-unknown-linux-gnu" ;; \
+	         *) DOCKER_PLATFORM_ARGS=""; TGT="" ;; \
+	       esac ;; \
+	  esac; \
+	  [ -n "$$TGT" ] || { echo "Unsupported architecture/OS: $$OS $$ARCH" >&2; exit 1; }; \
+	  echo "Building launcher inside $(RUST_BUILDER_IMAGE) for target $$TGT ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
+	fi
 
 .PHONY: test
 test:
-	cargo test
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Running cargo test inside $(RUST_BUILDER_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(RUST_BUILDER_IMAGE) cargo test
 
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
@@ -717,11 +766,17 @@ release-for-target:
 	rm -f Cargo.lock || true; \
 	PATH="$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
 	CHANNEL="$${AIFO_CODER_RUST_CHANNEL:-stable}"; \
-	if command -v rustup >/dev/null 2>&1; then \
-	  BUILD_HOST="rustup run $$CHANNEL cargo build --release --target"; \
-	else \
-	  BUILD_HOST="cargo build --release --target"; \
-	fi; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	DOCKER_PLATFORM_ARGS=""; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
 	if [ -n "$$RELEASE_TARGETS" ]; then \
 	  TARGETS="$$RELEASE_TARGETS"; \
 	  echo "Using RELEASE_TARGETS from environment: $$TARGETS"; \
@@ -753,19 +808,24 @@ release-for-target:
 	  echo "No RELEASE_TARGETS specified; defaulting to: $$TARGETS"; \
 	fi; \
 	for t in $$TARGETS; do \
-	  HOST_OK=0; \
-	  if [ -n "$$RUSTC_HOST" ] && [ "$$t" = "$$RUSTC_HOST" ]; then HOST_OK=1; fi; \
-	  if [ "$$HOST_OK" -eq 1 ]; then \
-	    echo "Building with cargo for host target $$t ..."; \
-	    $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
-	  elif command -v rustup >/dev/null 2>&1; then \
-	    echo "Ensuring rustup target $$t is installed ..."; \
-	    rustup target add "$$t" || true; \
-	    echo "Building with cargo for $$t ..."; \
-	    $$BUILD_HOST "$$t" || echo "Warning: build failed for $$t"; \
-	  else \
-	    echo "rustup not available and target != host; skipping $$t"; \
-	  fi; \
+	  case "$$t" in \
+	    *apple-darwin) \
+	      if [ "$$(uname -s 2>/dev/null)" = "Darwin" ]; then \
+	        echo "Building macOS target $$t with host Rust toolchain ..."; \
+	        if command -v rustup >/dev/null 2>&1; then rustup run "$$CHANNEL" cargo build --release --target "$$t"; else cargo build --release --target "$$t"; fi; \
+	      else \
+	        echo "Skipping macOS target $$t on non-Darwin host"; \
+	      fi ;; \
+	    *) \
+	      echo "Building target $$t inside $(RUST_BUILDER_IMAGE) ..."; \
+	      MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	        -v "$$PWD:/workspace" \
+	        -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	        -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	        -v "$$PWD/target:/workspace/target" \
+	        $(RUST_BUILDER_IMAGE) cargo build --release --target "$$t" \
+	      || echo "Warning: build failed for $$t";; \
+	  esac; \
 	done; \
 	[ -n "$$BIN" ] || BIN="$$( $(CARGO_NAME_CMD) )"; \
 	D="$${DIST:-$(DIST_DIR)}"; \
@@ -881,7 +941,21 @@ install: build build-launcher
 	BINPATH="target/release/$$BIN"; \
 	BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
 	[ -f "$$BINPATH" ] || BINPATH="target/release/$$BIN_US"; \
-	if [ ! -f "$$BINPATH" ]; then echo "Error: binary not found at $$BINPATH. Build failed?" >&2; exit 1; fi; \
+	if [ ! -f "$$BINPATH" ]; then \
+	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	  TGT=""; \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) TGT="x86_64-pc-windows-gnu" ;; \
+	    Darwin) case "$$ARCH" in arm64|aarch64) TGT="aarch64-apple-darwin" ;; x86_64) TGT="x86_64-apple-darwin" ;; esac ;; \
+	    *) case "$$ARCH" in x86_64|amd64) TGT="x86_64-unknown-linux-gnu" ;; aarch64|arm64) TGT="aarch64-unknown-linux-gnu" ;; esac ;; \
+	  esac; \
+	  if [ -n "$$TGT" ]; then \
+	    BINPATH="target/$$TGT/release/$$BIN"; \
+	    [ -f "$$BINPATH" ] || BINPATH="target/$$TGT/release/$$BIN_US"; \
+	  fi; \
+	fi; \
+	if [ ! -f "$$BINPATH" ]; then echo "Error: binary not found for install. Tried target/release and target/$$TGT/release." >&2; exit 1; fi; \
 	install -d -m 0755 "$(BIN_DIR)" "$(MAN1_DIR)" "$(DOC_DIR)"; \
 	install -m 0755 "$$BINPATH" "$(BIN_DIR)/$$BIN"; \
 	if [ -f man/$$BIN.1 ]; then \
