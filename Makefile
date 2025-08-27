@@ -624,8 +624,8 @@ BIN_NAME ?= aifo-coder
 # Cross-platform extraction of version/name without relying on sed on Windows
 ifeq ($(OS),Windows_NT)
   POWERSHELL := powershell
-  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($_ -match '^\s*version\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
-  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($_ -match '^\s*name\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
+  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($$_ -match '^\s*version\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
+  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($$_ -match '^\s*name\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
 else
   CARGO_VERSION_CMD := sh -c "sed -n 's/^version *= *\"\\(.*\\)\"/\\1/p' Cargo.toml | head -n1"
   CARGO_NAME_CMD := sh -c "sed -n 's/^name[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p' Cargo.toml | head -n1"
