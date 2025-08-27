@@ -564,7 +564,46 @@ rebuild-existing-nocache:
 
 .PHONY: clean
 clean:
-	-@docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) 2>/dev/null || true
+	@set -e; \
+	- docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	DOCKER_PLATFORM_ARGS=""; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS=""; IS_WIN=1 ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac; IS_WIN=0 ;; \
+	esac; \
+	if [ "$$IS_WIN" -eq 1 ]; then \
+	  if command -v docker >/dev/null 2>&1; then \
+	    echo "Running cargo clean inside $(RUST_BUILDER_IMAGE) (Windows) ..."; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) cargo clean; \
+	  else \
+	    echo "Docker not available; skipping cargo clean on Windows." >&2; \
+	  fi; \
+	else \
+	  if command -v cargo >/dev/null 2>&1; then \
+	    cargo clean; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "cargo not found; running cargo clean inside $(RUST_BUILDER_IMAGE) ..."; \
+	    docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) cargo clean; \
+	  else \
+	    echo "Neither cargo nor docker is available; skipping cargo clean." >&2; \
+	  fi; \
+	fi
 
 # AppArmor profile generation (for Docker containers)
 APPARMOR_PROFILE_NAME ?= aifo-coder
