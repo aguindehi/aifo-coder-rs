@@ -450,7 +450,7 @@ rebuild-existing:
 	for img in $$imgs; do \
 	  repo="$${img%%:*}"; \
 	  base="$$(basename "$$repo")"; \
-	  agent="$$(echo "$$base" | sed -E 's/.*-//')"; \
+	  agent="$${base##*-}"; \
 	  echo "Rebuilding $$img (target=$$agent) ..."; \
 	  $(DOCKER_BUILD) --target "$$agent" -t "$$img" .; \
 	done
@@ -465,7 +465,7 @@ rebuild-existing-nocache:
 	for img in $$imgs; do \
 	  repo="$${img%%:*}"; \
 	  base="$$(basename "$$repo")"; \
-	  agent="$$(echo "$$base" | sed -E 's/.*-//')"; \
+	  agent="$${base##*-}"; \
 	  echo "Rebuilding (no cache) $$img (target=$$agent) ..."; \
 	  $(DOCKER_BUILD) --no-cache --target "$$agent" -t "$$img" .; \
 	done
@@ -478,6 +478,16 @@ clean:
 APPARMOR_PROFILE_NAME ?= aifo-coder
 
 .PHONY: apparmor
+ifeq ($(OS),Windows_NT)
+apparmor:
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path 'build/apparmor' | Out-Null"
+	powershell -NoProfile -Command "(Get-Content 'apparmor/aifo-coder.apparmor.tpl') | ForEach-Object { $_ -replace '__PROFILE_NAME__','$(APPARMOR_PROFILE_NAME)' } | Set-Content 'build/apparmor/$(APPARMOR_PROFILE_NAME)'"
+	@echo "Wrote build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	@echo "Load into AppArmor on a Linux host with:"
+	@echo "  sudo apparmor_parser -r -W build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	@echo "Load into Colima's VM (macOS) with:"
+	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/build/apparmor/$(APPARMOR_PROFILE_NAME)\""
+else
 apparmor:
 	mkdir -p build/apparmor
 	sed -e 's/__PROFILE_NAME__/$(APPARMOR_PROFILE_NAME)/g' apparmor/aifo-coder.apparmor.tpl > build/apparmor/$(APPARMOR_PROFILE_NAME)
@@ -486,6 +496,7 @@ apparmor:
 	@echo "  sudo apparmor_parser -r -W build/apparmor/$(APPARMOR_PROFILE_NAME)"
 	@echo "Load into Colima's VM (macOS) with:"
 	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/build/apparmor/$(APPARMOR_PROFILE_NAME)\""
+endif
 
 .PHONY: apparmor-load-colima
 apparmor-load-colima:
@@ -610,7 +621,16 @@ scrub-coauthors:
 # Release packaging variables
 DIST_DIR ?= dist
 BIN_NAME ?= aifo-coder
-VERSION ?= $(shell sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -n1)
+# Cross-platform extraction of version/name without relying on sed on Windows
+ifeq ($(OS),Windows_NT)
+  POWERSHELL := powershell
+  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($_ -match '^\s*version\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
+  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command "(Get-Content 'Cargo.toml') | ForEach-Object { if($_ -match '^\s*name\s*=\s*\"(.*)\"'){ $$matches[1] } } | Select-Object -First 1"
+else
+  CARGO_VERSION_CMD := sh -c "sed -n 's/^version *= *\"\\(.*\\)\"/\\1/p' Cargo.toml | head -n1"
+  CARGO_NAME_CMD := sh -c "sed -n 's/^name[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p' Cargo.toml | head -n1"
+endif
+VERSION ?= $(shell $(CARGO_VERSION_CMD))
 ifeq ($(strip $(VERSION)),)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
@@ -704,7 +724,7 @@ release-for-target:
 	    echo "rustup not available and target != host; skipping $$t"; \
 	  fi; \
 	done; \
-	[ -n "$$BIN" ] || BIN="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	[ -n "$$BIN" ] || BIN="$$( $(CARGO_NAME_CMD) )"; \
 	D="$${DIST:-$(DIST_DIR)}"; \
 	V="$${VERSION:-$(VERSION)}"; \
 	mkdir -p "$$D"; \
@@ -783,7 +803,7 @@ release-for-target:
 	fi; \
 	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  PKG="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	  PKG="$$( $(CARGO_NAME_CMD) )"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
 	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
 	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
@@ -858,7 +878,7 @@ sbom:
 	D="$(DIST_DIR)"; \
 	mkdir -p "$$D"; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  PKG="$$(sed -n 's/^name[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p' Cargo.toml | head -n1)"; \
+	  PKG="$$( $(CARGO_NAME_CMD) )"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
 	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
 	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
