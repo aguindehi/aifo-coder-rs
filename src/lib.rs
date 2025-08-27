@@ -16,25 +16,10 @@ use nix::unistd::{getgid, getuid};
 
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
-        // OpenAI / Codex / generic
-        "OPENAI_API_KEY",
-        "OPENAI_ORG",
-        "OPENAI_BASE_URL",
-        "CODEX_OSS_BASE_URL",
-        "CODEX_OSS_PORT",
-        "CODEX_HOME",
-        // Google / Vertex / Gemini
-        "GEMINI_API_KEY",
-        "VERTEXAI_PROJECT",
-        "VERTEXAI_LOCATION",
-        // Azure OpenAI (Crush) and Azure generic (Codex/Aider)
-        "AZURE_OPENAI_API_ENDPOINT",
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_API_VERSION",
-        "AZURE_OPENAI_ENDPOINT",
-        "AZURE_API_KEY",
-        "AZURE_API_BASE",
-        "AZURE_API_VERSION",
+        // AIFO master env (single source of truth)
+        "AIFO_API_KEY",
+        "AIFO_API_BASE",
+        "AIFO_API_VERSION",
         // Git author/committer overrides
         "GIT_AUTHOR_NAME",
         "GIT_AUTHOR_EMAIL",
@@ -526,6 +511,49 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
         env_flags.push(OsString::from("-e"));
         env_flags.push(OsString::from("GPG_TTY=/dev/tty"));
+    }
+
+    // Map unified AIFO_* environment to agent-specific variables
+    if let Ok(v) = env::var("AIFO_API_KEY") {
+        if !v.is_empty() {
+            // OpenAI-style
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_KEY={v}")));
+            // Azure-style
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_KEY={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_KEY={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_API_BASE") {
+        if !v.is_empty() {
+            // OpenAI-style base URL
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_BASE_URL={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_BASE={v}")));
+            // Azure-style endpoint/base
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_ENDPOINT={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_BASE={v}")));
+            // Hint some clients that this is Azure-backed endpoint
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from("OPENAI_API_TYPE=azure"));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_API_VERSION") {
+        if !v.is_empty() {
+            // OpenAI-style API version (used by some clients for Azure)
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_VERSION={v}")));
+            // Azure-style version
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_VERSION={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_VERSION={v}")));
+        }
     }
 
     // Disable commit signing for Aider if requested
