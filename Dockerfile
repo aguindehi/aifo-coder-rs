@@ -208,3 +208,21 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
   fi
+
+# --- Rust target builder ---
+FROM rust:1-bookworm AS rust-builder
+
+WORKDIR /workspace
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc-mingw-w64-x86-64 \
+        g++-mingw-w64-x86-64 \
+        pkg-config \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
+
+ENTRYPOINT [ "/usr/local/cargo/bin/cargo", "build", "--release", "--target", "x86_64-pc-windows-gnu" ]

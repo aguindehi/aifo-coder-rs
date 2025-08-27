@@ -1,6 +1,7 @@
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
+use fs2::FileExt;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -8,9 +9,8 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
-use std::os::fd::AsRawFd;
-use libc;
 use atty;
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
@@ -338,7 +338,6 @@ pub fn preferred_registry_prefix() -> String {
 }
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
-/// Behavior is identical to preferred_registry_prefix(), but with no eprintln! output.
 pub fn preferred_registry_prefix_quiet() -> String {
     if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
@@ -818,20 +817,18 @@ pub fn acquire_lock() -> io::Result<File> {
         }
         match OpenOptions::new().create(true).read(true).write(true).open(&p) {
             Ok(f) => {
-                // Try non-blocking exclusive lock
-                let fd = f.as_raw_fd();
-                let res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-                if res == 0 {
-                    return Ok(f);
-                } else {
-                    let errno = io::Error::last_os_error().raw_os_error().unwrap_or(0);
-                    if errno == libc::EWOULDBLOCK || errno == libc::EAGAIN {
+                match f.try_lock_exclusive() {
+                    Ok(_) => {
+                        return Ok(f);
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "Another coding agent is already running (lock held). Please try again later.",
                         ));
-                    } else {
-                        last_err = Some(io::Error::last_os_error());
+                    }
+                    Err(e) => {
+                        last_err = Some(e);
                         continue;
                     }
                 }
@@ -864,20 +861,13 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
     }
     match OpenOptions::new().create(true).read(true).write(true).open(p) {
         Ok(f) => {
-            let fd = f.as_raw_fd();
-            let res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-            if res == 0 {
-                Ok(f)
-            } else {
-                let errno = io::Error::last_os_error().raw_os_error().unwrap_or(0);
-                if errno == libc::EWOULDBLOCK || errno == libc::EAGAIN {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Another coding agent is already running (lock held). Please try again later.",
-                    ))
-                } else {
-                    Err(io::Error::last_os_error())
-                }
+            match f.try_lock_exclusive() {
+                Ok(_) => Ok(f),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Another coding agent is already running (lock held). Please try again later.",
+                )),
+                Err(e) => Err(e),
             }
         }
         Err(e) => Err(e),

@@ -183,7 +183,7 @@ RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
 
-build: build-slim build-fat
+build: build-slim build-fat build-rust-builder
 
 build-codex:
 	@RP=""; \
@@ -338,7 +338,7 @@ test:
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
 
-rebuild: rebuild-slim rebuild-fat
+rebuild: rebuild-slim rebuild-fat rebuild-rust-builder
 
 rebuild-codex:
 	@RP=""; \
