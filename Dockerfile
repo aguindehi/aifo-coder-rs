@@ -1,11 +1,42 @@
 # Multi-stage Dockerfile for aifo-coder, producing one image per agent while
 # sharing identical parent layers for maximum cache and storage reuse.
 
-# Base layer: Node image + common OS tools used by all agents
 ARG REGISTRY_PREFIX
+
+# --- Base layer: Rust image ---
+FROM ${REGISTRY_PREFIX}rust:1-bookworm AS rust-base
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get -y upgrade \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+
+# --- Rust target builder for Linux, Windows & macOS ---
+FROM rust-base AS rust-builder
+WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
+        gcc-mingw-w64-x86-64 \
+        g++-mingw-w64-x86-64 \
+        pkg-config \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu \
+    && CARGO_BUILD_JOBS=1 RUSTFLAGS="-C codegen-units=1" cargo install --locked --git https://github.com/astral-sh/uv uv \
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/cargo/.package-cache /root/.cargo/registry /root/.cargo/git || true \
+    && find /workspace -maxdepth 2 -type d -name target -exec rm -rf {} + || true \
+    && rm -rf /usr/local/rustup || true \
+    && find /usr/local/cargo/bin -maxdepth 1 -type f ! -name uv -exec rm -f {} + || true \
+    && strip /usr/local/cargo/bin/uv || true
+
+# --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper \
  && rm -rf /var/lib/apt/lists/*
 
@@ -79,19 +110,22 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
+COPY --from=rust-builder /usr/local/cargo/bin/uv /usr/local/bin/uv
 # Python: Aider via uv (PEP 668-safe)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/uv && \
-    uv venv /opt/venv && \
+RUN uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
     uv pip install --python /opt/venv/bin/python aider-chat
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
     python3 \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
@@ -183,18 +217,21 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/uv && \
-    uv venv /opt/venv && \
+COPY --from=rust-builder /usr/local/cargo/bin/uv /usr/local/bin/uv
+RUN uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
     uv pip install --python /opt/venv/bin/python aider-chat
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
-RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ARG KEEP_APT=0
@@ -206,24 +243,3 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
   fi
-
-# Base layer: Rust image
-FROM ${REGISTRY_PREFIX}rust:1-bookworm AS rust-base
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get upgrade \
- && rm -rf /var/lib/apt/lists/*
-WORKDIR /workspace
-
-# --- Rust target builder for Linux, Windows & macOS ---
-FROM rust-base AS rust-builder
-WORKDIR /workspace
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PATH="/usr/local/cargo/bin:${PATH}"
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        gcc-mingw-w64-x86-64 \
-        g++-mingw-w64-x86-64 \
-        pkg-config \
-        ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
