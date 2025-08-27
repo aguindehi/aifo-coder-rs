@@ -75,6 +75,7 @@ fi
 
 # Try to build inside a container using Docker
 if command -v docker >/dev/null 2>&1; then
+  echo "DOCKER 0"
   echo "Building aifo-coder (release) using docker and rust:1-bookworm ..." >&2
   PLAT=""
   arch="$(uname -m 2>/dev/null || echo unknown)"
@@ -84,14 +85,19 @@ if command -v docker >/dev/null 2>&1; then
     *) PLAT="" ;;
   esac
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
-  docker run $DOCKER_PLATFORM_ARGS --rm -u "$(id -u):$(id -g)" \
+  echo "DOCKER 1"
+  echo "PWD: $PWD"
+  echo "HOME: $HOME"
+  MSYS_NO_PATHCONV=1 RELEASE_TARGETS=x86_64-pc-windows-gnu docker run $DOCKER_PLATFORM_ARGS --rm -u "$(id -u):$(id -g)" \
     -v "$PWD:/workspace" \
     -v "$HOME/.cargo/registry:/root/.cargo/registry" \
     -v "$HOME/.cargo/git:/root/.cargo/git" \
     -v "$PWD/target:/workspace/target" \
-    -w /workspace rust:1-bookworm cargo build --release
+    -w /workspace rust:1-bookworm bash -lc "/usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; /usr/local/cargo/bin/cargo build --release --target x86_64-pc-windows-gnu"
+  echo "DOCKER 2"
   BIN="./target/release/aifo-coder"
   if [ -x "$BIN" ] && can_run "$BIN"; then
+    echo "DOCKER 3"
     exec "$BIN" "$@"
   else
     echo "Error: built binary at $BIN is not executable on this host (architecture mismatch?)." >&2
