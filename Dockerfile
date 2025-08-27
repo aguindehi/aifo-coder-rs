@@ -23,13 +23,7 @@ RUN apt-get update \
         pkg-config \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu \
-    && CARGO_BUILD_JOBS=1 RUSTFLAGS="-C codegen-units=1" cargo install --locked --git https://github.com/astral-sh/uv uv \
-    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/cargo/.package-cache /root/.cargo/registry /root/.cargo/git || true \
-    && find /workspace -maxdepth 2 -type d -name target -exec rm -rf {} + || true \
-    && rm -rf /usr/local/rustup || true \
-    && find /usr/local/cargo/bin -maxdepth 1 -type f ! -name uv -exec rm -f {} + || true \
-    && strip /usr/local/cargo/bin/uv || true
+    && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
@@ -115,9 +109,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=rust-builder /usr/local/cargo/bin/uv /usr/local/bin/uv
 # Python: Aider via uv (PEP 668-safe)
-RUN uv venv /opt/venv && \
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
     uv pip install --python /opt/venv/bin/python aider-chat
 
@@ -222,8 +217,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=rust-builder /usr/local/cargo/bin/uv /usr/local/bin/uv
-RUN uv venv /opt/venv && \
+# Python: Aider via uv (PEP 668-safe)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
     uv pip install --python /opt/venv/bin/python aider-chat
 
