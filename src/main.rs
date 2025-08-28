@@ -718,14 +718,6 @@ fn main() -> ExitCode {
             let _ = aifo_coder::toolchain_run(kind.as_str(), args, true, true);
             return ExitCode::from(0);
         }
-        // Acquire lock only for real execution
-        let lock = match acquire_lock() {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("{e}");
-                return ExitCode::from(1);
-            }
-        };
         let code = match aifo_coder::toolchain_run(kind.as_str(), args, cli.verbose, false) {
             Ok(c) => c,
             Err(e) => {
@@ -733,7 +725,6 @@ fn main() -> ExitCode {
                 1
             }
         };
-        drop(lock);
         return ExitCode::from((code & 0xff) as u8);
     }
 
