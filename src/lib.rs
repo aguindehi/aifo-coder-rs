@@ -976,6 +976,7 @@ fn build_sidecar_run_preview(
     uidgid: Option<(u32, u32)>,
     kind: &str,
     image: &str,
+    no_cache: bool,
     pwd: &Path,
     apparmor: Option<&str>,
 ) -> Vec<String> {
@@ -996,30 +997,40 @@ fn build_sidecar_run_preview(
 
     match kind {
         "rust" => {
-            args.push("-v".to_string());
-            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-            args.push("-v".to_string());
-            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+            if !no_cache {
+                args.push("-v".to_string());
+                args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                args.push("-v".to_string());
+                args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+            }
             args.push("-e".to_string());
             args.push("CARGO_HOME=/usr/local/cargo".to_string());
         }
         "node" => {
-            args.push("-v".to_string());
-            args.push("aifo-npm-cache:/home/coder/.npm".to_string());
+            if !no_cache {
+                args.push("-v".to_string());
+                args.push("aifo-npm-cache:/home/coder/.npm".to_string());
+            }
         }
         "python" => {
-            args.push("-v".to_string());
-            args.push("aifo-pip-cache:/home/coder/.cache/pip".to_string());
+            if !no_cache {
+                args.push("-v".to_string());
+                args.push("aifo-pip-cache:/home/coder/.cache/pip".to_string());
+            }
         }
         "c-cpp" => {
-            args.push("-v".to_string());
-            args.push("aifo-ccache:/home/coder/.cache/ccache".to_string());
+            if !no_cache {
+                args.push("-v".to_string());
+                args.push("aifo-ccache:/home/coder/.cache/ccache".to_string());
+            }
             args.push("-e".to_string());
             args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
         }
         "go" => {
-            args.push("-v".to_string());
-            args.push("aifo-go:/go".to_string());
+            if !no_cache {
+                args.push("-v".to_string());
+                args.push("aifo-go:/go".to_string());
+            }
             args.push("-e".to_string());
             args.push("GOPATH=/go".to_string());
             args.push("-e".to_string());
@@ -1103,7 +1114,7 @@ fn build_sidecar_exec_preview(
 
 /// Rollout Phase 1: start a toolchain sidecar and run the provided command inside it.
 /// Returns the exit code of the executed command.
-pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: bool) -> io::Result<i32> {
+pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str>, no_cache: bool, verbose: bool, dry_run: bool) -> io::Result<i32> {
     let runtime = container_runtime_path()?;
     let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -1116,7 +1127,10 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
     let (uid, gid) = (0u32, 0u32);
 
     let sidecar_kind = normalize_toolchain_kind(kind_in);
-    let image = default_toolchain_image(sidecar_kind.as_str());
+    let image = match image_override {
+        Some(s) if !s.trim().is_empty() => s.to_string(),
+        _ => default_toolchain_image(sidecar_kind.as_str()),
+    };
     let session_id = create_session_id();
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
@@ -1135,6 +1149,7 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
         if cfg!(unix) { Some((uid, gid)) } else { None },
         sidecar_kind.as_str(),
         &image,
+        no_cache,
         &pwd,
         apparmor_profile.as_deref(),
     );

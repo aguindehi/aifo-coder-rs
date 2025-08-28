@@ -232,6 +232,10 @@ Examples:
 ./aifo-coder toolchain rust -- cargo --version
 ./aifo-coder toolchain node -- npx --version
 ./aifo-coder toolchain python -- python -m pip --version
+# override the image for a run:
+./aifo-coder toolchain rust --toolchain-image rust:1.80-slim -- cargo --help
+# disable named cache volumes (e.g., to avoid creating volumes on CI):
+./aifo-coder toolchain node --no-toolchain-cache -- npm ci
 ```
 
 ---

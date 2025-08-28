@@ -625,6 +625,12 @@ enum Agent {
     Toolchain {
         #[arg(value_enum)]
         kind: ToolchainKind,
+        /// Override the toolchain image reference for this run
+        #[arg(long = "toolchain-image")]
+        image: Option<String>,
+        /// Disable named cache volumes for the toolchain sidecar
+        #[arg(long = "no-toolchain-cache")]
+        no_cache: bool,
         /// Command and arguments to execute inside the sidecar (after --)
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
@@ -709,16 +715,22 @@ fn main() -> ExitCode {
         aifo_coder::invalidate_registry_cache();
         eprintln!("aifo-coder: cleared on-disk registry cache.");
         return ExitCode::from(0);
-    } else if let Agent::Toolchain { kind, args } = &cli.command {
+    } else if let Agent::Toolchain { kind, image, no_cache, args } = &cli.command {
         print_startup_banner();
         if cli.verbose {
             eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
+            if let Some(img) = image.as_deref() {
+                eprintln!("aifo-coder: toolchain image override: {}", img);
+            }
+            if *no_cache {
+                eprintln!("aifo-coder: toolchain caches disabled for this run");
+            }
         }
         if cli.dry_run {
-            let _ = aifo_coder::toolchain_run(kind.as_str(), args, true, true);
+            let _ = aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, true, true);
             return ExitCode::from(0);
         }
-        let code = match aifo_coder::toolchain_run(kind.as_str(), args, cli.verbose, false) {
+        let code = match aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, cli.verbose, false) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("{e}");
