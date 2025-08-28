@@ -238,6 +238,16 @@ Examples:
 ./aifo-coder toolchain node --no-toolchain-cache -- npm ci
 ```
 
+Running tests for toolchain sidecars (Phase 1)
+- Run the full test suite:
+```bash
+cargo test
+```
+- Run only the toolchain Phase 1 integration tests (note: use --test target name, not a file path filter):
+```bash
+cargo test --test toolchain_phase1
+```
+
 ---
 
 ## Makefile targets
