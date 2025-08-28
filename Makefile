@@ -767,12 +767,6 @@ ifeq ($(strip $(VERSION)),)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
-# Backwards compatibility wrappers (deprecated)
-build-app: release-app
-	@echo "Warning: 'build-app' is deprecated; use 'make release-app' instead." 1>&2
-
-build-dmg: release-dmg
-	@echo "Warning: 'build-dmg' is deprecated; use 'make release-dmg' instead." 1>&2
 
 # macOS app packaging variables
 APP_NAME ?= $(BIN_NAME)
@@ -1086,7 +1080,7 @@ loc:
 	printf "  -------------------------\n"; \
 	printf "  Total:           %8d\n\n" "$$total"
 
-.PHONY: release-app release-dmg release-dmg-sign build-app build-dmg
+.PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
 release-app:

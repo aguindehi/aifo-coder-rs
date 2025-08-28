@@ -41,7 +41,6 @@ Useful Makefile targets:
   - make test
 - macOS app and DMG (Darwin hosts only):
   - make release-app, make release-dmg, make release-dmg-sign
-  - Deprecated wrappers (still available): make build-app, make build-dmg
 - Utilities:
   - make docker-images, make docker-enter, make checksums, make sbom, make loc
 

@@ -217,7 +217,7 @@ make build-launcher
 ./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
 ```
 
-> For Powershell you can use `./aifo-coder.ps1` 
+> For Powershell you can use `./aifo-coder.ps1`
 
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
@@ -259,8 +259,6 @@ A quick reference of all Makefile targets.
 | release-app               | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
 | release-dmg               | Release    | Create a macOS .dmg from the .app (Darwin hosts only)                                        |
 | release-dmg-sign          | Release    | Sign the .app and .dmg (and notarize if configured); produces a signed DMG                   |
-| build-app                 | Release    | Deprecated wrapper; use 'make release-app'                                                   |
-| build-dmg                 | Release    | Deprecated wrapper; use 'make release-dmg'                                                   |
 | clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
 | loc                       | Utility    | Count lines of code across key file types                                                     |
 | docker-images             | Utility    | Show the available images in the local Docker registry                                        |
