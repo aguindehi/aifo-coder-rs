@@ -1116,7 +1116,9 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
     // Create network (best-effort)
-    create_network_if_possible(&runtime, &net_name, verbose);
+    if !dry_run {
+        create_network_if_possible(&runtime, &net_name, verbose);
+    }
 
     let apparmor_profile = desired_apparmor_profile();
 
@@ -1182,8 +1184,9 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
         let mut stop_cmd = Command::new(&runtime);
         stop_cmd.arg("stop").arg(&name);
         let _ = stop_cmd.status();
+
+        remove_network(&runtime, &net_name, verbose);
     }
-    remove_network(&runtime, &net_name, verbose);
 
     Ok(exit_code)
 }

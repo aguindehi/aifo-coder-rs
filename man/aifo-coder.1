@@ -147,6 +147,32 @@ Run the Crush agent with a custom image:
 .nf
 aifo\-coder \-\-image aifo\-coder\-crush:nightly crush
 .fi
+.SH TOOLCHAIN
+The toolchain subcommand launches a sidecar container for a language toolchain
+and executes the specified command within it.
+.TP
+.B aifo-coder toolchain
+.I kind
+\-\-
+.I args...
+.P
+Supported kinds:
+.B rust ,
+.B node ,
+.B typescript
+(alias of node),
+.B python ,
+.B c\-cpp ,
+.B go .
+.P
+Examples:
+.P
+.nf
+aifo\-coder toolchain rust \-\- cargo \-\-version
+aifo\-coder toolchain node \-\- npx \-\-version
+aifo\-coder toolchain python \-\- python \-m pip \-\-version
+.fi
+
 .SH SEE ALSO
 .BR docker (1),
 .BR apparmor (7),

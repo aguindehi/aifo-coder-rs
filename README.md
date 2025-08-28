@@ -53,7 +53,7 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|toolchain|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
@@ -70,6 +70,7 @@ Subcommands:
 - codex [args...]              Run OpenAI Codex CLI inside container
 - crush [args...]              Run Charmbracelet Crush inside container
 - aider [args...]              Run Aider inside container
+- toolchain <kind> -- [args...]  Run a command inside a language toolchain sidecar (Phase 1)
 - doctor                       Run environment diagnostics (Docker/AppArmor/UID mapping)
 - images                       Print effective image references (honoring flavor/registry)
 - cache-clear                  Clear the on-disk registry probe cache (alias: cache-invalidate)
@@ -221,6 +222,17 @@ make build-launcher
 
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
+
+### Toolchain sidecars (Phase 1)
+
+Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
+
+Examples:
+```bash
+./aifo-coder toolchain rust -- cargo --version
+./aifo-coder toolchain node -- npx --version
+./aifo-coder toolchain python -- python -m pip --version
+```
 
 ---
 
