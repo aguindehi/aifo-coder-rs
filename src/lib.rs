@@ -697,7 +697,7 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     // Shell command inside container (copied from Python implementation)
     let sh_cmd = format!(
         "set -e; umask 077; \
-         export PATH=\"/opt/venv/bin:$PATH\"; \
+         export PATH=\"/opt/aifo/bin:/opt/venv/bin:$PATH\"; \
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
          if (command -v getent >/dev/null 2>&1 && ! getent passwd \"$uid\" >/dev/null 2>&1) || (! command -v getent >/dev/null 2>&1 && ! grep -q \"^[^:]*:[^:]*:$uid:\" /etc/passwd); then \
