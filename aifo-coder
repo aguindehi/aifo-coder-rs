@@ -89,11 +89,17 @@ if command -v docker >/dev/null 2>&1; then
     aarch64|arm64) PLAT="linux/arm64" ;;
     *) PLAT="" ;;
   esac
+  echo "Detected architecture: $PLAT"
   # Detect if host is windows
   kernel="$(uname -s 2>/dev/null || echo unknown)"
   case "$kernel" in
-    MINGW*|MSYS*|CYGWIN*|Windows_NT) CARGO_TARGET="--target x86_64-pc-windows-gnu" ;;  # Cross compile required
-    *) CARGO_TARGET="" ;;  # No cross compile required
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      echo "Detected windows kernel. Configuring for cross compilation"
+      RELEASE_FOLDER="x86_64-pc-windows-gnu/"
+      CARGO_TARGET="--target x86_64-pc-windows-gnu" ;;
+    *)
+      RELEASE_FOLDER=""
+      CARGO_TARGET="" ;;  # No cross compile required
   esac
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
   MSYS_NO_PATHCONV=1 \
@@ -103,7 +109,7 @@ if command -v docker >/dev/null 2>&1; then
       -v "$HOME/.cargo/git:/root/.cargo/git" \
       -v "$PWD/target:/workspace/target" \
       aifo-coder-rust-builder cargo build --release $CARGO_TARGET
-  BIN="./target/x86_64-pc-windows-gnu/release/aifo-coder$EXE"
+  BIN="./target/${RELEASE_FOLDER}release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     exec "$BIN" "$@"
   else
