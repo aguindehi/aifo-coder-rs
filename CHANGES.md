@@ -1,3 +1,11 @@
+2025-08-29 14:45 Amir Guindehi <amir.guindehi@mgb.ch>
+
+test: add ignored live toolchain sidecar tests and docs
+
+- tests/toolchain_live.rs: new ignored tests for rust and node; exercise real
+  sidecars when run with --ignored.
+- README.md: document how to run the live tests.
+
 2025-08-29 14:10 Amir Guindehi <amir.guindehi@mgb.ch>
 
 feat: Rollout Phase 1 toolchain sidecars, CLI, docs, tests
