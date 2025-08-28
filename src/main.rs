@@ -560,6 +560,17 @@ struct Cli {
     #[arg(long)]
     image: Option<String>,
 
+    /// Attach language toolchains and inject PATH shims (repeatable)
+    #[arg(long = "toolchain", value_enum)]
+    toolchain: Vec<ToolchainKind>,
+
+    /// Override image(s) for toolchains (repeatable, kind=image)
+    #[arg(long = "toolchain-image")]
+    toolchain_image: Vec<String>,
+
+    /// Disable named cache volumes for toolchain sidecars
+    #[arg(long = "no-toolchain-cache")]
+    no_toolchain_cache: bool,
 
     /// Print detailed execution info
     #[arg(long)]
@@ -756,6 +767,88 @@ fn main() -> ExitCode {
     // Print startup banner before any further diagnostics
     print_startup_banner();
 
+    // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
+    let mut tc_session_id: Option<String> = None;
+    let mut tc_proxy_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
+    let mut tc_proxy_handle: Option<std::thread::JoinHandle<()>> = None;
+
+    if !cli.toolchain.is_empty() {
+        // kinds as strings
+        let kinds: Vec<String> = cli.toolchain.iter().map(|k| k.as_str().to_string()).collect();
+        // parse overrides kind=image
+        let mut overrides: Vec<(String, String)> = Vec::new();
+        for s in &cli.toolchain_image {
+            if let Some((k, v)) = s.split_once('=') {
+                if !k.trim().is_empty() && !v.trim().is_empty() {
+                    overrides.push((k.trim().to_string(), v.trim().to_string()));
+                }
+            }
+        }
+        if cli.dry_run {
+            if cli.verbose {
+                eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
+                if !overrides.is_empty() {
+                    eprintln!("aifo-coder: would use image overrides: {:?}", overrides);
+                }
+                if cli.no_toolchain_cache {
+                    eprintln!("aifo-coder: would disable toolchain caches");
+                }
+                eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
+            }
+        } else {
+            // Prepare shims
+            let shimdir = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("build")
+                .join("shims")
+                .join("bin");
+            let _ = fs::create_dir_all(&shimdir);
+            if let Err(e) = aifo_coder::toolchain_write_shims(&shimdir) {
+                eprintln!("aifo-coder: failed to write shims into {}: {}", shimdir.display(), e);
+                return ExitCode::from(1);
+            }
+            std::env::set_var("AIFO_SHIM_DIR", shimdir.display().to_string());
+
+            // Start sidecars
+            match aifo_coder::toolchain_start_session(&kinds, &overrides, cli.no_toolchain_cache, cli.verbose) {
+                Ok(sid) => {
+                    // Set network env for agent container to join
+                    let net = format!("aifo-net-{}", sid);
+                    std::env::set_var("AIFO_SESSION_NETWORK", &net);
+                    #[cfg(target_os = "linux")]
+                    {
+                        // Ensure agent can reach host proxy
+                        std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+                    }
+                    tc_session_id = Some(sid);
+                }
+                Err(e) => {
+                    eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
+                    return ExitCode::from(1);
+                }
+            }
+
+            // Start proxy
+            if let Some(ref sid) = tc_session_id {
+                match aifo_coder::toolexec_start_proxy(sid, cli.verbose) {
+                    Ok((url, token, flag, handle)) => {
+                        std::env::set_var("AIFO_TOOLEEXEC_URL", &url);
+                        std::env::set_var("AIFO_TOOLEEXEC_TOKEN", &token);
+                        tc_proxy_flag = Some(flag);
+                        tc_proxy_handle = Some(handle);
+                    }
+                    Err(e) => {
+                        eprintln!("aifo-coder: failed to start toolexec proxy: {}", e);
+                        if let Some(s) = tc_session_id.as_deref() {
+                            aifo_coder::toolchain_cleanup_session(s, cli.verbose);
+                        }
+                        return ExitCode::from(1);
+                    }
+                }
+            }
+        }
+    }
+
     let image = cli
         .image
         .clone()
@@ -797,10 +890,32 @@ fn main() -> ExitCode {
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting
             drop(lock);
+
+            // Phase 2 cleanup (if toolchain shims/proxy were attached)
+            if let Some(flag) = tc_proxy_flag.take() {
+                flag.store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+            if let Some(h) = tc_proxy_handle.take() {
+                let _ = h.join();
+            }
+            if let Some(ref sid) = tc_session_id {
+                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+            }
+
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
             eprintln!("{e}");
+            // Phase 2 cleanup on error
+            if let Some(flag) = tc_proxy_flag.take() {
+                flag.store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+            if let Some(h) = tc_proxy_handle.take() {
+                let _ = h.join();
+            }
+            if let Some(ref sid) = tc_session_id {
+                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+            }
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
             }

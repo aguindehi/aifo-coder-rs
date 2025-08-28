@@ -5,7 +5,7 @@ use fs2::FileExt;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{TcpStream, ToSocketAddrs, TcpListener};
 use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
@@ -34,6 +34,9 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "EDITOR",
         "VISUAL",
         "TERM",
+        // Tool-exec proxy (Phase 2)
+        "AIFO_TOOLEEXEC_URL",
+        "AIFO_TOOLEEXEC_TOKEN",
     ]
 });
  
@@ -554,6 +557,19 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
             env_flags.push(OsString::from(format!("AZURE_API_VERSION={v}")));
         }
     }
+    // Phase 2: pass through tool-exec proxy URL and token if set
+    if let Ok(v) = env::var("AIFO_TOOLEEXEC_URL") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_URL={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_TOOLEEXEC_TOKEN") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
+        }
+    }
 
     // Disable commit signing for Aider if requested
     if agent == "aider" {
@@ -637,6 +653,13 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     }
     volume_flags.push(OsString::from("-v"));
     volume_flags.push(OsString::from(format!("{}:/home/coder/.gnupg-host:ro", gnupg_dir.display())));
+    // Optional: mount host-provided shim directory into PATH front inside the agent
+    if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
+        if !shim_dir.trim().is_empty() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!("{}:/opt/aifo/bin:ro", shim_dir)));
+        }
+    }
 
     // User mapping
     #[allow(unused_mut)]
@@ -748,6 +771,23 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     for f in name_flags {
         preview_args.push(f.to_string_lossy().to_string());
         cmd.arg(f);
+    }
+    // Phase 2: join the ephemeral session network if provided
+    if let Ok(net) = env::var("AIFO_SESSION_NETWORK") {
+        if !net.trim().is_empty() {
+            cmd.arg("--network").arg(&net);
+            preview_args.push("--network".to_string());
+            preview_args.push(net);
+        }
+    }
+    // Phase 2 (Linux): make host.docker.internal resolvable to host-gateway
+    #[cfg(target_os = "linux")]
+    {
+        if env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
+            cmd.arg("--add-host").arg("host.docker.internal:host-gateway");
+            preview_args.push("--add-host".to_string());
+            preview_args.push("host.docker.internal:host-gateway".to_string());
+        }
     }
 
     // volumes
@@ -1216,4 +1256,373 @@ pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str
     }
 
     Ok(exit_code)
+}
+
+/// Map a tool name to the sidecar kind.
+fn route_tool_to_sidecar(tool: &str) -> &'static str {
+    let t = tool.to_ascii_lowercase();
+    match t.as_str() {
+        // rust
+        "cargo" | "rustc" => "rust",
+        // node/typescript
+        "node" | "npm" | "npx" | "tsc" | "ts-node" => "node",
+        // python
+        "python" | "python3" | "pip" | "pip3" => "python",
+        // c/c++
+        "gcc" | "g++" | "clang" | "clang++" | "make" | "cmake" | "ninja" | "pkg-config" => "c-cpp",
+        // go
+        "go" | "gofmt" => "go",
+        _ => "node",
+    }
+}
+
+fn url_decode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                let h1 = bytes[i + 1];
+                let h2 = bytes[i + 2];
+                let v1 = (h1 as char).to_digit(16);
+                let v2 = (h2 as char).to_digit(16);
+                if let (Some(a), Some(b)) = (v1, v2) {
+                    out.push(((a << 4) + b) as u8 as char);
+                    i += 3;
+                } else {
+                    out.push('%');
+                    i += 1;
+                }
+            }
+            _ => {
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
+    let mut res = Vec::new();
+    for pair in body.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let mut it = pair.splitn(2, '=');
+        let k = it.next().unwrap_or_default();
+        let v = it.next().unwrap_or_default();
+        res.push((url_decode(k), url_decode(v)));
+    }
+    res
+}
+
+/// Write aifo-shim and tool wrappers into the given directory.
+pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
+    let tools = [
+        "cargo","rustc","node","npm","npx","tsc","ts-node","python","pip","pip3",
+        "gcc","g++","clang","clang++","make","cmake","ninja","pkg-config","go","gofmt",
+    ];
+    fs::create_dir_all(dir)?;
+    let shim_path = dir.join("aifo-shim");
+    let shim = r#"#!/bin/sh
+set -e
+if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then
+  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2
+  exit 86
+fi
+tool="$(basename "$0")"
+cwd="$(pwd)"
+tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
+mkdir -p "$tmp"
+# Build curl form payload (-d key=value supports urlencoding)
+cmd=(curl -sS -D "$tmp/h" -o "$tmp/b" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN")
+cmd+=(-d "tool=$tool" -d "cwd=$cwd")
+# Append args preserving order
+for a in "$@"; do
+  cmd+=(-d "arg=$a")
+done
+cmd+=("$AIFO_TOOLEEXEC_URL")
+"${cmd[@]}"
+ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
+cat "$tmp/b"
+rm -rf "$tmp"
+# Fallback to 1 if header missing
+case "$ec" in '' ) ec=1 ;; esac
+exit "$ec"
+"#;
+    fs::write(&shim_path, shim)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&shim_path, fs::Permissions::from_mode(0o755))?;
+    }
+    for t in tools {
+        let path = dir.join(t);
+        fs::write(&path, format!("#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
+        }
+    }
+    Ok(())
+}
+
+/// Start sidecar session for requested kinds; returns the session id.
+pub fn toolchain_start_session(kinds: &[String], overrides: &[(String, String)], no_cache: bool, verbose: bool) -> io::Result<String> {
+    let runtime = container_runtime_path()?;
+    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    #[cfg(unix)]
+    let uid: u32 = u32::from(getuid());
+    #[cfg(unix)]
+    let gid: u32 = u32::from(getgid());
+    #[cfg(not(unix))]
+    let (_uid, _gid) = (0u32, 0u32);
+
+    let session_id = create_session_id();
+    let net_name = sidecar_network_name(&session_id);
+    create_network_if_possible(&runtime, &net_name, verbose);
+
+    let apparmor_profile = desired_apparmor_profile();
+    for k in kinds {
+        let kind = normalize_toolchain_kind(k);
+        // resolve image (override kind=image)
+        let mut image = default_toolchain_image(kind.as_str());
+        for (kk, vv) in overrides {
+            if normalize_toolchain_kind(kk) == kind {
+                image = vv.clone();
+            }
+        }
+        let name = sidecar_container_name(kind.as_str(), &session_id);
+        let args = build_sidecar_run_preview(
+            &name,
+            Some(&net_name),
+            if cfg!(unix) { Some((uid, gid)) } else { None },
+            kind.as_str(),
+            &image,
+            no_cache,
+            &pwd,
+            apparmor_profile.as_deref(),
+        );
+        if verbose {
+            eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        }
+        let mut run_cmd = Command::new(&runtime);
+        for a in &args[1..] {
+            run_cmd.arg(a);
+        }
+        if !verbose {
+            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+        let st = run_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+        if !st.success() {
+            remove_network(&runtime, &net_name, verbose);
+            return Err(io::Error::new(io::ErrorKind::Other, "failed to start one or more sidecars"));
+        }
+    }
+    Ok(session_id)
+}
+
+fn random_token() -> String {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .as_nanos();
+    let pid = std::process::id() as u128;
+    let v = now ^ pid;
+    let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    let mut n = v;
+    let mut s = String::new();
+    if n == 0 {
+        s.push('0');
+    } else {
+        while n > 0 {
+            s.push(alphabet[(n % 36) as usize] as char);
+            n /= 36;
+        }
+    }
+    s.chars().rev().collect()
+}
+
+/// Start a minimal HTTP proxy to execute tools inside sidecars.
+/// Returns (url, token, running_flag, thread_handle).
+pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(String, String, std::sync::Arc<std::sync::atomic::AtomicBool>, std::thread::JoinHandle<()>)> {
+    let runtime = container_runtime_path()?;
+
+    #[cfg(unix)]
+    let uid: u32 = u32::from(getuid());
+    #[cfg(unix)]
+    let gid: u32 = u32::from(getgid());
+    #[cfg(not(unix))]
+    let (uid, gid) = (0u32, 0u32);
+
+    let listener = TcpListener::bind(("0.0.0.0", 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
+    let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
+    let port = addr.port();
+    let token = random_token();
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_cl = running.clone();
+    let session = session_id.to_string();
+
+    let handle = std::thread::spawn(move || {
+        if verbose {
+            eprintln!("aifo-coder: toolexec proxy listening on 0.0.0.0:{port}");
+        }
+        for stream in listener.incoming() {
+            if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            let mut stream = match stream {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            // Read request (simple HTTP)
+            let mut buf = Vec::new();
+            let mut hdr = Vec::new();
+            let mut tmp = [0u8; 1024];
+            // Read until CRLF CRLF
+            let mut header_end = None;
+            while header_end.is_none() {
+                match stream.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if let Some(pos) = twoway::find_bytes(&buf, b"\r\n\r\n") {
+                            header_end = Some(pos + 4);
+                        }
+                        // avoid overly large header
+                        if buf.len() > 64 * 1024 {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            let Some(hend) = header_end else { continue };
+            hdr.extend_from_slice(&buf[..hend]);
+            let header_str = String::from_utf8_lossy(&hdr);
+            let mut auth_ok = false;
+            let mut content_len: usize = 0;
+            for line in header_str.lines() {
+                let l = line.trim();
+                if l.to_ascii_lowercase().starts_with("authorization:") {
+                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                        let v = v.trim();
+                        if v == format!("Bearer {}", token) {
+                            auth_ok = true;
+                        }
+                    }
+                } else if l.to_ascii_lowercase().starts_with("content-length:") {
+                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                        content_len = v.trim().parse().unwrap_or(0);
+                    }
+                }
+            }
+            if !auth_ok {
+                let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
+            // Read body
+            let mut body = buf[hend..].to_vec();
+            while body.len() < content_len {
+                match stream.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => body.extend_from_slice(&tmp[..n]),
+                    Err(_) => break,
+                }
+            }
+            let form = String::from_utf8_lossy(&body).to_string();
+            let mut tool = String::new();
+            let mut cwd = "/workspace".to_string();
+            let mut argv: Vec<String> = Vec::new();
+            for (k, v) in parse_form_urlencoded(&form) {
+                match k.as_str() {
+                    "tool" => tool = v,
+                    "cwd" => cwd = v,
+                    "arg" => argv.push(v),
+                    _ => {}
+                }
+            }
+            if tool.is_empty() {
+                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
+            let kind = route_tool_to_sidecar(&tool);
+            let name = sidecar_container_name(kind, &session);
+            let pwd = PathBuf::from(cwd);
+            let mut full_args = vec![tool.clone()];
+            full_args.extend(argv.clone());
+
+            let exec_preview_args = build_sidecar_exec_preview(
+                &name,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                &pwd,
+                kind,
+                &full_args,
+            );
+            let mut cmd = Command::new(&runtime);
+            for a in &exec_preview_args[1..] {
+                cmd.arg(a);
+            }
+            let out = cmd.output();
+            let (status_code, mut body_out) = match out {
+                Ok(o) => {
+                    let code = o.status.code().unwrap_or(1);
+                    let mut b = o.stdout;
+                    if !o.stderr.is_empty() {
+                        b.extend_from_slice(&o.stderr);
+                    }
+                    (code, b)
+                }
+                Err(e) => {
+                    let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
+                    (1, {
+                        b.push(b'\n');
+                        b
+                    })
+                }
+            };
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\n\r\n",
+                status_code,
+                body_out.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(&body_out);
+        }
+        if verbose {
+            eprintln!("aifo-coder: toolexec proxy stopped");
+        }
+    });
+    // On macOS/Windows, host.docker.internal resolves; on Linux we add host-gateway and still use host.docker.internal
+    let url = format!("http://host.docker.internal:{}/exec", port);
+    Ok((url, token, running, handle))
+}
+
+/// Cleanup sidecars and network for a session id (best-effort).
+pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
+    let runtime = match container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let kinds = ["rust", "node", "python", "c-cpp", "go"];
+    for k in kinds {
+        let name = sidecar_container_name(k, session_id);
+        let mut stop = Command::new(&runtime);
+        stop.arg("stop").arg(&name);
+        if !verbose {
+            let _ = stop.stdout(Stdio::null()).stderr(Stdio::null()).status();
+        } else {
+            let _ = stop.status();
+        }
+    }
+    let net = sidecar_network_name(session_id);
+    remove_network(&runtime, &net, verbose);
 }
