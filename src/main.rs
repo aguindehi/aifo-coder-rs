@@ -465,9 +465,11 @@ fn run_doctor(verbose: bool) {
         let has_base = present("AIFO_API_BASE");
         let has_version = present("AIFO_API_VERSION");
 
-        eprintln!("  environment:     AIFO_API_KEY                                 {}", icon(has_key));
-        eprintln!("                   AIFO_API_BASE                                {}", icon(has_base));
-        eprintln!("                   AIFO_API_VERSION                             {}", icon(has_version));
+        let label_w: usize = 14;
+        let name_w: usize = 29;
+        eprintln!("  {:<label_w$} {:<name_w$} {}", "environment:", "AIFO_API_KEY:", icon(has_key), label_w = label_w, name_w = name_w);
+        eprintln!("  {:<label_w$} {:<name_w$} {}", "", "AIFO_API_BASE:", icon(has_base), label_w = label_w, name_w = name_w);
+        eprintln!("  {:<label_w$} {:<name_w$} {}", "", "AIFO_API_VERSION:", icon(has_version), label_w = label_w, name_w = name_w);
     }
     eprintln!();
 
