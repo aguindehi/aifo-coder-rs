@@ -304,6 +304,25 @@ fn run_doctor(verbose: bool) {
     // (registry source suppressed)
     eprintln!();
 
+    // AIFO API environment variables availability
+    {
+        let use_color = atty::is(atty::Stream::Stderr);
+        let icon = |present: bool| -> String {
+            if present {
+                if use_color { "\x1b[32m✅\x1b[0m".to_string() } else { "✅".to_string() }
+            } else {
+                if use_color { "\x1b[31m❌\x1b[0m".to_string() } else { "❌".to_string() }
+            }
+        };
+        let has_key = std::env::var("AIFO_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let has_base = std::env::var("AIFO_API_BASE").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let has_version = std::env::var("AIFO_API_VERSION").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        eprintln!("  AIFO_API_KEY:     {}", icon(has_key));
+        eprintln!("  AIFO_API_BASE:    {}", icon(has_base));
+        eprintln!("  AIFO_API_VERSION: {}", icon(has_version));
+    }
+    eprintln!();
+
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
