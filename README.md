@@ -35,6 +35,8 @@ make build
 ./aifo-coder --help
 ```
 
+> For Powershell you can use `./aifo-coder.ps1`
+
 Optional:
 ```bash
 make build-fat
@@ -53,6 +55,8 @@ Synopsis:
 ```bash
 ./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
 ```
+
+> For Powershell you can use `./aifo-coder.ps1`
 
 Global flags:
 - --image <ref>                Override full image reference for all agents
@@ -212,6 +216,8 @@ make build-launcher
 ```bash
 ./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
 ```
+
+> For Powershell you can use `./aifo-coder.ps1` 
 
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
@@ -448,6 +454,8 @@ These options propagate as Docker build-args so you can also pass them directly 
 
 ## Runtime launching
 
+> For Powershell you can use `./aifo-coder.ps1`
+
 Use the Rust launcher:
 
 ```bash
@@ -595,6 +603,8 @@ Crush example config:
 ```bash
 ./aifo-coder crush --config /workspace/examples/sandbox/crush/crush.json
 ```
+
+> For Powershell you can use `./aifo-coder.ps1`
 
 ---
 
