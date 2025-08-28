@@ -898,18 +898,16 @@ fn create_session_id() -> String {
     s.chars().rev().collect()
 }
 
-fn normalize_toolchain_kind(kind: &str) -> &'static str {
-    match kind.to_ascii_lowercase().as_str() {
-        "rust" => "rust",
-        "node" => "node",
-        "ts" | "typescript" => "node", // typescript uses the node sidecar
-        "python" | "py" => "python",
-        "c" | "cpp" | "c-cpp" | "c_cpp" | "c++" => "c-cpp",
-        "go" | "golang" => "go",
-        other => {
-            // default: pass through but safest fallback to node for JS tooling
-            if other == "typescript" { "node" } else { other }
-        }
+fn normalize_toolchain_kind(kind: &str) -> String {
+    let lower = kind.to_ascii_lowercase();
+    match lower.as_str() {
+        "rust" => "rust".to_string(),
+        "node" => "node".to_string(),
+        "ts" | "typescript" => "node".to_string(), // typescript uses the node sidecar
+        "python" | "py" => "python".to_string(),
+        "c" | "cpp" | "c-cpp" | "c_cpp" | "c++" => "c-cpp".to_string(),
+        "go" | "golang" => "go".to_string(),
+        _ => lower,
     }
 }
 
@@ -1112,10 +1110,10 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
     let (uid, gid) = (0u32, 0u32);
 
     let sidecar_kind = normalize_toolchain_kind(kind_in);
-    let image = default_toolchain_image(sidecar_kind);
+    let image = default_toolchain_image(sidecar_kind.as_str());
     let session_id = create_session_id();
     let net_name = sidecar_network_name(&session_id);
-    let name = sidecar_container_name(sidecar_kind, &session_id);
+    let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
     // Create network (best-effort)
     create_network_if_possible(&runtime, &net_name, verbose);
@@ -1127,7 +1125,7 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
         &name,
         Some(&net_name),
         if cfg!(unix) { Some((uid, gid)) } else { None },
-        sidecar_kind,
+        sidecar_kind.as_str(),
         &image,
         &pwd,
         apparmor_profile.as_deref(),
@@ -1159,7 +1157,7 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
         &name,
         if cfg!(unix) { Some((uid, gid)) } else { None },
         &pwd,
-        sidecar_kind,
+        sidecar_kind.as_str(),
         args,
     );
     let exec_preview = shell_join(&exec_preview_args);
