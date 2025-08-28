@@ -304,25 +304,6 @@ fn run_doctor(verbose: bool) {
     // (registry source suppressed)
     eprintln!();
 
-    // AIFO API environment variables availability
-    {
-        let use_color = atty::is(atty::Stream::Stderr);
-        let icon = |present: bool| -> String {
-            if present {
-                if use_color { "\x1b[32m✅\x1b[0m".to_string() } else { "✅".to_string() }
-            } else {
-                if use_color { "\x1b[31m❌\x1b[0m".to_string() } else { "❌".to_string() }
-            }
-        };
-        let has_key = std::env::var("AIFO_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-        let has_base = std::env::var("AIFO_API_BASE").map(|v| !v.trim().is_empty()).unwrap_or(false);
-        let has_version = std::env::var("AIFO_API_VERSION").map(|v| !v.trim().is_empty()).unwrap_or(false);
-        eprintln!("  AIFO_API_KEY:     {}", icon(has_key));
-        eprintln!("  AIFO_API_BASE:    {}", icon(has_base));
-        eprintln!("  AIFO_API_VERSION: {}", icon(has_version));
-    }
-    eprintln!();
-
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
@@ -378,46 +359,6 @@ fn run_doctor(verbose: bool) {
         );
     };
 
-    // Local time and timezone from host (mounted only if present)
-    show(
-        "local time:",
-        std::path::PathBuf::from("/etc/timezone"),
-        std::path::Path::new("/etc/timezone").exists(),
-    );
-    show(
-        "local timezone:",
-        std::path::PathBuf::from("/etc/localtime"),
-        std::path::Path::new("/etc/localtime").exists(),
-    );
-    eprintln!();
-
-    // Git and GnuPG
-    let agent_ctx = std::env::var("AIFO_CODER_DOCTOR_AGENT").unwrap_or_else(|_| "aider".to_string());
-    let mount_git = true;
-    let mount_gnupg = true;
-    let mount_aider = agent_ctx.eq_ignore_ascii_case("aider");
-    let mount_crush = agent_ctx.eq_ignore_ascii_case("crush");
-    let mount_codex = agent_ctx.eq_ignore_ascii_case("codex");
-
-    show("git config:",   home.join(".gitconfig"), mount_git);
-    show("gnupg config:", home.join(".gnupg"), mount_gnupg);
-    eprintln!();
-
-    // Aider files
-    show("aider config:",   home.join(".aider.conf.yml"), mount_aider);
-    show("aider metadata:", home.join(".aider.model.metadata.json"), mount_aider);
-    show("aider settings:", home.join(".aider.model.settings.yml"), mount_aider);
-    eprintln!();
-
-    // Crush paths
-    show("crush config:", home.join(".local").join("share").join("crush"), mount_crush);
-    show("crush state:",  home.join(".crush"), mount_crush);
-    eprintln!();
-
-    // Codex path
-    show("codex config:", home.join(".codex"), mount_codex);
-    eprintln!();
-
     // Editor availability for installed images (full and/or slim) via crush image
     if aifo_coder::container_runtime_path().is_ok() {
         let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
@@ -467,8 +408,68 @@ fn run_doctor(verbose: bool) {
             }
         }
     }
-
     eprintln!();
+
+    // Local time and timezone from host (mounted only if present)
+    show(
+        "local time:",
+        std::path::PathBuf::from("/etc/timezone"),
+        std::path::Path::new("/etc/timezone").exists(),
+    );
+    show(
+        "local timezone:",
+        std::path::PathBuf::from("/etc/localtime"),
+        std::path::Path::new("/etc/localtime").exists(),
+    );
+    eprintln!();
+
+    // Git and GnuPG
+    let agent_ctx = std::env::var("AIFO_CODER_DOCTOR_AGENT").unwrap_or_else(|_| "aider".to_string());
+    let mount_git = true;
+    let mount_gnupg = true;
+    let mount_aider = agent_ctx.eq_ignore_ascii_case("aider");
+    let mount_crush = agent_ctx.eq_ignore_ascii_case("crush");
+    let mount_codex = agent_ctx.eq_ignore_ascii_case("codex");
+
+    show("git config:",   home.join(".gitconfig"), mount_git);
+    show("gnupg config:", home.join(".gnupg"), mount_gnupg);
+    eprintln!();
+
+    // Aider files
+    show("aider config:",   home.join(".aider.conf.yml"), mount_aider);
+    show("aider metadata:", home.join(".aider.model.metadata.json"), mount_aider);
+    show("aider settings:", home.join(".aider.model.settings.yml"), mount_aider);
+    eprintln!();
+
+    // Crush paths
+    show("crush config:", home.join(".local").join("share").join("crush"), mount_crush);
+    show("crush state:",  home.join(".crush"), mount_crush);
+    eprintln!();
+
+    // Codex path
+    show("codex config:", home.join(".codex"), mount_codex);
+    eprintln!();
+
+    // AIFO API environment variables availability
+    {
+        let use_color = atty::is(atty::Stream::Stderr);
+        let icon = |present: bool| -> String {
+            if present {
+                if use_color { "\x1b[32m✅ found\x1b[0m".to_string() } else { "✅ found".to_string() }
+            } else {
+                if use_color { "\x1b[31m❌ missing\x1b[0m".to_string() } else { "❌ missing".to_string() }
+            }
+        };
+        let has_key = std::env::var("AIFO_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let has_base = std::env::var("AIFO_API_BASE").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let has_version = std::env::var("AIFO_API_VERSION").map(|v| !v.trim().is_empty()).unwrap_or(false);
+
+        eprintln!("  environment:     AIFO_API_KEY                                 {}", icon(has_key));
+        eprintln!("                   AIFO_API_BASE                                {}", icon(has_base));
+        eprintln!("                   AIFO_API_VERSION                             {}", icon(has_version));
+    }
+    eprintln!();
+
     // Workspace write test to validate mounts and UID mapping
     if aifo_coder::container_runtime_path().is_ok() {
         let image = default_image_for_quiet("crush");
