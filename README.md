@@ -247,6 +247,10 @@ cargo test
 ```bash
 cargo test --test toolchain_phase1
 ```
+- Optional live tests (pull and execute real sidecars; ignored by default):
+```bash
+cargo test --test toolchain_live -- --ignored
+```
 
 ---
 
