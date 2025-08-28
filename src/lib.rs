@@ -933,6 +933,9 @@ fn sidecar_network_name(id: &str) -> String {
 fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
     let mut cmd = Command::new(runtime);
     cmd.arg("network").arg("create").arg(name);
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
@@ -950,6 +953,9 @@ fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     let mut cmd = Command::new(runtime);
     cmd.arg("network").arg("rm").arg(name);
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
@@ -1143,6 +1149,9 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
         for a in &run_preview_args[1..] {
             run_cmd.arg(a);
         }
+        if !verbose {
+            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
         let status = run_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
         if !status.success() {
             // Cleanup network
@@ -1183,6 +1192,9 @@ pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: boo
     if !dry_run {
         let mut stop_cmd = Command::new(&runtime);
         stop_cmd.arg("stop").arg(&name);
+        if !verbose {
+            stop_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
         let _ = stop_cmd.status();
 
         remove_network(&runtime, &net_name, verbose);
