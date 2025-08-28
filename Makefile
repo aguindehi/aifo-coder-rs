@@ -376,13 +376,24 @@ test:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
-	echo "Running cargo test inside $(RUST_BUILDER_IMAGE) ..."; \
-	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
-	  -v "$$PWD:/workspace" \
-	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
-	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
-	  -v "$$PWD/target:/workspace/target" \
-	  $(RUST_BUILDER_IMAGE) cargo test
+	if command -v rustup >/dev/null 2>&1; then \
+	  echo "Running cargo test locally via rustup (stable toolchain) ..."; \
+	  rustup run stable cargo test; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "Running cargo test locally via cargo ..."; \
+	  cargo test; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running cargo test inside $(RUST_BUILDER_IMAGE) ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) cargo test; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
 
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
