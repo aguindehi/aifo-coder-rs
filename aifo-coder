@@ -60,7 +60,7 @@ if command -v cargo >/dev/null 2>&1; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
-    echo "Building aifo-coder (release)..." >&2
+    echo "Building aifo-coder (release)..."
     cargo build --release
     BIN="./target/release/aifo-coder$EXE"
   fi
@@ -71,7 +71,7 @@ if [ -x "$BIN" ] && can_run "$BIN"; then
 fi
 
 if command -v cargo >/dev/null 2>&1; then
-  echo "Building aifo-coder (release)..." >&2
+  echo "Building aifo-coder (release)..."
   cargo build --release
   BIN="./target/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
@@ -81,7 +81,7 @@ fi
 
 # Try to build inside a container using Docker
 if command -v docker >/dev/null 2>&1; then
-  echo "Building aifo-coder (release) using docker and rust:1-bookworm ..." >&2
+  echo "Building aifo-coder (release) using docker and rust:1-bookworm ..."
   PLAT=""
   arch="$(uname -m 2>/dev/null || echo unknown)"
   case "$arch" in
