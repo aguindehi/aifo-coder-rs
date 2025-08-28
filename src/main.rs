@@ -747,6 +747,7 @@ fn main() -> ExitCode {
         Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
         Agent::Images => unreachable!("Images subcommand is handled earlier and returns immediately"),
         Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
+        Agent::Toolchain { .. } => unreachable!("Toolchain subcommand is handled earlier and returns immediately"),
     };
 
     // Print startup banner before any further diagnostics
