@@ -460,9 +460,10 @@ fn run_doctor(verbose: bool) {
                 if use_color { "\x1b[31m❌ missing\x1b[0m".to_string() } else { "❌ missing".to_string() }
             }
         };
-        let has_key = std::env::var("AIFO_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-        let has_base = std::env::var("AIFO_API_BASE").map(|v| !v.trim().is_empty()).unwrap_or(false);
-        let has_version = std::env::var("AIFO_API_VERSION").map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let present = |name: &str| std::env::var(name).map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let has_key = present("AIFO_API_KEY");
+        let has_base = present("AIFO_API_BASE");
+        let has_version = present("AIFO_API_VERSION");
 
         eprintln!("  environment:     AIFO_API_KEY                                 {}", icon(has_key));
         eprintln!("                   AIFO_API_BASE                                {}", icon(has_base));
