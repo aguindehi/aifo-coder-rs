@@ -722,7 +722,7 @@ fn main() -> ExitCode {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("{e}");
-                1
+                if e.kind() == io::ErrorKind::NotFound { 127 } else { 1 }
             }
         };
         return ExitCode::from((code & 0xff) as u8);
