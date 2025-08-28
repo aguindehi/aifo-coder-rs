@@ -587,6 +587,29 @@ enum Flavor {
     Slim,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
+enum ToolchainKind {
+    Rust,
+    Node,
+    Typescript,
+    Python,
+    CCpp,
+    Go,
+}
+
+impl ToolchainKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ToolchainKind::Rust => "rust",
+            ToolchainKind::Node => "node",
+            ToolchainKind::Typescript => "typescript",
+            ToolchainKind::Python => "python",
+            ToolchainKind::CCpp => "c-cpp",
+            ToolchainKind::Go => "go",
+        }
+    }
+}
+
 #[derive(Subcommand, Debug, Clone)]
 enum Agent {
     /// Run diagnostics to check environment and configuration
@@ -597,6 +620,15 @@ enum Agent {
 
     /// Clear on-disk caches (e.g., registry probe cache)
     CacheClear,
+
+    /// Toolchain sidecar: run a command inside a language toolchain sidecar
+    Toolchain {
+        #[arg(value_enum)]
+        kind: ToolchainKind,
+        /// Command and arguments to execute inside the sidecar (after --)
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 
     /// Run OpenAI Codex CLI
     Codex {
@@ -677,6 +709,32 @@ fn main() -> ExitCode {
         aifo_coder::invalidate_registry_cache();
         eprintln!("aifo-coder: cleared on-disk registry cache.");
         return ExitCode::from(0);
+    } else if let Agent::Toolchain { kind, args } = &cli.command {
+        print_startup_banner();
+        if cli.verbose {
+            eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
+        }
+        if cli.dry_run {
+            let _ = aifo_coder::toolchain_run(kind.as_str(), args, true, true);
+            return ExitCode::from(0);
+        }
+        // Acquire lock only for real execution
+        let lock = match acquire_lock() {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("{e}");
+                return ExitCode::from(1);
+            }
+        };
+        let code = match aifo_coder::toolchain_run(kind.as_str(), args, cli.verbose, false) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                1
+            }
+        };
+        drop(lock);
+        return ExitCode::from((code & 0xff) as u8);
     }
 
 

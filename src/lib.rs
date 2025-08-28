@@ -873,3 +873,319 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
         Err(e) => Err(e),
     }
 }
+
+fn create_session_id() -> String {
+    // Compose a short, mostly-unique ID from time and pid without extra deps
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0));
+    let pid = std::process::id() as u128;
+    let nanos = now.as_nanos();
+    let mix = nanos ^ (pid as u128);
+    // base36 encode last 40 bits for brevity
+    let mut v = (mix & 0xffffffffff) as u64;
+    let mut s = String::new();
+    let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    if v == 0 {
+        s.push('0');
+    } else {
+        while v > 0 {
+            let idx = (v % 36) as usize;
+            s.push(alphabet[idx] as char);
+            v /= 36;
+        }
+    }
+    s.chars().rev().collect()
+}
+
+fn normalize_toolchain_kind(kind: &str) -> &'static str {
+    match kind.to_ascii_lowercase().as_str() {
+        "rust" => "rust",
+        "node" => "node",
+        "ts" | "typescript" => "node", // typescript uses the node sidecar
+        "python" | "py" => "python",
+        "c" | "cpp" | "c-cpp" | "c_cpp" | "c++" => "c-cpp",
+        "go" | "golang" => "go",
+        other => {
+            // default: pass through but safest fallback to node for JS tooling
+            if other == "typescript" { "node" } else { other }
+        }
+    }
+}
+
+fn default_toolchain_image(kind: &str) -> String {
+    match kind {
+        "rust" => "rust:1.80-slim".to_string(),
+        "node" => "node:20-bookworm-slim".to_string(),
+        "python" => "python:3.12-slim".to_string(),
+        "c-cpp" => "aifo-cpp-toolchain:latest".to_string(),
+        "go" => "golang:1.22-bookworm".to_string(),
+        _ => "node:20-bookworm-slim".to_string(),
+    }
+}
+
+fn sidecar_container_name(kind: &str, id: &str) -> String {
+    format!("aifo-tc-{kind}-{id}")
+}
+
+fn sidecar_network_name(id: &str) -> String {
+    format!("aifo-net-{id}")
+}
+
+fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
+    let mut cmd = Command::new(runtime);
+    cmd.arg("network").arg("create").arg(name);
+    if verbose {
+        eprintln!(
+            "aifo-coder: docker: {}",
+            shell_join(&vec![
+                "docker".to_string(),
+                "network".to_string(),
+                "create".to_string(),
+                name.to_string()
+            ])
+        );
+    }
+    let _ = cmd.status();
+}
+
+fn remove_network(runtime: &Path, name: &str, verbose: bool) {
+    let mut cmd = Command::new(runtime);
+    cmd.arg("network").arg("rm").arg(name);
+    if verbose {
+        eprintln!(
+            "aifo-coder: docker: {}",
+            shell_join(&vec![
+                "docker".to_string(),
+                "network".to_string(),
+                "rm".to_string(),
+                name.to_string()
+            ])
+        );
+    }
+    let _ = cmd.status();
+}
+
+fn build_sidecar_run_preview(
+    name: &str,
+    network: Option<&str>,
+    uidgid: Option<(u32, u32)>,
+    kind: &str,
+    image: &str,
+    pwd: &Path,
+    apparmor: Option<&str>,
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["docker".to_string(), "run".to_string(), "-d".to_string(), "--rm".to_string()];
+    args.push("--name".to_string());
+    args.push(name.to_string());
+    if let Some(net) = network {
+        args.push("--network".to_string());
+        args.push(net.to_string());
+    }
+    if let Some((uid, gid)) = uidgid {
+        args.push("--user".to_string());
+        args.push(format!("{uid}:{gid}"));
+    }
+    // mounts
+    args.push("-v".to_string());
+    args.push(format!("{}:/workspace", pwd.display()));
+
+    match kind {
+        "rust" => {
+            args.push("-v".to_string());
+            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+            args.push("-v".to_string());
+            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+            args.push("-e".to_string());
+            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+        }
+        "node" => {
+            args.push("-v".to_string());
+            args.push("aifo-npm-cache:/home/coder/.npm".to_string());
+        }
+        "python" => {
+            args.push("-v".to_string());
+            args.push("aifo-pip-cache:/home/coder/.cache/pip".to_string());
+        }
+        "c-cpp" => {
+            args.push("-v".to_string());
+            args.push("aifo-ccache:/home/coder/.cache/ccache".to_string());
+            args.push("-e".to_string());
+            args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
+        }
+        "go" => {
+            args.push("-v".to_string());
+            args.push("aifo-go:/go".to_string());
+            args.push("-e".to_string());
+            args.push("GOPATH=/go".to_string());
+            args.push("-e".to_string());
+            args.push("GOMODCACHE=/go/pkg/mod".to_string());
+            args.push("-e".to_string());
+            args.push("GOCACHE=/go/build-cache".to_string());
+        }
+        _ => {}
+    }
+
+    // base env and workdir
+    args.push("-e".to_string());
+    args.push("HOME=/home/coder".to_string());
+    args.push("-e".to_string());
+    args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
+    args.push("-w".to_string());
+    args.push("/workspace".to_string());
+
+    if let Some(profile) = apparmor {
+        if docker_supports_apparmor() {
+            args.push("--security-opt".to_string());
+            args.push(format!("apparmor={profile}"));
+        }
+    }
+
+    args.push(image.to_string());
+    args.push("sleep".to_string());
+    args.push("infinity".to_string());
+    args
+}
+
+fn build_sidecar_exec_preview(
+    name: &str,
+    uidgid: Option<(u32, u32)>,
+    pwd: &Path,
+    kind: &str,
+    user_args: &[String],
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["docker".to_string(), "exec".to_string()];
+    if let Some((uid, gid)) = uidgid {
+        args.push("-u".to_string());
+        args.push(format!("{uid}:{gid}"));
+    }
+    args.push("-w".to_string());
+    args.push("/workspace".to_string());
+    // base env
+    args.push("-e".to_string());
+    args.push("HOME=/home/coder".to_string());
+    args.push("-e".to_string());
+    args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
+
+    match kind {
+        "rust" => {
+            args.push("-e".to_string());
+            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+        }
+        "c-cpp" => {
+            args.push("-e".to_string());
+            args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
+        }
+        "go" => {
+            args.push("-e".to_string());
+            args.push("GOPATH=/go".to_string());
+            args.push("-e".to_string());
+            args.push("GOMODCACHE=/go/pkg/mod".to_string());
+            args.push("-e".to_string());
+            args.push("GOCACHE=/go/build-cache".to_string());
+        }
+        _ => {}
+    }
+
+    args.push(name.to_string());
+    // user command
+    for a in user_args {
+        args.push(a.clone());
+    }
+    // include pwd to silence unused warning; it's already used for run mount
+    let _ = pwd;
+    args
+}
+
+/// Rollout Phase 1: start a toolchain sidecar and run the provided command inside it.
+/// Returns the exit code of the executed command.
+pub fn toolchain_run(kind_in: &str, args: &[String], verbose: bool, dry_run: bool) -> io::Result<i32> {
+    let runtime = container_runtime_path()?;
+    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    #[cfg(unix)]
+    let uid: u32 = u32::from(getuid());
+    #[cfg(unix)]
+    let gid: u32 = u32::from(getgid());
+
+    #[cfg(not(unix))]
+    let (uid, gid) = (0u32, 0u32);
+
+    let sidecar_kind = normalize_toolchain_kind(kind_in);
+    let image = default_toolchain_image(sidecar_kind);
+    let session_id = create_session_id();
+    let net_name = sidecar_network_name(&session_id);
+    let name = sidecar_container_name(sidecar_kind, &session_id);
+
+    // Create network (best-effort)
+    create_network_if_possible(&runtime, &net_name, verbose);
+
+    let apparmor_profile = desired_apparmor_profile();
+
+    // Build and optionally run sidecar
+    let run_preview_args = build_sidecar_run_preview(
+        &name,
+        Some(&net_name),
+        if cfg!(unix) { Some((uid, gid)) } else { None },
+        sidecar_kind,
+        &image,
+        &pwd,
+        apparmor_profile.as_deref(),
+    );
+    let run_preview = shell_join(&run_preview_args);
+
+    if verbose || dry_run {
+        eprintln!("aifo-coder: docker: {}", run_preview);
+    }
+
+    if !dry_run {
+        let mut run_cmd = Command::new(&runtime);
+        for a in &run_preview_args[1..] {
+            run_cmd.arg(a);
+        }
+        let status = run_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+        if !status.success() {
+            // Cleanup network
+            remove_network(&runtime, &net_name, verbose);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("sidecar container failed to start (exit: {:?})", status.code()),
+            ));
+        }
+    }
+
+    // docker exec
+    let exec_preview_args = build_sidecar_exec_preview(
+        &name,
+        if cfg!(unix) { Some((uid, gid)) } else { None },
+        &pwd,
+        sidecar_kind,
+        args,
+    );
+    let exec_preview = shell_join(&exec_preview_args);
+
+    if verbose || dry_run {
+        eprintln!("aifo-coder: docker: {}", exec_preview);
+    }
+
+    let mut exit_code: i32 = 0;
+
+    if !dry_run {
+        let mut exec_cmd = Command::new(&runtime);
+        for a in &exec_preview_args[1..] {
+            exec_cmd.arg(a);
+        }
+        let status = exec_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to exec in sidecar: {e}")))?;
+        exit_code = status.code().unwrap_or(1);
+    }
+
+    // Cleanup: stop sidecar and remove network (best-effort)
+    if !dry_run {
+        let mut stop_cmd = Command::new(&runtime);
+        stop_cmd.arg("stop").arg(&name);
+        let _ = stop_cmd.status();
+    }
+    remove_network(&runtime, &net_name, verbose);
+
+    Ok(exit_code)
+}
