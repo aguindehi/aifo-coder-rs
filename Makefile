@@ -566,6 +566,7 @@ rebuild-existing-nocache:
 clean:
 	@set -e; \
 	- docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
+	- docker rmi repository.migros.net/$(CODEX_IMAGE) repository.migros.net/$(CRUSH_IMAGE) repository.migros.net/$(AIDER_IMAGE) repository.migros.net/$(CODEX_IMAGE_SLIM) repository.migros.net/$(CRUSH_IMAGE_SLIM) repository.migros.net/$(AIDER_IMAGE_SLIM) repository.migros.net/$(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	DOCKER_PLATFORM_ARGS=""; \
@@ -653,7 +654,7 @@ apparmor-log-colima:
 		exit 1; \
 	fi
 
-.PHONY: docker-enter
+.PHONY: docker-images
 docker-images:
 	@set -e; \
 	docker images | head -1; docker images | sort | grep -v REPOSITORY
@@ -755,8 +756,8 @@ BIN_NAME ?= aifo-coder
 # Cross-platform extraction of version/name without relying on sed on Windows
 ifeq ($(OS),Windows_NT)
   POWERSHELL := powershell
-  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match ''^\s*version\s*=\s*"(.*)"''){ $$matches[1] } } | Select-Object -First 1'
-  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match ''^\s*name\s*=\s*"(.*)"''){ $$matches[1] } } | Select-Object -First 1'
+  CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*version\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
+  CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*name\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
 else
   CARGO_VERSION_CMD := sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
   CARGO_NAME_CMD := sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
@@ -767,7 +768,6 @@ VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
 # Backwards compatibility wrappers (deprecated)
-.PHONY: build-app build-dmg
 build-app: release-app
 	@echo "Warning: 'build-app' is deprecated; use 'make release-app' instead." 1>&2
 
@@ -931,7 +931,7 @@ release-for-target:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi; \
-	echo Generate checksums for archives (tar.gz, dmg) > /dev/null \
+	echo Generate checksums for archives (tar.gz, dmg) > /dev/null; \
 	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
 	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
 	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
@@ -943,7 +943,7 @@ release-for-target:
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
 	fi; \
-	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null \
+	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
 	  PKG="$$( $(CARGO_NAME_CMD) )"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
