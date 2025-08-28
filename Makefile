@@ -989,21 +989,22 @@ install: build build-launcher
 	  fi; \
 	fi; \
 	if [ ! -f "$$BINPATH" ]; then echo "Error: binary not found for install. Tried target/release and target/$$TGT/release." >&2; exit 1; fi; \
-	install -d -m 0755 "$(BIN_DIR)" "$(MAN1_DIR)" "$(DOC_DIR)"; \
-	install -m 0755 "$$BINPATH" "$(BIN_DIR)/$$BIN"; \
+	SUDO=""; if command -v sudo >/dev/null 2>&1 && [ -z "$(DESTDIR)" ]; then SUDO="sudo"; fi; \
+	$$SUDO install -d -m 0755 "$(BIN_DIR)" "$(MAN1_DIR)" "$(DOC_DIR)"; \
+	$$SUDO install -m 0755 "$$BINPATH" "$(BIN_DIR)/$$BIN"; \
 	if [ -f man/$$BIN.1 ]; then \
 	  if command -v gzip >/dev/null 2>&1; then \
-	    TMP="$$(mktemp)"; cp "man/$$BIN.1" "$$TMP"; gzip -c "$$TMP" > "$(MAN1_DIR)/$$BIN.1.gz"; rm -f "$$TMP"; \
+	    TMP="$$(mktemp)"; cp "man/$$BIN.1" "$$TMP"; gzip -c "$$TMP" | $$SUDO tee "$(MAN1_DIR)/$$BIN.1.gz" >/dev/null; rm -f "$$TMP"; \
 	  else \
-	    install -m 0644 "man/$$BIN.1" "$(MAN1_DIR)/$$BIN.1"; \
+	    $$SUDO install -m 0644 "man/$$BIN.1" "$(MAN1_DIR)/$$BIN.1"; \
 	  fi; \
 	fi; \
-	[ -f README.md ] && install -m 0644 README.md "$(DOC_DIR)/" || true; \
-	[ -f LICENSE ] && install -m 0644 LICENSE "$(DOC_DIR)/" || true; \
+	[ -f README.md ] && $$SUDO install -m 0644 README.md "$(DOC_DIR)/" || true; \
+	[ -f LICENSE ] && $$SUDO install -m 0644 LICENSE "$(DOC_DIR)/" || true; \
 	if [ -d examples ]; then \
-	  install -d -m 0755 "$(EXAMPLES_DIR)"; \
-	  cp -a examples/. "$(EXAMPLES_DIR)/"; \
-	  chmod -R u=rwX,go=rX "$(EXAMPLES_DIR)" || true; \
+	  $$SUDO install -d -m 0755 "$(EXAMPLES_DIR)"; \
+	  $$SUDO cp -a examples/. "$(EXAMPLES_DIR)/"; \
+	  $$SUDO chmod -R u=rwX,go=rX "$(EXAMPLES_DIR)" || true; \
 	fi; \
 	echo "Installed $$BIN to $(BIN_DIR), man page to $(MAN1_DIR), docs to $(DOC_DIR)"
 
