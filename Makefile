@@ -450,8 +450,15 @@ test-shim-embed:
 	cargo test --test shim_embed -- --ignored
 
 test-proxy-unix:
-	@echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."
-	cargo test --test proxy_unix_socket -- --ignored
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
+	  cargo test --test proxy_unix_socket -- --ignored; \
+	else \
+	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
+	  cargo test --test proxy_smoke -- --ignored; \
+	fi
 
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
