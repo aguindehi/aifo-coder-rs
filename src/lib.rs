@@ -573,13 +573,6 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
             env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
         }
     }
-    // Phase 4 (Linux): mount unix socket directory if unix transport is enabled
-    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
-        if !dir.trim().is_empty() {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!("{}:/run/aifo", dir)));
-        }
-    }
 
     // Disable commit signing for Aider if requested
     if agent == "aider" {
@@ -668,6 +661,14 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
         if !shim_dir.trim().is_empty() {
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(OsString::from(format!("{}:/opt/aifo/bin:ro", shim_dir)));
+        }
+    }
+
+    // Phase 4 (Linux): mount unix socket directory if unix transport is enabled
+    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
+        if !dir.trim().is_empty() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!("{}:/run/aifo", dir)));
         }
     }
 
