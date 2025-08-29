@@ -789,8 +789,8 @@ ifeq ($(OS),Windows_NT)
   CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*version\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
   CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*name\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
 else
-  CARGO_VERSION_CMD := awk '/^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*version[[:space:]]*=/{match($$0,/"([^"]+)"/,a); print a[1]; exit}' Cargo.toml
-  CARGO_NAME_CMD := awk '/^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*name[[:space:]]*=/{match($$0,/"([^"]+)"/,a); print a[1]; exit}' Cargo.toml
+  CARGO_VERSION_CMD := awk 'BEGIN{p=0} /^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*version[[:space:]]*=/ { q=index($$0, "\""); if (q>0) { rem=substr($$0, q+1); r=index(rem, "\""); if (r>0) { print substr(rem, 1, r-1); exit } } }' Cargo.toml
+  CARGO_NAME_CMD := awk 'BEGIN{p=0} /^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*name[[:space:]]*=/ { q=index($$0, "\""); if (q>0) { rem=substr($$0, q+1); r=index(rem, "\""); if (r>0) { print substr(rem, 1, r-1); exit } } }' Cargo.toml
 endif
 VERSION ?= $(shell $(CARGO_VERSION_CMD))
 ifeq ($(strip $(VERSION)),)
