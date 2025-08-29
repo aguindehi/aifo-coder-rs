@@ -395,6 +395,19 @@ test:
 	  exit 1; \
 	fi
 
+.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed
+test-proxy-smoke:
+	@echo "Running proxy smoke test (ignored by default) ..."
+	cargo test --test proxy_smoke -- --ignored
+
+test-toolchain-live:
+	@echo "Running live toolchain tests (ignored by default) ..."
+	cargo test --test toolchain_live -- --ignored
+
+test-shim-embed:
+	@echo "Running embedded shim presence test (ignored by default) ..."
+	cargo test --test shim_embed -- --ignored
+
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
 

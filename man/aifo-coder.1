@@ -230,7 +230,27 @@ shims for the selected kinds so that commands like
 or
 .B go
 invoked inside the agent are transparently executed via the sidecars.
-
+.P
+Embedded shims:
+Agent images embed a compiled
+.B aifo-shim
+at
+.B /opt/aifo/bin
+with symlinks for common tools (cargo, npm/npx/tsc, python/pip, gcc/clang, go).
+The PATH is prepended so these tools are available in the agent. For development
+or debugging you can override embedded shims by bind\-mounting a host directory
+via
+.BR AIFO_SHIM_DIR
+to
+.BR /opt/aifo/bin .
+.P
+Linux connectivity note:
+When toolchains are attached, the agent is launched with a host\-gateway entry so
+.B host.docker.internal
+resolves to the host proxy. If connectivity issues arise on Linux, ensure the launcher
+adds
+.BR \-\-add\-host=host.docker.internal:host\-gateway
+(which it does automatically when toolchains are enabled).
 .SH SEE ALSO
 .BR docker (1),
 .BR apparmor (7),
