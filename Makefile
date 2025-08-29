@@ -1,4 +1,5 @@
 .PHONY: help
+.DEFAULT_GOAL := help
 help:
 	@echo ""
 	@echo "aifo-coder - Makefile targets"
