@@ -1,0 +1,28 @@
+# c-cpp toolchain sidecar image for aifo-coder toolchains
+# Default tag: aifo-cpp-toolchain:latest
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base developer toolchain for C/C++
+RUN apt-get update \
+ && apt-get -y upgrade \
+ && apt-get install -y --no-install-recommends \
+    build-essential \
+    clang \
+    cmake \
+    ninja-build \
+    pkg-config \
+    ccache \
+    ca-certificates \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+
+# Prepare a world-writable HOME for arbitrary uid:gid mappings
+RUN mkdir -p /home/coder/.cache/ccache \
+ && chmod -R 0777 /home/coder
+
+ENV CCACHE_DIR=/home/coder/.cache/ccache
+
+# Sleep by default; the toolexec proxy will docker exec into this container
+CMD ["sleep", "infinity"]

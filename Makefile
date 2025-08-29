@@ -75,6 +75,8 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
+	@echo "  rebuild-toolchain-cpp ....... Rebuild c-cpp toolchain image without cache"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
@@ -264,6 +266,15 @@ build-rust-builder:
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
+
+.PHONY: build-toolchain-cpp rebuild-toolchain-cpp
+build-toolchain-cpp:
+	@echo "Building aifo-cpp-toolchain:latest ..."
+	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+rebuild-toolchain-cpp:
+	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
+	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim
