@@ -1600,6 +1600,9 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             }
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
+            if verbose {
+                eprintln!("aifo-coder: proxy exec: tool={} args={:?} cwd={}", tool, argv, pwd.display());
+            }
             let mut full_args: Vec<String>;
             if tool == "tsc" {
                 let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
@@ -1622,26 +1625,47 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 kind,
                 &full_args,
             );
-            let mut cmd = Command::new(&runtime);
-            for a in &exec_preview_args[1..] {
-                cmd.arg(a);
+            if verbose {
+                eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
             }
-            let out = cmd.output();
-            let (status_code, body_out) = match out {
-                Ok(o) => {
-                    let code = o.status.code().unwrap_or(1);
-                    let mut b = o.stdout;
-                    if !o.stderr.is_empty() {
-                        b.extend_from_slice(&o.stderr);
+            let (status_code, body_out) = {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let runtime_cl = runtime.clone();
+                let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+                std::thread::spawn(move || {
+                    let mut cmd = Command::new(&runtime_cl);
+                    for a in &args_clone {
+                        cmd.arg(a);
                     }
-                    (code, b)
-                }
-                Err(e) => {
-                    let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
-                    (1, {
+                    let out = cmd.output();
+                    let _ = tx.send(out);
+                });
+                match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+                    Ok(Ok(o)) => {
+                        let code = o.status.code().unwrap_or(1);
+                        let mut b = o.stdout;
+                        if !o.stderr.is_empty() {
+                            b.extend_from_slice(&o.stderr);
+                        }
+                        (code, b)
+                    }
+                    Ok(Err(e)) => {
+                        let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
                         b.push(b'\n');
-                        b
-                    })
+                        (1, b)
+                    }
+                    Err(_timeout) => {
+                        let msg = b"aifo-coder proxy timeout\n";
+                        let header = format!(
+                            "HTTP/1.1 504 Gateway Timeout\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 124\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            msg.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(msg);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
                 }
             };
             let header = format!(
