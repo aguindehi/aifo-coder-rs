@@ -286,12 +286,6 @@ pub fn preferred_registry_prefix() -> String {
     }
 
     // Prefer probing with curl for HTTPS reachability using short timeouts.
-    if let Some(cached) = read_registry_cache_disk(300) {
-        let v = cached;
-        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-        let _ = REGISTRY_PREFIX_SOURCE.set("disk".to_string());
-        return v;
-    }
     if which("curl").is_ok() {
         eprintln!("aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
         let status = Command::new("curl")
