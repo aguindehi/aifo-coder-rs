@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::time::{Duration, SystemTime, Instant};
+use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
 use atty;
