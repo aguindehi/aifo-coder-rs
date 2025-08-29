@@ -1085,7 +1085,7 @@ sbom:
 .PHONY: loc
 loc:
 	@set -e; \
-	echo "\nCounting lines of source in repository...\n"; \
+	printf "\nCounting lines of source in repository...\n\n"; \
 	count() { \
 	  pat="$$1"; \
 	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
