@@ -59,6 +59,22 @@ the image is derived from
 .BR AIFO_CODER_IMAGE_PREFIX " and " AIFO_CODER_IMAGE_TAG
 (see ENVIRONMENT).
 .TP
+.BR \-\-toolchain " " KIND
+Attach language toolchains and inject PATH shims (repeatable). Supported kinds:
+.B rust ,
+.B node ,
+.B typescript
+(alias of node),
+.B python ,
+.B c\-cpp ,
+.B go .
+.TP
+.BR \-\-toolchain\-image " " KIND=IMAGE
+Override image per toolchain kind (repeatable).
+.TP
+.BR \-\-no\-toolchain\-cache
+Disable named cache volumes for toolchain sidecars.
+.TP
 .BR \-h ", " \-\-help
 Print help and exit.
 .TP
@@ -108,6 +124,19 @@ Used for default paths and may influence host mounts inside the container.
 .B GNUPGHOME
 May be passed through to the container environment to enable GPG operations,
 depending on the agent and launcher defaults.
+.TP
+.B AIFO_TOOLEEXEC_URL
+Internal: URL the agent shims contact to execute tools via sidecars
+(e.g., http://host.docker.internal:PORT/exec). Set automatically when
+\-\-toolchain is used as a global option.
+.TP
+.B AIFO_TOOLEEXEC_TOKEN
+Internal: bearer token used by shims to authenticate to the proxy. Set
+automatically when \-\-toolchain is used.
+.TP
+.B AIFO_SESSION_NETWORK
+Internal: ephemeral Docker network name that the agent joins to communicate
+with toolchain sidecars (created automatically per session).
 .SH SECURITY
 On Linux hosts with AppArmor support, the launcher attempts to run agents
 under a constrained AppArmor profile to reduce kernel attack surface and
@@ -180,6 +209,16 @@ aifo\-coder toolchain rust \-\- cargo \-\-version
 aifo\-coder toolchain node \-\- npx \-\-version
 aifo\-coder toolchain python \-\- python \-m pip \-\-version
 .fi
+.P
+When provided as a global option, \-\-toolchain attaches sidecars and injects PATH
+shims for the selected kinds so that commands like
+.B cargo ,
+.B npx ,
+.B python ,
+.B gcc ,
+or
+.B go
+invoked inside the agent are transparently executed via the sidecars.
 
 .SH SEE ALSO
 .BR docker (1),
