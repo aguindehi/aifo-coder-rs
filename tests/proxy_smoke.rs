@@ -47,19 +47,47 @@ fn test_proxy_shim_route_rust_and_node() {
         );
         stream.write_all(req.as_bytes()).expect("write failed");
 
-        let mut resp = Vec::new();
-        stream.read_to_end(&mut resp).ok();
+        // Read headers until CRLFCRLF
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 1024];
+        let header_end_pos = loop {
+            let n = stream.read(&mut tmp).expect("read failed");
+            if n == 0 {
+                break None;
+            }
+            buf.extend_from_slice(&tmp[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                break Some(pos + 4);
+            }
+            if buf.len() > 128 * 1024 {
+                break None;
+            }
+        };
+        let hend = header_end_pos.expect("no header terminator found");
+        let header = String::from_utf8_lossy(&buf[..hend]).to_string();
 
-        let text = String::from_utf8_lossy(&resp).to_string();
+        // Parse X-Exit-Code and Content-Length
         let mut code: i32 = 1;
-        for line in text.lines() {
+        let mut content_len: usize = 0;
+        for line in header.lines() {
             if let Some(v) = line.strip_prefix("X-Exit-Code: ") {
                 code = v.trim().parse::<i32>().unwrap_or(1);
-            }
-            if line.trim().is_empty() {
-                break;
+            } else if let Some(v) = line.strip_prefix("Content-Length: ") {
+                content_len = v.trim().parse::<usize>().unwrap_or(0);
             }
         }
+
+        // Read exactly content_len bytes of body (may already have some in buf)
+        let mut body_bytes = buf[hend..].to_vec();
+        while body_bytes.len() < content_len {
+            let n = stream.read(&mut tmp).expect("read body failed");
+            if n == 0 {
+                break;
+            }
+            body_bytes.extend_from_slice(&tmp[..n]);
+        }
+
+        let text = String::from_utf8_lossy(&body_bytes).to_string();
         (code, text)
     }
 

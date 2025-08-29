@@ -6,7 +6,7 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::net::{TcpStream, ToSocketAddrs, TcpListener};
+use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
 use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
@@ -1645,12 +1645,14 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 }
             };
             let header = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 status_code,
                 body_out.len()
             );
             let _ = stream.write_all(header.as_bytes());
             let _ = stream.write_all(&body_out);
+            let _ = stream.flush();
+            let _ = stream.shutdown(Shutdown::Both);
         }
         if verbose {
             eprintln!("aifo-coder: toolexec proxy stopped");
