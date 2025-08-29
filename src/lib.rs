@@ -1495,6 +1495,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     let listener = TcpListener::bind(("0.0.0.0", 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
     let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();
+    let _ = listener.set_nonblocking(true);
     let token = random_token();
     let token_for_thread = token.clone();
     // Per-request timeout (seconds); default 60
@@ -1511,13 +1512,20 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
         if verbose {
             eprintln!("aifo-coder: toolexec proxy listening on 0.0.0.0:{port}");
         }
-        for stream in listener.incoming() {
+        loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
             }
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
+            let mut stream = match listener.accept() {
+                Ok((s, _addr)) => s,
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::WouldBlock {
+                        std::thread::sleep(Duration::from_millis(50));
+                        continue;
+                    } else {
+                        continue;
+                    }
+                }
             };
             let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
             let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
