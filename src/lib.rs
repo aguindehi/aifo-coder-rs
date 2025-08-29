@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, Instant};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
 use atty;
@@ -218,19 +218,6 @@ fn registry_cache_path() -> Option<PathBuf> {
     Some(base.join("aifo-coder.regprefix"))
 }
 
-fn read_registry_cache_disk(max_age_secs: u64) -> Option<String> {
-    let path = registry_cache_path()?;
-    let meta = fs::metadata(&path).ok()?;
-    let modified = meta.modified().ok()?;
-    let now = SystemTime::now();
-    let age = now.duration_since(modified).ok()?.as_secs();
-    if age <= max_age_secs {
-        let v = fs::read_to_string(&path).ok()?;
-        Some(v.trim().to_string())
-    } else {
-        None
-    }
-}
 
 fn write_registry_cache_disk(s: &str) {
     if let Some(path) = registry_cache_path() {
@@ -1663,6 +1650,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     if verbose {
                         eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
                     }
+                    let started = std::time::Instant::now();
                     let (status_code, body_out) = {
                         let (tx, rx) = std::sync::mpsc::channel();
                         let runtime_cl = runtime.clone();
@@ -1703,6 +1691,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                             }
                         }
                     };
+                    let dur_ms = started.elapsed().as_millis();
+                    if verbose {
+                        eprintln!("aifo-coder: proxy result tool={} kind={} code={} dur_ms={}", tool, kind, status_code, dur_ms);
+                    }
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                         status_code,
@@ -1870,6 +1862,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             if verbose {
                 eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
             }
+            let started = std::time::Instant::now();
             let (status_code, body_out) = {
                 let (tx, rx) = std::sync::mpsc::channel();
                 let runtime_cl = runtime.clone();
@@ -1910,6 +1903,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     }
                 }
             };
+            let dur_ms = started.elapsed().as_millis();
+            if verbose {
+                eprintln!("aifo-coder: proxy result tool={} kind={} code={} dur_ms={}", tool, kind, status_code, dur_ms);
+            }
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 status_code,
