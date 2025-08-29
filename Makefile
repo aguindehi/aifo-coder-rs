@@ -77,6 +77,7 @@ help:
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
 	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild c-cpp toolchain image without cache"
+	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
@@ -275,6 +276,11 @@ build-toolchain-cpp:
 rebuild-toolchain-cpp:
 	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
 	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+.PHONY: publish-toolchain-cpp
+publish-toolchain-cpp:
+	@echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."
+	$(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim

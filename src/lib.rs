@@ -1962,6 +1962,15 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     }
     let net = sidecar_network_name(session_id);
     remove_network(&runtime, &net, verbose);
+
+    // Best-effort cleanup of unix socket directory (Linux, unix transport)
+    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
+        if !dir.trim().is_empty() {
+            let p = PathBuf::from(dir);
+            let _ = fs::remove_file(p.join("toolexec.sock"));
+            let _ = fs::remove_dir_all(&p);
+        }
+    }
 }
 
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
