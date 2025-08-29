@@ -137,6 +137,10 @@ automatically when \-\-toolchain is used.
 .B AIFO_SESSION_NETWORK
 Internal: ephemeral Docker network name that the agent joins to communicate
 with toolchain sidecars (created automatically per session).
+.TP
+.B AIFO_TOOLEEXEC_TIMEOUT_SECS
+Per-request timeout in seconds for the toolexec proxy (default: 60). Increase on slow CI,
+lower to fail fast on unresponsive tool invocations.
 .SH SECURITY
 On Linux hosts with AppArmor support, the launcher attempts to run agents
 under a constrained AppArmor profile to reduce kernel attack surface and

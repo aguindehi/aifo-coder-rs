@@ -1268,6 +1268,17 @@ pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str
     Ok(exit_code)
 }
 
+fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "rust" => &["cargo", "rustc"],
+        "node" => &["node", "npm", "npx", "tsc", "ts-node"],
+        "python" => &["python", "python3", "pip", "pip3"],
+        "c-cpp" => &["gcc", "g++", "clang", "clang++", "make", "cmake", "ninja", "pkg-config"],
+        "go" => &["go", "gofmt"],
+        _ => &[],
+    }
+}
+
 /// Map a tool name to the sidecar kind.
 fn route_tool_to_sidecar(tool: &str) -> &'static str {
     let t = tool.to_ascii_lowercase();
@@ -1486,6 +1497,12 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     let port = addr.port();
     let token = random_token();
     let token_for_thread = token.clone();
+    // Per-request timeout (seconds); default 60
+    let timeout_secs: u64 = env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&v| v > 0)
+        .unwrap_or(60);
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_cl = running.clone();
     let session = session_id.to_string();
@@ -1502,6 +1519,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 Ok(s) => s,
                 Err(_) => continue,
             };
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
             // Read request (simple HTTP)
             let mut buf = Vec::new();
             let mut hdr = Vec::new();
@@ -1574,6 +1593,11 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 continue;
             }
             let kind = route_tool_to_sidecar(&tool);
+            let allow = sidecar_allowlist(kind);
+            if !allow.iter().any(|&t| t == tool.as_str()) {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
             let mut full_args: Vec<String>;
