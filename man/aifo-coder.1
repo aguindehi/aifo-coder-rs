@@ -141,6 +141,13 @@ with toolchain sidecars (created automatically per session).
 .B AIFO_TOOLEEXEC_TIMEOUT_SECS
 Per-request timeout in seconds for the toolexec proxy (default: 60). Increase on slow CI,
 lower to fail fast on unresponsive tool invocations.
+.TP
+.B AIFO_SHIM_DIR
+Path on the host to a directory containing the shim binary and symlinks to be
+bind-mounted into the agent at
+.BR /opt/aifo/bin .
+This allows overriding the embedded shims in the agent image for development
+or debugging. When unset, the embedded shims shipped in the image are used.
 .SH SECURITY
 On Linux hosts with AppArmor support, the launcher attempts to run agents
 under a constrained AppArmor profile to reduce kernel attack surface and
