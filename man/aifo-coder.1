@@ -81,6 +81,18 @@ On Linux, use a unix:/// socket transport for the tool\-exec proxy instead of TC
 The socket directory is bind\-mounted into the agent at
 .BR /run/aifo .
 .TP
+.BR \-\-toolchain\-spec " " SPEC
+Attach toolchains with optional versions (repeatable). Examples:
+.B rust@1.80 ,
+.B node@20 ,
+.B python@3.12 .
+When a version is provided, aifo\-coder selects a sane default image for that kind and version (e.g., rust:1.80\-slim, node:20\-bookworm\-slim, python:3.12\-slim).
+.TP
+.BR \-\-toolchain\-bootstrap " " OPT
+Bootstrap actions for attached toolchains (repeatable). Supported:
+.B typescript=global
+(which installs a global TypeScript compiler in the node sidecar as a fallback when no project\-local compiler is present).
+.TP
 .BR \-h ", " \-\-help
 Print help and exit.
 .TP
@@ -160,6 +172,13 @@ to connect.
 Host directory containing the proxy's unix socket (set automatically when unix
 transport is enabled). It is bind\-mounted into the agent at
 .BR /run/aifo .
+.TP
+.B AIFO_TOOLEEXEC_ADD_HOST
+On Linux, when set to
+.BR 1 ,
+the launcher adds
+.BR \-\-add\-host=host.docker.internal:host\-gateway
+to both the agent and sidecar containers to ensure connectivity to the host proxy in TCP mode.
 .TP
 .B AIFO_SHIM_DIR
 Path on the host to a directory containing the shim binary and symlinks to be
@@ -247,6 +266,9 @@ aifo\-coder toolchain rust \-\- cargo \-\-version
 aifo\-coder toolchain node \-\- npx \-\-version
 aifo\-coder toolchain python \-\- python \-m pip \-\-version
 aifo\-coder toolchain c\-cpp \-\- cmake \-\-version
+# Versioned specs and bootstrap
+aifo\-coder \-\-toolchain\-spec rust@1.80 \-\-toolchain\-spec node@20 aider \-\- cargo \-\-version
+aifo\-coder \-\-toolchain node \-\-toolchain\-bootstrap typescript=global aider \-\- tsc \-\-version
 .fi
 .P
 When provided as a global option, \-\-toolchain attaches sidecars and injects PATH

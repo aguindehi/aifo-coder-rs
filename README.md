@@ -53,27 +53,34 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|toolchain|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|toolchain|toolchain-cache-clear|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
 
 Global flags:
-- --image <ref>                Override full image reference for all agents
-- --flavor <full|slim>         Select image flavor; default is full
-- --verbose                    Increase logging verbosity
-- --dry-run                    Print the docker run command without executing it
-- --invalidate-registry-cache  Invalidate on-disk registry probe cache and re-probe
-- -h, --help                   Show help
+- --image <ref>                   Override full image reference for all agents
+- --flavor <full|slim>            Select image flavor; default is full
+- --verbose                       Increase logging verbosity
+- --dry-run                       Print the docker run command without executing it
+- --invalidate-registry-cache     Invalidate on-disk registry probe cache and re-probe
+- -h, --help                      Show help
+- --toolchain <kind>              Attach toolchains (repeatable): rust, node, typescript, python, c-cpp, go
+- --toolchain-spec <kind@ver>     Attach toolchains with optional version (repeatable), e.g. rust@1.80, node@20, python@3.12
+- --toolchain-image <k=img>       Override toolchain image (repeatable), e.g. c-cpp=aifo-cpp-toolchain:latest
+- --no-toolchain-cache            Disable named cache volumes for toolchain sidecars
+- --toolchain-unix-socket         Linux: use unix:/// socket transport for the proxy
+- --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global
 
 Subcommands:
-- codex [args...]              Run OpenAI Codex CLI inside container
-- crush [args...]              Run Charmbracelet Crush inside container
-- aider [args...]              Run Aider inside container
+- codex [args...]                Run OpenAI Codex CLI inside container
+- crush [args...]                Run Charmbracelet Crush inside container
+- aider [args...]                Run Aider inside container
 - toolchain <kind> -- [args...]  Run a command inside a language toolchain sidecar (Phase 1)
-- doctor                       Run environment diagnostics (Docker/AppArmor/UID mapping)
-- images                       Print effective image references (honoring flavor/registry)
-- cache-clear                  Clear the on-disk registry probe cache (alias: cache-invalidate)
+- toolchain-cache-clear          Purge all toolchain cache volumes (cargo, npm, pip, ccache, go)
+- doctor                         Run environment diagnostics (Docker/AppArmor/UID mapping)
+- images                         Print effective image references (honoring flavor/registry)
+- cache-clear                    Clear the on-disk registry probe cache (alias: cache-invalidate)
 
 Tips:
 - Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.

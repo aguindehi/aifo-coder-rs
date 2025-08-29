@@ -18,11 +18,15 @@ Overview
 Commands and flags
 - Global agent invocation with toolchains:
   - Use one or more --toolchain flags (repeatable).
+  - Optional versioned toolchain specs:
+    - --toolchain-spec kind[@version], e.g. rust@1.80 → rust:1.80-slim, node@20 → node:20-bookworm-slim
   - Optional image overrides and cache controls:
     - --toolchain-image KIND=IMAGE
     - --no-toolchain-cache
   - Optional Linux-only unix socket transport:
     - --toolchain-unix-socket
+  - Optional bootstrap actions:
+    - --toolchain-bootstrap typescript=global (installs a global tsc in the node sidecar if requested)
 
 Examples:
 - TCP proxy (default; works on macOS, Windows, Linux):
@@ -30,6 +34,9 @@ Examples:
   - aifo-coder --toolchain node aider -- npx --version
   - aifo-coder --toolchain python aider -- python -m pip --version
   - aifo-coder --toolchain c-cpp aider -- cmake --version
+- Versioned specs and bootstrap:
+  - aifo-coder --toolchain-spec rust@1.80 --toolchain-spec node@20 aider -- cargo --version
+  - aifo-coder --toolchain node --toolchain-bootstrap typescript=global aider -- tsc --version
 - Per-run overrides:
   - aifo-coder --toolchain rust --toolchain-image rust=rust:1.80-slim aider -- cargo --help
   - aifo-coder --toolchain node --no-toolchain-cache aider -- npm ci

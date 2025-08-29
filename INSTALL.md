@@ -78,6 +78,12 @@ Toolchains (Phases 2–4)
 - aifo-coder can attach language toolchains (rust, node/typescript, python, c-cpp, go) as sidecar containers and inject PATH shims inside the agent so tools like cargo, npx, python, gcc, go work transparently.
 - See docs/TOOLCHAINS.md for details, examples, and testing instructions.
 
+Platform notes
+- macOS/Windows: Use Docker Desktop; host.docker.internal resolves automatically to the host. TCP proxy mode works out of the box.
+- Linux:
+  - In TCP mode, the launcher adds --add-host=host.docker.internal:host-gateway to ensure containers can reach the host proxy.
+  - Optionally enable unix socket transport with --toolchain-unix-socket, which mounts the proxy socket into the agent at /run/aifo and avoids TCP entirely.
+
 Usage (global flags)
 - Attach toolchains (repeatable):
 ```bash
