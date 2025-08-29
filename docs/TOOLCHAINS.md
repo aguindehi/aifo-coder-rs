@@ -79,3 +79,11 @@ Examples
 Notes
 - On Linux, when using TCP mode, aifo-coder adds --add-host=host.docker.internal:host-gateway to ensure connectivity to the host proxy from inside containers.
 - On macOS/Windows, host.docker.internal resolves automatically inside Docker Desktop/VMs.
+
+Tests
+- TCP proxy smoke (ignored by default; runs when you pass -- --ignored):
+  - make test-proxy-smoke
+- Linux-only unix-socket proxy smoke (falls back to TCP on non-Linux):
+  - make test-proxy-unix
+- C/C++ sidecar dry-run tests:
+  - make test-toolchain-cpp
