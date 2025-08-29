@@ -1704,13 +1704,17 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     let kinds = ["rust", "node", "python", "c-cpp", "go"];
     for k in kinds {
         let name = sidecar_container_name(k, session_id);
-        let mut stop = Command::new(&runtime);
-        stop.arg("stop").arg(&name);
-        if !verbose {
-            let _ = stop.stdout(Stdio::null()).stderr(Stdio::null()).status();
-        } else {
-            let _ = stop.status();
+        if verbose {
+            eprintln!("aifo-coder: docker: docker stop {}", name);
         }
+        let _ = Command::new(&runtime)
+            .arg("stop")
+            .arg("--time")
+            .arg("1")
+            .arg(&name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
     let net = sidecar_network_name(session_id);
     remove_network(&runtime, &net, verbose);
