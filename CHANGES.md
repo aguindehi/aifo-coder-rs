@@ -1,3 +1,14 @@
+2025-08-29 16:20 Amir Guindehi <amir.guindehi@mgb.ch>
+
+feat: finalize toolchain rollout; versioned specs, bootstrap, tests
+
+- src/main.rs/src.lib.rs: add --toolchain-spec kind@version image mapping; optional
+  --toolchain-bootstrap typescript=global; proxy bind per OS; Linux sidecars get
+  host-gateway add-host; minor structured timing logs for proxy execs.
+- tests: add route mapping unit test and negative proxy auth test; optional unix
+  socket smoke; c-cpp dry-run test.
+- docs: README and docs/TOOLCHAINS.md updated with new flags and examples.
+
 2025-08-29 14:45 Amir Guindehi <amir.guindehi@mgb.ch>
 
 test: add ignored live toolchain sidecar tests and docs
