@@ -277,13 +277,7 @@ pub fn preferred_registry_prefix() -> String {
         return v;
     }
 
-    // Try on-disk cache across invocations (5 minutes TTL).
-    if let Some(cached) = read_registry_cache_disk(300) {
-        let v = cached;
-        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-        let _ = REGISTRY_PREFIX_SOURCE.set("disk".to_string());
-        return v;
-    }
+    // Disk cache disabled: always probe with curl/TCP in this run.
 
     // Prefer probing with curl for HTTPS reachability using short timeouts.
     if which("curl").is_ok() {
