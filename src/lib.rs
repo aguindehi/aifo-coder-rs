@@ -1309,6 +1309,14 @@ fn url_decode(s: &str) -> String {
     out
 }
 
+fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
+    if buf.len() < 4 {
+        return None;
+    }
+    let pattern: &[u8; 4] = b"\r\n\r\n";
+    buf.windows(4).position(|w| w == pattern)
+}
+
 fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     let mut res = Vec::new();
     for pair in body.split('&') {
@@ -1495,7 +1503,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     Ok(0) => break,
                     Ok(n) => {
                         buf.extend_from_slice(&tmp[..n]);
-                        if let Some(pos) = twoway::find_bytes(&buf, b"\r\n\r\n") {
+                        if let Some(pos) = find_crlfcrlf(&buf) {
                             header_end = Some(pos + 4);
                         }
                         // avoid overly large header
