@@ -796,18 +796,10 @@ fn main() -> ExitCode {
                 eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
             }
         } else {
-            // Prepare shims
-            let shimdir = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join("build")
-                .join("shims")
-                .join("bin");
-            let _ = fs::create_dir_all(&shimdir);
-            if let Err(e) = aifo_coder::toolchain_write_shims(&shimdir) {
-                eprintln!("aifo-coder: failed to write shims into {}: {}", shimdir.display(), e);
-                return ExitCode::from(1);
+            // Phase 3: use embedded shims in the agent image; host override via AIFO_SHIM_DIR still supported
+            if cli.verbose {
+                eprintln!("aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)");
             }
-            std::env::set_var("AIFO_SHIM_DIR", shimdir.display().to_string());
 
             // Start sidecars
             match aifo_coder::toolchain_start_session(&kinds, &overrides, cli.no_toolchain_cache, cli.verbose) {
