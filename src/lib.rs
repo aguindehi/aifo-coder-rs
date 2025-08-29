@@ -1476,6 +1476,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();
     let token = random_token();
+    let token_for_thread = token.clone();
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_cl = running.clone();
     let session = session_id.to_string();
@@ -1524,7 +1525,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 if l.to_ascii_lowercase().starts_with("authorization:") {
                     if let Some(v) = l.splitn(2, ':').nth(1) {
                         let v = v.trim();
-                        if v == format!("Bearer {}", token) {
+                        if v == format!("Bearer {}", token_for_thread) {
                             auth_ok = true;
                         }
                     }
@@ -1581,7 +1582,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 cmd.arg(a);
             }
             let out = cmd.output();
-            let (status_code, mut body_out) = match out {
+            let (status_code, body_out) = match out {
                 Ok(o) => {
                     let code = o.status.code().unwrap_or(1);
                     let mut b = o.stdout;
