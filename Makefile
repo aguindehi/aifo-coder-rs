@@ -12,6 +12,7 @@ help:
 	@echo "  USE_BUILDX .................. Use docker buildx when available; fallback to docker build (default: 1)"
 	@echo "  PLATFORMS ................... Comma-separated platforms for buildx (e.g., linux/amd64,linux/arm64)"
 	@echo "  PUSH ........................ With PLATFORMS set, push multi-arch images instead of loading (default: 0)"
+	@echo "  REGISTRY .................... Registry prefix for publish (e.g., repository.migros.net/). If unset, we will NOT push."
 	@echo "  CACHE_DIR ................... Local buildx cache directory for faster rebuilds (.buildx-cache)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
@@ -279,8 +280,29 @@ rebuild-toolchain-cpp:
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
-	@echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."
-	$(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+	@set -e; \
+	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	# Normalize REG to have optional trailing slash
+	case "$$REG" in \
+	  */) ;; \
+	  "") ;; \
+	  *) REG="$$REG/";; \
+	esac; \
+	if [ "$(PUSH)" = "1" ]; then \
+	  if [ -n "$$REG" ]; then \
+	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" .; \
+	  else \
+	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar .; \
+	    echo "Wrote dist/aifo-cpp-toolchain-latest.oci.tar"; \
+	  fi; \
+	else \
+	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim
