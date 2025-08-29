@@ -223,6 +223,11 @@ make build-launcher
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
 
+### Toolchains (Phases 2–4)
+
+For transparent PATH shims, the toolexec proxy (TCP and Linux unix sockets), per-language caches, the C/C++ sidecar image, and optional smokes, see:
+- docs/TOOLCHAINS.md
+
 ### Toolchain sidecars (Phase 1)
 
 Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.

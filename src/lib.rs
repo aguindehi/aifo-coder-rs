@@ -1082,6 +1082,15 @@ fn build_sidecar_run_preview(
         }
     }
 
+    // Linux connectivity (host proxy via host-gateway) for sidecars as well
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
+            args.push("--add-host".to_string());
+            args.push("host.docker.internal:host-gateway".to_string());
+        }
+    }
+
     args.push(image.to_string());
     args.push("sleep".to_string());
     args.push("infinity".to_string());
@@ -1265,7 +1274,7 @@ fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
 }
 
 /// Map a tool name to the sidecar kind.
-fn route_tool_to_sidecar(tool: &str) -> &'static str {
+pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
     let t = tool.to_ascii_lowercase();
     match t.as_str() {
         // rust
@@ -1710,7 +1719,9 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             return Ok((url, token, running, handle));
         }
     }
-    let listener = TcpListener::bind(("0.0.0.0", 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
+    // Bind address by OS: 0.0.0.0 on Linux (containers connect), 127.0.0.1 on macOS/Windows
+    let bind_host: &str = if cfg!(target_os = "linux") { "0.0.0.0" } else { "127.0.0.1" };
+    let listener = TcpListener::bind((bind_host, 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
     let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();
     let _ = listener.set_nonblocking(true);
@@ -1718,7 +1729,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
 
     let handle = std::thread::spawn(move || {
         if verbose {
-            eprintln!("aifo-coder: toolexec proxy listening on 0.0.0.0:{port}");
+            eprintln!("aifo-coder: toolexec proxy listening on {}:{port}", bind_host);
         }
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
