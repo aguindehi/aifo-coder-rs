@@ -632,6 +632,9 @@ enum Agent {
     /// Clear on-disk caches (e.g., registry probe cache)
     CacheClear,
 
+    /// Purge all named toolchain cache volumes (cargo, npm, pip, ccache, go)
+    ToolchainCacheClear,
+
     /// Toolchain sidecar: run a command inside a language toolchain sidecar
     Toolchain {
         #[arg(value_enum)]
@@ -726,6 +729,18 @@ fn main() -> ExitCode {
         aifo_coder::invalidate_registry_cache();
         eprintln!("aifo-coder: cleared on-disk registry cache.");
         return ExitCode::from(0);
+    } else if let Agent::ToolchainCacheClear = &cli.command {
+        print_startup_banner();
+        match aifo_coder::toolchain_purge_caches(cli.verbose) {
+            Ok(()) => {
+                eprintln!("aifo-coder: purged toolchain cache volumes.");
+                return ExitCode::from(0);
+            }
+            Err(e) => {
+                eprintln!("aifo-coder: failed to purge toolchain caches: {}", e);
+                return ExitCode::from(1);
+            }
+        }
     } else if let Agent::Toolchain { kind, image, no_cache, args } = &cli.command {
         print_startup_banner();
         if cli.verbose {
@@ -761,6 +776,7 @@ fn main() -> ExitCode {
         Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
         Agent::Images => unreachable!("Images subcommand is handled earlier and returns immediately"),
         Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
+        Agent::ToolchainCacheClear => unreachable!("ToolchainCacheClear subcommand is handled earlier and returns immediately"),
         Agent::Toolchain { .. } => unreachable!("Toolchain subcommand is handled earlier and returns immediately"),
     };
 

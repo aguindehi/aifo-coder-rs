@@ -231,6 +231,14 @@ or
 .B go
 invoked inside the agent are transparently executed via the sidecars.
 .P
+.SH TOOLCHAIN CACHE
+Purge all named Docker volumes used for toolchain caches. This removes caches for
+Rust (cargo registry/git), Node (npm), Python (pip), C/C++ (ccache), and Go.
+.P
+.nf
+aifo\-coder toolchain\-cache\-clear
+.fi
+.P
 Embedded shims:
 Agent images embed a compiled
 .B aifo-shim

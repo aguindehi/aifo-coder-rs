@@ -1737,3 +1737,30 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     let net = sidecar_network_name(session_id);
     remove_network(&runtime, &net, verbose);
 }
+
+/// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
+pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
+    let runtime = container_runtime_path()?;
+    let volumes = [
+        "aifo-cargo-registry",
+        "aifo-cargo-git",
+        "aifo-npm-cache",
+        "aifo-pip-cache",
+        "aifo-ccache",
+        "aifo-go",
+    ];
+    for v in volumes {
+        if verbose {
+            eprintln!("aifo-coder: docker: docker volume rm -f {}", v);
+        }
+        let _ = Command::new(&runtime)
+            .arg("volume")
+            .arg("rm")
+            .arg("-f")
+            .arg(v)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    Ok(())
+}

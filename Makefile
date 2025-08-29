@@ -104,6 +104,7 @@ help:
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
 	@echo "  sbom ........................ Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)"
+	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
@@ -406,6 +407,12 @@ test-toolchain-live:
 test-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
 	cargo test --test shim_embed -- --ignored
+
+.PHONY: toolchain-cache-clear
+toolchain-cache-clear:
+	@echo "Purging toolchain cache volumes (cargo registry/git, npm, pip, ccache, go) ..."
+	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
+	@echo "Done."
 
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
