@@ -1,6 +1,8 @@
 # Multi-stage Dockerfile for aifo-coder, producing one image per agent while
 # sharing identical parent layers for maximum cache and storage reuse.
 
+# Default working directory at /workspace: the host project will be mounted there
+
 ARG REGISTRY_PREFIX
 
 # --- Base layer: Rust image ---
@@ -17,7 +19,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get install -y --no-install-recommends \
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
         gcc-mingw-w64-x86-64 \
         g++-mingw-w64-x86-64 \
         pkg-config \
@@ -38,18 +40,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
-
-# Default working directory; the host project will be mounted here
 WORKDIR /workspace
 
-# Phase 3: embed compiled Rust PATH shim into agent images
+# embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim \
- && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
-ENV PATH="/opt/aifo/bin:${PATH}"
-
-# Phase 3 shim already embedded above; no duplicate needed
+    && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# will get added by the top layer
+#ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
@@ -78,7 +77,7 @@ RUN install -d -m 0755 /usr/local/bin \
  '# Prefer a TTY for pinentry' \
  'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
  'unset GPG_AGENT_INFO' \
- '# Launch gpg-agent (best-effort)' \
+ '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
  'exec "$@"' > /usr/local/bin/aifo-entrypoint \
  && chmod +x /usr/local/bin/aifo-entrypoint \
@@ -92,28 +91,34 @@ CMD ["bash"]
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
 RUN npm install -g @openai/codex
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
 
 # --- Crush image (adds only Crush CLI on top of base) ---
 FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
 RUN npm install -g @charmland/crush
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
@@ -139,34 +144,34 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
-
 ENV DEBIAN_FRONTEND=noninteractive
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
-
-# Default working directory; the host project will be mounted here
 WORKDIR /workspace
 
-# Phase 3: embed compiled Rust PATH shim into slim images
+# embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim \
- && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
-ENV PATH="/opt/aifo/bin:${PATH}"
+    && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# will get added by the top layer
+#ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
@@ -195,7 +200,7 @@ RUN install -d -m 0755 /usr/local/bin \
  '# Prefer a TTY for pinentry' \
  'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
  'unset GPG_AGENT_INFO' \
- '# Launch gpg-agent (best-effort)' \
+ '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
  'exec "$@"' > /usr/local/bin/aifo-entrypoint \
  && chmod +x /usr/local/bin/aifo-entrypoint \
@@ -208,27 +213,33 @@ CMD ["bash"]
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
 RUN npm install -g @openai/codex
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
 RUN npm install -g @charmland/crush
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
 
 # --- Aider slim builder stage ---
@@ -252,12 +263,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
-    apt-get remove --purge -y apt apt-get; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+    rm -f /var/lib/apt/lists/*; \
   fi
