@@ -4,6 +4,8 @@ help:
 	@echo ""
 	@echo "aifo-coder - Makefile targets"
 	@echo ""
+	@echo "Docs: see docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
+	@echo ""
 	@echo "Variables:"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
