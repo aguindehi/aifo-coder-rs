@@ -606,8 +606,14 @@ enum Flavor {
 enum ToolchainKind {
     Rust,
     Node,
+    #[value(alias = "ts")]
     Typescript,
     Python,
+    #[value(alias = "ccpp")]
+    #[value(alias = "c")]
+    #[value(alias = "cpp")]
+    #[value(alias = "c_cpp")]
+    #[value(alias = "c++")]
     CCpp,
     Go,
 }
