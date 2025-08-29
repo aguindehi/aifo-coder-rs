@@ -1128,6 +1128,15 @@ fn build_sidecar_exec_preview(
             args.push("-e".to_string());
             args.push("CARGO_HOME=/usr/local/cargo".to_string());
         }
+        "python" => {
+            let venv_bin = pwd.join(".venv").join("bin");
+            if venv_bin.exists() {
+                args.push("-e".to_string());
+                args.push("VIRTUAL_ENV=/workspace/.venv".to_string());
+                args.push("-e".to_string());
+                args.push("PATH=/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+            }
+        }
         "c-cpp" => {
             args.push("-e".to_string());
             args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
@@ -1567,8 +1576,20 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             let kind = route_tool_to_sidecar(&tool);
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
-            let mut full_args = vec![tool.clone()];
-            full_args.extend(argv.clone());
+            let mut full_args: Vec<String>;
+            if tool == "tsc" {
+                let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
+                if nm_tsc.exists() {
+                    full_args = vec!["./node_modules/.bin/tsc".to_string()];
+                    full_args.extend(argv.clone());
+                } else {
+                    full_args = vec!["npx".to_string(), "tsc".to_string()];
+                    full_args.extend(argv.clone());
+                }
+            } else {
+                full_args = vec![tool.clone()];
+                full_args.extend(argv.clone());
+            }
 
             let exec_preview_args = build_sidecar_exec_preview(
                 &name,
