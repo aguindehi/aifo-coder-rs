@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::{Duration, SystemTime};
 use which::which;
