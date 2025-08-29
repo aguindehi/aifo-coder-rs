@@ -110,6 +110,7 @@ help:
 	@echo "  sbom ........................ Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
@@ -435,7 +436,7 @@ test:
 	  exit 1; \
 	fi
 
-.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix
+.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
 test-proxy-smoke:
 	@echo "Running proxy smoke test (ignored by default) ..."
 	cargo test --test proxy_smoke -- --ignored
@@ -451,6 +452,10 @@ test-shim-embed:
 test-proxy-unix:
 	@echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."
 	cargo test --test proxy_unix_socket -- --ignored
+
+test-toolchain-cpp:
+	@echo "Running c-cpp toolchain dry-run tests ..."
+	cargo test --test toolchain_cpp
 
 .PHONY: toolchain-cache-clear
 toolchain-cache-clear:
