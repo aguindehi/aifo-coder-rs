@@ -161,6 +161,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Default working directory; the host project will be mounted here
 WORKDIR /workspace
 
+# Phase 3: embed compiled Rust PATH shim into slim images
+RUN install -d -m 0755 /opt/aifo/bin
+COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+RUN chmod 0755 /opt/aifo/bin/aifo-shim \
+ && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+ENV PATH="/opt/aifo/bin:${PATH}"
+
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \

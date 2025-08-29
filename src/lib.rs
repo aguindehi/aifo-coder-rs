@@ -1556,23 +1556,41 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             let header_str = String::from_utf8_lossy(&hdr);
             let mut auth_ok = false;
             let mut content_len: usize = 0;
+            let mut proto_ok = false;
             for line in header_str.lines() {
                 let l = line.trim();
-                if l.to_ascii_lowercase().starts_with("authorization:") {
+                let lower = l.to_ascii_lowercase();
+                if lower.starts_with("authorization:") {
                     if let Some(v) = l.splitn(2, ':').nth(1) {
                         let v = v.trim();
                         if v == format!("Bearer {}", token_for_thread) {
                             auth_ok = true;
                         }
                     }
-                } else if l.to_ascii_lowercase().starts_with("content-length:") {
+                } else if lower.starts_with("content-length:") {
                     if let Some(v) = l.splitn(2, ':').nth(1) {
                         content_len = v.trim().parse().unwrap_or(0);
+                    }
+                } else if lower.starts_with("x-aifo-proto:") {
+                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                        proto_ok = v.trim() == "1";
                     }
                 }
             }
             if !auth_ok {
                 let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
+            if !proto_ok {
+                let msg = b"Unsupported shim protocol; expected 1\n";
+                let header = format!(
+                    "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    msg.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(msg);
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
             // Read body
