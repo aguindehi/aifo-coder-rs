@@ -1502,6 +1502,18 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     #[cfg(not(unix))]
     let (uid, gid) = (0u32, 0u32);
 
+    // Prepare shared proxy state (token, timeout, running flag, session id)
+    let token = random_token();
+    let token_for_thread = token.clone();
+    // Per-request timeout (seconds); default 60
+    let timeout_secs: u64 = env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&v| v > 0)
+        .unwrap_or(60);
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let session = session_id.to_string();
+
     // Optional unix socket transport on Linux, gated by AIFO_TOOLEEXEC_USE_UNIX=1
     let use_unix = cfg!(target_os = "linux")
         && env::var("AIFO_TOOLEEXEC_USE_UNIX").ok().as_deref() == Some("1");
@@ -1722,17 +1734,7 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();
     let _ = listener.set_nonblocking(true);
-    let token = random_token();
-    let token_for_thread = token.clone();
-    // Per-request timeout (seconds); default 60
-    let timeout_secs: u64 = env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .filter(|&v| v > 0)
-        .unwrap_or(60);
-    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let running_cl = running.clone();
-    let session = session_id.to_string();
 
     let handle = std::thread::spawn(move || {
         if verbose {
