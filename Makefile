@@ -988,7 +988,11 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
+ifeq ($(shell uname -s),Darwin)
 release: rebuild build-launcher release-app release-dmg-sign release-for-mac release-for-linux
+else
+release: rebuild build-launcher release-for-linux
+endif
 
 .PHONY: install
 install: build build-launcher
