@@ -36,7 +36,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
-    git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper \
+    git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
 
 # Default working directory; the host project will be mounted here
@@ -155,7 +155,7 @@ FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper \
+    git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
 
 # Default working directory; the host project will be mounted here
