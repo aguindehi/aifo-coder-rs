@@ -59,6 +59,49 @@ pub fn container_runtime_path() -> io::Result<PathBuf> {
     ))
 }
 
+/// Bootstrap: install a global typescript in the node sidecar (best-effort).
+pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
+    let runtime = container_runtime_path()?;
+    let name = sidecar_container_name("node", session_id);
+
+    #[cfg(unix)]
+    let uid: u32 = u32::from(getuid());
+    #[cfg(unix)]
+    let gid: u32 = u32::from(getgid());
+    #[cfg(not(unix))]
+    let (uid, gid) = (0u32, 0u32);
+
+    let mut args: Vec<String> = vec![
+        "docker".to_string(),
+        "exec".to_string(),
+    ];
+    if cfg!(unix) {
+        args.push("-u".to_string());
+        args.push(format!("{uid}:{gid}"));
+    }
+    args.push("-w".to_string());
+    args.push("/workspace".to_string());
+    args.push(name);
+    args.push("npm".to_string());
+    args.push("install".to_string());
+    args.push("-g".to_string());
+    args.push("typescript".to_string());
+
+    if verbose {
+        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+    }
+
+    let mut cmd = Command::new(&runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let _ = cmd.status();
+    Ok(())
+}
+
 /// Probe whether the Docker daemon reports AppArmor support, and (on Linux)
 /// that the kernel AppArmor facility is enabled.
 pub fn docker_supports_apparmor() -> bool {
@@ -924,7 +967,7 @@ fn create_session_id() -> String {
     s.chars().rev().collect()
 }
 
-fn normalize_toolchain_kind(kind: &str) -> String {
+pub fn normalize_toolchain_kind(kind: &str) -> String {
     let lower = kind.to_ascii_lowercase();
     match lower.as_str() {
         "rust" => "rust".to_string(),
@@ -945,6 +988,18 @@ fn default_toolchain_image(kind: &str) -> String {
         "c-cpp" => "aifo-cpp-toolchain:latest".to_string(),
         "go" => "golang:1.22-bookworm".to_string(),
         _ => "node:20-bookworm-slim".to_string(),
+    }
+}
+
+/// Compute default image from kind@version (best-effort).
+pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
+    match kind {
+        "rust" => format!("rust:{}-slim", version),
+        "node" | "typescript" => format!("node:{}-bookworm-slim", version),
+        "python" => format!("python:{}-slim", version),
+        "go" => format!("golang:{}-bookworm", version),
+        "c-cpp" => "aifo-cpp-toolchain:latest".to_string(), // no version mapping
+        _ => default_toolchain_image(kind),
     }
 }
 

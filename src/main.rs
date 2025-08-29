@@ -564,6 +564,10 @@ struct Cli {
     #[arg(long = "toolchain", value_enum)]
     toolchain: Vec<ToolchainKind>,
 
+    /// Attach toolchains with optional versions (repeatable), e.g. rust@1.80, node@20, python@3.12
+    #[arg(long = "toolchain-spec")]
+    toolchain_spec: Vec<String>,
+
     /// Override image(s) for toolchains (repeatable, kind=image)
     #[arg(long = "toolchain-image")]
     toolchain_image: Vec<String>,
@@ -575,6 +579,10 @@ struct Cli {
     /// Use Linux unix socket transport for tool-exec proxy (instead of TCP)
     #[arg(long = "toolchain-unix-socket")]
     toolchain_unix_socket: bool,
+
+    /// Bootstrap actions for toolchains (repeatable), e.g. typescript=global
+    #[arg(long = "toolchain-bootstrap")]
+    toolchain_bootstrap: Vec<String>,
 
     /// Print detailed execution info
     #[arg(long)]
@@ -798,18 +806,59 @@ fn main() -> ExitCode {
     let mut tc_proxy_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
     let mut tc_proxy_handle: Option<std::thread::JoinHandle<()>> = None;
 
-    if !cli.toolchain.is_empty() {
-        // kinds as strings
-        let kinds: Vec<String> = cli.toolchain.iter().map(|k| k.as_str().to_string()).collect();
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        // kinds as strings (from enum flag)
+        let mut kinds: Vec<String> = cli.toolchain.iter().map(|k| k.as_str().to_string()).collect();
+
+        // Parse spec strings kind[@version]
+        fn parse_spec(s: &str) -> (String, Option<String>) {
+            let t = s.trim();
+            if let Some((k, v)) = t.split_once('@') {
+                (k.trim().to_string(), Some(v.trim().to_string()))
+            } else {
+                (t.to_string(), None)
+            }
+        }
+        let mut spec_versions: Vec<(String, String)> = Vec::new();
+        for s in &cli.toolchain_spec {
+            let (k, v) = parse_spec(s);
+            if !k.is_empty() {
+                kinds.push(k.clone());
+                if let Some(ver) = v {
+                    spec_versions.push((k, ver));
+                }
+            }
+        }
+        // Normalize kinds and dedup
+        use std::collections::BTreeSet;
+        let mut set = BTreeSet::new();
+        let mut kinds_norm: Vec<String> = Vec::new();
+        for k in kinds {
+            let norm = aifo_coder::normalize_toolchain_kind(&k);
+            if set.insert(norm.clone()) {
+                kinds_norm.push(norm);
+            }
+        }
+        let kinds = kinds_norm;
+
         // parse overrides kind=image
         let mut overrides: Vec<(String, String)> = Vec::new();
         for s in &cli.toolchain_image {
             if let Some((k, v)) = s.split_once('=') {
                 if !k.trim().is_empty() && !v.trim().is_empty() {
-                    overrides.push((k.trim().to_string(), v.trim().to_string()));
+                    overrides.push((aifo_coder::normalize_toolchain_kind(k), v.trim().to_string()));
                 }
             }
         }
+        // Add overrides derived from versions unless already overridden
+        for (k, ver) in spec_versions {
+            let kind = aifo_coder::normalize_toolchain_kind(&k);
+            if !overrides.iter().any(|(kk, _)| kk == &kind) {
+                let img = aifo_coder::default_toolchain_image_for_version(&kind, &ver);
+                overrides.push((kind, img));
+            }
+        }
+
         if cli.dry_run {
             if cli.verbose {
                 eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
@@ -821,6 +870,9 @@ fn main() -> ExitCode {
                 }
                 if cfg!(target_os = "linux") && cli.toolchain_unix_socket {
                     eprintln!("aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo");
+                }
+                if !cli.toolchain_bootstrap.is_empty() {
+                    eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
                 }
                 eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
             }
@@ -853,6 +905,21 @@ fn main() -> ExitCode {
                 Err(e) => {
                     eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
                     return ExitCode::from(1);
+                }
+            }
+
+            // Bootstrap (e.g., typescript=global) before starting proxy
+            if let Some(ref sid) = tc_session_id {
+                if !cli.toolchain_bootstrap.is_empty() {
+                    let want_ts_global = cli.toolchain_bootstrap.iter().any(|b| {
+                        let t = b.trim().to_ascii_lowercase();
+                        t == "typescript=global" || t == "ts=global"
+                    });
+                    if want_ts_global && kinds.iter().any(|k| k == "node") {
+                        if let Err(e) = aifo_coder::toolchain_bootstrap_typescript_global(sid, cli.verbose) {
+                            eprintln!("aifo-coder: typescript bootstrap failed: {}", e);
+                        }
+                    }
                 }
             }
 
