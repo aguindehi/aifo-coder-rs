@@ -25,6 +25,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
 
+# Build the Rust aifo-shim binary for the current build platform
+COPY Cargo.toml .
+COPY src ./src
+RUN cargo build --release --bin aifo-shim
+
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -37,65 +42,14 @@ RUN apt-get update \
 # Default working directory; the host project will be mounted here
 WORKDIR /workspace
 
-# Phase 3: embed PATH shim into slim agent images as well
-RUN install -d -m 0755 /opt/aifo/bin \
- && cat > /opt/aifo/bin/aifo-shim <<'SHIM'
-#!/bin/sh
-set -e
-if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then
-  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2
-  exit 86
-fi
-tool="$(basename "$0")"
-cwd="$(pwd)"
-tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
-mkdir -p "$tmp"
-cmd=(curl -sS -D "$tmp/h" -o "$tmp/b" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN")
-cmd+=(-d "tool=$tool" -d "cwd=$cwd")
-for a in "$@"; do
-  cmd+=(-d "arg=$a")
-done
-cmd+=("$AIFO_TOOLEEXEC_URL")
-"${cmd[@]}"
-ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
-cat "$tmp/b"
-rm -rf "$tmp"
-case "$ec" in '' ) ec=1 ;; esac
-exit "$ec"
-SHIM
+# Phase 3: embed compiled Rust PATH shim into agent images
+RUN install -d -m 0755 /opt/aifo/bin
+COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim \
  && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 ENV PATH="/opt/aifo/bin:${PATH}"
 
-# Phase 3: embed PATH shim into agent images at /opt/aifo/bin (shell-based; host override still supported)
-RUN install -d -m 0755 /opt/aifo/bin \
- && cat > /opt/aifo/bin/aifo-shim <<'SHIM'
-#!/bin/sh
-set -e
-if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then
-  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2
-  exit 86
-fi
-tool="$(basename "$0")"
-cwd="$(pwd)"
-tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
-mkdir -p "$tmp"
-cmd=(curl -sS -D "$tmp/h" -o "$tmp/b" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN")
-cmd+=(-d "tool=$tool" -d "cwd=$cwd")
-for a in "$@"; do
-  cmd+=(-d "arg=$a")
-done
-cmd+=("$AIFO_TOOLEEXEC_URL")
-"${cmd[@]}"
-ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
-cat "$tmp/b"
-rm -rf "$tmp"
-case "$ec" in '' ) ec=1 ;; esac
-exit "$ec"
-SHIM
-RUN chmod 0755 /opt/aifo/bin/aifo-shim \
- && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Phase 3 shim already embedded above; no duplicate needed
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
 RUN install -d -m 0755 /usr/local/bin \
