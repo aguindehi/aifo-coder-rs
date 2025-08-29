@@ -1,6 +1,8 @@
 use std::env;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process;
 
@@ -80,6 +82,82 @@ fn main() {
         body.push_str(&encode_www_form(&a));
     }
 
+    // Support unix:/// socket URLs on Unix systems
+    if url.starts_with("unix://") {
+        #[cfg(unix)]
+        {
+            let sock_path = url.trim_start_matches("unix://").to_string();
+            let mut stream = match UnixStream::connect(&sock_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("aifo-shim: failed to connect to unix socket {}: {}", sock_path, e);
+                    process::exit(86);
+                }
+            };
+            // Always POST to /exec for unix transport
+            let req = format!(
+                "POST {} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "/exec",
+                token,
+                PROTO_VERSION,
+                body.len(),
+                body
+            );
+            if let Err(e) = stream.write_all(req.as_bytes()) {
+                eprintln!("aifo-shim: write failed: {}", e);
+                process::exit(86);
+            }
+            // Read response headers
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 1024];
+            let header_end = loop {
+                match stream.read(&mut tmp) {
+                    Ok(0) => break None,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                            break Some(pos + 4);
+                        }
+                        if buf.len() > 64 * 1024 {
+                            break None;
+                        }
+                    }
+                    Err(_) => break None,
+                }
+            };
+            let hend = header_end.unwrap_or(buf.len());
+            let header = String::from_utf8_lossy(&buf[..hend]).to_string();
+            let mut content_len: usize = 0;
+            let mut exit_code: i32 = 1;
+            for line in header.lines() {
+                if let Some(v) = line.strip_prefix("Content-Length: ") {
+                    content_len = v.trim().parse::<usize>().unwrap_or(0);
+                } else if let Some(v) = line.strip_prefix("X-Exit-Code: ") {
+                    exit_code = v.trim().parse::<i32>().unwrap_or(1);
+                }
+            }
+            let mut body_bytes = buf[hend..].to_vec();
+            while body_bytes.len() < content_len {
+                match stream.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => body_bytes.extend_from_slice(&tmp[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = std::io::stdout().write_all(&body_bytes);
+            let _ = std::io::stdout().flush();
+            if exit_code == 0 {
+                process::exit(0);
+            } else {
+                process::exit(exit_code);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            eprintln!("aifo-shim: unix:// transport not supported on this platform.");
+            process::exit(86);
+        }
+    }
     let (host, port, path) = match parse_http_url(&url) {
         Some(v) => v,
         None => {

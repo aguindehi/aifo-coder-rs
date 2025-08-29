@@ -572,6 +572,10 @@ struct Cli {
     #[arg(long = "no-toolchain-cache")]
     no_toolchain_cache: bool,
 
+    /// Use Linux unix socket transport for tool-exec proxy (instead of TCP)
+    #[arg(long = "toolchain-unix-socket")]
+    toolchain_unix_socket: bool,
+
     /// Print detailed execution info
     #[arg(long)]
     verbose: bool,
@@ -809,12 +813,20 @@ fn main() -> ExitCode {
                 if cli.no_toolchain_cache {
                     eprintln!("aifo-coder: would disable toolchain caches");
                 }
+                if cfg!(target_os = "linux") && cli.toolchain_unix_socket {
+                    eprintln!("aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo");
+                }
                 eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
             }
         } else {
             // Phase 3: use embedded shims in the agent image; host override via AIFO_SHIM_DIR still supported
             if cli.verbose {
                 eprintln!("aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)");
+            }
+            // Optional: switch to unix socket transport for proxy on Linux
+            #[cfg(target_os = "linux")]
+            if cli.toolchain_unix_socket {
+                std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
             }
 
             // Start sidecars
@@ -825,8 +837,10 @@ fn main() -> ExitCode {
                     std::env::set_var("AIFO_SESSION_NETWORK", &net);
                     #[cfg(target_os = "linux")]
                     {
-                        // Ensure agent can reach host proxy
-                        std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+                        // Ensure agent can reach host proxy when using TCP; not needed for unix socket transport
+                        if !cli.toolchain_unix_socket {
+                            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+                        }
                     }
                     tc_session_id = Some(sid);
                 }

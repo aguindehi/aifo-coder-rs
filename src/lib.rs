@@ -7,6 +7,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
+#[cfg(unix)]
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::{Duration, SystemTime};
 use which::which;
 use once_cell::sync::{Lazy, OnceCell};
@@ -569,6 +571,13 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
         if !v.is_empty() {
             env_flags.push(OsString::from("-e"));
             env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
+        }
+    }
+    // Phase 4 (Linux): mount unix socket directory if unix transport is enabled
+    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
+        if !dir.trim().is_empty() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!("{}:/run/aifo", dir)));
         }
     }
 
@@ -1492,6 +1501,222 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
     #[cfg(not(unix))]
     let (uid, gid) = (0u32, 0u32);
 
+    // Optional unix socket transport on Linux, gated by AIFO_TOOLEEXEC_USE_UNIX=1
+    let use_unix = cfg!(target_os = "linux")
+        && env::var("AIFO_TOOLEEXEC_USE_UNIX").ok().as_deref() == Some("1");
+    if use_unix {
+        #[cfg(target_os = "linux")]
+        {
+            // Create host socket directory and bind UnixListener
+            let base = "/tmp/aifo";
+            let _ = fs::create_dir_all(base);
+            let host_dir = format!("{}/aifo-{}", base, session);
+            let _ = fs::create_dir_all(&host_dir);
+            let sock_path = format!("{}/toolexec.sock", host_dir);
+            let _ = fs::remove_file(&sock_path);
+            let listener = UnixListener::bind(&sock_path)
+                .map_err(|e| io::Error::new(e.kind(), format!("proxy unix bind failed: {e}")))?;
+            let _ = listener.set_nonblocking(true);
+            // Expose directory for agent mount
+            env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
+            let running_cl2 = running.clone();
+            let token_for_thread2 = token_for_thread.clone();
+            let handle = std::thread::spawn(move || {
+                loop {
+                    if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
+                        break;
+                    }
+                    let mut stream = match listener.accept() {
+                        Ok((s, _addr)) => s,
+                        Err(e) => {
+                            if e.kind() == io::ErrorKind::WouldBlock {
+                                std::thread::sleep(Duration::from_millis(50));
+                                continue;
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
+                    let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
+                    // Read request (simple HTTP)
+                    let mut buf = Vec::new();
+                    let mut hdr = Vec::new();
+                    let mut tmp = [0u8; 1024];
+                    // Read until CRLF CRLF
+                    let mut header_end = None;
+                    while header_end.is_none() {
+                        match stream.read(&mut tmp) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                buf.extend_from_slice(&tmp[..n]);
+                                if let Some(pos) = find_crlfcrlf(&buf) {
+                                    header_end = Some(pos + 4);
+                                }
+                                if buf.len() > 64 * 1024 {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    let Some(hend) = header_end else { continue };
+                    hdr.extend_from_slice(&buf[..hend]);
+                    let header_str = String::from_utf8_lossy(&hdr);
+                    let mut auth_ok = false;
+                    let mut content_len: usize = 0;
+                    let mut proto_ok = false;
+                    for line in header_str.lines() {
+                        let l = line.trim();
+                        let lower = l.to_ascii_lowercase();
+                        if lower.starts_with("authorization:") {
+                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                                let v = v.trim();
+                                if v == format!("Bearer {}", token_for_thread2) {
+                                    auth_ok = true;
+                                }
+                            }
+                        } else if lower.starts_with("content-length:") {
+                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                                content_len = v.trim().parse().unwrap_or(0);
+                            }
+                        } else if lower.starts_with("x-aifo-proto:") {
+                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                                proto_ok = v.trim() == "1";
+                            }
+                        }
+                    }
+                    if !auth_ok {
+                        let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+                        continue;
+                    }
+                    if !proto_ok {
+                        let msg = b"Unsupported shim protocol; expected 1\n";
+                        let header = format!(
+                            "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            msg.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(msg);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    // Read body
+                    let mut body = buf[hend..].to_vec();
+                    while body.len() < content_len {
+                        match stream.read(&mut tmp) {
+                            Ok(0) => break,
+                            Ok(n) => body.extend_from_slice(&tmp[..n]),
+                            Err(_) => break,
+                        }
+                    }
+                    let form = String::from_utf8_lossy(&body).to_string();
+                    let mut tool = String::new();
+                    let mut cwd = "/workspace".to_string();
+                    let mut argv: Vec<String> = Vec::new();
+                    for (k, v) in parse_form_urlencoded(&form) {
+                        match k.as_str() {
+                            "tool" => tool = v,
+                            "cwd" => cwd = v,
+                            "arg" => argv.push(v),
+                            _ => {}
+                        }
+                    }
+                    if tool.is_empty() {
+                        let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+                        continue;
+                    }
+                    let kind = route_tool_to_sidecar(&tool);
+                    let allow = sidecar_allowlist(kind);
+                    if !allow.iter().any(|&t| t == tool.as_str()) {
+                        let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+                        continue;
+                    }
+                    let name = sidecar_container_name(kind, &session);
+                    let pwd = PathBuf::from(cwd);
+                    if verbose {
+                        eprintln!("aifo-coder: proxy exec: tool={} args={:?} cwd={}", tool, argv, pwd.display());
+                    }
+                    let mut full_args: Vec<String>;
+                    if tool == "tsc" {
+                        let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
+                        if nm_tsc.exists() {
+                            full_args = vec!["./node_modules/.bin/tsc".to_string()];
+                            full_args.extend(argv.clone());
+                        } else {
+                            full_args = vec!["npx".to_string(), "tsc".to_string()];
+                            full_args.extend(argv.clone());
+                        }
+                    } else {
+                        full_args = vec![tool.clone()];
+                        full_args.extend(argv.clone());
+                    }
+                    let exec_preview_args = build_sidecar_exec_preview(
+                        &name,
+                        if cfg!(unix) { Some((uid, gid)) } else { None },
+                        &pwd,
+                        kind,
+                        &full_args,
+                    );
+                    if verbose {
+                        eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+                    }
+                    let (status_code, body_out) = {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        let runtime_cl = runtime.clone();
+                        let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+                        std::thread::spawn(move || {
+                            let mut cmd = Command::new(&runtime_cl);
+                            for a in &args_clone {
+                                cmd.arg(a);
+                            }
+                            let out = cmd.output();
+                            let _ = tx.send(out);
+                        });
+                        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+                            Ok(Ok(o)) => {
+                                let code = o.status.code().unwrap_or(1);
+                                let mut b = o.stdout;
+                                if !o.stderr.is_empty() {
+                                    b.extend_from_slice(&o.stderr);
+                                }
+                                (code, b)
+                            }
+                            Ok(Err(e)) => {
+                                let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
+                                b.push(b'\n');
+                                (1, b)
+                            }
+                            Err(_timeout) => {
+                                let msg = b"aifo-coder proxy timeout\n";
+                                let header = format!(
+                                    "HTTP/1.1 504 Gateway Timeout\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 124\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    msg.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(msg);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                        }
+                    };
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        status_code,
+                        body_out.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(&body_out);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                }
+            });
+            let url = "unix:///run/aifo/toolexec.sock".to_string();
+            return Ok((url, token, running, handle));
+        }
+    }
     let listener = TcpListener::bind(("0.0.0.0", 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
     let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();

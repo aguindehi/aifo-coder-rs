@@ -75,6 +75,11 @@ Override image per toolchain kind (repeatable).
 .BR \-\-no\-toolchain\-cache
 Disable named cache volumes for toolchain sidecars.
 .TP
+.BR \-\-toolchain\-unix\-socket
+On Linux, use a unix:/// socket transport for the tool\-exec proxy instead of TCP.
+The socket directory is bind\-mounted into the agent at
+.BR /run/aifo .
+.TP
 .BR \-h ", " \-\-help
 Print help and exit.
 .TP
@@ -141,6 +146,19 @@ with toolchain sidecars (created automatically per session).
 .B AIFO_TOOLEEXEC_TIMEOUT_SECS
 Per-request timeout in seconds for the toolexec proxy (default: 60). Increase on slow CI,
 lower to fail fast on unresponsive tool invocations.
+.TP
+.B AIFO_TOOLEEXEC_USE_UNIX
+On Linux, when set to
+.BR 1 ,
+the launcher starts the toolexec proxy bound to a unix domain socket and mounts
+the socket directory into the agent. The shim uses
+.BR unix:///run/aifo/toolexec.sock
+to connect.
+.TP
+.B AIFO_TOOLEEXEC_UNIX_DIR
+Host directory containing the proxy's unix socket (set automatically when unix
+transport is enabled). It is bind\-mounted into the agent at
+.BR /run/aifo .
 .TP
 .B AIFO_SHIM_DIR
 Path on the host to a directory containing the shim binary and symlinks to be
