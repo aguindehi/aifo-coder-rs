@@ -1,4 +1,3 @@
-.ONESHELL:
 
 .PHONY: help
 help:
