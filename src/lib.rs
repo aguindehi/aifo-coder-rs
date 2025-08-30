@@ -1032,6 +1032,20 @@ fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
 }
 
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
+    // Only attempt removal if network exists to avoid noisy errors
+    let exists = Command::new(runtime)
+        .arg("network")
+        .arg("inspect")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !exists {
+        return;
+    }
+
     let mut cmd = Command::new(runtime);
     cmd.arg("network").arg("rm").arg(name);
     if !verbose {
