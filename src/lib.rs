@@ -2703,4 +2703,28 @@ mod tests {
         if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
         if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
     }
+
+    #[test]
+    fn test_candidate_lock_paths_includes_xdg_runtime_dir() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old = std::env::var("XDG_RUNTIME_DIR").ok();
+        std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        let paths = candidate_lock_paths();
+        let expected = td.path().join("aifo-coder.lock");
+        assert!(
+            paths.iter().any(|p| p == &expected),
+            "candidate_lock_paths missing expected XDG_RUNTIME_DIR path: {:?}",
+            expected
+        );
+        // Restore env
+        if let Some(v) = old { std::env::set_var("XDG_RUNTIME_DIR", v); } else { std::env::remove_var("XDG_RUNTIME_DIR"); }
+    }
+
+    #[test]
+    fn test_parse_form_urlencoded_empty_and_missing_values() {
+        let pairs = parse_form_urlencoded("a=1&b=&c");
+        assert!(pairs.contains(&(String::from("a"), String::from("1"))), "missing a=1 in {:?}", pairs);
+        assert!(pairs.contains(&(String::from("b"), String::from(""))), "missing b= in {:?}", pairs);
+        assert!(pairs.contains(&(String::from("c"), String::from(""))), "missing c (no '=') in {:?}", pairs);
+    }
 }
