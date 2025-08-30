@@ -2255,17 +2255,28 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     let kinds = ["rust", "node", "python", "c-cpp", "go"];
     for k in kinds {
         let name = sidecar_container_name(k, session_id);
-        if verbose {
-            eprintln!("aifo-coder: docker: docker stop {}", name);
-        }
-        let _ = Command::new(&runtime)
-            .arg("stop")
-            .arg("--time")
-            .arg("1")
+        // Only attempt stop when container exists to avoid noisy daemon errors
+        let exists = Command::new(&runtime)
+            .arg("inspect")
             .arg(&name)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status();
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if exists {
+            if verbose {
+                eprintln!("aifo-coder: docker: docker stop {}", name);
+            }
+            let _ = Command::new(&runtime)
+                .arg("stop")
+                .arg("--time")
+                .arg("1")
+                .arg(&name)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
     }
     let net = sidecar_network_name(session_id);
     remove_network(&runtime, &net, verbose);
