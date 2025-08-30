@@ -32,9 +32,22 @@ fn test_proxy_python_venv_precedence() {
         fs::set_permissions(&py_path, fs::Permissions::from_mode(0o755)).expect("chmod python");
     }
 
-    // Start python sidecar and proxy
+    // Start python sidecar and proxy (skip if image not present locally to avoid pulling)
     let kinds = vec!["python".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let image = std::env::var("AIFO_CODER_TEST_PY_IMAGE")
+        .unwrap_or_else(|_| "python:3.12-slim".to_string());
+    let present = std::process::Command::new("docker")
+        .args(["image", "inspect", &image])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !present {
+        eprintln!("skipping: test image not present locally: {}", image);
+        return;
+    }
+    let overrides: Vec<(String, String)> = vec![("python".to_string(), image.clone())];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, true, true)
         .expect("failed to start sidecar session");
     let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
