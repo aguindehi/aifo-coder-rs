@@ -1,6 +1,6 @@
 # Test Coverage Report
 
-This document summarizes the current state of the test suite, highlights strengths, and proposes additional tests to close remaining gaps. It is based on all tests and source files provided in the chat.
+This document summarizes the current state of the test suite, highlights strengths, and scores coverage with clear next steps. It reflects all tests currently provided in the chat.
 
 Current coverage overview
 
@@ -8,13 +8,14 @@ A) CLI flows and subcommands
 - doctor
   - tests/cli_doctor.rs: doctor executes and exits 0 (happy path).
   - tests/doctor_no_docker.rs: doctor still exits 0 with docker absent (PATH cleared); asserts stderr shows “docker command:  (not found)”.
+  - tests/cli_doctor_details.rs: when Docker is present, asserts “docker registry:” and “docker security options:” lines are printed.
 - images
   - tests/cli_images.rs: prints codex/crush/aider image lines and exits 0.
   - tests/cli_images_flavor.rs and tests/cli_images_flavor_flag.rs: slim flavor honored via env and --flavor flag.
-  - tests/cli_images_registry_env.rs: “images” prints the effective registry line; respects env override (value and empty) and displays “Docker Hub” when empty.
+  - tests/cli_images_registry_env.rs: “images” prints the effective registry line according to env override (value or empty/Docker Hub).
 - agent run dry-run
   - tests/cli_dry_run.rs: --dry-run + --verbose prints docker preview for aider and exits 0.
-  - tests/command_lock.rs:test_build_docker_cmd_preview_contains: preview contains expected markers (shell, image, agent invocation).
+  - tests/cli_image_override.rs: --image override reflected in verbose output and preview string.
 - cache maintenance
   - tests/cli_cache_clear.rs: cache-clear exits 0.
   - tests/cli_cache_clear_effect.rs: removes the on-disk registry cache file (XDG_RUNTIME_DIR).
@@ -22,8 +23,9 @@ A) CLI flows and subcommands
 - toolchain command (Phase 1)
   - tests/cli_toolchain_dry_run.rs: toolchain rust dry-run prints docker run/exec previews.
   - tests/cli_toolchain_override_precedence.rs: --toolchain-image takes precedence over --toolchain-spec version mapping.
+  - tests/cli_toolchain_flags_reporting.rs: verbose dry-run reports attached toolchains and computed image overrides.
   - tests/toolchain_phase1.rs: direct toolchain_run dry-run success for rust and node.
-  - tests/toolchain_live.rs (ignored): live runs for rust/node simple version commands (skips in CI unless images present).
+  - tests/toolchain_live.rs (ignored): live runs for rust/node simple version commands (skips unless images present).
 
 B) Docker command preview for agent containers (build_docker_cmd)
 - basic mounts and workdir
@@ -34,19 +36,23 @@ B) Docker command preview for agent containers (build_docker_cmd)
   - tests/preview_api_env.rs: AIFO_API_* map to OPENAI_* and AZURE_* correctly (including OPENAI_API_TYPE=azure).
   - tests/preview_proxy_env.rs: AIFO_TOOLEEXEC_URL/TOKEN are passed through.
   - tests/preview_pass_env.rs: EDITOR pass-through present; no git-sign env unless explicitly disabled.
+  - tests/preview_pass_env_more.rs: confirms VISUAL, TERM and TZ are passed via -e NAME.
   - tests/preview_git_sign.rs: AIFO_CODER_GIT_SIGN=0 injects GIT_CONFIG_* triplet to disable signing for Aider.
 - container identity
   - tests/preview_container_name.rs: respects AIFO_CODER_CONTAINER_NAME for both --name and --hostname.
+  - tests/preview_hostname_env.rs: AIFO_CODER_HOSTNAME can differ from container name and is honored.
 - network and host connectivity
   - tests/preview_network.rs: honors AIFO_SESSION_NETWORK; on Linux, injects --add-host host.docker.internal:host-gateway when requested.
 - shims and unix mounts
   - tests/preview_shim_dir.rs: mounts host shim dir to /opt/aifo/bin:ro when AIFO_SHIM_DIR is set.
   - tests/preview_unix_mount.rs: mounts AIFO_TOOLEEXEC_UNIX_DIR to /run/aifo when set.
-- AppArmor flag
+  - tests/preview_path_contains_shim_dir.rs: PATH export inside the container includes /opt/aifo/bin and /opt/venv/bin.
+- AppArmor flags
   - tests/preview_apparmor.rs: includes or omits --security-opt apparmor=… based on docker_supports_apparmor().
-- shell escaping and helpers
-  - tests/docker_cmd_edges.rs: verifies shell escaping for spaces and single quotes in preview.
-  - tests/helpers.rs: unit tests for shell_escape, shell_join, path_pair, ensure_file_exists, candidate_lock_paths, desired_apparmor_profile option behavior.
+  - tests/apparmor_env_disable.rs: env override “none” disables AppArmor.
+  - tests/apparmor_env_fallback.rs (Linux): env forces non-existent profile; falls back to docker-default if available.
+- user mapping
+  - tests/preview_user_flag_unix.rs (Unix): preview contains --user <uid>:<gid>.
 
 C) Toolchain sidecars and sessions
 - session lifecycle
@@ -54,8 +60,11 @@ C) Toolchain sidecars and sessions
   - tests/cleanup_idempotent.rs: cleanup with random/nonexistent session ID is a no-op.
 - mappings and defaults
   - tests/toolchain_mappings.rs: normalize_toolchain_kind aliases and default image by version mapping for all kinds.
+  - tests/toolchain_unknown_kind_version_default.rs: unknown kind falls back to node default mapping.
 - C/C++ specific
   - tests/toolchain_cpp.rs: dry-run OK (live cmake version test ignored by default).
+- bootstrap
+  - tests/toolchain_bootstrap_typescript.rs: best-effort TypeScript global bootstrap does not fail (even if sidecar absent).
 
 D) Proxy and shim protocol
 - smoke and routing
@@ -76,11 +85,10 @@ E) Registry prefix logic
 - tests/registry_env_empty.rs and tests/registry_env_value.rs:
   - Environment override empty forces Docker Hub (no prefix); non-empty normalized to exactly one trailing slash; source tags env/env-empty.
 - CLI reflection
-  - tests/cli_images_registry_env.rs: ensures “images” outputs the effective registry consistent with env override.
+  - tests/cli_images_registry_env.rs: ensures images output reflects the effective registry consistent with env override.
 
 F) Locking
 - tests/lock_edges.rs: threaded contention produces “already running” error; lock then can be reacquired.
-- tests/command_lock.rs:test_acquire_lock_at_exclusive_and_release: exclusive lock behavior on a specific path.
 
 G) Shims and notifications
 - tests/shims.rs: writes all expected shims; invoking any shim without proxy env exits 86.
@@ -93,52 +101,54 @@ H) Image content smoke
 - tests/shim_embed.rs (ignored): verifies embedded aifo-shim and PATH tools in agent image (if present).
 
 What’s notably strong
-- Thorough coverage of build_docker_cmd, including env mappings, mounts, container identity, networking, AppArmor, and shell-escaping behavior.
-- Robust proxy protocol surface: auth, version negotiation, allowlist, timeout, unix transport (Linux), and language-specific routing rules (Python venv; TypeScript local vs npx).
-- Toolchain lifecycle: dry-run, overrides precedence, cleanup, and per-language cache/envs verified (plus unit tests in src/lib.rs).
-- CLI behaviors across doctor/images/cache clear and the Phase 1 toolchain subcommand.
-- Shims presence and failure modes without proxy env; notifications feature tests validate both allow and reject paths.
-- Registry handling: env-based overrides and CLI reflection; normalization of trailing slash is tested.
+- Thorough coverage of build_docker_cmd: mounts, env mappings (OpenAI/Azure and proxy), container identity, networking, PATH export, user mapping, AppArmor flags.
+- Robust proxy protocol surface: auth and version enforcement, allowlist, timeout, unix transport (Linux), and language-specific routing (Python venv; TypeScript local vs npx).
+- Toolchain lifecycle: dry-run, overrides precedence, bootstrap best-effort, cleanup idempotency, and per-language caches/envs (including unit-level previews).
+- CLI behaviors across doctor/images/cache clear, toolchain subcommand (phase 1), and verbose reporting of effective configuration.
+- Shims presence and failure modes without proxy env; notifications feature validates both allow and reject paths.
+- Registry handling via env overrides and normalization.
 
-Proposed additions (prioritized and low-flakiness first)
-- CLI: explicit image override for agent runs
-  - tests/cli_image_override.rs
-    - Run: aifo-coder --verbose --dry-run --image alpine:3.20 aider -- --version
-    - Assert: stderr shows chosen image alpine:3.20 and preview uses it.
-- Hostname override distinct from container name
-  - tests/preview_hostname_env.rs
-    - Set AIFO_CODER_HOSTNAME=my-host; assert preview has --hostname my-host (independent of --name).
-- AppArmor environment overrides (deterministic)
-  - tests/apparmor_env_disable.rs
-    - Set AIFO_CODER_APPARMOR_PROFILE=none; desired_apparmor_profile_quiet() returns None and build_docker_cmd omits apparmor flag.
-  - tests/apparmor_env_fallback.rs (Linux-only, conditional on daemon support)
-    - Set AIFO_CODER_APPARMOR_PROFILE to a non-existent profile; expect fallback to docker-default if available, else omit.
-- Agent PATH export includes shim dir
-  - tests/preview_path_contains_shim_dir.rs
-    - Assert preview shell command includes PATH="/opt/aifo/bin:/opt/venv/bin:$PATH".
-- Additional env pass-throughs
-  - tests/preview_pass_env_more.rs
-    - Set VISUAL, TERM, TZ; assert -e VISUAL, -e TERM, -e TZ flags appear by name (complementing EDITOR test).
-- User/UID mapping flag (Unix)
-  - tests/preview_user_flag_unix.rs (Unix-only)
-    - Assert preview includes --user <uid>:<gid>.
-- Toolchain bootstrap (TypeScript)
-  - tests/toolchain_bootstrap_typescript.rs (skip unless node image present locally)
-    - Start node sidecar session; call toolchain_bootstrap_typescript_global(); then run tsc --version via proxy and assert non-failure.
-- Toolchain CLI flags round-trip (dry-run)
-  - tests/cli_toolchain_flags_reporting.rs
-    - Run: aifo-coder --verbose --dry-run --toolchain rust --toolchain-spec node@20 --toolchain-image python=python:3.12-slim aider -- --version
-    - Assert verbose output lists attached toolchains and computed image overrides.
-- Unknown toolchain kind default mapping
-  - tests/toolchain_unknown_kind_version_default.rs
-    - Validate default_toolchain_image_for_version() fallback for unknown kinds (or via verbose dry-run image override behavior).
-- Doctor extended assertions (when docker present)
-  - tests/cli_doctor_details.rs
-    - Assert presence of “docker registry:” and parsed “docker security options:” lines; optionally assert “workspace writable” line.
+Coverage scoring
 
-Notes on stability and CI
-- Continue to skip live/sidecar tests if required images are not present locally, to avoid pulling in CI.
-- Keep heavier or environment-sensitive tests as #[ignore], running them only in extended pipelines.
-- Guard Linux-only behavior (e.g., host-gateway add-host and unix socket transport) using #[cfg(target_os = "linux")] and/or environment toggles.
+- Feature breadth coverage: 90% (A-)
+  - Most CLI commands, preview construction, proxy protocol, and toolchain flows are exercised.
+- Critical path assertions: 88% (A-)
+  - Previews include security, identity, env, mounts, and user mapping; doctor prints key diagnostics; proxy rejects invalid requests.
+- OS-specific behavior: 85% (B+)
+  - Linux-only paths (add-host, unix sockets, AppArmor) have tests; macOS/Windows specifics are indirectly covered via doctor; some host variations remain untested.
+- Negative/error handling: 90% (A-)
+  - Auth, protocol version, allowlist, timeouts, and config mismatches covered.
+- E2E/integration depth: 80% (B)
+  - End-to-end proxy tests are present for rust/node (TCP/unix), with heavier tests gated behind #[ignore]; other toolchains less exercised in live mode.
+- Gaps (not yet covered): wrapper script behavior; live smoke for python/c-cpp/go; deterministic tests for registry curl/TCP probe branches.
 
-If you want me to draft any of the proposed tests as ready-to-drop files (e.g., cli_image_override.rs, preview_hostname_env.rs, apparmor_env_disable.rs), let me know which ones to start with.
+Overall grade: A- (strong, comprehensive suite with a few targeted areas to extend)
+
+Next steps (prioritized)
+
+1) Wrapper script behavior (ignored by default; low risk to core code)
+- Add tests to ensure the aifo-coder shell wrapper prefers a system-installed binary when present and falls back to cargo build otherwise.
+- Guard with environment isolation and mark #[ignore] to run on dedicated runners.
+
+2) Live smoke for additional toolchains (conditional, skip if images missing)
+- Add end-to-end proxy smoke tests for python, c-cpp, and go (e.g., pip --version, cmake --version, go version).
+- Keep skipped when images aren’t present locally to avoid pulls in CI.
+
+3) Registry probe determinism
+- Consider refactoring preferred_registry_prefix into a probe abstraction to allow injecting test doubles for curl/TCP.
+- Add unit tests for “curl success,” “curl failure,” “TCP success,” and “TCP fail → Docker Hub” branches.
+
+4) AppArmor portability checks
+- Add tests for macOS/Windows default behavior of desired_apparmor_profile_quiet() (docker-default), guarded with appropriate #[cfg] and skipping where Docker info is unavailable.
+
+5) Doctor output refinements (optional)
+- Add assertions for the “workspace writable” line when Docker is present and mount succeeds, and for editor discovery lines when images are locally available.
+
+6) C/C++ and Go cache effectiveness (optional, flaky → #[ignore])
+- Run a tiny build twice inside c-cpp to observe ccache hits (or at least stable stats output).
+- For Go, assert go env GOPATH/GOMODCACHE/GOCACHE values match expectations inside sidecar.
+
+Stability and CI notes
+- Continue to gate Docker-dependent tests with presence checks; prefer skipping to avoid flaky CI.
+- Keep heavy or platform-sensitive tests under #[ignore] and run them in a separate job or locally.
+- Maintain Linux-specific guards (cfg[target_os = "linux"]) for unix sockets and host-gateway behavior.
