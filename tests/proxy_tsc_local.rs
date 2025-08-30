@@ -1,0 +1,79 @@
+use std::fs;
+use std::path::PathBuf;
+
+#[test]
+fn test_proxy_tsc_prefers_local_compiler() {
+    // Skip if docker isn't available on this host
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+
+    // Prepare a local ./node_modules/.bin/tsc that prints a sentinel
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let nm_dir = root.join("node_modules");
+    let bin_dir = nm_dir.join(".bin");
+    let tsc_path = bin_dir.join("tsc");
+
+    let existed_nm = nm_dir.exists();
+    let existed_bin = bin_dir.exists();
+    let existed_tsc = tsc_path.exists();
+
+    if existed_tsc {
+        eprintln!("skipping: node_modules/.bin/tsc already exists; not overriding");
+        return;
+    }
+
+    fs::create_dir_all(&bin_dir).expect("create node_modules/.bin failed");
+    fs::write(&tsc_path, "#!/bin/sh\necho local-tsc\n").expect("write tsc shim failed");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tsc_path, fs::Permissions::from_mode(0o755)).expect("chmod tsc");
+    }
+
+    // Start node sidecar and proxy
+    let kinds = vec!["node".to_string()];
+    let overrides: Vec<(String, String)> = Vec::new();
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, true, true)
+        .expect("failed to start sidecar session");
+    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
+        .expect("failed to start proxy");
+
+    fn extract_port(u: &str) -> u16 {
+        let after_scheme = u.split("://").nth(1).unwrap_or(u);
+        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
+        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+    }
+    let port = extract_port(&url);
+
+    // POST tool=tsc
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
+    let body = "tool=tsc&cwd=.";
+    let req = format!(
+        "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+        token, body.len(), body
+    );
+    stream.write_all(req.as_bytes()).expect("write failed");
+    let mut resp = Vec::new();
+    stream.read_to_end(&mut resp).ok();
+    let text = String::from_utf8_lossy(&resp).to_string();
+    assert!(text.contains("200 OK"), "expected 200, got:\n{}", text);
+    assert!(text.contains("local-tsc"), "tsc did not come from local node_modules");
+
+    // Cleanup session first
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = handle.join();
+    aifo_coder::toolchain_cleanup_session(&sid, true);
+
+    // Cleanup files we created
+    let _ = fs::remove_file(&tsc_path);
+    if !existed_bin {
+        let _ = fs::remove_dir(&bin_dir);
+    }
+    if !existed_nm {
+        let _ = fs::remove_dir(&nm_dir);
+    }
+}

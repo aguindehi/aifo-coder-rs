@@ -21,6 +21,7 @@ fs2 = "0.4"
 
 [dev-dependencies]
 urlencoding = "2"
+tempfile = "3"
 
 [profile.release]
 opt-level = "z"
