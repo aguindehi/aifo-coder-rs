@@ -69,6 +69,7 @@ C) Toolchain sidecars and sessions
 D) Proxy and shim protocol
 - smoke and routing
   - tests/proxy_smoke.rs (ignored): end-to-end rust+node via TCP proxy; cargo/npx succeed.
+  - tests/proxy_smoke_more.rs: conditional live smokes for python (python --version), c-cpp (cmake --version), and go (go version); all skip if docker or images are missing and clean up sessions/proxy.
 - protocol and auth handling
   - tests/proxy_negatives_light.rs: 401 (no Authorization) and 400 (missing tool) without sidecars.
   - tests/proxy_protocol.rs: 426 + exit 86 for missing or wrong X-Aifo-Proto.
@@ -84,6 +85,8 @@ D) Proxy and shim protocol
 E) Registry prefix logic
 - tests/registry_env_empty.rs and tests/registry_env_value.rs:
   - Environment override empty forces Docker Hub (no prefix); non-empty normalized to exactly one trailing slash; source tags env/env-empty.
+- deterministic probe control (unit-level)
+  - tests/registry_probe_determinism.rs: forces curl-ok/curl-fail/tcp-ok/tcp-fail via AIFO_CODER_TEST_REGISTRY_PROBE; asserts prefix and reported source; tests are serialized to avoid env races.
 - CLI reflection
   - tests/cli_images_registry_env.rs: ensures images output reflects the effective registry consistent with env override.
 
@@ -100,53 +103,53 @@ G) Shims and notifications
 H) Image content smoke
 - tests/shim_embed.rs (ignored): verifies embedded aifo-shim and PATH tools in agent image (if present).
 
+I) Wrapper script behavior
+- tests/wrapper_behavior.rs (ignored): ensures shell wrapper prefers an installed system aifo-coder when present and falls back to local/cargo build otherwise; PATH isolation and stub used to avoid interference.
+
 What’s notably strong
 - Thorough coverage of build_docker_cmd: mounts, env mappings (OpenAI/Azure and proxy), container identity, networking, PATH export, user mapping, AppArmor flags.
 - Robust proxy protocol surface: auth and version enforcement, allowlist, timeout, unix transport (Linux), and language-specific routing (Python venv; TypeScript local vs npx).
 - Toolchain lifecycle: dry-run, overrides precedence, bootstrap best-effort, cleanup idempotency, and per-language caches/envs (including unit-level previews).
 - CLI behaviors across doctor/images/cache clear, toolchain subcommand (phase 1), and verbose reporting of effective configuration.
 - Shims presence and failure modes without proxy env; notifications feature validates both allow and reject paths.
-- Registry handling via env overrides and normalization.
+- Registry handling via env overrides and normalization; plus deterministic unit tests for curl/TCP probing.
+- Broadened live coverage via conditional proxy smokes for python, c-cpp, and go, with safe skips and cleanup.
 
 Coverage scoring
 
-- Feature breadth coverage: 90% (A-)
-  - Most CLI commands, preview construction, proxy protocol, and toolchain flows are exercised.
-- Critical path assertions: 88% (A-)
-  - Previews include security, identity, env, mounts, and user mapping; doctor prints key diagnostics; proxy rejects invalid requests.
-- OS-specific behavior: 85% (B+)
-  - Linux-only paths (add-host, unix sockets, AppArmor) have tests; macOS/Windows specifics are indirectly covered via doctor; some host variations remain untested.
+- Feature breadth coverage: 93% (A-)
+  - Most CLI commands, preview construction, proxy protocol, toolchain flows, and additional toolchain smokes are exercised.
+- Critical path assertions: 90% (A-)
+  - Previews include security, identity, env, mounts, and user mapping; doctor prints key diagnostics; proxy rejects invalid requests; registry path includes source tagging.
+- OS-specific behavior: 87% (B+)
+  - Linux-only paths (add-host, unix sockets, AppArmor) have tests; macOS/Windows specifics indirectly covered via doctor and wrapper tests; some host variations remain untested.
 - Negative/error handling: 90% (A-)
   - Auth, protocol version, allowlist, timeouts, and config mismatches covered.
-- E2E/integration depth: 80% (B)
-  - End-to-end proxy tests are present for rust/node (TCP/unix), with heavier tests gated behind #[ignore]; other toolchains less exercised in live mode.
-- Gaps (not yet covered): wrapper script behavior; live smoke for python/c-cpp/go; deterministic tests for registry curl/TCP probe branches.
+- E2E/integration depth: 84% (B)
+  - End-to-end proxy tests now include python/c-cpp/go smokes (conditional); heavier tests remain under #[ignore] to keep CI stable.
 
-Overall grade: A- (strong, comprehensive suite with a few targeted areas to extend)
+Overall grade: A- (strong, comprehensive suite with targeted, realistic integration tests and deterministic probing)
 
 Next steps (prioritized)
 
-1) Wrapper script behavior (ignored by default; low risk to core code)
-- Add tests to ensure the aifo-coder shell wrapper prefers a system-installed binary when present and falls back to cargo build otherwise.
-- Guard with environment isolation and mark #[ignore] to run on dedicated runners.
-
-2) Live smoke for additional toolchains (conditional, skip if images missing)
-- Add end-to-end proxy smoke tests for python, c-cpp, and go (e.g., pip --version, cmake --version, go version).
-- Keep skipped when images aren’t present locally to avoid pulls in CI.
-
-3) Registry probe determinism
-- Consider refactoring preferred_registry_prefix into a probe abstraction to allow injecting test doubles for curl/TCP.
-- Add unit tests for “curl success,” “curl failure,” “TCP success,” and “TCP fail → Docker Hub” branches.
-
-4) AppArmor portability checks
+1) AppArmor portability checks
 - Add tests for macOS/Windows default behavior of desired_apparmor_profile_quiet() (docker-default), guarded with appropriate #[cfg] and skipping where Docker info is unavailable.
 
-5) Doctor output refinements (optional)
+2) Doctor output refinements (optional)
 - Add assertions for the “workspace writable” line when Docker is present and mount succeeds, and for editor discovery lines when images are locally available.
 
-6) C/C++ and Go cache effectiveness (optional, flaky → #[ignore])
+3) C/C++ and Go cache effectiveness (optional, flaky → #[ignore])
 - Run a tiny build twice inside c-cpp to observe ccache hits (or at least stable stats output).
 - For Go, assert go env GOPATH/GOMODCACHE/GOCACHE values match expectations inside sidecar.
+
+4) Resilience and determinism around network probing
+- Add a tiny abstraction over curl/TCP probing and futher unit tests for edge cases (curl not present, TCP DNS failure, short timeouts), keeping the current env-based test hook as a fast path.
+
+5) Shim/proxy protocol robustness
+- Expand unit tests for HTTP header parsing (case-insensitivity, folded headers), and large payload handling to ensure robustness without external deps.
+
+6) Windows support checks (optional)
+- Add minimal checks that the wrapper and shim behave correctly under MSYS/Cygwin (e.g., path parsing), guarding behind #[cfg(windows)] and marking #[ignore] as needed.
 
 Stability and CI notes
 - Continue to gate Docker-dependent tests with presence checks; prefer skipping to avoid flaky CI.
