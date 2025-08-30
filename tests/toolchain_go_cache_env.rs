@@ -43,7 +43,7 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
     );
     stream.write_all(req.as_bytes()).expect("write");
     let mut buf = Vec::new();
-    let mut tmp = [0u8; 1024];
+    // removed unused buffer
     stream.read_to_end(&mut buf).expect("read");
     // parse headers
     let mut exit_code: i32 = 1;
