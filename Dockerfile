@@ -148,8 +148,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --python /opt/venv/bin/python --upgrade pip; \
     uv pip install --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-       uv pip install playwright; \
-       playwright install --with-deps chromium; \
+        uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
+        uv run --python /opt/venv/bin/python -m playwright install --with-deps chromium; \
     fi; \
     find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
@@ -311,8 +311,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --python /opt/venv/bin/python --upgrade pip; \
     uv pip install --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        uv pip install playwright; \
-        playwright install --with-deps chromium; \
+        uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
+        uv run --python /opt/venv/bin/python -m playwright install --with-deps chromium; \
     fi; \
     find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
