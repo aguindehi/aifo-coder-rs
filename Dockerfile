@@ -151,9 +151,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
 RUN apt-get update \
-    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
-    python3-minimal \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
@@ -270,10 +269,10 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
-RUN apt-get update \
-    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
@@ -285,8 +284,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
-RUN apt-get update \
-    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3-minimal && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 && \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
