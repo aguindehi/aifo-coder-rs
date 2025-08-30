@@ -35,7 +35,7 @@ RUN cargo build --release --bin aifo-shim
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
@@ -136,7 +136,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
@@ -151,7 +151,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     python3-minimal \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
@@ -172,7 +172,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
@@ -271,7 +271,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
@@ -286,7 +286,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3-minimal && rm -rf /var/lib/apt/lists/*
+    && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3-minimal && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
