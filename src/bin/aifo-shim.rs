@@ -259,3 +259,29 @@ fn main() {
         process::exit(exit_code);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_www_form_basic() {
+        assert_eq!(encode_www_form("abcXYZ-_.~"), "abcXYZ-_.~");
+        assert_eq!(encode_www_form("a b"), "a+b");
+        assert_eq!(encode_www_form("O'Reilly"), "O%27Reilly");
+        assert_eq!(encode_www_form("A&B=C"), "A%26B%3DC");
+    }
+
+    #[test]
+    fn test_parse_http_url_ok_and_bad() {
+        let u = "http://host.docker.internal:12345/exec";
+        let parsed = parse_http_url(u).expect("parse_http_url failed");
+        assert_eq!(parsed.0, "host.docker.internal");
+        assert_eq!(parsed.1, 12345);
+        assert_eq!(parsed.2, "/exec");
+
+        assert!(parse_http_url("unix:///run/aifo/toolexec.sock").is_none());
+        assert!(parse_http_url("https://example.com").is_none());
+        assert!(parse_http_url("http://noport").is_none());
+    }
+}

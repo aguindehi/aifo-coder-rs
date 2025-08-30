@@ -2639,4 +2639,54 @@ mod tests {
             go_joined
         );
     }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_cpp_ccache_env() {
+        // c/cpp exec should include CCACHE_DIR env
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let user_args = vec!["cmake".to_string(), "--version".to_string()];
+        let args = build_sidecar_exec_preview("tc-cpp", None, pwd, "c-cpp", &user_args);
+        let has_ccache = args.iter().any(|s| s == "CCACHE_DIR=/home/coder/.cache/ccache");
+        assert!(has_ccache, "exec preview missing CCACHE_DIR: {:?}", args);
+    }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_go_envs() {
+        // go exec should include GOPATH/GOMODCACHE/GOCACHE envs
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let user_args = vec!["go".to_string(), "version".to_string()];
+        let args = build_sidecar_exec_preview("tc-go", None, pwd, "go", &user_args);
+        let has_gopath = args.iter().any(|s| s == "GOPATH=/go");
+        let has_mod = args.iter().any(|s| s == "GOMODCACHE=/go/pkg/mod");
+        let has_cache = args.iter().any(|s| s == "GOCACHE=/go/build-cache");
+        assert!(has_gopath && has_mod && has_cache, "exec preview missing go envs: {:?}", args);
+    }
+
+    #[test]
+    fn test_notifications_args_mismatch_error() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Prepare config allowing only ["--title", "AIFO"]
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+
+        // Request with mismatching args
+        let res = notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
+        assert!(res.is_err(), "expected mismatch error, got: {:?}", res);
+        let msg = res.err().unwrap();
+        assert!(msg.contains("arguments mismatch"), "unexpected error message: {}", msg);
+
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+    }
 }
