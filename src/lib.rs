@@ -2366,9 +2366,15 @@ mod tests {
         std::env::set_var("HOME", &home);
 
         let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
-        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid HOME/env races
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications array");
         assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
 
         // Restore HOME
         if let Some(v) = old_home {
@@ -2387,9 +2393,15 @@ mod tests {
         std::env::set_var("HOME", &home);
 
         let cfg = r#"notifications-command: "say --title AIFO"\n"#;
-        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid HOME/env races
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications string");
         assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
 
         // Restore HOME
         if let Some(v) = old_home {
