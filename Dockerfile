@@ -140,13 +140,35 @@ RUN apt-get update \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
+ARG WITH_PLAYWRIGHT=1
+ARG KEEP_APT=0
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/uv && \
-    uv venv /opt/venv && \
-    uv pip install --python /opt/venv/bin/python --upgrade pip && \
-    uv pip install --python /opt/venv/bin/python aider-chat && \
-    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete && \
-    rm -rf /root/.cache/uv /root/.cache/pip
+    mv /root/.local/bin/uv /usr/local/bin/uv; \
+    uv venv /opt/venv; \
+    uv pip install --python /opt/venv/bin/python --upgrade pip; \
+    uv pip install --python /opt/venv/bin/python aider-chat; \
+    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+       uv pip install playwright; \
+       playwright install --with-deps chromium; \
+    fi; \
+    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
+    rm -rf /root/.cache/uv /root/.cache/pip; \
+    if [ "$KEEP_APT" = "0" ]; then \
+        apt-get remove -y procps || true; \
+        apt-get autoremove -y; \
+        apt-get clean; \
+        apt-get remove --purge -y apt apt-get; \
+        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+        npm prune -g --omit=dev; \
+        npm cache clean --force; \
+        rm -rf /root/.npm /root/.cache; \
+        rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+        rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/cache/apt/apt-file/; \
+        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+        rm -rf /opt/yarn-v1.22.22; \
+    fi
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
@@ -159,14 +181,21 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
-    apt-get autoremove -y; \
-    apt-get clean; \
-    apt-get remove --purge -y apt apt-get; \
-    rm -rf /var/lib/apt/lists/*; \
-    rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
-  fi
+        apt-get remove -y procps || true; \
+        apt-get autoremove -y; \
+        apt-get clean; \
+        apt-get remove --purge -y apt apt-get; \
+        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+        npm prune -g --omit=dev; \
+        npm cache clean --force; \
+        rm -rf /root/.npm /root/.cache; \
+        rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+        rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/cache/apt/apt-file/; \
+        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+        rm -rf /opt/yarn-v1.22.22; \
+    fi
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
@@ -274,13 +303,35 @@ RUN apt-get update && \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 # Python: Aider via uv (PEP 668-safe)
+ARG WITH_PLAYWRIGHT=1
+ARG KEEP_APT=0
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/uv && \
-    uv venv /opt/venv && \
-    uv pip install --python /opt/venv/bin/python --upgrade pip && \
-    uv pip install --python /opt/venv/bin/python aider-chat && \
-    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete && \
-    rm -rf /root/.cache/uv /root/.cache/pip
+    mv /root/.local/bin/uv /usr/local/bin/uv; \
+    uv venv /opt/venv; \
+    uv pip install --python /opt/venv/bin/python --upgrade pip; \
+    uv pip install --python /opt/venv/bin/python aider-chat; \
+    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+        uv pip install playwright; \
+        playwright install --with-deps chromium; \
+    fi; \
+    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
+    rm -rf /root/.cache/uv /root/.cache/pip; \
+    if [ "$KEEP_APT" = "0" ]; then \
+        apt-get remove -y procps || true; \
+        apt-get autoremove -y; \
+        apt-get clean; \
+        apt-get remove --purge -y apt apt-get; \
+        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+        npm prune -g --omit=dev; \
+        npm cache clean --force; \
+        rm -rf /root/.npm /root/.cache; \
+        rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+        rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/cache/apt/apt-file/; \
+        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+        rm -rf /opt/yarn-v1.22.22; \
+    fi
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
@@ -293,10 +344,18 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
-    apt-get autoremove -y; \
-    apt-get clean; \
-    apt-get remove --purge -y apt apt-get; \
-    rm -rf /var/lib/apt/lists/*; \
-    rm -rf /var/cache/apt/apt-file/; \
-  fi
+        apt-get remove -y procps || true; \
+        apt-get autoremove -y; \
+        apt-get clean; \
+        apt-get remove --purge -y apt apt-get; \
+        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+        npm prune -g --omit=dev; \
+        npm cache clean --force; \
+        rm -rf /root/.npm /root/.cache; \
+        rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+        rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/cache/apt/apt-file/; \
+        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+        rm -rf /opt/yarn-v1.22.22; \
+    fi
