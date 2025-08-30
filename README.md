@@ -442,6 +442,12 @@ Tip:
   - Copies keys from `/home/coder/.gnupg-host` (read‑only mount) into `GNUPGHOME`
   - Configures pinentry to `pinentry-curses` and launches `gpg-agent`
 
+### Host notifications command (notifications-cmd)
+
+- Available inside agent containers as notifications-cmd.
+- When invoked, it asks the host listener to run say with the provided arguments, but only if the full command equals the notifications-command configured in ~/.aider.conf.yml.
+- If the configured command is missing or does not match, execution is rejected with a clear reason. This feature requires toolchains to be enabled so the internal proxy is running.
+
 ### Slim image variants
 
 For smaller footprints, use the -slim variants of each image:

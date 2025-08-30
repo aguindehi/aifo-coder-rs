@@ -294,7 +294,15 @@ Agent images embed a compiled
 .B aifo-shim
 at
 .B /opt/aifo/bin
-with symlinks for common tools (cargo, npm/npx/tsc, python/pip, gcc/clang, go).
+with symlinks for common tools (cargo, npm/npx/tsc, python/pip, gcc/clang, go) and a host shim
+.B notifications-cmd
+that sends a request to the host listener to run
+.B say
+only when it exactly matches the
+.B notifications-command
+configured in
+.BR ~/.aider.conf.yml .
+Mismatches are rejected (403; exit 86).
 The PATH is prepended so these tools are available in the agent. For development
 or debugging you can override embedded shims by bind\-mounting a host directory
 via

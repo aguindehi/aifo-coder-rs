@@ -1400,11 +1400,132 @@ fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     res
 }
 
+/// Extract outer single or double quotes if the whole string is wrapped.
+fn strip_outer_quotes(s: &str) -> String {
+    if s.len() >= 2 {
+        let b = s.as_bytes();
+        let first = b[0] as char;
+        let last = b[s.len() - 1] as char;
+        if (first == '\'' && last == '\'') || (first == '"' && last == '"') {
+            return s[1..s.len() - 1].to_string();
+        }
+    }
+    s.to_string()
+}
+
+/// Minimal shell-like tokenizer supporting single and double quotes.
+/// Does not support escapes; quotes preserve spaces.
+fn shell_like_split_args(s: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    for ch in s.chars() {
+        match ch {
+            '\'' if !in_double => {
+                if in_single {
+                    in_single = false;
+                } else {
+                    in_single = true;
+                }
+            }
+            '"' if !in_single => {
+                if in_double {
+                    in_double = false;
+                } else {
+                    in_double = true;
+                }
+            }
+            c if c.is_whitespace() && !in_single && !in_double => {
+                if !current.is_empty() {
+                    out.push(current.clone());
+                    current.clear();
+                }
+            }
+            c => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
+/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
+fn parse_notifications_command_config() -> Result<Vec<String>, String> {
+    let home = home::home_dir().ok_or_else(|| "home directory not found".to_string())?;
+    let path = home.join(".aider.conf.yml");
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
+    for line in content.lines() {
+        let l = line.trim_start();
+        if l.starts_with('#') || l.is_empty() {
+            continue;
+        }
+        if let Some(rest) = l.strip_prefix("notifications-command:") {
+            let val = rest.trim();
+            if val.is_empty() {
+                return Err("notifications-command is empty or multi-line values are not supported".to_string());
+            }
+            let unquoted = strip_outer_quotes(val);
+            let argv = shell_like_split_args(&unquoted);
+            if argv.is_empty() {
+                return Err("notifications-command parsed to an empty command".to_string());
+            }
+            return Ok(argv);
+        }
+    }
+    Err("notifications-command not found in ~/.aider.conf.yml".to_string())
+}
+
+/// Validate and, if allowed, execute the host 'say' command with provided args.
+/// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
+fn notifications_handle_request(argv: &[String], verbose: bool, timeout_secs: u64) -> Result<(i32, Vec<u8>), String> {
+    let cfg_argv = parse_notifications_command_config()?;
+    if cfg_argv.is_empty() {
+        return Err("notifications-command is empty".to_string());
+    }
+    if cfg_argv[0] != "say" {
+        return Err("only 'say' is allowed as notifications-command executable".to_string());
+    }
+    let cfg_args = &cfg_argv[1..];
+    if cfg_args != argv {
+        return Err(format!(
+            "arguments mismatch: configured {:?} vs requested {:?}",
+            cfg_args, argv
+        ));
+    }
+
+    // Execute 'say' on the host with a timeout.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let args_vec: Vec<String> = argv.to_vec();
+    std::thread::spawn(move || {
+        let mut cmd = Command::new("say");
+        for a in &args_vec {
+            cmd.arg(a);
+        }
+        let out = cmd.output();
+        let _ = tx.send(out);
+    });
+    match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
+        Ok(Ok(o)) => {
+            let mut b = o.stdout;
+            if !o.stderr.is_empty() {
+                b.extend_from_slice(&o.stderr);
+            }
+            Ok((o.status.code().unwrap_or(1), b))
+        }
+        Ok(Err(e)) => Err(format!("failed to execute host 'say': {}", e)),
+        Err(_timeout) => Err("host 'say' execution timed out".to_string()),
+    }
+}
+
 /// Write aifo-shim and tool wrappers into the given directory.
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     let tools = [
         "cargo","rustc","node","npm","npx","tsc","ts-node","python","pip","pip3",
-        "gcc","g++","clang","clang++","make","cmake","ninja","pkg-config","go","gofmt",
+        "gcc","g++","clang","clang++","make","cmake","ninja","pkg-config","go","gofmt","notifications-cmd",
     ];
     fs::create_dir_all(dir)?;
     let shim_path = dir.join("aifo-shim");
@@ -1679,6 +1800,35 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
                         continue;
                     }
+                    if tool == "notifications-cmd" {
+                        match notifications_handle_request(&argv, verbose, timeout_secs) {
+                            Ok((status_code, body_out)) => {
+                                let header = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    status_code,
+                                    body_out.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body_out);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                            Err(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                let header = format!(
+                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    body.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                        }
+                    }
                     let kind = route_tool_to_sidecar(&tool);
                     let allow = sidecar_allowlist(kind);
                     if !allow.iter().any(|&t| t == tool.as_str()) {
@@ -1891,6 +2041,35 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             if tool.is_empty() {
                 let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
                 continue;
+            }
+            if tool == "notifications-cmd" {
+                match notifications_handle_request(&argv, verbose, timeout_secs) {
+                    Ok((status_code, body_out)) => {
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            status_code,
+                            body_out.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body_out);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    Err(reason) => {
+                        let mut body = reason.into_bytes();
+                        body.push(b'\n');
+                        let header = format!(
+                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                }
             }
             let kind = route_tool_to_sidecar(&tool);
             let allow = sidecar_allowlist(kind);
