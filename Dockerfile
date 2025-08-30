@@ -97,7 +97,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt; \
-    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -121,7 +120,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt; \
-    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -157,7 +155,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y apt; \
-        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -189,7 +186,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y apt; \
-        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -265,7 +261,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt; \
-    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -288,7 +283,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt; \
-    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -324,7 +318,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y apt; \
-        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -356,7 +349,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y apt; \
-        npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
