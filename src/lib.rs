@@ -2345,4 +2345,61 @@ mod tests {
         let args2 = shell_like_split_args("  a   'b c'   d  ");
         assert_eq!(args2, vec!["a".to_string(), "b c".to_string(), "d".to_string()]);
     }
+
+    #[test]
+    fn test_parse_notifications_inline_array() {
+        // Isolate HOME to a temp dir with an inline-array notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let argv = parse_notifications_command_config().expect("parse notifications array");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_parse_notifications_single_line_string() {
+        // Isolate HOME to a temp dir with a single-line string notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: "say --title AIFO"\n"#;
+        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let argv = parse_notifications_command_config().expect("parse notifications string");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_python_venv_env() {
+        // Create a temp workspace with .venv/bin and ensure PATH/VIRTUAL_ENV are injected
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        std::fs::create_dir_all(pwd.join(".venv").join("bin")).expect("create venv/bin");
+        let user_args = vec!["python".to_string(), "--version".to_string()];
+        let args = build_sidecar_exec_preview("tc-python", None, pwd, "python", &user_args);
+
+        let has_virtual_env = args.iter().any(|s| s == "VIRTUAL_ENV=/workspace/.venv");
+        let has_path_prefix = args.iter().any(|s| s.contains("PATH=/workspace/.venv/bin:"));
+        assert!(has_virtual_env, "exec preview missing VIRTUAL_ENV: {:?}", args);
+        assert!(has_path_prefix, "exec preview missing PATH venv prefix: {:?}", args);
+    }
 }
