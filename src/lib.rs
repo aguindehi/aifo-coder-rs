@@ -2404,4 +2404,61 @@ mod tests {
         assert!(has_virtual_env, "exec preview missing VIRTUAL_ENV: {:?}", args);
         assert!(has_path_prefix, "exec preview missing PATH venv prefix: {:?}", args);
     }
+
+    #[test]
+    fn test_notifications_config_rejects_non_say() {
+        // Isolate HOME to a temp dir with a non-say notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["notify", "--title", "AIFO"]\n"#;
+        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let res = notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
+        assert!(res.is_err(), "expected error when executable is not 'say'");
+        let msg = res.err().unwrap();
+        assert!(msg.contains("only 'say' is allowed"), "unexpected error: {}", msg);
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_sidecar_run_preview_add_host_flag_linux() {
+        // Ensure add-host is injected for sidecars when env flag is set
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let old = std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok();
+        std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+
+        let args = build_sidecar_run_preview(
+            "tc-rust-test",
+            Some("aifo-net-test"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let joined = shell_join(&args);
+        assert!(
+            joined.contains("--add-host host.docker.internal:host-gateway"),
+            "sidecar run preview missing --add-host: {}",
+            joined
+        );
+
+        // Restore env
+        if let Some(v) = old {
+            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v);
+        } else {
+            std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST");
+        }
+    }
 }
