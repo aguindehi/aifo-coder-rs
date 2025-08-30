@@ -31,7 +31,9 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
     let port: u16 = port_str.parse().expect("port parse");
     let path = format!("/{}", path_rest);
 
-    let mut stream = TcpStream::connect((host, port)).expect("connect failed");
+    // Some hosts (e.g., macOS test runners) may not resolve host.docker.internal; connect to loopback in that case.
+    let connect_host = if host == "host.docker.internal" { "127.0.0.1" } else { host };
+    let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
 
     let mut body = format!("tool={}&cwd={}", urlencoding::Encoded::new(tool), urlencoding::Encoded::new("."));
     for a in args {
