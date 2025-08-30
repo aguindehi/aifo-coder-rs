@@ -1468,6 +1468,70 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
             if val.is_empty() {
                 return Err("notifications-command is empty or multi-line values are not supported".to_string());
             }
+            // Support YAML/JSON-like inline array: ["say", "--title", "AIFO"]
+            if val.starts_with('[') && val.ends_with(']') {
+                let inner = &val[1..val.len() - 1];
+                let mut argv: Vec<String> = Vec::new();
+                let mut cur = String::new();
+                let mut in_single = false;
+                let mut in_double = false;
+                let mut esc = false;
+                for ch in inner.chars() {
+                    if esc {
+                        // simple unescape in quoted strings
+                        let c = match ch {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            other => other,
+                        };
+                        cur.push(c);
+                        esc = false;
+                        continue;
+                    }
+                    match ch {
+                        '\\' if in_double || in_single => {
+                            esc = true;
+                        }
+                        '"' if !in_single => {
+                            if in_double {
+                                in_double = false;
+                                argv.push(cur.clone());
+                                cur.clear();
+                            } else {
+                                in_double = true;
+                            }
+                        }
+                        '\'' if !in_double => {
+                            if in_single {
+                                in_single = false;
+                                argv.push(cur.clone());
+                                cur.clear();
+                            } else {
+                                in_single = true;
+                            }
+                        }
+                        ',' if !in_single && !in_double => {
+                            // item separator outside quotes; ignore
+                        }
+                        c => {
+                            // collect only when inside quotes; ignore whitespace outside
+                            if in_single || in_double {
+                                cur.push(c);
+                            }
+                        }
+                    }
+                }
+                if !cur.is_empty() && (in_single || in_double) == false {
+                    // In case of a trailing unquoted token (not expected), include it
+                    argv.push(cur);
+                }
+                if argv.is_empty() {
+                    return Err("notifications-command parsed to an empty command".to_string());
+                }
+                return Ok(argv);
+            }
+            // Fallback: treat as a single-line shell-like string
             let unquoted = strip_outer_quotes(val);
             let argv = shell_like_split_args(&unquoted);
             if argv.is_empty() {
