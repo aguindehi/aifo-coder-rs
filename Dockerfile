@@ -18,7 +18,6 @@ WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
         gcc-mingw-w64-x86-64 \
         g++-mingw-w64-x86-64 \
@@ -137,7 +136,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -273,7 +271,6 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip build-essential pkg-config libssl-dev \
  && rm -rf /var/lib/apt/lists/*
