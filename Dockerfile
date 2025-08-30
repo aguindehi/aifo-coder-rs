@@ -149,7 +149,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
-        uv run --python /opt/venv/bin/python -m playwright install --with-deps chromium; \
     fi; \
     find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
@@ -178,6 +177,11 @@ RUN apt-get update \
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
+ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
+ARG WITH_PLAYWRIGHT=1
+RUN if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+        /opt/venv/bin/python -m playwright install --with-deps chromium; \
+    fi
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -312,7 +316,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     uv pip install --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
-        uv run --python /opt/venv/bin/python -m playwright install --with-deps chromium; \
     fi; \
     find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
@@ -341,6 +344,11 @@ RUN apt-get update && \
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
+ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
+ARG WITH_PLAYWRIGHT=1
+RUN if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+        /opt/venv/bin/python -m playwright install --with-deps chromium; \
+    fi
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
