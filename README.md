@@ -53,26 +53,34 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|toolchain|toolchain-cache-clear|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
 
 Global flags:
-- --image <ref>                Override full image reference for all agents
-- --flavor <full|slim>         Select image flavor; default is full
-- --verbose                    Increase logging verbosity
-- --dry-run                    Print the docker run command without executing it
-- --invalidate-registry-cache  Invalidate on-disk registry probe cache and re-probe
-- -h, --help                   Show help
+- --image <ref>                   Override full image reference for all agents
+- --flavor <full|slim>            Select image flavor; default is full
+- --verbose                       Increase logging verbosity
+- --dry-run                       Print the docker run command without executing it
+- --invalidate-registry-cache     Invalidate on-disk registry probe cache and re-probe
+- -h, --help                      Show help
+- --toolchain <kind>              Attach toolchains (repeatable): rust, node, typescript, python, c-cpp, go
+- --toolchain-spec <kind@ver>     Attach toolchains with optional version (repeatable), e.g. rust@1.80, node@20, python@3.12
+- --toolchain-image <k=img>       Override toolchain image (repeatable), e.g. c-cpp=aifo-cpp-toolchain:latest
+- --no-toolchain-cache            Disable named cache volumes for toolchain sidecars
+- --toolchain-unix-socket         Linux: use unix:/// socket transport for the proxy
+- --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global
 
 Subcommands:
-- codex [args...]              Run OpenAI Codex CLI inside container
-- crush [args...]              Run Charmbracelet Crush inside container
-- aider [args...]              Run Aider inside container
-- doctor                       Run environment diagnostics (Docker/AppArmor/UID mapping)
-- images                       Print effective image references (honoring flavor/registry)
-- cache-clear                  Clear the on-disk registry probe cache (alias: cache-invalidate)
+- codex [args...]                Run OpenAI Codex CLI inside container
+- crush [args...]                Run Charmbracelet Crush inside container
+- aider [args...]                Run Aider inside container
+- toolchain <kind> -- [args...]  Run a command inside a language toolchain sidecar (Phase 1)
+- toolchain-cache-clear          Purge all toolchain cache volumes (cargo, npm, pip, ccache, go)
+- doctor                         Run environment diagnostics (Docker/AppArmor/UID mapping)
+- images                         Print effective image references (honoring flavor/registry)
+- cache-clear                    Clear the on-disk registry probe cache (alias: cache-invalidate)
 
 Tips:
 - Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.
@@ -221,6 +229,40 @@ make build-launcher
 
 
 All trailing arguments after the agent subcommand are passed through to the agent unchanged.
+
+### Toolchains (Phases 2–4)
+
+For transparent PATH shims, the toolexec proxy (TCP and Linux unix sockets), per-language caches, the C/C++ sidecar image, and optional smokes, see:
+- docs/TOOLCHAINS.md
+
+### Toolchain sidecars (Phase 1)
+
+Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
+
+Examples:
+```bash
+./aifo-coder toolchain rust -- cargo --version
+./aifo-coder toolchain node -- npx --version
+./aifo-coder toolchain python -- python -m pip --version
+# override the image for a run:
+./aifo-coder toolchain rust --toolchain-image rust:1.80-slim -- cargo --help
+# disable named cache volumes (e.g., to avoid creating volumes on CI):
+./aifo-coder toolchain node --no-toolchain-cache -- npm ci
+```
+
+Running tests for toolchain sidecars (Phase 1)
+- Run the full test suite:
+```bash
+cargo test
+```
+- Run only the toolchain Phase 1 integration tests (note: use --test target name, not a file path filter):
+```bash
+cargo test --test toolchain_phase1
+```
+- Optional live tests (pull and execute real sidecars; ignored by default):
+```bash
+cargo test --test toolchain_live -- --ignored
+```
 
 ---
 
@@ -399,6 +441,12 @@ Tip:
   - Ensures `$HOME` and `$GNUPGHOME` exist (0700), prepares `$XDG_RUNTIME_DIR`
   - Copies keys from `/home/coder/.gnupg-host` (read‑only mount) into `GNUPGHOME`
   - Configures pinentry to `pinentry-curses` and launches `gpg-agent`
+
+### Host notifications command (notifications-cmd)
+
+- Available inside agent containers as notifications-cmd.
+- When invoked, it asks the host listener to run say with the provided arguments, but only if the full command equals the notifications-command configured in ~/.aider.conf.yml.
+- If the configured command is missing or does not match, execution is rejected with a clear reason. This feature requires toolchains to be enabled so the internal proxy is running.
 
 ### Slim image variants
 

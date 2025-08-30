@@ -560,6 +560,29 @@ struct Cli {
     #[arg(long)]
     image: Option<String>,
 
+    /// Attach language toolchains and inject PATH shims (repeatable)
+    #[arg(long = "toolchain", value_enum)]
+    toolchain: Vec<ToolchainKind>,
+
+    /// Attach toolchains with optional versions (repeatable), e.g. rust@1.80, node@20, python@3.12
+    #[arg(long = "toolchain-spec")]
+    toolchain_spec: Vec<String>,
+
+    /// Override image(s) for toolchains (repeatable, kind=image)
+    #[arg(long = "toolchain-image")]
+    toolchain_image: Vec<String>,
+
+    /// Disable named cache volumes for toolchain sidecars
+    #[arg(long = "no-toolchain-cache")]
+    no_toolchain_cache: bool,
+
+    /// Use Linux unix socket transport for tool-exec proxy (instead of TCP)
+    #[arg(long = "toolchain-unix-socket")]
+    toolchain_unix_socket: bool,
+
+    /// Bootstrap actions for toolchains (repeatable), e.g. typescript=global
+    #[arg(long = "toolchain-bootstrap")]
+    toolchain_bootstrap: Vec<String>,
 
     /// Print detailed execution info
     #[arg(long)]
@@ -587,6 +610,35 @@ enum Flavor {
     Slim,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
+enum ToolchainKind {
+    Rust,
+    Node,
+    #[value(alias = "ts")]
+    Typescript,
+    Python,
+    #[value(alias = "ccpp")]
+    #[value(alias = "c")]
+    #[value(alias = "cpp")]
+    #[value(alias = "c_cpp")]
+    #[value(alias = "c++")]
+    CCpp,
+    Go,
+}
+
+impl ToolchainKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ToolchainKind::Rust => "rust",
+            ToolchainKind::Node => "node",
+            ToolchainKind::Typescript => "typescript",
+            ToolchainKind::Python => "python",
+            ToolchainKind::CCpp => "c-cpp",
+            ToolchainKind::Go => "go",
+        }
+    }
+}
+
 #[derive(Subcommand, Debug, Clone)]
 enum Agent {
     /// Run diagnostics to check environment and configuration
@@ -597,6 +649,24 @@ enum Agent {
 
     /// Clear on-disk caches (e.g., registry probe cache)
     CacheClear,
+
+    /// Purge all named toolchain cache volumes (cargo, npm, pip, ccache, go)
+    ToolchainCacheClear,
+
+    /// Toolchain sidecar: run a command inside a language toolchain sidecar
+    Toolchain {
+        #[arg(value_enum)]
+        kind: ToolchainKind,
+        /// Override the toolchain image reference for this run
+        #[arg(long = "toolchain-image")]
+        image: Option<String>,
+        /// Disable named cache volumes for the toolchain sidecar
+        #[arg(long = "no-toolchain-cache")]
+        no_cache: bool,
+        /// Command and arguments to execute inside the sidecar (after --)
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 
     /// Run OpenAI Codex CLI
     Codex {
@@ -677,6 +747,41 @@ fn main() -> ExitCode {
         aifo_coder::invalidate_registry_cache();
         eprintln!("aifo-coder: cleared on-disk registry cache.");
         return ExitCode::from(0);
+    } else if let Agent::ToolchainCacheClear = &cli.command {
+        print_startup_banner();
+        match aifo_coder::toolchain_purge_caches(cli.verbose) {
+            Ok(()) => {
+                eprintln!("aifo-coder: purged toolchain cache volumes.");
+                return ExitCode::from(0);
+            }
+            Err(e) => {
+                eprintln!("aifo-coder: failed to purge toolchain caches: {}", e);
+                return ExitCode::from(1);
+            }
+        }
+    } else if let Agent::Toolchain { kind, image, no_cache, args } = &cli.command {
+        print_startup_banner();
+        if cli.verbose {
+            eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
+            if let Some(img) = image.as_deref() {
+                eprintln!("aifo-coder: toolchain image override: {}", img);
+            }
+            if *no_cache {
+                eprintln!("aifo-coder: toolchain caches disabled for this run");
+            }
+        }
+        if cli.dry_run {
+            let _ = aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, true, true);
+            return ExitCode::from(0);
+        }
+        let code = match aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, cli.verbose, false) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                if e.kind() == io::ErrorKind::NotFound { 127 } else { 1 }
+            }
+        };
+        return ExitCode::from((code & 0xff) as u8);
     }
 
 
@@ -689,10 +794,155 @@ fn main() -> ExitCode {
         Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
         Agent::Images => unreachable!("Images subcommand is handled earlier and returns immediately"),
         Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
+        Agent::ToolchainCacheClear => unreachable!("ToolchainCacheClear subcommand is handled earlier and returns immediately"),
+        Agent::Toolchain { .. } => unreachable!("Toolchain subcommand is handled earlier and returns immediately"),
     };
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
+
+    // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
+    let mut tc_session_id: Option<String> = None;
+    let mut tc_proxy_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
+    let mut tc_proxy_handle: Option<std::thread::JoinHandle<()>> = None;
+
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        // kinds as strings (from enum flag)
+        let mut kinds: Vec<String> = cli.toolchain.iter().map(|k| k.as_str().to_string()).collect();
+
+        // Parse spec strings kind[@version]
+        fn parse_spec(s: &str) -> (String, Option<String>) {
+            let t = s.trim();
+            if let Some((k, v)) = t.split_once('@') {
+                (k.trim().to_string(), Some(v.trim().to_string()))
+            } else {
+                (t.to_string(), None)
+            }
+        }
+        let mut spec_versions: Vec<(String, String)> = Vec::new();
+        for s in &cli.toolchain_spec {
+            let (k, v) = parse_spec(s);
+            if !k.is_empty() {
+                kinds.push(k.clone());
+                if let Some(ver) = v {
+                    spec_versions.push((k, ver));
+                }
+            }
+        }
+        // Normalize kinds and dedup
+        use std::collections::BTreeSet;
+        let mut set = BTreeSet::new();
+        let mut kinds_norm: Vec<String> = Vec::new();
+        for k in kinds {
+            let norm = aifo_coder::normalize_toolchain_kind(&k);
+            if set.insert(norm.clone()) {
+                kinds_norm.push(norm);
+            }
+        }
+        let kinds = kinds_norm;
+
+        // parse overrides kind=image
+        let mut overrides: Vec<(String, String)> = Vec::new();
+        for s in &cli.toolchain_image {
+            if let Some((k, v)) = s.split_once('=') {
+                if !k.trim().is_empty() && !v.trim().is_empty() {
+                    overrides.push((aifo_coder::normalize_toolchain_kind(k), v.trim().to_string()));
+                }
+            }
+        }
+        // Add overrides derived from versions unless already overridden
+        for (k, ver) in spec_versions {
+            let kind = aifo_coder::normalize_toolchain_kind(&k);
+            if !overrides.iter().any(|(kk, _)| kk == &kind) {
+                let img = aifo_coder::default_toolchain_image_for_version(&kind, &ver);
+                overrides.push((kind, img));
+            }
+        }
+
+        if cli.dry_run {
+            if cli.verbose {
+                eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
+                if !overrides.is_empty() {
+                    eprintln!("aifo-coder: would use image overrides: {:?}", overrides);
+                }
+                if cli.no_toolchain_cache {
+                    eprintln!("aifo-coder: would disable toolchain caches");
+                }
+                if cfg!(target_os = "linux") && cli.toolchain_unix_socket {
+                    eprintln!("aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo");
+                }
+                if !cli.toolchain_bootstrap.is_empty() {
+                    eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
+                }
+                eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
+            }
+        } else {
+            // Phase 3: use embedded shims in the agent image; host override via AIFO_SHIM_DIR still supported
+            if cli.verbose {
+                eprintln!("aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)");
+            }
+            // Optional: switch to unix socket transport for proxy on Linux
+            #[cfg(target_os = "linux")]
+            if cli.toolchain_unix_socket {
+                std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
+            }
+
+            // Start sidecars
+            match aifo_coder::toolchain_start_session(&kinds, &overrides, cli.no_toolchain_cache, cli.verbose) {
+                Ok(sid) => {
+                    // Set network env for agent container to join
+                    let net = format!("aifo-net-{}", sid);
+                    std::env::set_var("AIFO_SESSION_NETWORK", &net);
+                    #[cfg(target_os = "linux")]
+                    {
+                        // Ensure agent can reach host proxy when using TCP; not needed for unix socket transport
+                        if !cli.toolchain_unix_socket {
+                            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+                        }
+                    }
+                    tc_session_id = Some(sid);
+                }
+                Err(e) => {
+                    eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
+                    return ExitCode::from(1);
+                }
+            }
+
+            // Bootstrap (e.g., typescript=global) before starting proxy
+            if let Some(ref sid) = tc_session_id {
+                if !cli.toolchain_bootstrap.is_empty() {
+                    let want_ts_global = cli.toolchain_bootstrap.iter().any(|b| {
+                        let t = b.trim().to_ascii_lowercase();
+                        t == "typescript=global" || t == "ts=global"
+                    });
+                    if want_ts_global && kinds.iter().any(|k| k == "node") {
+                        if let Err(e) = aifo_coder::toolchain_bootstrap_typescript_global(sid, cli.verbose) {
+                            eprintln!("aifo-coder: typescript bootstrap failed: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Start proxy
+            if let Some(ref sid) = tc_session_id {
+                match aifo_coder::toolexec_start_proxy(sid, cli.verbose) {
+                    Ok((url, token, flag, handle)) => {
+                        std::env::set_var("AIFO_TOOLEEXEC_URL", &url);
+                        std::env::set_var("AIFO_TOOLEEXEC_TOKEN", &token);
+                        tc_proxy_flag = Some(flag);
+                        tc_proxy_handle = Some(handle);
+                    }
+                    Err(e) => {
+                        eprintln!("aifo-coder: failed to start toolexec proxy: {}", e);
+                        if let Some(s) = tc_session_id.as_deref() {
+                            aifo_coder::toolchain_cleanup_session(s, cli.verbose);
+                        }
+                        return ExitCode::from(1);
+                    }
+                }
+            }
+        }
+    }
 
     let image = cli
         .image
@@ -735,10 +985,32 @@ fn main() -> ExitCode {
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting
             drop(lock);
+
+            // Phase 2 cleanup (if toolchain shims/proxy were attached)
+            if let Some(flag) = tc_proxy_flag.take() {
+                flag.store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+            if let Some(h) = tc_proxy_handle.take() {
+                let _ = h.join();
+            }
+            if let Some(ref sid) = tc_session_id {
+                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+            }
+
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
             eprintln!("{e}");
+            // Phase 2 cleanup on error
+            if let Some(flag) = tc_proxy_flag.take() {
+                flag.store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+            if let Some(h) = tc_proxy_handle.take() {
+                let _ = h.join();
+            }
+            if let Some(ref sid) = tc_session_id {
+                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+            }
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
             }

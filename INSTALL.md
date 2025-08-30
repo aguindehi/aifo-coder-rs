@@ -73,3 +73,66 @@ security unlock-keychain -p "<your-password>" login.keychain-db
 ```bash
 xattr -cr dist/aifo-coder.app dist/aifo-coder.dmg
 ```
+
+Toolchains (Phases 2–4)
+- aifo-coder can attach language toolchains (rust, node/typescript, python, c-cpp, go) as sidecar containers and inject PATH shims inside the agent so tools like cargo, npx, python, gcc, go work transparently.
+- See docs/TOOLCHAINS.md for details, examples, and testing instructions.
+
+Platform notes
+- macOS/Windows: Use Docker Desktop; host.docker.internal resolves automatically to the host. TCP proxy mode works out of the box.
+- Linux:
+  - In TCP mode, the launcher adds --add-host=host.docker.internal:host-gateway to ensure containers can reach the host proxy.
+  - Optionally enable unix socket transport with --toolchain-unix-socket, which mounts the proxy socket into the agent at /run/aifo and avoids TCP entirely.
+
+Usage (global flags)
+- Attach toolchains (repeatable):
+```bash
+aifo-coder --toolchain rust aider -- cargo --version
+aifo-coder --toolchain node aider -- npx --version
+aifo-coder --toolchain python aider -- python -m pip --version
+aifo-coder --toolchain c-cpp aider -- cmake --version
+```
+- Per-language image override and cache control:
+```bash
+aifo-coder --toolchain rust --toolchain-image rust=rust:1.80-slim aider -- cargo --help
+aifo-coder --toolchain node --no-toolchain-cache aider -- npm ci
+```
+- Linux unix-socket transport (reduces TCP surface):
+```bash
+aifo-coder --toolchain rust --toolchain-unix-socket aider -- cargo --version
+```
+
+C/C++ sidecar (local build and publish)
+- Build the c-cpp sidecar locally:
+```bash
+make build-toolchain-cpp
+```
+- Rebuild without cache:
+```bash
+make rebuild-toolchain-cpp
+```
+- Safe multi-arch publish to a private registry (never docker.io unless REGISTRY is set):
+```bash
+make publish-toolchain-cpp PLATFORMS=linux/amd64,linux/arm64 PUSH=1 REGISTRY=repository.migros.net/
+```
+
+Toolchain caches
+- Caches are enabled by default (named Docker volumes). Purge all toolchain caches:
+```bash
+aifo-coder toolchain-cache-clear
+make toolchain-cache-clear
+```
+
+Tests (optional, require Docker)
+- TCP proxy smoke (ignored by default):
+```bash
+make test-proxy-smoke
+```
+- Linux-only unix-socket proxy smoke (falls back to TCP on non-Linux):
+```bash
+make test-proxy-unix
+```
+- C/C++ dry-run tests:
+```bash
+make test-toolchain-cpp
+```

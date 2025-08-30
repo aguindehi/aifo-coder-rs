@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider) using Docker"
 repository = ""
+default-run = "aifo-coder"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -17,3 +18,13 @@ once_cell = "1"
 libc = "0.2"
 dotenvy = "0.15"
 fs2 = "0.4"
+
+[dev-dependencies]
+urlencoding = "2"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

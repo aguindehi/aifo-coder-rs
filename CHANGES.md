@@ -1,3 +1,38 @@
+2025-08-29 16:20 Amir Guindehi <amir.guindehi@mgb.ch>
+
+feat: finalize toolchain rollout; versioned specs, bootstrap, tests
+
+- src/main.rs/src.lib.rs: add --toolchain-spec kind@version image mapping; optional
+  --toolchain-bootstrap typescript=global; proxy bind per OS; Linux sidecars get
+  host-gateway add-host; minor structured timing logs for proxy execs.
+- tests: add route mapping unit test and negative proxy auth test; optional unix
+  socket smoke; c-cpp dry-run test.
+- docs: README and docs/TOOLCHAINS.md updated with new flags and examples.
+
+2025-08-29 14:45 Amir Guindehi <amir.guindehi@mgb.ch>
+
+test: add ignored live toolchain sidecar tests and docs
+
+- tests/toolchain_live.rs: new ignored tests for rust and node; exercise real
+  sidecars when run with --ignored.
+- README.md: document how to run the live tests.
+
+2025-08-29 14:10 Amir Guindehi <amir.guindehi@mgb.ch>
+
+feat: Rollout Phase 1 toolchain sidecars, CLI, docs, tests
+
+- src/lib.rs: implement toolchain_run; add sidecar helpers (run/exec/network),
+  per-language caches, and AppArmor application; suppress docker output when not
+  verbose; respect --dry-run for previews without creating networks.
+- src/main.rs: add Toolchain subcommand with --toolchain-image and
+  --no-toolchain-cache flags; bypass application lock for toolchain runs; print
+  effective docker previews on --verbose/--dry-run; return 127 when docker is
+  missing.
+- README.md, man/aifo-coder.1: document Toolchain Phase 1 usage, options, and
+  examples; add notes on running the new tests.
+- tests/toolchain_phase1.rs: add dry-run integration tests for rust and node.
+- Minor: tighten verbosity for docker run/stop/network output.
+
 2025-08-27 12:35 Amir Guindehi <amir.guindehi@mgb.ch>
 
 score: refresh scorecard per AGENT.md

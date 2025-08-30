@@ -1,9 +1,10 @@
-.ONESHELL:
-
 .PHONY: help
+.DEFAULT_GOAL := help
 help:
 	@echo ""
 	@echo "aifo-coder - Makefile targets"
+	@echo ""
+	@echo "Docs: see docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
 	@echo ""
 	@echo "Variables:"
 	@echo ""
@@ -13,6 +14,7 @@ help:
 	@echo "  USE_BUILDX .................. Use docker buildx when available; fallback to docker build (default: 1)"
 	@echo "  PLATFORMS ................... Comma-separated platforms for buildx (e.g., linux/amd64,linux/arm64)"
 	@echo "  PUSH ........................ With PLATFORMS set, push multi-arch images instead of loading (default: 0)"
+	@echo "  REGISTRY .................... Registry prefix for publish (e.g., repository.migros.net/). If unset, we will NOT push."
 	@echo "  CACHE_DIR ................... Local buildx cache directory for faster rebuilds (.buildx-cache)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
@@ -76,6 +78,9 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
+	@echo "  rebuild-toolchain-cpp ....... Rebuild c-cpp toolchain image without cache"
+	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
@@ -105,6 +110,9 @@ help:
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
 	@echo "  sbom ........................ Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)"
+	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
+	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
@@ -265,6 +273,41 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
+.PHONY: build-toolchain-cpp rebuild-toolchain-cpp
+build-toolchain-cpp:
+	@echo "Building aifo-cpp-toolchain:latest ..."
+	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+rebuild-toolchain-cpp:
+	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
+	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+.PHONY: publish-toolchain-cpp
+publish-toolchain-cpp:
+	@set -e; \
+	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	# Normalize REG to have optional trailing slash
+	case "$$REG" in \
+	  */) ;; \
+	  "") ;; \
+	  *) REG="$$REG/";; \
+	esac; \
+	if [ "$(PUSH)" = "1" ]; then \
+	  if [ -n "$$REG" ]; then \
+	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" .; \
+	  else \
+	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar .; \
+	    echo "Wrote dist/aifo-cpp-toolchain-latest.oci.tar"; \
+	  fi; \
+	else \
+	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	fi
+
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim
 
@@ -394,6 +437,40 @@ test:
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
 	fi
+
+.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
+test-proxy-smoke:
+	@echo "Running proxy smoke test (ignored by default) ..."
+	cargo test --test proxy_smoke -- --ignored
+
+test-toolchain-live:
+	@echo "Running live toolchain tests (ignored by default) ..."
+	cargo test --test toolchain_live -- --ignored
+
+test-shim-embed:
+	@echo "Running embedded shim presence test (ignored by default) ..."
+	cargo test --test shim_embed -- --ignored
+
+test-proxy-unix:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
+	  cargo test --test proxy_unix_socket -- --ignored; \
+	else \
+	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
+	  cargo test --test proxy_smoke -- --ignored; \
+	fi
+
+test-toolchain-cpp:
+	@echo "Running c-cpp toolchain dry-run tests ..."
+	cargo test --test toolchain_cpp
+
+.PHONY: toolchain-cache-clear
+toolchain-cache-clear:
+	@echo "Purging toolchain cache volumes (cargo registry/git, npm, pip, ccache, go) ..."
+	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
+	@echo "Done."
 
 .PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
@@ -770,8 +847,8 @@ ifeq ($(OS),Windows_NT)
   CARGO_VERSION_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*version\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
   CARGO_NAME_CMD := $(POWERSHELL) -NoProfile -Command '(Get-Content "Cargo.toml") | ForEach-Object { if($$_ -match '\''^\s*name\s*=\s*"(.*)"'\'' ){ $$matches[1] } } | Select-Object -First 1'
 else
-  CARGO_VERSION_CMD := sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
-  CARGO_NAME_CMD := sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' Cargo.toml | head -n1
+  CARGO_VERSION_CMD := awk 'BEGIN{p=0} /^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*version[[:space:]]*=/ { q=index($$0, "\""); if (q>0) { rem=substr($$0, q+1); r=index(rem, "\""); if (r>0) { print substr(rem, 1, r-1); exit } } }' Cargo.toml
+  CARGO_NAME_CMD := awk 'BEGIN{p=0} /^\[package\]/{p=1;next} /^\[/{p=0} p && $$0 ~ /^[[:space:]]*name[[:space:]]*=/ { q=index($$0, "\""); if (q>0) { rem=substr($$0, q+1); r=index(rem, "\""); if (r>0) { print substr(rem, 1, r-1); exit } } }' Cargo.toml
 endif
 VERSION ?= $(shell $(CARGO_VERSION_CMD))
 ifeq ($(strip $(VERSION)),)
@@ -976,7 +1053,11 @@ release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
 
 # Build both mac (host) and Linux, and also build launcher and mac app/dmg
+ifeq ($(shell uname -s),Darwin)
 release: rebuild build-launcher release-app release-dmg-sign release-for-mac release-for-linux
+else
+release: rebuild build-launcher release-for-linux
+endif
 
 .PHONY: install
 install: build build-launcher
@@ -1063,7 +1144,7 @@ sbom:
 .PHONY: loc
 loc:
 	@set -e; \
-	echo "\nCounting lines of source in repository...\n"; \
+	printf "\nCounting lines of source in repository...\n\n"; \
 	count() { \
 	  pat="$$1"; \
 	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
