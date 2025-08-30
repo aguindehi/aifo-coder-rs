@@ -1,9 +1,16 @@
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static REG_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 fn clear_env_overrides() {
     std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }
 
 #[test]
 fn test_registry_probe_curl_success_forced() {
+    let _g = REG_GUARD.lock().unwrap();
     clear_env_overrides();
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
     let rp = aifo_coder::preferred_registry_prefix_quiet();
@@ -15,6 +22,7 @@ fn test_registry_probe_curl_success_forced() {
 
 #[test]
 fn test_registry_probe_curl_failure_forced() {
+    let _g = REG_GUARD.lock().unwrap();
     clear_env_overrides();
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-fail");
     let rp = aifo_coder::preferred_registry_prefix_quiet();
@@ -26,6 +34,7 @@ fn test_registry_probe_curl_failure_forced() {
 
 #[test]
 fn test_registry_probe_tcp_success_forced() {
+    let _g = REG_GUARD.lock().unwrap();
     clear_env_overrides();
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-ok");
     let rp = aifo_coder::preferred_registry_prefix_quiet();
@@ -37,6 +46,7 @@ fn test_registry_probe_tcp_success_forced() {
 
 #[test]
 fn test_registry_probe_tcp_failure_forced() {
+    let _g = REG_GUARD.lock().unwrap();
     clear_env_overrides();
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
     let rp = aifo_coder::preferred_registry_prefix_quiet();
