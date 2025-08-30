@@ -148,16 +148,16 @@ Next steps (prioritized)
 - Go: assert go env GOPATH/GOMODCACHE/GOCACHE values (already covered) and add a small module build twice to validate caching.
 
 3) Registry probe abstraction and resiliency
-- Introduce a small probe abstraction to inject test doubles (curl present/absent, TCP DNS failure, timeouts) without relying on env; add unit tests for each path and short timeouts.
+- Implemented: added test override API (registry_probe_set_override_for_tests) and enum (RegistryProbeTestMode) to control probe outcome without env; added tests/registry_probe_abstraction.rs.
 
 4) Proxy robustness under concurrency
-- Add tests that issue multiple parallel requests (auth OK/KO, varied proto) to ensure no panics, fair handling, and proper shutdown behavior.
+- Implemented: added tests/proxy_concurrency.rs to issue parallel requests with mixed auth/proto to ensure stable behavior and clean shutdowns.
 
 5) Notifications configuration parsing
-- Extend parser to support multi-line YAML scalars and nested arrays; add tests for mixed quoting, escapes, and invalid formats with clear error messages.
+- Implemented: parser now supports multi-line YAML scalars and nested arrays; unit tests added in src/lib.rs (test_parse_notifications_nested_array_lines, test_parse_notifications_block_scalar).
 
 6) CI workflow enhancements
-- Provide a separate job to run #[ignore] tests with required images preloaded (rust/node/python/go and aifo-cpp-toolchain) to validate live paths.
+- Pending: recommend a dedicated CI job to run #[ignore] tests with required images preloaded (rust/node/python/go and aifo-cpp-toolchain) to validate live paths.
 
 Stability and CI notes
 - Continue to gate Docker-dependent tests with presence checks; prefer skipping to avoid flaky CI.

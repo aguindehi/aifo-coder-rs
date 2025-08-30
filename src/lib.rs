@@ -48,6 +48,25 @@ static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 // Record how the registry prefix was determined this run.
 static REGISTRY_PREFIX_SOURCE: OnceCell<String> = OnceCell::new();
 
+#[derive(Clone, Copy)]
+pub enum RegistryProbeTestMode {
+    CurlOk,
+    CurlFail,
+    TcpOk,
+    TcpFail,
+}
+
+// Test-only override for registry probing without relying on environment variables.
+// When set, preferred_registry_prefix{_quiet} will return deterministically and
+// will not populate OnceCell caches to avoid cross-test interference.
+static REGISTRY_PROBE_OVERRIDE: Lazy<std::sync::Mutex<Option<RegistryProbeTestMode>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
+
+pub fn registry_probe_set_override_for_tests(mode: Option<RegistryProbeTestMode>) {
+    let mut guard = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock");
+    *guard = mode;
+}
+
 /// Locate the Docker runtime binary.
 pub fn container_runtime_path() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
@@ -303,6 +322,24 @@ pub fn preferred_registry_prefix() -> String {
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
         write_registry_cache_disk(&v);
         return v;
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
     }
     // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
     if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
@@ -1514,20 +1551,26 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     };
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
-    for line in content.lines() {
+
+    // Pre-split lines to allow simple multi-line parsing
+    let lines: Vec<&str> = content.lines().collect();
+    let mut i = 0usize;
+    while i < lines.len() {
+        let line = lines[i];
         let l = line.trim_start();
         if l.starts_with('#') || l.is_empty() {
+            i += 1;
             continue;
         }
         if let Some(rest) = l.strip_prefix("notifications-command:") {
             let mut val = rest.trim().to_string();
             // Tolerate configs/tests that append a literal "\n" at end of line
-            if val.ends_with("\\n") { val.truncate(val.len() - 2); }
-            if val.is_empty() {
-                return Err("notifications-command is empty or multi-line values are not supported".to_string());
+            if val.ends_with("\\n") {
+                val.truncate(val.len() - 2);
             }
-            // Support YAML/JSON-like inline array: ["say", "--title", "AIFO"]
-            if val.starts_with('[') && val.ends_with(']') {
+
+            // Helper: parse inline JSON/YAML-like array ["say","--title","AIFO"]
+            let parse_inline_array = |val: &str| -> Result<Vec<String>, String> {
                 let inner = &val[1..val.len() - 1];
                 let mut argv: Vec<String> = Vec::new();
                 let mut cur = String::new();
@@ -1536,7 +1579,6 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
                 let mut esc = false;
                 for ch in inner.chars() {
                     if esc {
-                        // simple unescape in quoted strings
                         let c = match ch {
                             'n' => '\n',
                             'r' => '\r',
@@ -1548,9 +1590,7 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
                         continue;
                     }
                     match ch {
-                        '\\' if in_double || in_single => {
-                            esc = true;
-                        }
+                        '\\' if in_double || in_single => esc = true,
                         '"' if !in_single => {
                             if in_double {
                                 in_double = false;
@@ -1569,27 +1609,87 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
                                 in_single = true;
                             }
                         }
-                        ',' if !in_single && !in_double => {
-                            // item separator outside quotes; ignore
-                        }
+                        ',' if !in_single && !in_double => { /* separator */ }
                         c => {
-                            // collect only when inside quotes; ignore whitespace outside
                             if in_single || in_double {
                                 cur.push(c);
                             }
                         }
                     }
                 }
-                if !cur.is_empty() && (in_single || in_double) == false {
-                    // In case of a trailing unquoted token (not expected), include it
+                if !cur.is_empty() && !in_single && !in_double {
                     argv.push(cur);
                 }
                 if argv.is_empty() {
-                    return Err("notifications-command parsed to an empty command".to_string());
+                    Err("notifications-command parsed to an empty command".to_string())
+                } else {
+                    Ok(argv)
                 }
-                return Ok(argv);
+            };
+
+            // Case 1: inline array
+            if val.starts_with('[') && val.ends_with(']') {
+                return parse_inline_array(&val);
             }
-            // Fallback: treat as a single-line shell-like string
+
+            // Case 2: explicit block scalars '|' or '>'
+            if val == "|" || val == ">" || val.is_empty() {
+                // Collect subsequent indented lines; also support YAML list items beginning with '-'
+                let mut j = i + 1;
+                // Skip blank/comment lines until first candidate
+                while j < lines.len() && (lines[j].trim().is_empty() || lines[j].trim_start().starts_with('#')) {
+                    j += 1;
+                }
+                if j >= lines.len() {
+                    return Err("notifications-command is empty or malformed".to_string());
+                }
+                let first = lines[j];
+                let is_list = first.trim_start().starts_with('-');
+                if is_list {
+                    let mut argv: Vec<String> = Vec::new();
+                    while j < lines.len() {
+                        let ln = lines[j];
+                        let t = ln.trim_start();
+                        if !t.starts_with('-') {
+                            break;
+                        }
+                        let item = t.trim_start_matches('-').trim();
+                        if !item.is_empty() {
+                            argv.push(strip_outer_quotes(item));
+                        }
+                        j += 1;
+                    }
+                    if argv.is_empty() {
+                        return Err("notifications-command list is empty".to_string());
+                    }
+                    return Ok(argv);
+                } else {
+                    // Block scalar: concatenate trimmed lines with spaces into a single command string
+                    let mut parts: Vec<String> = Vec::new();
+                    while j < lines.len() {
+                        let ln = lines[j];
+                        let t = ln.trim_start();
+                        if t.is_empty() || t.starts_with('#') {
+                            j += 1;
+                            continue;
+                        }
+                        // Stop if de-indented to column 0 and looks like a new key
+                        if !ln.starts_with(' ') && t.contains(':') {
+                            break;
+                        }
+                        parts.push(t.to_string());
+                        j += 1;
+                    }
+                    let joined = parts.join(" ");
+                    let argv = shell_like_split_args(&strip_outer_quotes(&joined));
+                    if argv.is_empty() {
+                        return Err("notifications-command parsed to an empty command".to_string());
+                    }
+                    return Ok(argv);
+                }
+            }
+
+            // Case 3: single-line scalar
             let unquoted = strip_outer_quotes(&val);
             let argv = shell_like_split_args(&unquoted);
             if argv.is_empty() {
@@ -1597,6 +1697,7 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
             }
             return Ok(argv);
         }
+        i += 1;
     }
     Err("notifications-command not found in ~/.aider.conf.yml".to_string())
 }
@@ -2464,6 +2565,54 @@ mod tests {
         } else {
             std::env::remove_var("HOME");
         }
+    }
+
+    #[test]
+    fn test_parse_notifications_nested_array_lines() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a nested array notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command:
+  - "say"
+  - --title
+  - AIFO
+"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications nested array");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+    }
+
+    #[test]
+    fn test_parse_notifications_block_scalar() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a block scalar notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: |
+  say --title "AIFO"
+"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications block");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
     }
 
     #[test]
