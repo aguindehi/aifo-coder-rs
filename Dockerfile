@@ -36,7 +36,6 @@ RUN cargo build --release --bin aifo-shim
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
@@ -154,7 +153,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
     python3-minimal \
  && rm -rf /var/lib/apt/lists/*
@@ -291,7 +289,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends python3-minimal && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
