@@ -5,6 +5,7 @@ fn test_cli_images_respects_flavor_env_slim() {
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
 
     // Ensure slim flavor is selected
+    let old = std::env::var("AIFO_CODER_IMAGE_FLAVOR").ok();
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim");
 
     let out = Command::new(bin)
@@ -30,4 +31,11 @@ fn test_cli_images_respects_flavor_env_slim() {
         "expected slim flavor image references, got:\n{}",
         all
     );
+
+    // Restore environment
+    if let Some(v) = old {
+        std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", v);
+    } else {
+        std::env::remove_var("AIFO_CODER_IMAGE_FLAVOR");
+    }
 }
