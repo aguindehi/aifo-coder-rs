@@ -304,6 +304,17 @@ pub fn preferred_registry_prefix() -> String {
         write_registry_cache_disk(&v);
         return v;
     }
+    // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" => "repository.migros.net/".to_string(),
+            "curl-fail" => String::new(),
+            "tcp-ok" => "repository.migros.net/".to_string(),
+            "tcp-fail" => String::new(),
+            _ => String::new(),
+        };
+    }
     if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
     }
@@ -382,6 +393,17 @@ pub fn preferred_registry_prefix_quiet() -> String {
         write_registry_cache_disk(&v);
         return v;
     }
+    // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" => "repository.migros.net/".to_string(),
+            "curl-fail" => String::new(),
+            "tcp-ok" => "repository.migros.net/".to_string(),
+            "tcp-fail" => String::new(),
+            _ => String::new(),
+        };
+    }
     if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
     }
@@ -429,6 +451,15 @@ pub fn preferred_registry_prefix_quiet() -> String {
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
+    // Test hook: reflect forced probe source deterministically
+    if let Ok(mode) = std::env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" | "curl-fail" => "curl".to_string(),
+            "tcp-ok" | "tcp-fail" => "tcp".to_string(),
+            _ => "unknown".to_string(),
+        };
+    }
     REGISTRY_PREFIX_SOURCE
         .get()
         .cloned()
