@@ -1,6 +1,5 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
 
 #[test]
 fn test_notifications_cmd_e2e_ok_and_mismatch() {
@@ -46,9 +45,8 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     )
     .unwrap();
 
-    // Start proxy with a minimal session (use rust sidecar, but no tool exec is needed)
-    let sid = aifo_coder::toolchain_start_session(&["rust".into()], &[], true, false)
-        .expect("failed to start sidecar session");
+    // Start proxy without launching sidecars (notifications-cmd does not require sidecars)
+    let sid = format!("notif-{}", std::process::id());
     let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, false)
         .expect("failed to start proxy");
 
