@@ -2321,6 +2321,11 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+
+    // Serialize tests that mutate HOME/AIFO_NOTIFICATIONS_CONFIG to avoid env races
+    static NOTIF_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     #[test]
     fn test_url_decode_mixed() {
@@ -2370,6 +2375,7 @@ mod tests {
 
     #[test]
     fn test_parse_notifications_inline_array() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
         // Isolate HOME to a temp dir with an inline-array notifications-command
         let td = tempfile::tempdir().expect("tmpdir");
         let home = td.path().to_path_buf();
@@ -2397,6 +2403,7 @@ mod tests {
 
     #[test]
     fn test_parse_notifications_single_line_string() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
         // Isolate HOME to a temp dir with a single-line string notifications-command
         let td = tempfile::tempdir().expect("tmpdir");
         let home = td.path().to_path_buf();
@@ -2439,6 +2446,7 @@ mod tests {
 
     #[test]
     fn test_notifications_config_rejects_non_say() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
         // Isolate HOME to a temp dir with a non-say notifications-command
         let td = tempfile::tempdir().expect("tmpdir");
         let home = td.path().to_path_buf();
