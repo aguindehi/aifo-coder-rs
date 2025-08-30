@@ -21,3 +21,10 @@ fs2 = "0.4"
 
 [dev-dependencies]
 urlencoding = "2"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
