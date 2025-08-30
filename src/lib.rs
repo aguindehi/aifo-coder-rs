@@ -1454,8 +1454,17 @@ fn shell_like_split_args(s: &str) -> Vec<String> {
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 fn parse_notifications_command_config() -> Result<Vec<String>, String> {
-    let home = home::home_dir().ok_or_else(|| "home directory not found".to_string())?;
-    let path = home.join(".aider.conf.yml");
+    // Allow tests (and power users) to override config path explicitly
+    let path = if let Ok(p) = env::var("AIFO_NOTIFICATIONS_CONFIG") {
+        let p = p.trim().to_string();
+        if !p.is_empty() {
+            PathBuf::from(p)
+        } else {
+            home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+        }
+    } else {
+        home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+    };
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
     for line in content.lines() {
@@ -2414,11 +2423,18 @@ mod tests {
         std::env::set_var("HOME", &home);
 
         let cfg = r#"notifications-command: ["notify", "--title", "AIFO"]\n"#;
-        std::fs::write(home.join(".aider.conf.yml"), cfg).expect("write config");
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid platform-specific HOME quirks
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let res = notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
         assert!(res.is_err(), "expected error when executable is not 'say'");
         let msg = res.err().unwrap();
         assert!(msg.contains("only 'say' is allowed"), "unexpected error: {}", msg);
+
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
 
         // Restore HOME
         if let Some(v) = old_home {
