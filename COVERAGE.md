@@ -76,6 +76,7 @@ D) Proxy and shim protocol
   - tests/proxy_smoke.rs (ignored): end-to-end rust+node via TCP proxy; cargo/npx succeed.
   - tests/proxy_smoke_more.rs: conditional live smokes for python (python --version), c-cpp (cmake --version), and go (go version); all skip if docker or images are missing and clean up sessions/proxy.
   - tests/proxy_header_case.rs: lower-case HTTP headers accepted; 401 for missing Authorization; 426 + X-Exit-Code: 86 for bad X-Aifo-Proto.
+  - tests/proxy_concurrency.rs: mixed concurrent requests (missing auth → 401; bad proto → 426) handled correctly and proxy shuts down cleanly.
   - tests/proxy_large_payload.rs (ignored): exercises large Content-Length bodies to ensure robust request handling.
 - protocol and auth handling
   - tests/proxy_negatives_light.rs: 401 (no Authorization) and 400 (missing tool) without sidecars.
@@ -95,6 +96,7 @@ E) Registry prefix logic
 - deterministic probe control (unit-level)
   - tests/registry_probe_determinism.rs: forces curl-ok/curl-fail/tcp-ok/tcp-fail via AIFO_CODER_TEST_REGISTRY_PROBE; asserts prefix and reported source; tests are serialized to avoid env races.
   - tests/registry_probe_edge_cases.rs: simulates curl absence and unknown probe mode to assert robustness and proper source reporting (“unknown”).
+  - tests/registry_probe_abstraction.rs: override API drives deterministic outcomes without env and avoids OnceCell cache pollution.
 - CLI reflection
   - tests/cli_images_registry_env.rs: ensures images output reflects the effective registry consistent with env override.
 
@@ -125,18 +127,18 @@ What’s notably strong
 
 Coverage scoring
 
-- Feature breadth coverage: 95% (A)
-  - Broader CLI, preview construction, proxy protocol, toolchain flows, and added live smokes plus doctor/editor checks are exercised.
-- Critical path assertions: 91% (A-)
-  - Security flags, identity, env mappings, mounts, user mapping; doctor prints workspace/editor diagnostics; proxy rejects invalid requests; registry path includes deterministic source tagging.
-- OS-specific behavior: 89% (B+)
-  - Linux-only (add-host, unix sockets, AppArmor) and non-Linux portability (AppArmor) covered; some Windows-specific paths remain.
-- Negative/error handling: 92% (A-)
-  - Auth, protocol version, allowlist, timeouts, malformed/large payloads, and config mismatches covered.
-- E2E/integration depth: 85% (B)
-  - End-to-end proxy tests include python/c-cpp/go smokes (conditional) and header behavior; heavier scenarios remain #[ignore] for CI stability.
+- Feature breadth coverage: 96% (A)
+  - Broader CLI, preview construction, proxy protocol, toolchain flows; added live smokes, doctor/editor checks, concurrency and registry-probe abstraction tests.
+- Critical path assertions: 92% (A-)
+  - Security flags, identity, env mappings, mounts, user mapping; doctor prints workspace/editor diagnostics; proxy rejects invalid/ill-formed requests; registry path includes deterministic source tagging.
+- OS-specific behavior: 90% (A-)
+  - Linux-only (add-host, unix sockets, AppArmor) and non-Linux portability (AppArmor) covered; Windows-specific paths remain to be exercised.
+- Negative/error handling: 93% (A-)
+  - Auth, protocol, allowlist, timeouts, malformed/large payloads, concurrency, and config mismatches covered.
+- E2E/integration depth: 86% (B)
+  - End-to-end proxy tests include python/c-cpp/go smokes (conditional), header behavior and concurrency; heavier scenarios remain #[ignore] for CI stability.
 
-Overall grade: A- (improved; strong, comprehensive suite with realistic integration and deterministic probing)
+Overall grade: A- (further improved; comprehensive suite with realistic integration, concurrency and deterministic probing)
 
 Next steps (prioritized)
 
@@ -145,19 +147,19 @@ Next steps (prioritized)
 
 2) Toolchain cache effectiveness (ignored, best-effort)
 - C/C++: compile a tiny source twice inside sidecar; assert ccache stats increment or at least stable timings/output.
-- Go: assert go env GOPATH/GOMODCACHE/GOCACHE values (already covered) and add a small module build twice to validate caching.
+- Go: add a small module build twice to validate caching on top of current env assertions.
 
-3) Registry probe abstraction and resiliency
-- Implemented: added test override API (registry_probe_set_override_for_tests) and enum (RegistryProbeTestMode) to control probe outcome without env; added tests/registry_probe_abstraction.rs.
+3) CI workflow enhancements
+- Provide a separate CI job to run #[ignore] tests with required images preloaded (rust/node/python/go and aifo-cpp-toolchain) to validate live paths.
 
-4) Proxy robustness under concurrency
-- Implemented: added tests/proxy_concurrency.rs to issue parallel requests with mixed auth/proto to ensure stable behavior and clean shutdowns.
+4) HTTP handling hardening
+- Add tests for large/streamed bodies and header limit enforcement; exercise graceful connection close semantics across platforms.
 
-5) Notifications configuration parsing
-- Implemented: parser now supports multi-line YAML scalars and nested arrays; unit tests added in src/lib.rs (test_parse_notifications_nested_array_lines, test_parse_notifications_block_scalar).
+5) Image presence heuristics
+- Enhance tests/doctors to better detect local images across registries/tags and skip/present hints accordingly to reduce flakiness.
 
-6) CI workflow enhancements
-- Pending: recommend a dedicated CI job to run #[ignore] tests with required images preloaded (rust/node/python/go and aifo-cpp-toolchain) to validate live paths.
+6) Windows shim/path robustness
+- Add minimal checks that shim URL-encoding and CRLF handling behave correctly on Windows; guard with #[cfg(windows)] and mark #[ignore] as needed.
 
 Stability and CI notes
 - Continue to gate Docker-dependent tests with presence checks; prefer skipping to avoid flaky CI.
