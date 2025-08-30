@@ -8,7 +8,7 @@ fn test_build_docker_cmd_includes_network_and_add_host() {
 
     // Save and set env for session network and add-host (Linux only)
     let old_net = std::env::var("AIFO_SESSION_NETWORK").ok();
-    let old_add = std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok();
+    let _old_add = std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok();
 
     std::env::set_var("AIFO_SESSION_NETWORK", "aifo-net-test123");
     #[cfg(target_os = "linux")]
@@ -32,6 +32,6 @@ fn test_build_docker_cmd_includes_network_and_add_host() {
     if let Some(v) = old_net { std::env::set_var("AIFO_SESSION_NETWORK", v); } else { std::env::remove_var("AIFO_SESSION_NETWORK"); }
     #[cfg(target_os = "linux")]
     {
-        if let Some(v) = old_add { std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST"); }
+        if let Some(v) = _old_add { std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST"); }
     }
 }
