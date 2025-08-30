@@ -156,7 +156,7 @@ FROM base AS aider
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends \
-    python3 \
+    python3-minimal \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
@@ -292,7 +292,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 FROM base-slim AS aider-slim
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends python3-minimal && rm -rf /var/lib/apt/lists/*
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
