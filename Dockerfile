@@ -114,7 +114,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Crush image (adds only Crush CLI on top of base) ---
 FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
-RUN npm install -g @charmland/crush
+RUN npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -228,7 +228,7 @@ CMD ["bash"]
 
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
-RUN npm install -g @openai/codex
+RUN npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -251,7 +251,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
-RUN npm install -g @charmland/crush
+RUN npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
