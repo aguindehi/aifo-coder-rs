@@ -1,7 +1,12 @@
 use std::process::Command;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static REG_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 #[test]
 fn test_cli_images_respects_registry_env_value() {
+    let _g = REG_ENV_GUARD.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
 
     // Save and set env
@@ -39,6 +44,7 @@ fn test_cli_images_respects_registry_env_value() {
 
 #[test]
 fn test_cli_images_respects_registry_env_empty() {
+    let _g = REG_ENV_GUARD.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
 
     // Save and set env to empty → Docker Hub
