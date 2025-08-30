@@ -8,11 +8,8 @@ fn test_proxy_missing_or_wrong_proto_header() {
         return;
     }
 
-    // Start a minimal session (rust sidecar is sufficient)
-    let kinds = vec!["rust".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
-    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, false)
-        .expect("failed to start sidecar session");
+    // Start proxy without launching sidecars; protocol guard is independent of sidecars
+    let sid = format!("proto-{}", std::process::id());
     let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, false)
         .expect("failed to start proxy");
 
