@@ -24,6 +24,7 @@ fn test_build_docker_cmd_includes_api_env_mappings() {
     assert!(preview.contains("-e OPENAI_BASE_URL=https://example.invalid/base"), "missing OPENAI_BASE_URL mapping: {preview}");
     assert!(preview.contains("-e OPENAI_API_BASE=https://example.invalid/base"), "missing OPENAI_API_BASE mapping: {preview}");
     assert!(preview.contains("-e OPENAI_API_VERSION=2024-10-01"), "missing OPENAI_API_VERSION mapping: {preview}");
+    assert!(preview.contains("-e OPENAI_API_TYPE=azure"), "missing OPENAI_API_TYPE mapping: {preview}");
 
     // Expect Azure-style envs
     assert!(preview.contains("-e AZURE_OPENAI_API_KEY=k-123"), "missing AZURE_OPENAI_API_KEY mapping: {preview}");

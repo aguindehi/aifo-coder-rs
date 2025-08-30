@@ -2489,4 +2489,135 @@ mod tests {
             std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST");
         }
     }
+
+    #[test]
+    fn test_sidecar_run_preview_rust_caches_env() {
+        // Ensure rust sidecar gets cargo cache mounts and CARGO_HOME
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let args = build_sidecar_run_preview(
+            "tc-rust-cache",
+            Some("aifo-net-x"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            false, // no_cache = false -> caches enabled
+            pwd,
+            Some("docker-default"),
+        );
+        let joined = shell_join(&args);
+        assert!(
+            joined.contains("aifo-cargo-registry:/usr/local/cargo/registry"),
+            "missing cargo registry mount: {}",
+            joined
+        );
+        assert!(
+            joined.contains("aifo-cargo-git:/usr/local/cargo/git"),
+            "missing cargo git mount: {}",
+            joined
+        );
+        assert!(
+            joined.contains("CARGO_HOME=/usr/local/cargo"),
+            "missing CARGO_HOME env: {}",
+            joined
+        );
+    }
+
+    #[test]
+    fn test_sidecar_run_preview_caches_for_node_python_cpp_go() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+
+        // node: npm cache
+        let node = build_sidecar_run_preview(
+            "tc-node-cache",
+            Some("aifo-net-x"),
+            None,
+            "node",
+            "node:20-bookworm-slim",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let node_joined = shell_join(&node);
+        assert!(
+            node_joined.contains("aifo-npm-cache:/home/coder/.npm"),
+            "missing npm cache mount: {}",
+            node_joined
+        );
+
+        // python: pip cache
+        let py = build_sidecar_run_preview(
+            "tc-python-cache",
+            Some("aifo-net-x"),
+            None,
+            "python",
+            "python:3.12-slim",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let py_joined = shell_join(&py);
+        assert!(
+            py_joined.contains("aifo-pip-cache:/home/coder/.cache/pip"),
+            "missing pip cache mount: {}",
+            py_joined
+        );
+
+        // c-cpp: ccache dir and env
+        let cpp = build_sidecar_run_preview(
+            "tc-cpp-cache",
+            Some("aifo-net-x"),
+            None,
+            "c-cpp",
+            "aifo-cpp-toolchain:latest",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let cpp_joined = shell_join(&cpp);
+        assert!(
+            cpp_joined.contains("aifo-ccache:/home/coder/.cache/ccache"),
+            "missing ccache volume: {}",
+            cpp_joined
+        );
+        assert!(
+            cpp_joined.contains("CCACHE_DIR=/home/coder/.cache/ccache"),
+            "missing CCACHE_DIR env: {}",
+            cpp_joined
+        );
+
+        // go: GOPATH/GOMODCACHE/GOCACHE and volume
+        let go = build_sidecar_run_preview(
+            "tc-go-cache",
+            Some("aifo-net-x"),
+            None,
+            "go",
+            "golang:1.22-bookworm",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let go_joined = shell_join(&go);
+        assert!(
+            go_joined.contains("aifo-go:/go"),
+            "missing go volume: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOPATH=/go"),
+            "missing GOPATH env: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOMODCACHE=/go/pkg/mod"),
+            "missing GOMODCACHE env: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOCACHE=/go/build-cache"),
+            "missing GOCACHE env: {}",
+            go_joined
+        );
+    }
 }
