@@ -1479,9 +1479,9 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     Err("notifications-command not found in ~/.aider.conf.yml".to_string())
 }
 
-/// Validate and, if allowed, execute the host 'say' command with provided args.
+//// Validate and, if allowed, execute the host 'say' command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
-fn notifications_handle_request(argv: &[String], verbose: bool, timeout_secs: u64) -> Result<(i32, Vec<u8>), String> {
+fn notifications_handle_request(argv: &[String], _verbose: bool, timeout_secs: u64) -> Result<(i32, Vec<u8>), String> {
     let cfg_argv = parse_notifications_command_config()?;
     if cfg_argv.is_empty() {
         return Err("notifications-command is empty".to_string());
