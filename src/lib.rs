@@ -1464,7 +1464,9 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
             continue;
         }
         if let Some(rest) = l.strip_prefix("notifications-command:") {
-            let val = rest.trim();
+            let mut val = rest.trim().to_string();
+            // Tolerate configs/tests that append a literal "\n" at end of line
+            if val.ends_with("\\n") { val.truncate(val.len() - 2); }
             if val.is_empty() {
                 return Err("notifications-command is empty or multi-line values are not supported".to_string());
             }
@@ -1532,7 +1534,7 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
                 return Ok(argv);
             }
             // Fallback: treat as a single-line shell-like string
-            let unquoted = strip_outer_quotes(val);
+            let unquoted = strip_outer_quotes(&val);
             let argv = shell_like_split_args(&unquoted);
             if argv.is_empty() {
                 return Err("notifications-command parsed to an empty command".to_string());
