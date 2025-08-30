@@ -2295,3 +2295,54 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_decode_mixed() {
+        assert_eq!(url_decode("a+b%20c%2F%3F%25"), "a b c/?%");
+        assert_eq!(url_decode("%41%42%43"), "ABC");
+        assert_eq!(url_decode("no-escapes_here~"), "no-escapes_here~");
+    }
+
+    #[test]
+    fn test_parse_form_urlencoded_basic_and_repeated() {
+        let pairs = parse_form_urlencoded("arg=a&arg=b&tool=cargo&cwd=.");
+        let expected = vec![
+            ("arg".to_string(), "a".to_string()),
+            ("arg".to_string(), "b".to_string()),
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
+        assert_eq!(pairs, expected);
+    }
+
+    #[test]
+    fn test_find_crlfcrlf_cases() {
+        assert_eq!(find_crlfcrlf(b"\r\n\r\n"), Some(0));
+        assert_eq!(find_crlfcrlf(b"abc\r\n\r\ndef"), Some(3));
+        assert_eq!(find_crlfcrlf(b"abcdef"), None);
+        assert_eq!(find_crlfcrlf(b"\r\n\r"), None);
+    }
+
+    #[test]
+    fn test_strip_outer_quotes_variants() {
+        assert_eq!(strip_outer_quotes("'abc'"), "abc");
+        assert_eq!(strip_outer_quotes("\"abc\""), "abc");
+        assert_eq!(strip_outer_quotes("'a b'"), "a b");
+        assert_eq!(strip_outer_quotes("noquote"), "noquote");
+        // Only strips if both ends match the same quote type
+        assert_eq!(strip_outer_quotes("'mismatch\""), "'mismatch\"");
+    }
+
+    #[test]
+    fn test_shell_like_split_args_quotes_and_spaces() {
+        let args = shell_like_split_args("'a b' c \"d e\"");
+        assert_eq!(args, vec!["a b".to_string(), "c".to_string(), "d e".to_string()]);
+
+        let args2 = shell_like_split_args("  a   'b c'   d  ");
+        assert_eq!(args2, vec!["a".to_string(), "b c".to_string(), "d".to_string()]);
+    }
+}
