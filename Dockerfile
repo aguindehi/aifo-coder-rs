@@ -45,8 +45,8 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
-RUN chmod 0755 /opt/aifo/bin/aifo-shim \
-    && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
+    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -90,7 +90,7 @@ CMD ["bash"]
 # --- Codex image (adds only Codex CLI on top of base) ---
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
-RUN npm install -g @openai/codex
+RUN npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -99,9 +99,16 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt apt-get; \
+    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+    npm prune -g --omit=dev; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
+    rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+    rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+    rm -rf /opt/yarn-v1.22.22; \
   fi
 
 # --- Crush image (adds only Crush CLI on top of base) ---
@@ -116,9 +123,16 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt apt-get; \
+    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+    npm prune -g --omit=dev; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
+    rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+    rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+    rm -rf /opt/yarn-v1.22.22; \
   fi
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
@@ -133,7 +147,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
     uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
-    uv pip install --python /opt/venv/bin/python aider-chat
+    uv pip install --python /opt/venv/bin/python aider-chat && \
+    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete && \
+    rm -rf /root/.cache/uv /root/.cache/pip
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
@@ -168,8 +184,8 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
-RUN chmod 0755 /opt/aifo/bin/aifo-shim \
-    && for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
+    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -221,9 +237,16 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt apt-get; \
+    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+    npm prune -g --omit=dev; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
+    rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+    rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+    rm -rf /opt/yarn-v1.22.22; \
   fi
 
 # --- Crush slim image ---
@@ -237,9 +260,16 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y apt apt-get; \
+    npm install -g  --omit=dev --no-audit --no-fund --no-update-notifier --no-optional; \
+    npm prune -g --omit=dev; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
+    rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+    rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+    rm -rf /opt/yarn-v1.22.22; \
   fi
 
 # --- Aider slim builder stage ---
@@ -254,7 +284,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
     uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --upgrade pip && \
-    uv pip install --python /opt/venv/bin/python aider-chat
+    uv pip install --python /opt/venv/bin/python aider-chat && \
+    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete && \
+    rm -rf /root/.cache/uv /root/.cache/pip
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
@@ -273,5 +305,4 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove --purge -y apt apt-get; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
-    rm -f /var/lib/apt/lists/*; \
   fi
