@@ -284,9 +284,7 @@ pub fn invalidate_registry_cache() {
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
 pub fn preferred_registry_prefix() -> String {
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
-    }
+    // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
@@ -305,6 +303,9 @@ pub fn preferred_registry_prefix() -> String {
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
         write_registry_cache_disk(&v);
         return v;
+    }
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
     }
 
     // Disk cache disabled: always probe with curl/TCP in this run.
@@ -363,9 +364,7 @@ pub fn preferred_registry_prefix() -> String {
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 pub fn preferred_registry_prefix_quiet() -> String {
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
-    }
+    // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
@@ -382,6 +381,9 @@ pub fn preferred_registry_prefix_quiet() -> String {
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
         write_registry_cache_disk(&v);
         return v;
+    }
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
     }
 
     if which("curl").is_ok() {
