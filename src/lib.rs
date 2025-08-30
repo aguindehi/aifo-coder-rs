@@ -2729,4 +2729,81 @@ mod tests {
         assert!(pairs.contains(&(String::from("b"), String::from(""))), "missing b= in {:?}", pairs);
         assert!(pairs.contains(&(String::from("c"), String::from(""))), "missing c (no '=') in {:?}", pairs);
     }
+
+    #[test]
+    fn test_sidecar_run_preview_no_cache_removes_cache_mounts() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+
+        // rust: no aifo-cargo-* mounts when no_cache=true
+        let rust = build_sidecar_run_preview(
+            "tc-rust-nocache",
+            Some("aifo-net-x"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let r = shell_join(&rust);
+        assert!(!r.contains("aifo-cargo-registry:/usr/local/cargo/registry"), "unexpected cargo registry mount: {}", r);
+        assert!(!r.contains("aifo-cargo-git:/usr/local/cargo/git"), "unexpected cargo git mount: {}", r);
+
+        // node: no npm cache mount
+        let node = build_sidecar_run_preview(
+            "tc-node-nocache",
+            Some("aifo-net-x"),
+            None,
+            "node",
+            "node:20-bookworm-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let n = shell_join(&node);
+        assert!(!n.contains("aifo-npm-cache:/home/coder/.npm"), "unexpected npm cache mount: {}", n);
+
+        // python: no pip cache mount
+        let py = build_sidecar_run_preview(
+            "tc-python-nocache",
+            Some("aifo-net-x"),
+            None,
+            "python",
+            "python:3.12-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let p = shell_join(&py);
+        assert!(!p.contains("aifo-pip-cache:/home/coder/.cache/pip"), "unexpected pip cache mount: {}", p);
+
+        // c-cpp: no ccache volume
+        let cpp = build_sidecar_run_preview(
+            "tc-cpp-nocache",
+            Some("aifo-net-x"),
+            None,
+            "c-cpp",
+            "aifo-cpp-toolchain:latest",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let c = shell_join(&cpp);
+        assert!(!c.contains("aifo-ccache:/home/coder/.cache/ccache"), "unexpected ccache volume: {}", c);
+
+        // go: no /go volume
+        let go = build_sidecar_run_preview(
+            "tc-go-nocache",
+            Some("aifo-net-x"),
+            None,
+            "go",
+            "golang:1.22-bookworm",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let g = shell_join(&go);
+        assert!(!g.contains("aifo-go:/go"), "unexpected go volume: {}", g);
+    }
 }
