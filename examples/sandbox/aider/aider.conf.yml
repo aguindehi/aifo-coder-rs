@@ -10,6 +10,9 @@ restore-chat-history: true
 llm-history-file: .aider.llm.history
 cache-keepalive-pings: 3 # 15min
 
+notifications: true
+notifications-command: "say 'Task complete. What is your next assignment?'"
+
 multiline: false
 cache-prompts: true
 dark-mode: true
