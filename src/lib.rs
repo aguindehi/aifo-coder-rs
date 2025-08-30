@@ -1956,7 +1956,13 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                             Err(_) => break,
                         }
                     }
-                    let Some(hend) = header_end else { continue };
+                    let Some(hend) = header_end else {
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    };
                     hdr.extend_from_slice(&buf[..hend]);
                     let header_str = String::from_utf8_lossy(&hdr);
                     let mut auth_ok = false;
@@ -2207,7 +2213,13 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     Err(_) => break,
                 }
             }
-            let Some(hend) = header_end else { continue };
+            let Some(hend) = header_end else {
+                let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            };
             hdr.extend_from_slice(&buf[..hend]);
             let header_str = String::from_utf8_lossy(&hdr);
             let mut auth_ok = false;
