@@ -502,6 +502,15 @@ pub fn preferred_registry_prefix() -> String {
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 pub fn preferred_registry_prefix_quiet() -> String {
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
     // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
