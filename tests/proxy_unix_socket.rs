@@ -110,4 +110,12 @@ fn test_proxy_unix_socket_rust_and_node() {
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
     aifo_coder::toolchain_cleanup_session(&sid, verbose);
+
+    // After cleanup, the unix socket directory should be removed by toolchain_cleanup_session
+    let dir_path = std::path::Path::new(&sock_dir);
+    assert!(
+        !dir_path.exists(),
+        "expected unix socket dir to be removed after cleanup: {}",
+        sock_dir
+    );
 }

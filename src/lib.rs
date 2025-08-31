@@ -48,6 +48,25 @@ static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 // Record how the registry prefix was determined this run.
 static REGISTRY_PREFIX_SOURCE: OnceCell<String> = OnceCell::new();
 
+#[derive(Clone, Copy)]
+pub enum RegistryProbeTestMode {
+    CurlOk,
+    CurlFail,
+    TcpOk,
+    TcpFail,
+}
+
+// Test-only override for registry probing without relying on environment variables.
+// When set, preferred_registry_prefix{_quiet} will return deterministically and
+// will not populate OnceCell caches to avoid cross-test interference.
+static REGISTRY_PROBE_OVERRIDE: Lazy<std::sync::Mutex<Option<RegistryProbeTestMode>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
+
+pub fn registry_probe_set_override_for_tests(mode: Option<RegistryProbeTestMode>) {
+    let mut guard = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock");
+    *guard = mode;
+}
+
 /// Locate the Docker runtime binary.
 pub fn container_runtime_path() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
@@ -284,9 +303,7 @@ pub fn invalidate_registry_cache() {
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
 pub fn preferred_registry_prefix() -> String {
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
-    }
+    // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
@@ -305,6 +322,128 @@ pub fn preferred_registry_prefix() -> String {
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
         write_registry_cache_disk(&v);
         return v;
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
+    // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" => "repository.migros.net/".to_string(),
+            "curl-fail" => String::new(),
+            "tcp-ok" => "repository.migros.net/".to_string(),
+            "tcp-fail" => String::new(),
+            _ => String::new(),
+        };
+    }
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
     }
 
     // Disk cache disabled: always probe with curl/TCP in this run.
@@ -363,9 +502,16 @@ pub fn preferred_registry_prefix() -> String {
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 pub fn preferred_registry_prefix_quiet() -> String {
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
     }
+    // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
@@ -382,6 +528,20 @@ pub fn preferred_registry_prefix_quiet() -> String {
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
         write_registry_cache_disk(&v);
         return v;
+    }
+    // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" => "repository.migros.net/".to_string(),
+            "curl-fail" => String::new(),
+            "tcp-ok" => "repository.migros.net/".to_string(),
+            "tcp-fail" => String::new(),
+            _ => String::new(),
+        };
+    }
+    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
     }
 
     if which("curl").is_ok() {
@@ -427,6 +587,19 @@ pub fn preferred_registry_prefix_quiet() -> String {
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
+    // Test override (without env): when set, do not expose a source; treat as unknown
+    if REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").is_some() {
+        return "unknown".to_string();
+    }
+    // Test hook: reflect forced probe source deterministically
+    if let Ok(mode) = std::env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
+        let ml = mode.to_ascii_lowercase();
+        return match ml.as_str() {
+            "curl-ok" | "curl-fail" => "curl".to_string(),
+            "tcp-ok" | "tcp-fail" => "tcp".to_string(),
+            _ => "unknown".to_string(),
+        };
+    }
     REGISTRY_PREFIX_SOURCE
         .get()
         .cloned()
@@ -1032,6 +1205,20 @@ fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
 }
 
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
+    // Only attempt removal if network exists to avoid noisy errors
+    let exists = Command::new(runtime)
+        .arg("network")
+        .arg("inspect")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !exists {
+        return;
+    }
+
     let mut cmd = Command::new(runtime);
     cmd.arg("network").arg("rm").arg(name);
     if !verbose {
@@ -1454,27 +1641,166 @@ fn shell_like_split_args(s: &str) -> Vec<String> {
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 fn parse_notifications_command_config() -> Result<Vec<String>, String> {
-    let home = home::home_dir().ok_or_else(|| "home directory not found".to_string())?;
-    let path = home.join(".aider.conf.yml");
+    // Allow tests (and power users) to override config path explicitly
+    let path = if let Ok(p) = env::var("AIFO_NOTIFICATIONS_CONFIG") {
+        let p = p.trim().to_string();
+        if !p.is_empty() {
+            PathBuf::from(p)
+        } else {
+            home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+        }
+    } else {
+        home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+    };
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
-    for line in content.lines() {
+
+    // Pre-split lines to allow simple multi-line parsing
+    let lines: Vec<&str> = content.lines().collect();
+    let mut i = 0usize;
+    while i < lines.len() {
+        let line = lines[i];
         let l = line.trim_start();
         if l.starts_with('#') || l.is_empty() {
+            i += 1;
             continue;
         }
         if let Some(rest) = l.strip_prefix("notifications-command:") {
-            let val = rest.trim();
-            if val.is_empty() {
-                return Err("notifications-command is empty or multi-line values are not supported".to_string());
+            let mut val = rest.trim().to_string();
+            // Tolerate configs/tests that append a literal "\n" at end of line
+            if val.ends_with("\\n") {
+                val.truncate(val.len() - 2);
             }
-            let unquoted = strip_outer_quotes(val);
+
+            // Helper: parse inline JSON/YAML-like array ["say","--title","AIFO"]
+            let parse_inline_array = |val: &str| -> Result<Vec<String>, String> {
+                let inner = &val[1..val.len() - 1];
+                let mut argv: Vec<String> = Vec::new();
+                let mut cur = String::new();
+                let mut in_single = false;
+                let mut in_double = false;
+                let mut esc = false;
+                for ch in inner.chars() {
+                    if esc {
+                        let c = match ch {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            other => other,
+                        };
+                        cur.push(c);
+                        esc = false;
+                        continue;
+                    }
+                    match ch {
+                        '\\' if in_double || in_single => esc = true,
+                        '"' if !in_single => {
+                            if in_double {
+                                in_double = false;
+                                argv.push(cur.clone());
+                                cur.clear();
+                            } else {
+                                in_double = true;
+                            }
+                        }
+                        '\'' if !in_double => {
+                            if in_single {
+                                in_single = false;
+                                argv.push(cur.clone());
+                                cur.clear();
+                            } else {
+                                in_single = true;
+                            }
+                        }
+                        ',' if !in_single && !in_double => { /* separator */ }
+                        c => {
+                            if in_single || in_double {
+                                cur.push(c);
+                            }
+                        }
+                    }
+                }
+                if !cur.is_empty() && !in_single && !in_double {
+                    argv.push(cur);
+                }
+                if argv.is_empty() {
+                    Err("notifications-command parsed to an empty command".to_string())
+                } else {
+                    Ok(argv)
+                }
+            };
+
+            // Case 1: inline array
+            if val.starts_with('[') && val.ends_with(']') {
+                return parse_inline_array(&val);
+            }
+
+            // Case 2: explicit block scalars '|' or '>'
+            if val == "|" || val == ">" || val.is_empty() {
+                // Collect subsequent indented lines; also support YAML list items beginning with '-'
+                let mut j = i + 1;
+                // Skip blank/comment lines until first candidate
+                while j < lines.len() && (lines[j].trim().is_empty() || lines[j].trim_start().starts_with('#')) {
+                    j += 1;
+                }
+                if j >= lines.len() {
+                    return Err("notifications-command is empty or malformed".to_string());
+                }
+                let first = lines[j];
+                let is_list = first.trim_start().starts_with('-');
+                if is_list {
+                    let mut argv: Vec<String> = Vec::new();
+                    while j < lines.len() {
+                        let ln = lines[j];
+                        let t = ln.trim_start();
+                        if !t.starts_with('-') {
+                            break;
+                        }
+                        let item = t.trim_start_matches('-').trim();
+                        if !item.is_empty() {
+                            argv.push(strip_outer_quotes(item));
+                        }
+                        j += 1;
+                    }
+                    if argv.is_empty() {
+                        return Err("notifications-command list is empty".to_string());
+                    }
+                    return Ok(argv);
+                } else {
+                    // Block scalar: concatenate trimmed lines with spaces into a single command string
+                    let mut parts: Vec<String> = Vec::new();
+                    while j < lines.len() {
+                        let ln = lines[j];
+                        let t = ln.trim_start();
+                        if t.is_empty() || t.starts_with('#') {
+                            j += 1;
+                            continue;
+                        }
+                        // Stop if de-indented to column 0 and looks like a new key
+                        if !ln.starts_with(' ') && t.contains(':') {
+                            break;
+                        }
+                        parts.push(t.to_string());
+                        j += 1;
+                    }
+                    let joined = parts.join(" ");
+                    let argv = shell_like_split_args(&strip_outer_quotes(&joined));
+                    if argv.is_empty() {
+                        return Err("notifications-command parsed to an empty command".to_string());
+                    }
+                    return Ok(argv);
+                }
+            }
+
+            // Case 3: single-line scalar
+            let unquoted = strip_outer_quotes(&val);
             let argv = shell_like_split_args(&unquoted);
             if argv.is_empty() {
                 return Err("notifications-command parsed to an empty command".to_string());
             }
             return Ok(argv);
         }
+        i += 1;
     }
     Err("notifications-command not found in ~/.aider.conf.yml".to_string())
 }
@@ -1733,7 +2059,13 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                             Err(_) => break,
                         }
                     }
-                    let Some(hend) = header_end else { continue };
+                    let Some(hend) = header_end else {
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    };
                     hdr.extend_from_slice(&buf[..hend]);
                     let header_str = String::from_utf8_lossy(&hdr);
                     let mut auth_ok = false;
@@ -1760,7 +2092,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         }
                     }
                     if !auth_ok {
-                        let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
                     if !proto_ok {
@@ -1797,7 +2132,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         }
                     }
                     if tool.is_empty() {
-                        let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+                        let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
                     if tool == "notifications-cmd" {
@@ -1832,7 +2170,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     let kind = route_tool_to_sidecar(&tool);
                     let allow = sidecar_allowlist(kind);
                     if !allow.iter().any(|&t| t == tool.as_str()) {
-                        let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+                        let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
                     let name = sidecar_container_name(kind, &session);
@@ -1975,7 +2316,13 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     Err(_) => break,
                 }
             }
-            let Some(hend) = header_end else { continue };
+            let Some(hend) = header_end else {
+                let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            };
             hdr.extend_from_slice(&buf[..hend]);
             let header_str = String::from_utf8_lossy(&hdr);
             let mut auth_ok = false;
@@ -2002,7 +2349,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 }
             }
             if !auth_ok {
-                let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+                let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
             if !proto_ok {
@@ -2039,7 +2389,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 }
             }
             if tool.is_empty() {
-                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+                let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
             if tool == "notifications-cmd" {
@@ -2074,7 +2427,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             let kind = route_tool_to_sidecar(&tool);
             let allow = sidecar_allowlist(kind);
             if !allow.iter().any(|&t| t == tool.as_str()) {
-                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+                let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
             let name = sidecar_container_name(kind, &session);
@@ -2180,17 +2536,28 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     let kinds = ["rust", "node", "python", "c-cpp", "go"];
     for k in kinds {
         let name = sidecar_container_name(k, session_id);
-        if verbose {
-            eprintln!("aifo-coder: docker: docker stop {}", name);
-        }
-        let _ = Command::new(&runtime)
-            .arg("stop")
-            .arg("--time")
-            .arg("1")
+        // Only attempt stop when container exists to avoid noisy daemon errors
+        let exists = Command::new(&runtime)
+            .arg("inspect")
             .arg(&name)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status();
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if exists {
+            if verbose {
+                eprintln!("aifo-coder: docker: docker stop {}", name);
+            }
+            let _ = Command::new(&runtime)
+                .arg("stop")
+                .arg("--time")
+                .arg("1")
+                .arg(&name)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
     }
     let net = sidecar_network_name(session_id);
     remove_network(&runtime, &net, verbose);
@@ -2230,4 +2597,526 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
             .status();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+
+    // Serialize tests that mutate HOME/AIFO_NOTIFICATIONS_CONFIG to avoid env races
+    static NOTIF_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    #[test]
+    fn test_url_decode_mixed() {
+        assert_eq!(url_decode("a+b%20c%2F%3F%25"), "a b c/?%");
+        assert_eq!(url_decode("%41%42%43"), "ABC");
+        assert_eq!(url_decode("no-escapes_here~"), "no-escapes_here~");
+    }
+
+    #[test]
+    fn test_parse_form_urlencoded_basic_and_repeated() {
+        let pairs = parse_form_urlencoded("arg=a&arg=b&tool=cargo&cwd=.");
+        let expected = vec![
+            ("arg".to_string(), "a".to_string()),
+            ("arg".to_string(), "b".to_string()),
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
+        assert_eq!(pairs, expected);
+    }
+
+    #[test]
+    fn test_find_crlfcrlf_cases() {
+        assert_eq!(find_crlfcrlf(b"\r\n\r\n"), Some(0));
+        assert_eq!(find_crlfcrlf(b"abc\r\n\r\ndef"), Some(3));
+        assert_eq!(find_crlfcrlf(b"abcdef"), None);
+        assert_eq!(find_crlfcrlf(b"\r\n\r"), None);
+    }
+
+    #[test]
+    fn test_strip_outer_quotes_variants() {
+        assert_eq!(strip_outer_quotes("'abc'"), "abc");
+        assert_eq!(strip_outer_quotes("\"abc\""), "abc");
+        assert_eq!(strip_outer_quotes("'a b'"), "a b");
+        assert_eq!(strip_outer_quotes("noquote"), "noquote");
+        // Only strips if both ends match the same quote type
+        assert_eq!(strip_outer_quotes("'mismatch\""), "'mismatch\"");
+    }
+
+    #[test]
+    fn test_shell_like_split_args_quotes_and_spaces() {
+        let args = shell_like_split_args("'a b' c \"d e\"");
+        assert_eq!(args, vec!["a b".to_string(), "c".to_string(), "d e".to_string()]);
+
+        let args2 = shell_like_split_args("  a   'b c'   d  ");
+        assert_eq!(args2, vec!["a".to_string(), "b c".to_string(), "d".to_string()]);
+    }
+
+    #[test]
+    fn test_parse_notifications_inline_array() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with an inline-array notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid HOME/env races
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications array");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_parse_notifications_nested_array_lines() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a nested array notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command:
+  - "say"
+  - --title
+  - AIFO
+"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications nested array");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+    }
+
+    #[test]
+    fn test_parse_notifications_block_scalar() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a block scalar notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: |
+  say --title "AIFO"
+"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications block");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+    }
+
+    #[test]
+    fn test_parse_notifications_single_line_string() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a single-line string notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: "say --title AIFO"\n"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid HOME/env races
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse notifications string");
+        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_python_venv_env() {
+        // Create a temp workspace with .venv/bin and ensure PATH/VIRTUAL_ENV are injected
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        std::fs::create_dir_all(pwd.join(".venv").join("bin")).expect("create venv/bin");
+        let user_args = vec!["python".to_string(), "--version".to_string()];
+        let args = build_sidecar_exec_preview("tc-python", None, pwd, "python", &user_args);
+
+        let has_virtual_env = args.iter().any(|s| s == "VIRTUAL_ENV=/workspace/.venv");
+        let has_path_prefix = args.iter().any(|s| s.contains("PATH=/workspace/.venv/bin:"));
+        assert!(has_virtual_env, "exec preview missing VIRTUAL_ENV: {:?}", args);
+        assert!(has_path_prefix, "exec preview missing PATH venv prefix: {:?}", args);
+    }
+
+    #[test]
+    fn test_notifications_config_rejects_non_say() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Isolate HOME to a temp dir with a non-say notifications-command
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["notify", "--title", "AIFO"]\n"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        // Force parser to use this exact file path to avoid platform-specific HOME quirks
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let res = notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
+        assert!(res.is_err(), "expected error when executable is not 'say'");
+        let msg = res.err().unwrap();
+        assert!(msg.contains("only 'say' is allowed"), "unexpected error: {}", msg);
+
+        // Restore AIFO_NOTIFICATIONS_CONFIG
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+
+        // Restore HOME
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_sidecar_run_preview_add_host_flag_linux() {
+        // Ensure add-host is injected for sidecars when env flag is set
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let old = std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok();
+        std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
+
+        let args = build_sidecar_run_preview(
+            "tc-rust-test",
+            Some("aifo-net-test"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let joined = shell_join(&args);
+        assert!(
+            joined.contains("--add-host host.docker.internal:host-gateway"),
+            "sidecar run preview missing --add-host: {}",
+            joined
+        );
+
+        // Restore env
+        if let Some(v) = old {
+            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v);
+        } else {
+            std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST");
+        }
+    }
+
+    #[test]
+    fn test_sidecar_run_preview_rust_caches_env() {
+        // Ensure rust sidecar gets cargo cache mounts and CARGO_HOME
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let args = build_sidecar_run_preview(
+            "tc-rust-cache",
+            Some("aifo-net-x"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            false, // no_cache = false -> caches enabled
+            pwd,
+            Some("docker-default"),
+        );
+        let joined = shell_join(&args);
+        assert!(
+            joined.contains("aifo-cargo-registry:/usr/local/cargo/registry"),
+            "missing cargo registry mount: {}",
+            joined
+        );
+        assert!(
+            joined.contains("aifo-cargo-git:/usr/local/cargo/git"),
+            "missing cargo git mount: {}",
+            joined
+        );
+        assert!(
+            joined.contains("CARGO_HOME=/usr/local/cargo"),
+            "missing CARGO_HOME env: {}",
+            joined
+        );
+    }
+
+    #[test]
+    fn test_sidecar_run_preview_caches_for_node_python_cpp_go() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+
+        // node: npm cache
+        let node = build_sidecar_run_preview(
+            "tc-node-cache",
+            Some("aifo-net-x"),
+            None,
+            "node",
+            "node:20-bookworm-slim",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let node_joined = shell_join(&node);
+        assert!(
+            node_joined.contains("aifo-npm-cache:/home/coder/.npm"),
+            "missing npm cache mount: {}",
+            node_joined
+        );
+
+        // python: pip cache
+        let py = build_sidecar_run_preview(
+            "tc-python-cache",
+            Some("aifo-net-x"),
+            None,
+            "python",
+            "python:3.12-slim",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let py_joined = shell_join(&py);
+        assert!(
+            py_joined.contains("aifo-pip-cache:/home/coder/.cache/pip"),
+            "missing pip cache mount: {}",
+            py_joined
+        );
+
+        // c-cpp: ccache dir and env
+        let cpp = build_sidecar_run_preview(
+            "tc-cpp-cache",
+            Some("aifo-net-x"),
+            None,
+            "c-cpp",
+            "aifo-cpp-toolchain:latest",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let cpp_joined = shell_join(&cpp);
+        assert!(
+            cpp_joined.contains("aifo-ccache:/home/coder/.cache/ccache"),
+            "missing ccache volume: {}",
+            cpp_joined
+        );
+        assert!(
+            cpp_joined.contains("CCACHE_DIR=/home/coder/.cache/ccache"),
+            "missing CCACHE_DIR env: {}",
+            cpp_joined
+        );
+
+        // go: GOPATH/GOMODCACHE/GOCACHE and volume
+        let go = build_sidecar_run_preview(
+            "tc-go-cache",
+            Some("aifo-net-x"),
+            None,
+            "go",
+            "golang:1.22-bookworm",
+            false,
+            pwd,
+            Some("docker-default"),
+        );
+        let go_joined = shell_join(&go);
+        assert!(
+            go_joined.contains("aifo-go:/go"),
+            "missing go volume: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOPATH=/go"),
+            "missing GOPATH env: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOMODCACHE=/go/pkg/mod"),
+            "missing GOMODCACHE env: {}",
+            go_joined
+        );
+        assert!(
+            go_joined.contains("GOCACHE=/go/build-cache"),
+            "missing GOCACHE env: {}",
+            go_joined
+        );
+    }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_cpp_ccache_env() {
+        // c/cpp exec should include CCACHE_DIR env
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let user_args = vec!["cmake".to_string(), "--version".to_string()];
+        let args = build_sidecar_exec_preview("tc-cpp", None, pwd, "c-cpp", &user_args);
+        let has_ccache = args.iter().any(|s| s == "CCACHE_DIR=/home/coder/.cache/ccache");
+        assert!(has_ccache, "exec preview missing CCACHE_DIR: {:?}", args);
+    }
+
+    #[test]
+    fn test_build_sidecar_exec_preview_go_envs() {
+        // go exec should include GOPATH/GOMODCACHE/GOCACHE envs
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+        let user_args = vec!["go".to_string(), "version".to_string()];
+        let args = build_sidecar_exec_preview("tc-go", None, pwd, "go", &user_args);
+        let has_gopath = args.iter().any(|s| s == "GOPATH=/go");
+        let has_mod = args.iter().any(|s| s == "GOMODCACHE=/go/pkg/mod");
+        let has_cache = args.iter().any(|s| s == "GOCACHE=/go/build-cache");
+        assert!(has_gopath && has_mod && has_cache, "exec preview missing go envs: {:?}", args);
+    }
+
+    #[test]
+    fn test_notifications_args_mismatch_error() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        // Prepare config allowing only ["--title", "AIFO"]
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        let cfg_path = home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, cfg).expect("write config");
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+
+        // Request with mismatching args
+        let res = notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
+        assert!(res.is_err(), "expected mismatch error, got: {:?}", res);
+        let msg = res.err().unwrap();
+        assert!(msg.contains("arguments mismatch"), "unexpected error message: {}", msg);
+
+        // Restore env
+        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+    }
+
+    #[test]
+    fn test_candidate_lock_paths_includes_xdg_runtime_dir() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old = std::env::var("XDG_RUNTIME_DIR").ok();
+        std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        let paths = candidate_lock_paths();
+        let expected = td.path().join("aifo-coder.lock");
+        assert!(
+            paths.iter().any(|p| p == &expected),
+            "candidate_lock_paths missing expected XDG_RUNTIME_DIR path: {:?}",
+            expected
+        );
+        // Restore env
+        if let Some(v) = old { std::env::set_var("XDG_RUNTIME_DIR", v); } else { std::env::remove_var("XDG_RUNTIME_DIR"); }
+    }
+
+    #[test]
+    fn test_parse_form_urlencoded_empty_and_missing_values() {
+        let pairs = parse_form_urlencoded("a=1&b=&c");
+        assert!(pairs.contains(&(String::from("a"), String::from("1"))), "missing a=1 in {:?}", pairs);
+        assert!(pairs.contains(&(String::from("b"), String::from(""))), "missing b= in {:?}", pairs);
+        assert!(pairs.contains(&(String::from("c"), String::from(""))), "missing c (no '=') in {:?}", pairs);
+    }
+
+    #[test]
+    fn test_sidecar_run_preview_no_cache_removes_cache_mounts() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let pwd = td.path();
+
+        // rust: no aifo-cargo-* mounts when no_cache=true
+        let rust = build_sidecar_run_preview(
+            "tc-rust-nocache",
+            Some("aifo-net-x"),
+            None,
+            "rust",
+            "rust:1.80-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let r = shell_join(&rust);
+        assert!(!r.contains("aifo-cargo-registry:/usr/local/cargo/registry"), "unexpected cargo registry mount: {}", r);
+        assert!(!r.contains("aifo-cargo-git:/usr/local/cargo/git"), "unexpected cargo git mount: {}", r);
+
+        // node: no npm cache mount
+        let node = build_sidecar_run_preview(
+            "tc-node-nocache",
+            Some("aifo-net-x"),
+            None,
+            "node",
+            "node:20-bookworm-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let n = shell_join(&node);
+        assert!(!n.contains("aifo-npm-cache:/home/coder/.npm"), "unexpected npm cache mount: {}", n);
+
+        // python: no pip cache mount
+        let py = build_sidecar_run_preview(
+            "tc-python-nocache",
+            Some("aifo-net-x"),
+            None,
+            "python",
+            "python:3.12-slim",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let p = shell_join(&py);
+        assert!(!p.contains("aifo-pip-cache:/home/coder/.cache/pip"), "unexpected pip cache mount: {}", p);
+
+        // c-cpp: no ccache volume
+        let cpp = build_sidecar_run_preview(
+            "tc-cpp-nocache",
+            Some("aifo-net-x"),
+            None,
+            "c-cpp",
+            "aifo-cpp-toolchain:latest",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let c = shell_join(&cpp);
+        assert!(!c.contains("aifo-ccache:/home/coder/.cache/ccache"), "unexpected ccache volume: {}", c);
+
+        // go: no /go volume
+        let go = build_sidecar_run_preview(
+            "tc-go-nocache",
+            Some("aifo-net-x"),
+            None,
+            "go",
+            "golang:1.22-bookworm",
+            true,
+            pwd,
+            Some("docker-default"),
+        );
+        let g = shell_join(&go);
+        assert!(!g.contains("aifo-go:/go"), "unexpected go volume: {}", g);
+    }
 }

@@ -25,4 +25,7 @@ fn test_route_tool_to_sidecar_mapping() {
 
     assert_eq!(aifo_coder::route_tool_to_sidecar("go"), "go");
     assert_eq!(aifo_coder::route_tool_to_sidecar("gofmt"), "go");
+
+    // Unknown tools default to node sidecar (defense-in-depth allowlist applies)
+    assert_eq!(aifo_coder::route_tool_to_sidecar("unknown-tool"), "node");
 }
