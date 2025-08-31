@@ -406,8 +406,65 @@ build-launcher:
 	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
 	fi
 
-.PHONY: test
+.PHONY: test test-cargo test-legacy
 test:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH$${ARCH:+}" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest (rustup stable) ..."; \
+	    rustup run stable cargo nextest run; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	  else \
+	    echo "cargo-nextest not found locally and docker unavailable; falling back to 'cargo test' via rustup ..."; \
+	    rustup run stable cargo test; \
+	  fi; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest ..."; \
+	    cargo nextest run; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	  else \
+	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
+	    cargo test; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	else \
+	  echo "Error: neither cargo-nextest/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
+
+test-cargo:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
@@ -437,6 +494,8 @@ test:
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
 	fi
+
+test-legacy: test-cargo
 
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
 test-proxy-smoke:

@@ -26,6 +26,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu
 
+# Pre-install cargo-nextest to speed up tests inside this container
+RUN cargo install cargo-nextest --locked
+
 # Build the Rust aifo-shim binary for the current build platform
 COPY Cargo.toml .
 COPY src ./src
