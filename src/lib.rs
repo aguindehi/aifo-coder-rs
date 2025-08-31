@@ -359,6 +359,15 @@ pub fn preferred_registry_prefix() -> String {
             RegistryProbeTestMode::TcpFail => String::new(),
         };
     }
+    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+        return match mode {
+            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::CurlFail => String::new(),
+            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
+            RegistryProbeTestMode::TcpFail => String::new(),
+        };
+    }
     // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
     if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
         let ml = mode.to_ascii_lowercase();
@@ -506,6 +515,10 @@ pub fn preferred_registry_prefix_quiet() -> String {
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
+    // Test override (without env): when set, do not expose a source; treat as unknown
+    if REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").is_some() {
+        return "unknown".to_string();
+    }
     // Test hook: reflect forced probe source deterministically
     if let Ok(mode) = std::env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
         let ml = mode.to_ascii_lowercase();
