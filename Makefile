@@ -57,13 +57,13 @@ help:
 	@echo ""
 	@echo "  Hints: set RELEASE_TARGETS to: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin]"
 	@echo ""
-	@echo "Build launcher:"
-	@echo ""
-	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
-	@echo ""
 	@echo "Install:"
 	@echo ""
 	@echo "  install ..................... Install binary, man page, LICENSE/README and examples, then build Docker images locally"
+	@echo ""
+	@echo "Build launcher:"
+	@echo ""
+	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
 	@echo ""
 	@echo "Build images:"
 	@echo ""
@@ -79,8 +79,9 @@ help:
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
 	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
-	@echo "  rebuild-toolchain-cpp ....... Rebuild c-cpp toolchain image without cache"
-	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo ""
+	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
+	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
@@ -95,39 +96,52 @@ help:
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
+	@echo "  rebuild-toolchain-cpp ....... Rebuild only the c-cpp toolchain image without cache"
 	@echo ""
 	@echo "Rebuild existing images by prefix:"
 	@echo ""
 	@echo "  rebuild-existing ............ Rebuild any existing local images with IMAGE_PREFIX (using cache)"
 	@echo "  rebuild-existing-nocache .... Same, but without cache"
 	@echo ""
+	@echo "Publish images:"
+	@echo ""
+	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo ""
 	@echo "Utilities:"
 	@echo ""
 	@echo "  clean ....................... Remove built images (ignores errors if not present)"
+	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
-	@echo "  docker-images ............... Show the available images in the local Docker registry"
-	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
 	@echo "  sbom ........................ Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)"
-	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
-	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
-	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
+	@echo ""
+	@echo "  docker-images ............... Show the available images in the local Docker registry"
+	@echo "  docker-enter ................ Enter a running container via docker exec with GPG runtime prepared"
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
 	@echo "  gpg-show-config ............. Show current git GPG signing-related configuration"
-	@echo ""
 	@echo "  gpg-enable-signing .......... Re-enable GPG signing for commits and tags in this repo"
 	@echo "  gpg-disable-signing ......... Disable GPG signing for commits and tags in this repo (use if commits fail to sign)"
 	@echo "  gpg-disable-signing-global .. Disable GPG signing globally (in your ~/.gitconfig)"
 	@echo "  gpg-unset-signing ........... Unset local signing config for this repo (return to defaults)"
 	@echo ""
 	@echo "  git-show-signatures ........ Show commit signature status (git log %h %G? %s)"
-	@echo ""
 	@echo "  git-commit-no-sign .......... Commit staged changes without GPG signing (MESSAGE='your message')"
 	@echo "  git-commit-no-sign-all ...... Stage all and commit without signing (MESSAGE='your message' optional)"
 	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
+	@echo ""
+	@echo "Test targets:"
+	@echo ""
+	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
+	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
+	@echo "  test-legacy ................. Alias for test-cargo"
+	@echo "  test-proxy-smoke ............ Run proxy smoke test (ignored by default)"
+	@echo "  test-toolchain-live ......... Run live toolchain tests (ignored by default)"
+	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
+	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -273,6 +287,47 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
+.PHONY: build-debug
+build-debug:
+	@set -e; \
+	STAGE="$${STAGE:-aider}"; \
+	echo "Debug building stage '$$STAGE' with docker buildx (plain progress) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	fi; \
+	case "$$STAGE" in \
+	  codex) OUT="$(CODEX_IMAGE)" ;; \
+	  crush) OUT="$(CRUSH_IMAGE)" ;; \
+	  aider) OUT="$(AIDER_IMAGE)" ;; \
+	  codex-slim) OUT="$(CODEX_IMAGE_SLIM)" ;; \
+	  crush-slim) OUT="$(CRUSH_IMAGE_SLIM)" ;; \
+	  aider-slim) OUT="$(AIDER_IMAGE_SLIM)" ;; \
+	  rust-builder) OUT="$(RUST_BUILDER_IMAGE)" ;; \
+	  *) OUT="$(IMAGE_PREFIX)-$$STAGE:$(TAG)" ;; \
+	esac; \
+	if ! docker buildx version >/dev/null 2>&1; then \
+	  echo "Error: docker buildx is not available; please install/enable buildx." >&2; \
+	  exit 1; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker buildx build --progress=plain --load \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --target "$$STAGE" \
+	    -t "$$OUT" \
+	    -t "$${RP}$$OUT" .; \
+	else \
+	  docker buildx build --progress=plain --load \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --target "$$STAGE" \
+	    -t "$$OUT" .; \
+	fi
+
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@echo "Building aifo-cpp-toolchain:latest ..."
@@ -406,8 +461,65 @@ build-launcher:
 	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
 	fi
 
-.PHONY: test
+.PHONY: test test-cargo test-legacy
 test:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH$${ARCH:+}" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest (rustup stable) ..."; \
+	    rustup run stable cargo nextest run; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	  else \
+	    echo "cargo-nextest not found locally and docker unavailable; falling back to 'cargo test' via rustup ..."; \
+	    rustup run stable cargo test; \
+	  fi; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest ..."; \
+	    cargo nextest run; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" \
+	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	      -v "$$PWD/target:/workspace/target" \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	  else \
+	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
+	    cargo test; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run'; \
+	else \
+	  echo "Error: neither cargo-nextest/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
+
+test-cargo:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
@@ -437,6 +549,8 @@ test:
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
 	fi
+
+test-legacy: test-cargo
 
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
 test-proxy-smoke:
@@ -1150,7 +1264,8 @@ loc:
 	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
 	    | xargs -0 wc -l 2>/dev/null | awk 'END{print ($$1+0)}'; \
 	}; \
-	rust=$$(count "-name '*.rs'"); \
+	rust_src=$$(count "-path './src/*' -a -name '*.rs' -o -name 'build.rs'"); \
+	rust_tests=$$(count "-path './tests/*' -a -name '*.rs'"); \
 	shell=$$(count "-name '*.sh' -o -name '*.bash' -o -name '*.zsh'"); \
 	makef=$$(count "-name 'Makefile' -o -name '*.mk'"); \
 	docker=$$(count "-name 'Dockerfile' -o -name '*.dockerfile'"); \
@@ -1159,9 +1274,10 @@ loc:
 	json=$$(count "-name '*.json'"); \
 	md=$$(count "-name '*.md'"); \
 	other=$$(count "-name '*.conf'"); \
-	total=$$((rust+shell+makef+docker+yaml+toml+json+md+other)); \
+	total=$$((rust_src+rust_tests+shell+makef+docker+yaml+toml+json+md+other)); \
 	printf "Lines of code (excluding .git, target, dist, build, node_modules):\n\n"; \
-	printf "  Rust (.rs):      %8d\n" "$$rust"; \
+	printf "  Rust source:     %8d  (src/, build.rs)\n" "$$rust_src"; \
+	printf "  Rust tests:      %8d  (tests/)\n" "$$rust_tests"; \
 	printf "  Shell scripts:   %8d\n" "$$shell"; \
 	printf "  Makefiles:       %8d\n" "$$makef"; \
 	printf "  Dockerfiles:     %8d\n" "$$docker"; \
