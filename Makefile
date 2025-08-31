@@ -78,6 +78,7 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs (set STAGE=codex|crush|aider|*-slim|rust-builder; default: aider)"
 	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
 	@echo ""
 	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -280,6 +281,47 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${RP}$(RUST_BUILDER_IMAGE)" .; \
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	fi
+
+.PHONY: build-debug
+build-debug:
+	@set -e; \
+	STAGE="$${STAGE:-aider}"; \
+	echo "Debug building stage '$$STAGE' with docker buildx (plain progress) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	fi; \
+	case "$$STAGE" in \
+	  codex) OUT="$(CODEX_IMAGE)" ;; \
+	  crush) OUT="$(CRUSH_IMAGE)" ;; \
+	  aider) OUT="$(AIDER_IMAGE)" ;; \
+	  codex-slim) OUT="$(CODEX_IMAGE_SLIM)" ;; \
+	  crush-slim) OUT="$(CRUSH_IMAGE_SLIM)" ;; \
+	  aider-slim) OUT="$(AIDER_IMAGE_SLIM)" ;; \
+	  rust-builder) OUT="$(RUST_BUILDER_IMAGE)" ;; \
+	  *) OUT="$(IMAGE_PREFIX)-$$STAGE:$(TAG)" ;; \
+	esac; \
+	if ! docker buildx version >/dev/null 2>&1; then \
+	  echo "Error: docker buildx is not available; please install/enable buildx." >&2; \
+	  exit 1; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  docker buildx build --progress=plain --load \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --target "$$STAGE" \
+	    -t "$$OUT" \
+	    -t "$${RP}$$OUT" .; \
+	else \
+	  docker buildx build --progress=plain --load \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --target "$$STAGE" \
+	    -t "$$OUT" .; \
 	fi
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
