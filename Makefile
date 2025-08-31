@@ -1264,7 +1264,8 @@ loc:
 	  eval "find . \\( -path './.git' -o -path './target' -o -path './dist' -o -path './build' -o -path './node_modules' \\) -prune -o -type f \\( $${pat} \\) -print0" \
 	    | xargs -0 wc -l 2>/dev/null | awk 'END{print ($$1+0)}'; \
 	}; \
-	rust=$$(count "-name '*.rs'"); \
+	rust_src=$$(count "-path './src/*' -a -name '*.rs' -o -name 'build.rs'"); \
+	rust_tests=$$(count "-path './tests/*' -a -name '*.rs'"); \
 	shell=$$(count "-name '*.sh' -o -name '*.bash' -o -name '*.zsh'"); \
 	makef=$$(count "-name 'Makefile' -o -name '*.mk'"); \
 	docker=$$(count "-name 'Dockerfile' -o -name '*.dockerfile'"); \
@@ -1273,9 +1274,10 @@ loc:
 	json=$$(count "-name '*.json'"); \
 	md=$$(count "-name '*.md'"); \
 	other=$$(count "-name '*.conf'"); \
-	total=$$((rust+shell+makef+docker+yaml+toml+json+md+other)); \
+	total=$$((rust_src+rust_tests+shell+makef+docker+yaml+toml+json+md+other)); \
 	printf "Lines of code (excluding .git, target, dist, build, node_modules):\n\n"; \
-	printf "  Rust (.rs):      %8d\n" "$$rust"; \
+	printf "  Rust source:     %8d  (src/, build.rs)\n" "$$rust_src"; \
+	printf "  Rust tests:      %8d  (tests/)\n" "$$rust_tests"; \
 	printf "  Shell scripts:   %8d\n" "$$shell"; \
 	printf "  Makefiles:       %8d\n" "$$makef"; \
 	printf "  Dockerfiles:     %8d\n" "$$docker"; \
