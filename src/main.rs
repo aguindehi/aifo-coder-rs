@@ -974,17 +974,24 @@ fn main() -> ExitCode {
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
                 return ExitCode::from(0);
             }
-            // Acquire lock only for real execution
-            let lock = match acquire_lock() {
-                Ok(f) => f,
-                Err(e) => {
-                    eprintln!("{e}");
-                    return ExitCode::from(1);
+            // Acquire lock only for real execution; honor AIFO_CODER_SKIP_LOCK=1 for child panes
+            let skip_lock = std::env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() == Some("1");
+            let maybe_lock = if skip_lock {
+                None
+            } else {
+                match acquire_lock() {
+                    Ok(f) => Some(f),
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return ExitCode::from(1);
+                    }
                 }
             };
             let status = cmd.status().expect("failed to start docker");
-            // Release lock before exiting
-            drop(lock);
+            // Release lock before exiting (if held)
+            if let Some(lock) = maybe_lock {
+                drop(lock);
+            }
 
             // Phase 2 cleanup (if toolchain shims/proxy were attached)
             if let Some(flag) = tc_proxy_flag.take() {

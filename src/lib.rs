@@ -639,8 +639,92 @@ pub fn shell_escape(s: &str) -> String {
     }
 }
 
-/// Candidate lock file locations, ordered by preference.
+//// Repository-scoped locking helpers and candidate paths
+
+/// Try to detect the Git repository root (absolute canonical path).
+/// Returns Some(repo_root) when inside a Git repository; otherwise None.
+pub fn repo_root() -> Option<PathBuf> {
+    // Use `git rev-parse --show-toplevel` to detect the repository top-level
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(s);
+    // Prefer canonical absolute path if possible
+    fs::canonicalize(&p).ok().or(Some(p))
+}
+
+/// Normalize a repository path string for hashing to a stable key.
+/// - Windows: convert separators to backslashes, case-fold the full path to lowercase,
+///   then uppercase drive letter if present (e.g., c:\ -> C:\).
+/// - Other OS: use the canonical absolute path as-is.
+pub fn normalized_repo_key_for_hash(p: &Path) -> String {
+    let abs = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let s = abs.to_string_lossy().to_string();
+    #[cfg(windows)]
+    {
+        // Normalize separators to backslashes and case-fold
+        let mut t = s.replace('/', "\\").to_ascii_lowercase();
+        // Uppercase drive letter if path starts with "c:\" style
+        if t.len() >= 2 && t.as_bytes()[1] == b':' {
+            let mut chs: Vec<u8> = t.into_bytes();
+            chs[0] = (chs[0] as char).to_ascii_uppercase() as u8;
+            return String::from_utf8(chs).unwrap_or_default();
+        }
+        t
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
+/// Simple stable 64-bit FNV-1a hash for strings; returns 16-hex lowercase id.
+fn hash_repo_key_hex(s: &str) -> String {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 1099511628211;
+    let mut h: u64 = FNV_OFFSET;
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(FNV_PRIME);
+    }
+    format!("{:016x}", h)
+}
+
+/// Candidate lock file locations.
+/// - If inside a Git repository:
+///   1) <repo_root>/.aifo-coder.lock
+///   2) <xdg_runtime>/aifo-coder.<hash(repo_root)>.lock
+/// - Otherwise (not in a Git repo), legacy ordered candidates:
+///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
 pub fn candidate_lock_paths() -> Vec<PathBuf> {
+    if let Some(root) = repo_root() {
+        let mut paths = Vec::new();
+        // Preferred: in-repo lock (if writable, acquire will succeed)
+        paths.push(root.join(".aifo-coder.lock"));
+        // Secondary: runtime-scoped hashed lock path
+        let rt_base = env::var("XDG_RUNTIME_DIR")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir());
+        let key = normalized_repo_key_for_hash(&root);
+        let hash = hash_repo_key_hex(&key);
+        paths.push(rt_base.join(format!("aifo-coder.{}.lock", hash)));
+        return paths;
+    }
+
+    // Not inside a Git repository: legacy behavior
     let mut paths = Vec::new();
     if let Some(home) = home::home_dir() {
         paths.push(home.join(".aifo-coder.lock"));
@@ -3021,9 +3105,13 @@ mod tests {
 
     #[test]
     fn test_candidate_lock_paths_includes_xdg_runtime_dir() {
+        // Use a non-repo temp directory to exercise legacy fallback candidates
         let td = tempfile::tempdir().expect("tmpdir");
         let old = std::env::var("XDG_RUNTIME_DIR").ok();
+        let old_cwd = std::env::current_dir().expect("cwd");
         std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        std::env::set_current_dir(td.path()).expect("chdir");
+
         let paths = candidate_lock_paths();
         let expected = td.path().join("aifo-coder.lock");
         assert!(
@@ -3031,8 +3119,10 @@ mod tests {
             "candidate_lock_paths missing expected XDG_RUNTIME_DIR path: {:?}",
             expected
         );
-        // Restore env
+
+        // Restore env and cwd
         if let Some(v) = old { std::env::set_var("XDG_RUNTIME_DIR", v); } else { std::env::remove_var("XDG_RUNTIME_DIR"); }
+        std::env::set_current_dir(old_cwd).ok();
     }
 
     #[test]
