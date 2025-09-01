@@ -868,28 +868,74 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     let mut volume_flags: Vec<OsString> = Vec::new();
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
 
-    // Crush state
-    let crush_dir = host_home.join(".local").join("share").join("crush");
-    fs::create_dir_all(&crush_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
-    // Additional Crush state directory (~/.crush)
-    let crush_state_dir = host_home.join(".crush");
-    fs::create_dir_all(&crush_state_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+    // Per-pane state mounts (Phase 1): when AIFO_CODER_FORK_STATE_DIR is set, mount per-pane
+    // .aider/.codex/.crush directories instead of HOME-based equivalents to avoid shared-state races.
+    if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
+        let sd = state_dir.trim();
+        if !sd.is_empty() {
+            let base = PathBuf::from(sd);
+            let aider_dir = base.join(".aider");
+            let codex_dir = base.join(".codex");
+            let crush_dir = base.join(".crush");
+            let _ = fs::create_dir_all(&aider_dir);
+            let _ = fs::create_dir_all(&codex_dir);
+            let _ = fs::create_dir_all(&crush_dir);
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
+        } else {
+            // Fallback to legacy HOME-based mounts if the env var is empty
+            // Crush state
+            let crush_dir = host_home.join(".local").join("share").join("crush");
+            fs::create_dir_all(&crush_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+            // Additional Crush state directory (~/.crush)
+            let crush_state_dir = host_home.join(".crush");
+            fs::create_dir_all(&crush_state_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
 
-    // Codex state
-    let codex_dir = host_home.join(".codex");
-    fs::create_dir_all(&codex_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            // Codex state
+            let codex_dir = host_home.join(".codex");
+            fs::create_dir_all(&codex_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
 
-    // Aider state dir
-    let aider_dir = host_home.join(".aider");
-    fs::create_dir_all(&aider_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            // Aider state dir
+            let aider_dir = host_home.join(".aider");
+            fs::create_dir_all(&aider_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+        }
+    } else {
+        // Legacy HOME-based mounts (non-fork mode)
+        // Crush state
+        let crush_dir = host_home.join(".local").join("share").join("crush");
+        fs::create_dir_all(&crush_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+        // Additional Crush state directory (~/.crush)
+        let crush_state_dir = host_home.join(".crush");
+        fs::create_dir_all(&crush_state_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+
+        // Codex state
+        let codex_dir = host_home.join(".codex");
+        fs::create_dir_all(&codex_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+
+        // Aider state dir
+        let aider_dir = host_home.join(".aider");
+        fs::create_dir_all(&aider_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+    }
 
     // Aider root-level config files
     for fname in [".aider.conf.yml", ".aider.model.metadata.json", ".aider.model.settings.yml"] {
