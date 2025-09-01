@@ -3209,4 +3209,64 @@ mod tests {
         let g = shell_join(&go);
         assert!(!g.contains("aifo-go:/go"), "unexpected go volume: {}", g);
     }
+
+    #[test]
+    fn test_candidate_lock_paths_repo_scoped() {
+        // Create a temporary git repository and ensure repo-scoped lock paths are preferred
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old_cwd = std::env::current_dir().expect("cwd");
+        let old_xdg = std::env::var("XDG_RUNTIME_DIR").ok();
+
+        // Use a temp runtime dir to make the hashed path predictable and writable
+        std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        std::env::set_current_dir(td.path()).expect("chdir");
+
+        // Initialize a git repo
+        let _ = std::fs::create_dir_all(td.path().join(".git"));
+        // Prefer actual git init if available (more realistic)
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+
+        // Resolve repo root (should be Some for initialized repo)
+        let root = repo_root().unwrap_or_else(|| td.path().to_path_buf());
+
+        // Compute expected candidates
+        let first = root.join(".aifo-coder.lock");
+        let key = normalized_repo_key_for_hash(&root);
+        let mut second_base = std::env::var("XDG_RUNTIME_DIR").ok().filter(|s| !s.is_empty()).map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir());
+        second_base.push(format!("aifo-coder.{}.lock", super::hash_repo_key_hex(&key)));
+
+        let paths = candidate_lock_paths();
+        assert_eq!(paths.get(0), Some(&first), "first candidate must be in-repo lock path");
+        assert_eq!(paths.get(1), Some(&second_base), "second candidate must be hashed runtime-scoped lock path");
+
+        // Restore env and cwd
+        if let Some(v) = old_xdg { std::env::set_var("XDG_RUNTIME_DIR", v); } else { std::env::remove_var("XDG_RUNTIME_DIR"); }
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_normalized_repo_key_windows_drive_uppercase_and_backslashes() {
+        // Create a temp dir and verify normalization rules:
+        // - case-fold whole path
+        // - separators are backslashes
+        // - drive letter uppercased
+        let td = tempfile::tempdir().expect("tmpdir");
+        let canon = std::fs::canonicalize(td.path()).expect("canon").to_string_lossy().to_string();
+
+        let norm = normalized_repo_key_for_hash(td.path());
+        // Build expected normalization from canonical path
+        let lower = canon.replace('/', "\\").to_ascii_lowercase();
+        let mut expected = lower.into_bytes();
+        if expected.len() >= 2 && expected[1] == b':' {
+            expected[0] = (expected[0] as char).to_ascii_uppercase() as u8;
+        }
+        let expected = String::from_utf8(expected).unwrap();
+        assert_eq!(norm, expected, "normalized repo key mismatch on Windows");
+    }
 }
