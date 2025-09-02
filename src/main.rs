@@ -985,6 +985,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     }
 
     // Panes 2..N
+    let mut split_failed = false;
     for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
         let i = idx + 1;
         let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
@@ -998,7 +999,30 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("sh")
             .arg("-lc")
             .arg(inner);
-        let _ = cmd.status();
+        let st = cmd.status();
+        match st {
+            Ok(s) if s.success() => {}
+            Ok(_) | Err(_) => {
+                split_failed = true;
+                break;
+            }
+        }
+    }
+    if split_failed {
+        eprintln!("aifo-coder: tmux split-window failed for one or more panes.");
+        // Best-effort: kill the tmux session to avoid leaving a half-configured window
+        let mut kill = Command::new(&tmux);
+        let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+
+        println!("Clones remain under {} for recovery.", session_dir.display());
+        if let Some((first_dir, first_branch)) = clones.first() {
+            println!("Example recovery:");
+            println!("  git -C \"{}\" status", first_dir.display());
+            println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+        }
+        return ExitCode::from(1);
     }
 
     // Layout and options
