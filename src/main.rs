@@ -762,6 +762,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    if panes > 8 {
+        eprintln!(
+            "aifo-coder: warning: launching {} panes may impact disk/memory and I/O performance.",
+            panes
+        );
+    }
 
     // Identify base
     let (base_label, mut base_ref_or_sha, base_commit_sha) = match aifo_coder::fork_base_info(&repo_root) {
@@ -956,9 +962,24 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("sh")
             .arg("-lc")
             .arg(inner);
-        let st = cmd.status().unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
+        let st = match cmd.status() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("aifo-coder: tmux new-session failed to start: {}", e);
+                println!("One or more clones were created under {}.", session_dir.display());
+                println!("You can inspect them manually. Example:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                }
+                return ExitCode::from(1);
+            }
+        };
         if !st.success() {
             eprintln!("aifo-coder: tmux new-session failed.");
+            println!("Clones remain under {} for recovery.", session_dir.display());
             return ExitCode::from(1);
         }
     }
@@ -1007,6 +1028,21 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         att.arg(a);
     }
     let _ = att.status();
+
+    // After tmux session ends or switch completes, print merging guidance
+    println!();
+    println!("aifo-coder: fork session {} completed.", sid);
+    println!("To inspect and merge changes, you can run:");
+    if let Some((first_dir, first_branch)) = clones.first() {
+        println!("  git -C \"{}\" status", first_dir.display());
+        println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+        println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+        println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+        if base_label != "detached" {
+            println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+            println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+        }
+    }
 
     ExitCode::from(0)
 }
