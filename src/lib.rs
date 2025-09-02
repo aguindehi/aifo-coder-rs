@@ -2847,7 +2847,7 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> io::Result<String> {
         git_dir.join(idx_name)
     };
     // Helper to run git with the temporary index
-    let mut with_tmp_index = |args: &[&str]| -> io::Result<std::process::Output> {
+    let with_tmp_index = |args: &[&str]| -> io::Result<std::process::Output> {
         let mut cmd = Command::new("git");
         cmd.arg("-C").arg(repo_root);
         for a in args {
