@@ -2729,6 +2729,301 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     Ok(())
 }
 
+//// Phase 2: Snapshot and cloning primitives (per spec v4)
+
+// Sanitize a ref path component: lowercase, replace invalid chars with '-',
+// collapse repeated '-', and strip leading/trailing '/', '-' and '.'.
+// Additionally trim to a safe length to keep branch names manageable.
+pub fn fork_sanitize_base_label(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_dash = false;
+    for ch in s.chars().map(|c| c.to_ascii_lowercase()) {
+        let valid = ch.is_ascii_alphanumeric();
+        let replace = match ch {
+            '-' | '.' | '/' | ' ' | '_' => true, // treat these as separators
+            _ => !valid,
+        };
+        if replace {
+            if !last_dash && !out.is_empty() {
+                out.push('-');
+                last_dash = true;
+            }
+        } else {
+            out.push(ch);
+            last_dash = false;
+        }
+    }
+    // Trim leading/trailing separators
+    while matches!(out.chars().next(), Some('-') | Some('/') | Some('.')) {
+        out.remove(0);
+    }
+    while matches!(out.chars().last(), Some('-') | Some('/') | Some('.')) {
+        out.pop();
+    }
+    let mut res = if out.is_empty() { "base".to_string() } else { out };
+    // Collapse any accidental double dashes that may remain
+    while res.contains("--") {
+        res = res.replace("--", "-");
+    }
+    // Enforce a conservative max length for the component
+    const MAX_LEN: usize = 48;
+    if res.len() > MAX_LEN {
+        res.truncate(MAX_LEN);
+        // Avoid trailing dash after truncation
+        while matches!(res.chars().last(), Some('-') | Some('/') | Some('.')) && !res.is_empty() {
+            res.pop();
+        }
+        if res.is_empty() {
+            res = "base".to_string();
+        }
+    }
+    res
+}
+
+/// Compute base ref/SHA and label for the current repository state.
+/// Returns (base_label, base_ref_or_sha, base_commit_sha).
+pub fn fork_base_info(repo_root: &Path) -> io::Result<(String, String, String)> {
+    let root = repo_root;
+    // Determine current branch or detached state
+    let branch_out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("rev-parse")
+        .arg("--abbrev-ref")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()?;
+    let head_out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("rev-parse")
+        .arg("--verify")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok();
+
+    let head_sha = head_out
+        .as_ref()
+        .and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
+        .unwrap_or_default();
+
+    let (base_label, base_ref_or_sha) = if branch_out.status.success() {
+        let name = String::from_utf8_lossy(&branch_out.stdout).trim().to_string();
+        if name == "HEAD" {
+            ("detached".to_string(), head_sha.clone())
+        } else {
+            (fork_sanitize_base_label(&name), name)
+        }
+    } else {
+        ("detached".to_string(), head_sha.clone())
+    };
+    Ok((base_label, base_ref_or_sha, head_sha))
+}
+
+/// Create a temporary snapshot commit that includes staged + unstaged changes without
+/// altering user index or working tree. Uses a temporary index (GIT_INDEX_FILE) and
+/// git commit-tree. Returns the new snapshot commit SHA on success.
+pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> io::Result<String> {
+    // Create a unique temporary index path (under .git when possible)
+    let tmp_idx = {
+        let git_dir_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("rev-parse")
+            .arg("--git-dir")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .ok();
+        let git_dir = git_dir_out
+            .and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo_root.join(".git"));
+        let pid = std::process::id();
+        let idx_name = format!("index.aifo-{}-{}", sid, pid);
+        git_dir.join(idx_name)
+    };
+    // Helper to run git with the temporary index
+    let mut with_tmp_index = |args: &[&str]| -> io::Result<std::process::Output> {
+        let mut cmd = Command::new("git");
+        cmd.arg("-C").arg(repo_root);
+        for a in args {
+            cmd.arg(a);
+        }
+        cmd.env("GIT_INDEX_FILE", &tmp_idx);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.output()
+    };
+
+    // 1) Index current working tree: git add -A
+    let add_out = with_tmp_index(&["add", "-A"])?;
+    if !add_out.status.success() {
+        let _ = fs::remove_file(&tmp_idx);
+        return Err(io::Error::new(io::ErrorKind::Other, "git add -A failed for snapshot"));
+    }
+
+    // 2) write-tree
+    let wt = with_tmp_index(&["write-tree"])?;
+    if !wt.status.success() {
+        let _ = fs::remove_file(&tmp_idx);
+        return Err(io::Error::new(io::ErrorKind::Other, "git write-tree failed for snapshot"));
+    }
+    let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
+
+    // 3) Determine parent if any (HEAD may not exist)
+    let parent = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .arg("rev-parse")
+        .arg("--verify")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    // 4) commit-tree
+    let mut ct = Command::new("git");
+    ct.arg("-C").arg(repo_root);
+    ct.arg("commit-tree").arg(&tree);
+    if let Some(p) = parent.as_deref() {
+        ct.arg("-p").arg(p);
+    }
+    ct.arg("-m").arg(format!("aifo-fork snapshot {}", sid));
+    ct.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let ct_out = ct.output()?;
+    // Clean up temporary index (best-effort)
+    let _ = fs::remove_file(&tmp_idx);
+    if !ct_out.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "git commit-tree failed for snapshot: {}",
+                String::from_utf8_lossy(&ct_out.stderr)
+            ),
+        ));
+    }
+    let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
+    if sha.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::Other, "empty snapshot SHA from commit-tree"));
+    }
+    Ok(sha)
+}
+
+/// Construct the fork branch name for pane i (1-based): fork/<base-label>/<sid>-<i>
+pub fn fork_branch_name(base_label: &str, sid: &str, i: usize) -> String {
+    format!("fork/{}/{}-{}", fork_sanitize_base_label(base_label), sid, i)
+}
+
+/// Base directory for fork panes: <repo-root>/.aifo-coder/forks/<sid>
+pub fn fork_session_dir(repo_root: &Path, sid: &str) -> PathBuf {
+    repo_root.join(".aifo-coder").join("forks").join(sid)
+}
+
+/// Clone and checkout N fork panes based on a base ref/SHA.
+/// Each pane is created under <repo-root>/.aifo-coder/forks/<sid>/pane-<i> and
+/// on success returns a vector of (pane_dir, branch_name).
+pub fn fork_clone_and_checkout_panes(
+    repo_root: &Path,
+    sid: &str,
+    panes: usize,
+    base_ref_or_sha: &str,
+    base_label: &str,
+    dissociate: bool,
+) -> io::Result<Vec<(PathBuf, String)>> {
+    if panes < 1 {
+        return Ok(Vec::new());
+    }
+    let repo_abs = fs::canonicalize(repo_root).unwrap_or_else(|_| repo_root.to_path_buf());
+    let root_str = repo_abs.to_string_lossy().to_string();
+    let session_dir = fork_session_dir(&repo_abs, sid);
+    fs::create_dir_all(&session_dir)?;
+
+    // Try to capture push URL from base repo (non-fatal if unavailable)
+    let base_push_url = Command::new("git")
+        .arg("-C")
+        .arg(&repo_abs)
+        .arg("remote")
+        .arg("get-url")
+        .arg("--push")
+        .arg("origin")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let mut results: Vec<(PathBuf, String)> = Vec::with_capacity(panes);
+
+    for i in 1..=panes {
+        let pane_dir = session_dir.join(format!("pane-{}", i));
+        // git clone --no-checkout --reference-if-able [--dissociate] <repo_root> <pane_dir>
+        let mut clone = Command::new("git");
+        clone.arg("clone")
+            .arg("--no-checkout")
+            .arg("--reference-if-able")
+            .arg(&root_str);
+        if dissociate {
+            clone.arg("--dissociate");
+        }
+        clone.arg(&pane_dir);
+        clone.stdout(Stdio::null()).stderr(Stdio::null());
+        let st = clone.status()?;
+        if !st.success() {
+            let _ = fs::remove_dir_all(&pane_dir);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("git clone failed for pane {}", i),
+            ));
+        }
+
+        // Optional: set origin push URL to match base repo
+        if let Some(ref url) = base_push_url {
+            let _ = Command::new("git")
+                .arg("-C")
+                .arg(&pane_dir)
+                .arg("remote")
+                .arg("set-url")
+                .arg("origin")
+                .arg(url)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+
+        // git checkout -b fork/<base>/<sid>-<i> <base_ref_or_sha>
+        let branch = fork_branch_name(base_label, sid, i);
+        let st = Command::new("git")
+            .arg("-C")
+            .arg(&pane_dir)
+            .arg("checkout")
+            .arg("-b")
+            .arg(&branch)
+            .arg(base_ref_or_sha)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+        if !st.success() {
+            let _ = fs::remove_dir_all(&pane_dir);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("git checkout failed for pane {} (branch {})", i, branch),
+            ));
+        }
+
+        results.push((pane_dir, branch));
+    }
+
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
