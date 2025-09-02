@@ -3669,4 +3669,168 @@ mod tests {
         // Restore env
         if let Some(v) = old { std::env::set_var("AIFO_CODER_FORK_STATE_DIR", v); } else { std::env::remove_var("AIFO_CODER_FORK_STATE_DIR"); }
     }
+
+    // -------------------------
+    // Phase 2 unit tests
+    // -------------------------
+
+    #[test]
+    fn test_fork_sanitize_base_label_rules() {
+        assert_eq!(fork_sanitize_base_label("Main Feature"), "main-feature");
+        assert_eq!(fork_sanitize_base_label("Release/2025.09"), "release-2025-09");
+        assert_eq!(fork_sanitize_base_label("...Weird__Name///"), "weird-name");
+        // Length trimming and trailing cleanup
+        let long = "A".repeat(200);
+        let s = fork_sanitize_base_label(&long);
+        assert!(!s.is_empty() && s.len() <= 48, "sanitized too long: {}", s.len());
+    }
+
+    fn have_git() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn test_fork_base_info_branch_and_detached() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+
+        // configure identity (commit-tree does not need it, but normal commit may)
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+
+        // make initial commit
+        std::fs::write(repo.join("README.md"), "hello\n").expect("write");
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        // verify base info on branch
+        let (label, base, head) = fork_base_info(repo).expect("base info");
+        assert!(!head.is_empty(), "HEAD sha must be non-empty");
+        // Default branch could be 'master' or 'main' depending on git config; accept either
+        assert!(base == "master" || base == "main", "expected base to be current branch name, got {}", base);
+        assert!(label == "master" || label == "main", "expected label to match sanitized branch name, got {}", label);
+
+        // detached
+        assert!(std::process::Command::new("git")
+            .args(["checkout", "--detach", "HEAD"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let (label2, base2, head2) = fork_base_info(repo).expect("base info detached");
+        assert_eq!(label2, "detached");
+        assert_eq!(base2, head2);
+    }
+
+    #[test]
+    fn test_fork_create_snapshot_commit_exists() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        std::fs::write(repo.join("a.txt"), "a\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","c1"]).current_dir(repo).status().unwrap().success());
+
+        // dirty change (unstaged or staged)
+        std::fs::write(repo.join("b.txt"), "b\n").unwrap();
+
+        // create snapshot
+        let sid = "ut";
+        let snap = fork_create_snapshot(repo, sid).expect("snapshot");
+        assert_eq!(snap.len(), 40, "snapshot should be a 40-hex sha: {}", snap);
+
+        // verify it's a commit object
+        let out = std::process::Command::new("git")
+            .arg("cat-file").arg("-t").arg(&snap)
+            .current_dir(repo)
+            .output()
+            .expect("git cat-file");
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert_eq!(t, "commit", "snapshot object type must be commit, got {}", t);
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_creates_branches() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit on default branch
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        std::fs::write(repo.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","init"]).current_dir(repo).status().unwrap().success());
+
+        // Determine current branch name
+        let out = std::process::Command::new("git")
+            .args(["rev-parse","--abbrev-ref","HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        let sid = "forksid";
+        let res = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false).expect("clone panes");
+        assert_eq!(res.len(), 2, "expected two panes");
+
+        // Verify branches are checked out in panes
+        for (idx, (pane_dir, branch)) in res.iter().enumerate() {
+            assert!(pane_dir.exists(), "pane dir must exist: {}", pane_dir.display());
+            let out = std::process::Command::new("git")
+                .args(["rev-parse","--abbrev-ref","HEAD"])
+                .current_dir(pane_dir)
+                .output()
+                .unwrap();
+            let head_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            assert_eq!(&head_branch, branch, "pane {} HEAD should be {}", idx+1, branch);
+        }
+    }
 }
