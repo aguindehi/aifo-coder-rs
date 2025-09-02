@@ -1246,7 +1246,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
     }
 }
 
-fn create_session_id() -> String {
+pub fn create_session_id() -> String {
     // Compose a short, mostly-unique ID from time and pid without extra deps
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

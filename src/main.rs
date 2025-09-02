@@ -5,6 +5,7 @@ use std::io;
 use std::fs;
 use std::path::PathBuf;
 use aifo_coder::{desired_apparmor_profile, preferred_registry_prefix, build_docker_cmd, acquire_lock};
+use which::which;
 
 
 fn print_startup_banner() {
@@ -600,6 +601,30 @@ struct Cli {
     #[arg(long)]
     dry_run: bool,
 
+    /// Fork mode: create N panes (N>=2) in tmux with cloned workspaces
+    #[arg(long)]
+    fork: Option<usize>,
+
+    /// Include uncommitted changes via snapshot commit
+    #[arg(long = "fork-include-dirty")]
+    fork_include_dirty: bool,
+
+    /// Clone with --dissociate for independence
+    #[arg(long = "fork-dissociate")]
+    fork_dissociate: bool,
+
+    /// Session/window name override
+    #[arg(long = "fork-session-name")]
+    fork_session_name: Option<String>,
+
+    /// Layout for tmux panes: tiled, even-h, or even-v
+    #[arg(long = "fork-layout", value_parser = validate_layout)]
+    fork_layout: Option<String>,
+
+    /// Keep created clones on orchestration failure (default: keep)
+    #[arg(long = "fork-keep-on-failure")]
+    fork_keep_on_failure: bool,
+
     #[command(subcommand)]
     command: Agent,
 }
@@ -637,6 +662,353 @@ impl ToolchainKind {
             ToolchainKind::Go => "go",
         }
     }
+}
+
+// Validate tmux layout flag value
+fn validate_layout(s: &str) -> Result<String, String> {
+    match s {
+        "tiled" | "even-h" | "even-v" => Ok(s.to_string()),
+        _ => Err("must be one of tiled, even-h, even-v".to_string()),
+    }
+}
+
+// Build child args for panes by reconstructing from parsed Cli, stripping fork flags.
+fn fork_build_child_args(cli: &Cli) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+
+    if let Some(img) = cli.image.as_deref() {
+        if !img.trim().is_empty() {
+            args.push("--image".to_string());
+            args.push(img.to_string());
+        }
+    }
+    for k in &cli.toolchain {
+        args.push("--toolchain".to_string());
+        args.push(k.as_str().to_string());
+    }
+    for s in &cli.toolchain_spec {
+        args.push("--toolchain-spec".to_string());
+        args.push(s.clone());
+    }
+    for ti in &cli.toolchain_image {
+        args.push("--toolchain-image".to_string());
+        args.push(ti.clone());
+    }
+    if cli.no_toolchain_cache {
+        args.push("--no-toolchain-cache".to_string());
+    }
+    if cli.toolchain_unix_socket {
+        args.push("--toolchain-unix-socket".to_string());
+    }
+    for b in &cli.toolchain_bootstrap {
+        args.push("--toolchain-bootstrap".to_string());
+        args.push(b.clone());
+    }
+    if cli.verbose {
+        args.push("--verbose".to_string());
+    }
+    if let Some(fl) = cli.flavor {
+        args.push("--flavor".to_string());
+        args.push(match fl {
+            Flavor::Full => "full",
+            Flavor::Slim => "slim",
+        }.to_string());
+    }
+    if cli.invalidate_registry_cache {
+        args.push("--invalidate-registry-cache".to_string());
+    }
+    if cli.dry_run {
+        args.push("--dry-run".to_string());
+    }
+
+    // Subcommand and its args
+    match &cli.command {
+        Agent::Codex { args: a } => {
+            args.push("codex".to_string());
+            args.extend(a.clone());
+        }
+        Agent::Crush { args: a } => {
+            args.push("crush".to_string());
+            args.extend(a.clone());
+        }
+        Agent::Aider { args: a } => {
+            args.push("aider".to_string());
+            args.extend(a.clone());
+        }
+        // For non-agent subcommands, default to aider to avoid starting doctor/images in panes.
+        _ => {
+            args.push("aider".to_string());
+        }
+    }
+
+    args
+}
+
+// Orchestrate tmux-based fork session (Linux/macOS/WSL)
+fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
+    // Preflight
+    if which("git").is_err() {
+        eprintln!("aifo-coder: error: git is required and was not found in PATH.");
+        return ExitCode::from(1);
+    }
+    if which("tmux").is_err() {
+        eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
+        return ExitCode::from(127);
+    }
+    let repo_root = match aifo_coder::repo_root() {
+        Some(p) => p,
+        None => {
+            eprintln!("aifo-coder: error: fork mode must be run inside a Git repository.");
+            return ExitCode::from(1);
+        }
+    };
+
+    // Identify base
+    let (base_label, mut base_ref_or_sha, base_commit_sha) = match aifo_coder::fork_base_info(&repo_root) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("aifo-coder: error determining base: {}", e);
+            return ExitCode::from(1);
+        }
+    };
+
+    // Session id and name
+    let sid = aifo_coder::create_session_id();
+    let session_name = cli
+        .fork_session_name
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("aifo-{}", sid));
+
+    // Snapshot when requested
+    let mut snapshot_sha: Option<String> = None;
+    if cli.fork_include_dirty {
+        match aifo_coder::fork_create_snapshot(&repo_root, &sid) {
+            Ok(sha) => {
+                snapshot_sha = Some(sha.clone());
+                base_ref_or_sha = sha;
+            }
+            Err(e) => {
+                eprintln!("aifo-coder: warning: failed to create snapshot of dirty working tree ({}). Proceeding without including uncommitted changes.", e);
+            }
+        }
+    } else {
+        // Warn if dirty but not including
+        if let Ok(out) = Command::new("git")
+            .arg("-C")
+            .arg(&repo_root)
+            .arg("status")
+            .arg("--porcelain=v1")
+            .arg("-uall")
+            .output()
+        {
+            if !out.stdout.is_empty() {
+                eprintln!("aifo-coder: note: working tree has uncommitted changes; they will NOT be included. Re-run with --fork-include-dirty to include them.");
+            }
+        }
+    }
+
+    // Create clones
+    let dissoc = cli.fork_dissociate;
+    let clones = match aifo_coder::fork_clone_and_checkout_panes(
+        &repo_root,
+        &sid,
+        panes,
+        &base_ref_or_sha,
+        &base_label,
+        dissoc,
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("aifo-coder: error during cloning: {}", e);
+            return ExitCode::from(1);
+        }
+    };
+
+    // Prepare per-pane env/state dirs
+    let agent = match &cli.command {
+        Agent::Codex { .. } => "codex",
+        Agent::Crush { .. } => "crush",
+        Agent::Aider { .. } => "aider",
+        _ => "aider",
+    };
+    let state_base = env::var("AIFO_CODER_FORK_STATE_BASE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            home::home_dir()
+                .unwrap_or_else(|| PathBuf::from("~"))
+                .join(".aifo-coder")
+                .join("state")
+        });
+    let session_dir = aifo_coder::fork_session_dir(&repo_root, &sid);
+
+    // Summary header
+    println!(
+        "aifo-coder: fork session {} on base {} ({})",
+        sid, base_label, base_ref_or_sha
+    );
+    println!(
+        "created {} clones under {}",
+        panes,
+        session_dir.display()
+    );
+    if let Some(ref snap) = snapshot_sha {
+        println!("included dirty working tree via snapshot {}", snap);
+    } else if cli.fork_include_dirty {
+        println!("warning: requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
+    }
+    if !dissoc {
+        println!("note: clones reference the base repo’s object store; avoid pruning base objects until done.");
+    }
+
+    // Per-pane run
+    let child_args = fork_build_child_args(cli);
+    let layout = cli.fork_layout.as_deref().unwrap_or("tiled").to_string();
+
+    // Write metadata skeleton
+    let created_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+        .as_secs();
+    let pane_dirs_vec: Vec<String> = clones.iter().map(|(p, _b)| p.display().to_string()).collect();
+    let branches_vec: Vec<String> = clones.iter().map(|(_p, b)| b.clone()).collect();
+    let mut meta = format!(
+        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+        created_at,
+        aifo_coder::shell_escape(&base_label),
+        aifo_coder::shell_escape(&base_ref_or_sha),
+        aifo_coder::shell_escape(&base_commit_sha),
+        panes,
+        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+        aifo_coder::shell_escape(&layout)
+    );
+    if let Some(ref snap) = snapshot_sha {
+        meta.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+    }
+    meta.push_str(" }");
+    let _ = fs::create_dir_all(&session_dir);
+    let _ = fs::write(session_dir.join(".meta.json"), meta);
+
+    // Print per-pane info lines
+    for (idx, (pane_dir, branch)) in clones.iter().enumerate() {
+        let i = idx + 1;
+        let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+        let state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+        let _ = fs::create_dir_all(state_dir.join(".aider"));
+        let _ = fs::create_dir_all(state_dir.join(".codex"));
+        let _ = fs::create_dir_all(state_dir.join(".crush"));
+        println!(
+            "[{}] {} branch={} container={} state={}",
+            i,
+            pane_dir.display(),
+            branch,
+            cname,
+            state_dir.display()
+        );
+    }
+
+    // Build and run tmux session
+    let tmux = which("tmux").expect("tmux not found");
+    if clones.is_empty() {
+        eprintln!("aifo-coder: no panes to create.");
+        return ExitCode::from(1);
+    }
+
+    // Helper to build inner command string with env exports
+    let build_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
+        let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+        let mut exports: Vec<String> = Vec::new();
+        let kv = [
+            ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+            ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+            ("AIFO_CODER_HOSTNAME", cname),
+            ("AIFO_CODER_FORK_SESSION", sid.clone()),
+            ("AIFO_CODER_FORK_INDEX", i.to_string()),
+            ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+        ];
+        for (k, v) in kv {
+            exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
+        }
+        let mut child_cmd_words = vec!["aifo-coder".to_string()];
+        child_cmd_words.extend(child_args.clone());
+        let child_joined = aifo_coder::shell_join(&child_cmd_words);
+        format!("set -e; {}; exec {}", exports.join("; "), child_joined)
+    };
+
+    // Pane 1
+    {
+        let (pane1_dir, _b) = &clones[0];
+        let pane_state_dir = state_base.join(&sid).join("pane-1");
+        let inner = build_inner(1, &pane_state_dir);
+        let mut cmd = Command::new(&tmux);
+        cmd.arg("new-session")
+            .arg("-d")
+            .arg("-s")
+            .arg(&session_name)
+            .arg("-n")
+            .arg("aifo-fork")
+            .arg("-c")
+            .arg(pane1_dir)
+            .arg("sh")
+            .arg("-lc")
+            .arg(inner);
+        let st = cmd.status().unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
+        if !st.success() {
+            eprintln!("aifo-coder: tmux new-session failed.");
+            return ExitCode::from(1);
+        }
+    }
+
+    // Panes 2..N
+    for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+        let i = idx + 1;
+        let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+        let inner = build_inner(i, &pane_state_dir);
+        let mut cmd = Command::new(&tmux);
+        cmd.arg("split-window")
+            .arg("-t")
+            .arg(format!("{}:0", &session_name))
+            .arg("-c")
+            .arg(pane_dir)
+            .arg("sh")
+            .arg("-lc")
+            .arg(inner);
+        let _ = cmd.status();
+    }
+
+    // Layout and options
+    let mut lay = Command::new(&tmux);
+    lay.arg("select-layout")
+        .arg("-t")
+        .arg(format!("{}:0", &session_name))
+        .arg(&layout);
+    let _ = lay.status();
+
+    let mut sync = Command::new(&tmux);
+    sync.arg("set-window-option")
+        .arg("-t")
+        .arg(format!("{}:0", &session_name))
+        .arg("synchronize-panes")
+        .arg("off");
+    let _ = sync.status();
+
+    // Attach or switch
+    let attach_cmd = if env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
+        vec!["switch-client".to_string(), "-t".to_string(), session_name.clone()]
+    } else {
+        vec!["attach-session".to_string(), "-t".to_string(), session_name.clone()]
+    };
+    let mut att = Command::new(&tmux);
+    for a in &attach_cmd {
+        att.arg(a);
+    }
+    let _ = att.status();
+
+    ExitCode::from(0)
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -706,6 +1078,12 @@ fn main() -> ExitCode {
         }
     }
 
+    // Fork orchestrator (Phase 3): run early if requested
+    if let Some(n) = cli.fork {
+        if n >= 2 {
+            return fork_run(&cli, n);
+        }
+    }
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
