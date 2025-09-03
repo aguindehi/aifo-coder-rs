@@ -1705,6 +1705,18 @@ fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
     buf.windows(4).position(|w| w == pattern)
 }
 
+/// Find end of HTTP headers, accepting either CRLF-CRLF or LF-LF separators.
+/// Returns the index just after the header terminator when found.
+fn find_header_end(buf: &[u8]) -> Option<usize> {
+    if let Some(pos) = find_crlfcrlf(buf) {
+        return Some(pos + 4);
+    }
+    // Also accept LF-only separators for robustness
+    buf.windows(2)
+        .position(|w| w == b"\n\n")
+        .map(|pos| pos + 2)
+}
+
 fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     let mut res = Vec::new();
     for pair in body.split('&') {
@@ -2181,8 +2193,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                             Ok(0) => break,
                             Ok(n) => {
                                 buf.extend_from_slice(&tmp[..n]);
-                                if let Some(pos) = find_crlfcrlf(&buf) {
-                                    header_end = Some(pos + 4);
+                                if let Some(end) = find_header_end(&buf) {
+                                    header_end = Some(end);
                                 }
                                 if buf.len() > 64 * 1024 {
                                     break;
@@ -2441,8 +2453,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     Ok(0) => break,
                     Ok(n) => {
                         buf.extend_from_slice(&tmp[..n]);
-                        if let Some(pos) = find_crlfcrlf(&buf) {
-                            header_end = Some(pos + 4);
+                        if let Some(end) = find_header_end(&buf) {
+                            header_end = Some(end);
                         }
                         // avoid overly large header
                         if buf.len() > 64 * 1024 {
