@@ -2100,6 +2100,10 @@ fn main() -> ExitCode {
             return fork_run(&cli, n);
         }
     }
+    // Optional auto-clean of stale fork sessions before printing notice (Phase 6)
+    if !matches!(cli.command, Agent::Fork { .. }) {
+        aifo_coder::fork_autoclean_if_enabled();
+    }
     // Stale sessions notice (Phase 6): print suggestions for old fork sessions on normal runs
     aifo_coder::fork_print_stale_notice();
 

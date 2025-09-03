@@ -3687,6 +3687,106 @@ pub fn fork_print_stale_notice() {
     }
 }
 
+/// Auto-clean clean fork sessions older than the stale threshold when AIFO_CODER_FORK_AUTOCLEAN=1 is set.
+/// - Only removes sessions where all panes are clean (no dirty, ahead, or base-unknown panes).
+/// - Threshold in days is taken from AIFO_CODER_FORK_STALE_DAYS (default 30).
+/// - Prints a concise summary of deletions and survivors.
+pub fn fork_autoclean_if_enabled() {
+    if env::var("AIFO_CODER_FORK_AUTOCLEAN").ok().as_deref() != Some("1") {
+        return;
+    }
+    let repo = match repo_root() {
+        Some(p) => p,
+        None => return,
+    };
+    let base = repo.join(".aifo-coder").join("forks");
+    if !base.exists() { return; }
+    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
+    let now = secs_since_epoch(SystemTime::now());
+
+    let mut deleted = 0usize;
+    let mut kept = 0usize;
+
+    for sd in session_dirs(&base) {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let created_at = meta.as_deref()
+            .and_then(|s| meta_extract_value(s, "created_at"))
+            .and_then(|s| s.parse::<u64>().ok())
+            .or_else(|| fs::metadata(&sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
+            .unwrap_or(0);
+        if created_at == 0 { continue; }
+        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        if age_days < threshold_days {
+            continue;
+        }
+        // Determine if all panes are clean (safe to delete entire session)
+        let mut all_clean = true;
+        let base_commit = meta.as_deref().and_then(|s| meta_extract_value(s, "base_commit_sha"));
+        let panes = pane_dirs_for_session(&sd);
+        for p in panes {
+            // dirty detection
+            let dirty = Command::new("git")
+                .arg("-C").arg(&p)
+                .arg("status").arg("--porcelain=v1").arg("-uall")
+                .stdout(Stdio::piped()).stderr(Stdio::null())
+                .output().ok().map(|o| !o.stdout.is_empty()).unwrap_or(false);
+            if dirty {
+                all_clean = false;
+                break;
+            }
+            // submodules dirty
+            if let Ok(o) = Command::new("git")
+                .arg("-C").arg(&p)
+                .arg("submodule").arg("status").arg("--recursive")
+                .output() {
+                let s = String::from_utf8_lossy(&o.stdout);
+                if s.lines().any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U')) {
+                    all_clean = false;
+                    break;
+                }
+            }
+            // ahead detection requires known base_commit
+            let mut base_unknown = base_commit.is_none();
+            if let Some(ref base_sha) = base_commit {
+                if let Ok(o) = Command::new("git")
+                    .arg("-C").arg(&p)
+                    .arg("rev-list").arg("--count")
+                    .arg(format!("{}..HEAD", base_sha))
+                    .output() {
+                    if o.status.success() {
+                        let c = String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().unwrap_or(0);
+                        if c > 0 {
+                            all_clean = false;
+                            break;
+                        }
+                    } else {
+                        base_unknown = true;
+                    }
+                } else {
+                    base_unknown = true;
+                }
+            }
+            if base_unknown {
+                all_clean = false;
+                break;
+            }
+        }
+        if all_clean {
+            let _ = fs::remove_dir_all(&sd);
+            deleted += 1;
+        } else {
+            kept += 1;
+        }
+    }
+
+    if deleted > 0 {
+        eprintln!(
+            "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
+            deleted, threshold_days, kept
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
