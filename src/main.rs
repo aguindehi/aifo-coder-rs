@@ -2246,6 +2246,7 @@ fn main() -> ExitCode {
         Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
         Agent::ToolchainCacheClear => unreachable!("ToolchainCacheClear subcommand is handled earlier and returns immediately"),
         Agent::Toolchain { .. } => unreachable!("Toolchain subcommand is handled earlier and returns immediately"),
+        Agent::Fork { .. } => unreachable!("Fork maintenance subcommands are handled earlier and return immediately"),
     };
 
     // Print startup banner before any further diagnostics

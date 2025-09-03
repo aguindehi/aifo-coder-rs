@@ -3449,7 +3449,7 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
             let base_label = meta.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
             let panes = pane_dirs_for_session(&sd).len();
             let now = secs_since_epoch(SystemTime::now());
-            let age_days = if created_at > 0 { (now.saturating_sub(created_at) / 86400) } else { 0 };
+            let age_days = if created_at > 0 { now.saturating_sub(created_at) / 86400 } else { 0 };
             let stale = (age_days as u64) >= list_stale_days;
             rows.push((sid, panes, created_at, age_days, base_label, stale));
         }
@@ -3486,7 +3486,6 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
                                     shell_escape(&base_label),
                                     if stale { "true" } else { "false" }
                                 ));
-                                any = true;
                             }
                         }
                     }
