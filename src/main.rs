@@ -995,6 +995,98 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
         };
 
+        // Orchestrator preference override (optional): AIFO_CODER_FORK_ORCH={gitbash|powershell}
+        let orch_pref = env::var("AIFO_CODER_FORK_ORCH").ok().map(|s| s.to_ascii_lowercase());
+        if orch_pref.as_deref() == Some("gitbash") {
+            // Force Git Bash orchestrator if available
+            let gitbash = which("git-bash.exe").or_else(|_| which("bash.exe"));
+            if let Ok(gb) = gitbash {
+                let mut any_failed = false;
+                for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
+                    let i = idx + 1;
+                    let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+
+                    let mut cmd = Command::new(&gb);
+                    cmd.arg("-c").arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            gb.display().to_string(),
+                            "-c".to_string(),
+                            inner.clone(),
+                        ];
+                        eprintln!("aifo-coder: git-bash: {}", aifo_coder::shell_join(&preview));
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        _ => {
+                            any_failed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if any_failed {
+                    eprintln!("aifo-coder: failed to launch one or more Git Bash windows.");
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("Clones remain under {} for recovery.", session_dir.display());
+                    }
+                    // Update metadata with panes_created
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+
+                // Print guidance and return
+                println!();
+                println!("aifo-coder: fork session {} launched (Git Bash).", sid);
+                println!("To inspect and merge changes, you can run:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    if base_label != "detached" {
+                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                    }
+                }
+                return ExitCode::from(0);
+            } else {
+                eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash was not found in PATH.");
+                return ExitCode::from(1);
+            }
+        } else if orch_pref.as_deref() == Some("powershell") {
+            // Fall through to PowerShell windows launcher below, bypassing Windows Terminal
+        }
         // Prefer Windows Terminal (wt.exe)
         let wt = which("wt").or_else(|_| which("wt.exe"));
         if let Ok(wtbin) = wt {
@@ -1036,7 +1128,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "new-tab".to_string(),
                         "-d".to_string(),
                         pane1_dir.display().to_string(),
-                        "powershell".to_string(),
+                        psbin.display().to_string(),
                         "-NoExit".to_string(),
                         "-Command".to_string(),
                         inner.clone(),
@@ -1106,7 +1198,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         orient.to_string(),
                         "-d".to_string(),
                         pane_dir.display().to_string(),
-                        "powershell".to_string(),
+                        psbin.display().to_string(),
                         "-NoExit".to_string(),
                         "-Command".to_string(),
                         inner.clone(),
@@ -1284,34 +1376,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
             let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
 
-            let mut cmd = Command::new("cmd");
-            cmd.arg("/c")
-                .arg("start")
-                .arg(format!("aifo-{}-{}", sid, i)) // window title
-                .arg("/D")
-                .arg(pane_dir)
-                .arg(ps_name.display().to_string())
-                .arg("-NoExit")
-                .arg("-Command")
-                .arg(&inner);
+            // Launch a new PowerShell window using Start-Process and capture its PID
+            let script = {
+                let wd = ps_quote(&pane_dir.display().to_string());
+                let child = ps_quote(&ps_name.display().to_string());
+                let inner_q = ps_quote(&inner);
+                format!("(Start-Process -WindowStyle Normal -WorkingDirectory {wd} {child} -ArgumentList '-NoExit','-Command',{inner_q} -PassThru).Id")
+            };
             if cli.verbose {
-                let preview = vec![
-                    "cmd".to_string(),
-                    "/c".to_string(),
-                    "start".to_string(),
-                    format!("aifo-{}-{}", sid, i),
-                    "/D".to_string(),
-                    pane_dir.display().to_string(),
-                    "powershell".to_string(),
-                    "-NoExit".to_string(),
-                    "-Command".to_string(),
-                    inner.clone(),
-                ];
-                eprintln!("aifo-coder: powershell window: {}", aifo_coder::shell_join(&preview));
+                eprintln!("aifo-coder: powershell start-script: {}", script);
                 eprintln!("aifo-coder: powershell detected at: {}", ps_name.display());
             }
-            match cmd.status() {
-                Ok(s) if s.success() => {}
+            let out = Command::new(&ps_name)
+                .arg("-NoProfile")
+                .arg("-Command")
+                .arg(&script)
+                .output();
+            match out {
+                Ok(o) if o.status.success() => {
+                    let pid = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    if !pid.is_empty() {
+                        println!("[{}] started PID={} dir={}", i, pid, pane_dir.display());
+                    } else {
+                        println!("[{}] started dir={} (PID unknown)", i, pane_dir.display());
+                    }
+                }
                 _ => {
                     any_failed = true;
                     break;
