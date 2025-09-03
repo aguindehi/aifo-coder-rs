@@ -721,6 +721,8 @@ pub fn candidate_lock_paths() -> Vec<PathBuf> {
         let key = normalized_repo_key_for_hash(&root);
         let hash = hash_repo_key_hex(&key);
         paths.push(rt_base.join(format!("aifo-coder.{}.lock", hash)));
+        // Tertiary fallback: always include a tmp-scoped lock path for robustness and tests
+        paths.push(PathBuf::from("/tmp/aifo-coder.lock"));
         return paths;
     }
 
@@ -2941,6 +2943,11 @@ pub fn fork_clone_and_checkout_panes(
     }
     let repo_abs = fs::canonicalize(repo_root).unwrap_or_else(|_| repo_root.to_path_buf());
     let root_str = repo_abs.to_string_lossy().to_string();
+    let src_url = if cfg!(windows) {
+        format!("file:///{}", root_str.replace('\\', "/"))
+    } else {
+        format!("file://{}", root_str)
+    };
     let session_dir = fork_session_dir(&repo_abs, sid);
     fs::create_dir_all(&session_dir)?;
 
@@ -2969,7 +2976,7 @@ pub fn fork_clone_and_checkout_panes(
         clone.arg("clone")
             .arg("--no-checkout")
             .arg("--reference-if-able")
-            .arg(&root_str);
+            .arg(&src_url);
         if dissociate {
             clone.arg("--dissociate");
         }
