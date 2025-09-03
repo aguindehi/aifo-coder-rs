@@ -2971,20 +2971,34 @@ pub fn fork_clone_and_checkout_panes(
 
     for i in 1..=panes {
         let pane_dir = session_dir.join(format!("pane-{}", i));
-        // git clone --no-checkout --reference-if-able [--dissociate] <repo_root> <pane_dir>
-        let mut clone = Command::new("git");
-        clone.arg("clone")
-            .arg("--no-checkout")
-            .arg("--reference-if-able")
-            .arg(&src_url);
-        if dissociate {
-            clone.arg("--dissociate");
+        // Try cloning using a plain local path first (most compatible), then fall back to file:// with protocol allow.
+        let mut cloned_ok = false;
+        for (source, allow_file_proto) in [(&root_str, false), (&src_url, true)] {
+            let mut clone = Command::new("git");
+            if allow_file_proto {
+                // Newer Git may restrict file:// by default; allow it explicitly for local cloning.
+                clone.arg("-c").arg("protocol.file.allow=always");
+            }
+            clone
+                .arg("clone")
+                .arg("--no-checkout")
+                .arg("--reference-if-able")
+                .arg(source);
+            if dissociate {
+                clone.arg("--dissociate");
+            }
+            clone.arg(&pane_dir);
+            clone.stdout(Stdio::null()).stderr(Stdio::null());
+            let st = clone.status()?;
+            if st.success() {
+                cloned_ok = true;
+                break;
+            } else {
+                // Clean up any partial directory before next attempt
+                let _ = fs::remove_dir_all(&pane_dir);
+            }
         }
-        clone.arg(&pane_dir);
-        clone.stdout(Stdio::null()).stderr(Stdio::null());
-        let st = clone.status()?;
-        if !st.success() {
-            let _ = fs::remove_dir_all(&pane_dir);
+        if !cloned_ok {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("git clone failed for pane {}", i),
