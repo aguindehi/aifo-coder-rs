@@ -927,89 +927,178 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         );
     }
 
-    // Build and run tmux session
-    let tmux = which("tmux").expect("tmux not found");
-    if clones.is_empty() {
-        eprintln!("aifo-coder: no panes to create.");
-        return ExitCode::from(1);
-    }
-
-    // Helper to build inner command string with env exports
-    let build_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
-        let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-        let mut exports: Vec<String> = Vec::new();
-        let kv = [
-            ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-            ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-            ("AIFO_CODER_HOSTNAME", cname),
-            ("AIFO_CODER_FORK_SESSION", sid.clone()),
-            ("AIFO_CODER_FORK_INDEX", i.to_string()),
-            ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
-        ];
-        for (k, v) in kv {
-            exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
-        }
-        let mut child_cmd_words = vec!["aifo-coder".to_string()];
-        child_cmd_words.extend(child_args.clone());
-        let child_joined = aifo_coder::shell_join(&child_cmd_words);
-        format!("set -e; {}; exec {}", exports.join("; "), child_joined)
-    };
-
-    // Pane 1
-    {
-        let (pane1_dir, _b) = &clones[0];
-        let pane_state_dir = state_base.join(&sid).join("pane-1");
-        let inner = build_inner(1, &pane_state_dir);
-        let mut cmd = Command::new(&tmux);
-        cmd.arg("new-session")
-            .arg("-d")
-            .arg("-s")
-            .arg(&session_name)
-            .arg("-n")
-            .arg("aifo-fork")
-            .arg("-c")
-            .arg(pane1_dir)
-            .arg("sh")
-            .arg("-lc")
-            .arg(&inner);
-        if cli.verbose {
-            let preview_new = vec![
-                "tmux".to_string(),
-                "new-session".to_string(),
-                "-d".to_string(),
-                "-s".to_string(),
-                session_name.clone(),
-                "-n".to_string(),
-                "aifo-fork".to_string(),
-                "-c".to_string(),
-                pane1_dir.display().to_string(),
-                "sh".to_string(),
-                "-lc".to_string(),
-                inner.clone()
+    // Orchestrate panes (Windows uses Windows Terminal or PowerShell; Unix-like uses tmux)
+    if cfg!(target_os = "windows") {
+        // Helper to PowerShell-quote a single token
+        let ps_quote = |s: &str| -> String {
+            let esc = s.replace('\'', "''");
+            format!("'{}'", esc)
+        };
+        // Build inner PowerShell command string setting env per pane, then invoking aifo-coder with args
+        let build_ps_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
+            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+            let kv = [
+                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+                ("AIFO_CODER_HOSTNAME", cname),
+                ("AIFO_CODER_FORK_SESSION", sid.clone()),
+                ("AIFO_CODER_FORK_INDEX", i.to_string()),
+                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
             ];
-            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_new));
-        }
-        let st = match cmd.status() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("aifo-coder: tmux new-session failed to start: {}", e);
-                // Failure policy: keep clones by default; optionally remove if user disabled keep-on-failure
+            let mut assigns: Vec<String> = Vec::new();
+            for (k, v) in kv {
+                assigns.push(format!("$env:{}={}", k, ps_quote(&v)));
+            }
+            let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+            words.extend(child_args.clone());
+            let cmd = words
+                .iter()
+                .map(|w| ps_quote(w))
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("{}; {}", assigns.join("; "), cmd)
+        };
+
+        // Prefer Windows Terminal (wt.exe)
+        let wt = which("wt").or_else(|_| which("wt.exe"));
+        if let Ok(wtbin) = wt {
+            if clones.is_empty() {
+                eprintln!("aifo-coder: no panes to create.");
+                return ExitCode::from(1);
+            }
+            let orient_for_layout = |i: usize| -> &'static str {
+                match layout.as_str() {
+                    "even-h" => "-H",
+                    "even-v" => "-V",
+                    _ => {
+                        // tiled: alternate for some balance
+                        if i % 2 == 0 { "-H" } else { "-V" }
+                    }
+                }
+            };
+
+            // Pane 1: new tab
+            {
+                let (pane1_dir, _b) = &clones[0];
+                let pane_state_dir = state_base.join(&sid).join("pane-1");
+                let inner = build_ps_inner(1, &pane_state_dir);
+                let mut cmd = Command::new(&wtbin);
+                cmd.arg("new-tab")
+                    .arg("-d")
+                    .arg(pane1_dir)
+                    .arg("powershell")
+                    .arg("-NoExit")
+                    .arg("-Command")
+                    .arg(&inner);
+                if cli.verbose {
+                    let preview = vec![
+                        "wt".to_string(),
+                        "new-tab".to_string(),
+                        "-d".to_string(),
+                        pane1_dir.display().to_string(),
+                        "powershell".to_string(),
+                        "-NoExit".to_string(),
+                        "-Command".to_string(),
+                        inner.clone(),
+                    ];
+                    eprintln!("aifo-coder: windows-terminal: {}", aifo_coder::shell_join(&preview));
+                }
+                if let Err(e) = cmd.status() {
+                    eprintln!("aifo-coder: Windows Terminal failed to start first pane: {}", e);
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("Clones remain under {} for recovery.", session_dir.display());
+                    }
+                    // Update metadata with panes_created
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+            }
+
+            // Additional panes: split-pane
+            let mut split_failed = false;
+            for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+                let i = idx + 1;
+                let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                let inner = build_ps_inner(i, &pane_state_dir);
+                let orient = orient_for_layout(i);
+                let mut cmd = Command::new(&wtbin);
+                cmd.arg("split-pane")
+                    .arg(orient)
+                    .arg("-d")
+                    .arg(pane_dir)
+                    .arg("powershell")
+                    .arg("-NoExit")
+                    .arg("-Command")
+                    .arg(&inner);
+                if cli.verbose {
+                    let preview = vec![
+                        "wt".to_string(),
+                        "split-pane".to_string(),
+                        orient.to_string(),
+                        "-d".to_string(),
+                        pane_dir.display().to_string(),
+                        "powershell".to_string(),
+                        "-NoExit".to_string(),
+                        "-Command".to_string(),
+                        inner.clone(),
+                    ];
+                    eprintln!("aifo-coder: windows-terminal: {}", aifo_coder::shell_join(&preview));
+                }
+                match cmd.status() {
+                    Ok(s) if s.success() => {}
+                    _ => {
+                        split_failed = true;
+                        break;
+                    }
+                }
+            }
+            if split_failed {
+                eprintln!("aifo-coder: Windows Terminal split-pane failed for one or more panes.");
                 if !cli.fork_keep_on_failure {
                     for (dir, _) in &clones {
                         let _ = fs::remove_dir_all(dir);
                     }
                     println!("Removed all created pane directories under {}.", session_dir.display());
                 } else {
-                    println!("One or more clones were created under {}.", session_dir.display());
-                    println!("You can inspect them manually. Example:");
+                    println!("Clones remain under {} for recovery.", session_dir.display());
                     if let Some((first_dir, first_branch)) = clones.first() {
+                        println!("Example recovery:");
                         println!("  git -C \"{}\" status", first_dir.display());
                         println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
                         println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
                         println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
                     }
                 }
-                // Update metadata with panes_created and existing pane dirs
+                // Update metadata
                 let existing: Vec<(PathBuf, String)> = clones
                     .iter()
                     .filter(|(p, _)| p.exists())
@@ -1037,12 +1126,77 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let _ = fs::write(session_dir.join(".meta.json"), meta2);
                 return ExitCode::from(1);
             }
-        };
-        if !st.success() {
-            eprintln!("aifo-coder: tmux new-session failed.");
-            // Best-effort: kill any stray session
-            let mut kill = Command::new(&tmux);
-            let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+
+            // Print guidance and return (wt.exe is detached)
+            println!();
+            println!("aifo-coder: fork session {} launched in Windows Terminal.", sid);
+            println!("To inspect and merge changes, you can run:");
+            if let Some((first_dir, first_branch)) = clones.first() {
+                println!("  git -C \"{}\" status", first_dir.display());
+                println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+                println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+                println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                if base_label != "detached" {
+                    println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                    println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                }
+            }
+            return ExitCode::from(0);
+        }
+
+        // Fallback: separate PowerShell windows via cmd.exe start
+        let powershell = which("pwsh")
+            .or_else(|_| which("powershell"))
+            .or_else(|_| which("powershell.exe"));
+        if powershell.is_err() {
+            eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe) nor PowerShell found in PATH.");
+            return ExitCode::from(1);
+        }
+        let ps_name = powershell.unwrap(); // used only for reference in logs
+
+        let mut any_failed = false;
+        for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
+            let i = idx + 1;
+            let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+            let inner = build_ps_inner(i, &pane_state_dir);
+
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/c")
+                .arg("start")
+                .arg(format!("aifo-{}-{}", sid, i)) // window title
+                .arg("/D")
+                .arg(pane_dir)
+                .arg("powershell")
+                .arg("-NoExit")
+                .arg("-Command")
+                .arg(&inner);
+            if cli.verbose {
+                let preview = vec![
+                    "cmd".to_string(),
+                    "/c".to_string(),
+                    "start".to_string(),
+                    format!("aifo-{}-{}", sid, i),
+                    "/D".to_string(),
+                    pane_dir.display().to_string(),
+                    "powershell".to_string(),
+                    "-NoExit".to_string(),
+                    "-Command".to_string(),
+                    inner.clone(),
+                ];
+                eprintln!("aifo-coder: powershell window: {}", aifo_coder::shell_join(&preview));
+                eprintln!("aifo-coder: powershell detected at: {}", ps_name.display());
+            }
+            match cmd.status() {
+                Ok(s) if s.success() => {}
+                _ => {
+                    any_failed = true;
+                    break;
+                }
+            }
+        }
+
+        if any_failed {
+            eprintln!("aifo-coder: failed to launch one or more PowerShell windows.");
             if !cli.fork_keep_on_failure {
                 for (dir, _) in &clones {
                     let _ = fs::remove_dir_all(dir);
@@ -1051,7 +1205,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             } else {
                 println!("Clones remain under {} for recovery.", session_dir.display());
             }
-            // Update metadata
+            // Update metadata with panes_created
             let existing: Vec<(PathBuf, String)> = clones
                 .iter()
                 .filter(|(p, _)| p.exists())
@@ -1079,162 +1233,332 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             let _ = fs::write(session_dir.join(".meta.json"), meta2);
             return ExitCode::from(1);
         }
-    }
 
-    // Panes 2..N
-    let mut split_failed = false;
-    for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
-        let i = idx + 1;
-        let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-        let inner = build_inner(i, &pane_state_dir);
-        let mut cmd = Command::new(&tmux);
-        cmd.arg("split-window")
+        // Print guidance and return
+        println!();
+        println!("aifo-coder: fork session {} launched (PowerShell windows).", sid);
+        println!("To inspect and merge changes, you can run:");
+        if let Some((first_dir, first_branch)) = clones.first() {
+            println!("  git -C \"{}\" status", first_dir.display());
+            println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            if base_label != "detached" {
+                println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+            }
+        }
+        return ExitCode::from(0);
+    } else {
+        // Build and run tmux session
+        let tmux = which("tmux").expect("tmux not found");
+        if clones.is_empty() {
+            eprintln!("aifo-coder: no panes to create.");
+            return ExitCode::from(1);
+        }
+
+        // Helper to build inner command string with env exports
+        let build_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
+            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+            let mut exports: Vec<String> = Vec::new();
+            let kv = [
+                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+                ("AIFO_CODER_HOSTNAME", cname),
+                ("AIFO_CODER_FORK_SESSION", sid.clone()),
+                ("AIFO_CODER_FORK_INDEX", i.to_string()),
+                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+            ];
+            for (k, v) in kv {
+                exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
+            }
+            let mut child_cmd_words = vec!["aifo-coder".to_string()];
+            child_cmd_words.extend(child_args.clone());
+            let child_joined = aifo_coder::shell_join(&child_cmd_words);
+            format!("set -e; {}; exec {}", exports.join("; "), child_joined)
+        };
+
+        // Pane 1
+        {
+            let (pane1_dir, _b) = &clones[0];
+            let pane_state_dir = state_base.join(&sid).join("pane-1");
+            let inner = build_inner(1, &pane_state_dir);
+            let mut cmd = Command::new(&tmux);
+            cmd.arg("new-session")
+                .arg("-d")
+                .arg("-s")
+                .arg(&session_name)
+                .arg("-n")
+                .arg("aifo-fork")
+                .arg("-c")
+                .arg(pane1_dir)
+                .arg("sh")
+                .arg("-lc")
+                .arg(&inner);
+            if cli.verbose {
+                let preview_new = vec![
+                    "tmux".to_string(),
+                    "new-session".to_string(),
+                    "-d".to_string(),
+                    "-s".to_string(),
+                    session_name.clone(),
+                    "-n".to_string(),
+                    "aifo-fork".to_string(),
+                    "-c".to_string(),
+                    pane1_dir.display().to_string(),
+                    "sh".to_string(),
+                    "-lc".to_string(),
+                    inner.clone()
+                ];
+                eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_new));
+            }
+            let st = match cmd.status() {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("aifo-coder: tmux new-session failed to start: {}", e);
+                    // Failure policy: keep clones by default; optionally remove if user disabled keep-on-failure
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("One or more clones were created under {}.", session_dir.display());
+                        println!("You can inspect them manually. Example:");
+                        if let Some((first_dir, first_branch)) = clones.first() {
+                            println!("  git -C \"{}\" status", first_dir.display());
+                            println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+                            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+                            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                        }
+                    }
+                    // Update metadata with panes_created and existing pane dirs
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+            };
+            if !st.success() {
+                eprintln!("aifo-coder: tmux new-session failed.");
+                // Best-effort: kill any stray session
+                let mut kill = Command::new(&tmux);
+                let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+                if !cli.fork_keep_on_failure {
+                    for (dir, _) in &clones {
+                        let _ = fs::remove_dir_all(dir);
+                    }
+                    println!("Removed all created pane directories under {}.", session_dir.display());
+                } else {
+                    println!("Clones remain under {} for recovery.", session_dir.display());
+                }
+                // Update metadata
+                let existing: Vec<(PathBuf, String)> = clones
+                    .iter()
+                    .filter(|(p, _)| p.exists())
+                    .map(|(p, b)| (p.clone(), b.clone()))
+                    .collect();
+                let panes_created = existing.len();
+                let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                let mut meta2 = format!(
+                    "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                    created_at,
+                    aifo_coder::shell_escape(&base_label),
+                    aifo_coder::shell_escape(&base_ref_or_sha),
+                    aifo_coder::shell_escape(&base_commit_sha),
+                    panes,
+                    panes_created,
+                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                    aifo_coder::shell_escape(&layout)
+                );
+                if let Some(ref snap) = snapshot_sha {
+                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                }
+                meta2.push_str(" }");
+                let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                return ExitCode::from(1);
+            }
+        }
+
+        // Panes 2..N
+        let mut split_failed = false;
+        for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+            let i = idx + 1;
+            let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+            let inner = build_inner(i, &pane_state_dir);
+            let mut cmd = Command::new(&tmux);
+            cmd.arg("split-window")
+                .arg("-t")
+                .arg(format!("{}:0", &session_name))
+                .arg("-c")
+                .arg(pane_dir)
+                .arg("sh")
+                .arg("-lc")
+                .arg(&inner);
+            if cli.verbose {
+                let target = format!("{}:0", &session_name);
+                let preview_split = vec![
+                    "tmux".to_string(),
+                    "split-window".to_string(),
+                    "-t".to_string(),
+                    target,
+                    "-c".to_string(),
+                    pane_dir.display().to_string(),
+                    "sh".to_string(),
+                    "-lc".to_string(),
+                    inner.clone()
+                ];
+                eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_split));
+            }
+            let st = cmd.status();
+            match st {
+                Ok(s) if s.success() => {}
+                Ok(_) | Err(_) => {
+                    split_failed = true;
+                    break;
+                }
+            }
+        }
+        if split_failed {
+            eprintln!("aifo-coder: tmux split-window failed for one or more panes.");
+            // Best-effort: kill the tmux session to avoid leaving a half-configured window
+            let mut kill = Command::new(&tmux);
+            let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+
+            if !cli.fork_keep_on_failure {
+                for (dir, _) in &clones {
+                    let _ = fs::remove_dir_all(dir);
+                }
+                println!("Removed all created pane directories under {}.", session_dir.display());
+            } else {
+                println!("Clones remain under {} for recovery.", session_dir.display());
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("Example recovery:");
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                }
+            }
+            // Update metadata with panes_created and existing pane dirs
+            let existing: Vec<(PathBuf, String)> = clones
+                .iter()
+                .filter(|(p, _)| p.exists())
+                .map(|(p, b)| (p.clone(), b.clone()))
+                .collect();
+            let panes_created = existing.len();
+            let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+            let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+            let mut meta2 = format!(
+                "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                created_at,
+                aifo_coder::shell_escape(&base_label),
+                aifo_coder::shell_escape(&base_ref_or_sha),
+                aifo_coder::shell_escape(&base_commit_sha),
+                panes,
+                panes_created,
+                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                aifo_coder::shell_escape(&layout)
+            );
+            if let Some(ref snap) = snapshot_sha {
+                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+            }
+            meta2.push_str(" }");
+            let _ = fs::write(session_dir.join(".meta.json"), meta2);
+            return ExitCode::from(1);
+        }
+
+        // Layout and options
+        let mut lay = Command::new(&tmux);
+        lay.arg("select-layout")
             .arg("-t")
             .arg(format!("{}:0", &session_name))
-            .arg("-c")
-            .arg(pane_dir)
-            .arg("sh")
-            .arg("-lc")
-            .arg(&inner);
+            .arg(&layout_effective);
         if cli.verbose {
-            let target = format!("{}:0", &session_name);
-            let preview_split = vec![
+            let preview_layout = vec![
                 "tmux".to_string(),
-                "split-window".to_string(),
+                "select-layout".to_string(),
                 "-t".to_string(),
-                target,
-                "-c".to_string(),
-                pane_dir.display().to_string(),
-                "sh".to_string(),
-                "-lc".to_string(),
-                inner.clone()
+                format!("{}:0", &session_name),
+                layout_effective.clone()
             ];
-            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_split));
+            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_layout));
         }
-        let st = cmd.status();
-        match st {
-            Ok(s) if s.success() => {}
-            Ok(_) | Err(_) => {
-                split_failed = true;
-                break;
-            }
-        }
-    }
-    if split_failed {
-        eprintln!("aifo-coder: tmux split-window failed for one or more panes.");
-        // Best-effort: kill the tmux session to avoid leaving a half-configured window
-        let mut kill = Command::new(&tmux);
-        let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+        let _ = lay.status();
 
-        if !cli.fork_keep_on_failure {
-            for (dir, _) in &clones {
-                let _ = fs::remove_dir_all(dir);
-            }
-            println!("Removed all created pane directories under {}.", session_dir.display());
+        let mut sync = Command::new(&tmux);
+        sync.arg("set-window-option")
+            .arg("-t")
+            .arg(format!("{}:0", &session_name))
+            .arg("synchronize-panes")
+            .arg("off");
+        if cli.verbose {
+            let preview_sync = vec![
+                "tmux".to_string(),
+                "set-window-option".to_string(),
+                "-t".to_string(),
+                format!("{}:0", &session_name),
+                "synchronize-panes".to_string(),
+                "off".to_string()
+            ];
+            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_sync));
+        }
+        let _ = sync.status();
+
+        // Attach or switch
+        let attach_cmd = if env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
+            vec!["switch-client".to_string(), "-t".to_string(), session_name.clone()]
         } else {
-            println!("Clones remain under {} for recovery.", session_dir.display());
-            if let Some((first_dir, first_branch)) = clones.first() {
-                println!("Example recovery:");
-                println!("  git -C \"{}\" status", first_dir.display());
-                println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-                println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-                println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            vec!["attach-session".to_string(), "-t".to_string(), session_name.clone()]
+        };
+        let mut att = Command::new(&tmux);
+        for a in &attach_cmd {
+            att.arg(a);
+        }
+        let _ = att.status();
+
+        // After tmux session ends or switch completes, print merging guidance
+        println!();
+        println!("aifo-coder: fork session {} completed.", sid);
+        println!("To inspect and merge changes, you can run:");
+        if let Some((first_dir, first_branch)) = clones.first() {
+            println!("  git -C \"{}\" status", first_dir.display());
+            println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            if base_label != "detached" {
+                println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
             }
         }
-        // Update metadata with panes_created and existing pane dirs
-        let existing: Vec<(PathBuf, String)> = clones
-            .iter()
-            .filter(|(p, _)| p.exists())
-            .map(|(p, b)| (p.clone(), b.clone()))
-            .collect();
-        let panes_created = existing.len();
-        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-        let mut meta2 = format!(
-            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-            created_at,
-            aifo_coder::shell_escape(&base_label),
-            aifo_coder::shell_escape(&base_ref_or_sha),
-            aifo_coder::shell_escape(&base_commit_sha),
-            panes,
-            panes_created,
-            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-            aifo_coder::shell_escape(&layout)
-        );
-        if let Some(ref snap) = snapshot_sha {
-            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
-        }
-        meta2.push_str(" }");
-        let _ = fs::write(session_dir.join(".meta.json"), meta2);
-        return ExitCode::from(1);
-    }
 
-    // Layout and options
-    let mut lay = Command::new(&tmux);
-    lay.arg("select-layout")
-        .arg("-t")
-        .arg(format!("{}:0", &session_name))
-        .arg(&layout_effective);
-    if cli.verbose {
-        let preview_layout = vec![
-            "tmux".to_string(),
-            "select-layout".to_string(),
-            "-t".to_string(),
-            format!("{}:0", &session_name),
-            layout_effective.clone()
-        ];
-        eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_layout));
+        ExitCode::from(0)
     }
-    let _ = lay.status();
-
-    let mut sync = Command::new(&tmux);
-    sync.arg("set-window-option")
-        .arg("-t")
-        .arg(format!("{}:0", &session_name))
-        .arg("synchronize-panes")
-        .arg("off");
-    if cli.verbose {
-        let preview_sync = vec![
-            "tmux".to_string(),
-            "set-window-option".to_string(),
-            "-t".to_string(),
-            format!("{}:0", &session_name),
-            "synchronize-panes".to_string(),
-            "off".to_string()
-        ];
-        eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_sync));
-    }
-    let _ = sync.status();
-
-    // Attach or switch
-    let attach_cmd = if env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
-        vec!["switch-client".to_string(), "-t".to_string(), session_name.clone()]
-    } else {
-        vec!["attach-session".to_string(), "-t".to_string(), session_name.clone()]
-    };
-    let mut att = Command::new(&tmux);
-    for a in &attach_cmd {
-        att.arg(a);
-    }
-    let _ = att.status();
-
-    // After tmux session ends or switch completes, print merging guidance
-    println!();
-    println!("aifo-coder: fork session {} completed.", sid);
-    println!("To inspect and merge changes, you can run:");
-    if let Some((first_dir, first_branch)) = clones.first() {
-        println!("  git -C \"{}\" status", first_dir.display());
-        println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-        println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-        println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
-        if base_label != "detached" {
-            println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-            println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
-        }
-    }
-
-    ExitCode::from(0)
 }
 
 #[derive(Subcommand, Debug, Clone)]
