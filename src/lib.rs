@@ -3273,6 +3273,8 @@ pub fn fork_clone_and_checkout_panes(
         // Initialize and update submodules if .gitmodules exists
         if pane_dir.join(".gitmodules").exists() {
             let _ = Command::new("git")
+                .arg("-c")
+                .arg("protocol.file.allow=always")
                 .arg("-C")
                 .arg(&pane_dir)
                 .arg("submodule")
@@ -4168,10 +4170,10 @@ mod tests {
         assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(&base).status().unwrap().success());
         assert!(std::process::Command::new("git").args(["commit","-m","base init"]).current_dir(&base).status().unwrap().success());
 
-        // Add submodule pointing to local path
+        // Add submodule pointing to local path; allow file transport explicitly for modern Git
         let sub_path = sub.display().to_string();
         assert!(std::process::Command::new("git")
-            .args(["submodule","add",&sub_path,"submod"])
+            .args(["-c","protocol.file.allow=always","submodule","add",&sub_path,"submod"])
             .current_dir(&base)
             .status()
             .unwrap()
