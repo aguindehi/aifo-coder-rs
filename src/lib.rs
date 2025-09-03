@@ -3365,6 +3365,7 @@ pub struct ForkCleanOpts {
     pub yes: bool,
     pub force: bool,
     pub keep_dirty: bool,
+    pub json: bool,
 }
 
 fn read_file_to_string(p: &Path) -> Option<String> { fs::read_to_string(p).ok() }
@@ -3562,7 +3563,8 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
         for (idx, (sid, panes, created_at, age_days, base_label, stale)) in rows.iter().enumerate() {
             if idx > 0 { out.push(','); }
             out.push_str(&format!(
-                "{{\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                json_escape(&repo_root.display().to_string()),
                 sid, panes, created_at, age_days, json_escape(base_label), if *stale { "true" } else { "false" }
             ));
         }
@@ -3705,8 +3707,39 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
         }
     }
 
+    // If JSON + dry-run requested, print plan and exit before confirmation/execution
+    if opts.json && opts.dry_run {
+        let mut out = String::from("{\"plan\":true,\"sessions\":[");
+        for (idx, (sd, panes)) in plan.iter().enumerate() {
+            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)");
+            let total = panes.len();
+            let clean_count = panes.iter().filter(|ps| ps.clean).count();
+            let protected = total.saturating_sub(clean_count);
+            // Determine deletion scope per session
+            let will_delete_session = if opts.force {
+                true
+            } else if opts.keep_dirty {
+                clean_count == total
+            } else {
+                true // at this point, non-clean cases were refused unless --force/--keep-dirty handled above
+            };
+            if idx > 0 { out.push(','); }
+            out.push_str(&format!(
+                "{{\"sid\":{},\"panes_total\":{},\"panes_clean\":{},\"panes_protected\":{},\"will_delete_session\":{}}}",
+                json_escape(sid),
+                total,
+                clean_count,
+                protected,
+                if will_delete_session { "true" } else { "false" }
+            ));
+        }
+        out.push_str("]}");
+        println!("{}", out);
+        return Ok(0);
+    }
+
     // Interactive confirmation before deletion (Phase 6 safety prompt)
-    if !opts.dry_run && !opts.yes {
+    if !opts.dry_run && !opts.yes && !opts.json {
         if !atty::is(atty::Stream::Stdin) {
             eprintln!("aifo-coder: refusing to delete without confirmation on non-interactive stdin. Re-run with --yes or --dry-run.");
             return Ok(1);
@@ -3741,12 +3774,18 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
     }
 
     // Execute deletions (or print in dry-run)
+    let mut deleted_sessions_count: usize = 0;
+    let mut deleted_panes_count: usize = 0;
+
     for (sd, panes) in &plan {
         let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)").to_string();
         if opts.force {
             if opts.dry_run {
                 println!("DRY-RUN: rm -rf {}", sd.display());
             } else {
+                // count all panes removed and the session
+                deleted_panes_count += panes.len();
+                deleted_sessions_count += 1;
                 let _ = fs::remove_dir_all(sd);
             }
             continue;
@@ -3758,6 +3797,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     if opts.dry_run {
                         println!("DRY-RUN: rm -rf {}", ps.dir.display());
                     } else {
+                        deleted_panes_count += 1;
                         let _ = fs::remove_dir_all(&ps.dir);
                     }
                 } else {
@@ -3768,6 +3808,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                 if opts.dry_run {
                     println!("DRY-RUN: rmdir {}", sd.display());
                 } else {
+                    deleted_sessions_count += 1;
                     let _ = fs::remove_dir_all(sd);
                 }
             } else {
@@ -3829,6 +3870,8 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             if opts.dry_run {
                 println!("DRY-RUN: rm -rf {}", sd.display());
             } else {
+                deleted_panes_count += panes.len();
+                deleted_sessions_count += 1;
                 let _ = fs::remove_dir_all(sd);
             }
         }
@@ -3836,6 +3879,13 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
 
     if !opts.yes && !opts.dry_run {
         // nothing interactive implemented; --yes is accepted to match CLI but not required
+    }
+
+    if opts.json && !opts.dry_run {
+        println!(
+            "{{\"executed\":true,\"deleted_sessions\":{},\"deleted_panes\":{}}}",
+            deleted_sessions_count, deleted_panes_count
+        );
     }
 
     Ok(0)

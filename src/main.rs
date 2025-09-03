@@ -545,7 +545,7 @@ fn run_doctor(verbose: bool) {
     }
 
     eprintln!();
-    eprintln!("  spec status: implemented: base + 1-4 (v4); not implemented: 5-7");
+    eprintln!("  spec status: implemented: base + 1-6 (v4); not implemented: 7");
     eprintln!();
     eprintln!("doctor: completed diagnostics.");
     eprintln!();
@@ -2037,6 +2037,9 @@ enum ForkCmd {
         /// Delete only clean panes; keep dirty/ahead/base-unknown
         #[arg(long = "keep-dirty")]
         keep_dirty: bool,
+        /// Emit machine-readable JSON summary (plan in --dry-run; result when executed)
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -2140,7 +2143,7 @@ fn main() -> ExitCode {
                 let code = aifo_coder::fork_list(&repo_root, *json, *all_repos).unwrap_or(1);
                 return ExitCode::from(code as u8);
             }
-            ForkCmd::Clean { session, older_than, all, dry_run, yes, force, keep_dirty } => {
+            ForkCmd::Clean { session, older_than, all, dry_run, yes, force, keep_dirty, json } => {
                 let opts = aifo_coder::ForkCleanOpts {
                     session: session.clone(),
                     older_than_days: *older_than,
@@ -2149,6 +2152,7 @@ fn main() -> ExitCode {
                     yes: *yes,
                     force: *force,
                     keep_dirty: *keep_dirty,
+                    json: *json,
                 };
                 let code = aifo_coder::fork_clean(&repo_root, &opts).unwrap_or(1);
                 return ExitCode::from(code as u8);
