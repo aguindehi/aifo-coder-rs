@@ -14,6 +14,88 @@ use which::which;
 use once_cell::sync::{Lazy, OnceCell};
 use atty;
 
+#[cfg(windows)]
+fn ps_quote_inner(s: &str) -> String {
+    let esc = s.replace('\'', "''");
+    format!("'{}'", esc)
+}
+
+#[cfg(windows)]
+/// Build the PowerShell inner command for fork panes (used by tests).
+pub fn fork_ps_inner_string(
+    agent: &str,
+    sid: &str,
+    i: usize,
+    pane_dir: &std::path::Path,
+    pane_state_dir: &std::path::Path,
+    child_args: &[String],
+) -> String {
+    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+    let kv = [
+        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+        ("AIFO_CODER_HOSTNAME", cname),
+        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
+        ("AIFO_CODER_FORK_INDEX", i.to_string()),
+        ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+    ];
+    let mut assigns: Vec<String> = Vec::new();
+    for (k, v) in kv {
+        assigns.push(format!("$env:{}={}", k, ps_quote_inner(&v)));
+    }
+    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    words.extend(child_args.iter().cloned());
+    let cmd = words
+        .iter()
+        .map(|w| ps_quote_inner(w))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let setloc = format!("Set-Location {}", ps_quote_inner(&pane_dir.display().to_string()));
+    format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
+}
+
+#[cfg(windows)]
+/// Build the Git Bash inner command for fork panes (used by tests).
+pub fn fork_bash_inner_string(
+    agent: &str,
+    sid: &str,
+    i: usize,
+    pane_dir: &std::path::Path,
+    pane_state_dir: &std::path::Path,
+    child_args: &[String],
+) -> String {
+    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+    let kv = [
+        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+        ("AIFO_CODER_HOSTNAME", cname),
+        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
+        ("AIFO_CODER_FORK_INDEX", i.to_string()),
+        ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+    ];
+    let mut exports: Vec<String> = Vec::new();
+    for (k, v) in kv {
+        exports.push(format!("export {}={}", k, shell_escape(&v)));
+    }
+    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    words.extend(child_args.iter().cloned());
+    let cmd = shell_join(&words);
+    let cddir = shell_escape(&pane_dir.display().to_string());
+    format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
+}
+
+#[cfg(windows)]
+/// Map layout to wt.exe split orientation flag.
+pub fn wt_orient_for_layout(layout: &str, i: usize) -> &'static str {
+    match layout {
+        "even-h" => "-H",
+        "even-v" => "-V",
+        _ => {
+            if i % 2 == 0 { "-H" } else { "-V" }
+        }
+    }
+}
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 

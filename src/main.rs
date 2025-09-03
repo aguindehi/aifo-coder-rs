@@ -1135,43 +1135,84 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     ];
                     eprintln!("aifo-coder: windows-terminal: {}", aifo_coder::shell_join(&preview));
                 }
-                if let Err(e) = cmd.status() {
-                    eprintln!("aifo-coder: Windows Terminal failed to start first pane: {}", e);
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
+                match cmd.status() {
+                    Ok(s) if s.success() => {}
+                    Ok(_) => {
+                        eprintln!("aifo-coder: Windows Terminal failed to start first pane (non-zero exit).");
+                        if !cli.fork_keep_on_failure {
+                            for (dir, _) in &clones {
+                                let _ = fs::remove_dir_all(dir);
+                            }
+                            println!("Removed all created pane directories under {}.", session_dir.display());
+                        } else {
+                            println!("Clones remain under {} for recovery.", session_dir.display());
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
-                    } else {
-                        println!("Clones remain under {} for recovery.", session_dir.display());
+                        // Update metadata with panes_created
+                        let existing: Vec<(PathBuf, String)> = clones
+                            .iter()
+                            .filter(|(p, _)| p.exists())
+                            .map(|(p, b)| (p.clone(), b.clone()))
+                            .collect();
+                        let panes_created = existing.len();
+                        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                        let mut meta2 = format!(
+                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                            created_at,
+                            aifo_coder::shell_escape(&base_label),
+                            aifo_coder::shell_escape(&base_ref_or_sha),
+                            aifo_coder::shell_escape(&base_commit_sha),
+                            panes,
+                            panes_created,
+                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                            aifo_coder::shell_escape(&layout)
+                        );
+                        if let Some(ref snap) = snapshot_sha {
+                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        }
+                        meta2.push_str(" }");
+                        let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                        return ExitCode::from(1);
                     }
-                    // Update metadata with panes_created
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
-                    );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    Err(e) => {
+                        eprintln!("aifo-coder: Windows Terminal failed to start first pane: {}", e);
+                        if !cli.fork_keep_on_failure {
+                            for (dir, _) in &clones {
+                                let _ = fs::remove_dir_all(dir);
+                            }
+                            println!("Removed all created pane directories under {}.", session_dir.display());
+                        } else {
+                            println!("Clones remain under {} for recovery.", session_dir.display());
+                        }
+                        // Update metadata with panes_created
+                        let existing: Vec<(PathBuf, String)> = clones
+                            .iter()
+                            .filter(|(p, _)| p.exists())
+                            .map(|(p, b)| (p.clone(), b.clone()))
+                            .collect();
+                        let panes_created = existing.len();
+                        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                        let mut meta2 = format!(
+                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                            created_at,
+                            aifo_coder::shell_escape(&base_label),
+                            aifo_coder::shell_escape(&base_ref_or_sha),
+                            aifo_coder::shell_escape(&base_commit_sha),
+                            panes,
+                            panes_created,
+                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                            aifo_coder::shell_escape(&layout)
+                        );
+                        if let Some(ref snap) = snapshot_sha {
+                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        }
+                        meta2.push_str(" }");
+                        let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                        return ExitCode::from(1);
                     }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
-                    return ExitCode::from(1);
                 }
             }
 
