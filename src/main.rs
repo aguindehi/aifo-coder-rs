@@ -624,7 +624,7 @@ struct Cli {
     fork_layout: Option<String>,
 
     /// Keep created clones on orchestration failure (default: keep)
-    #[arg(long = "fork-keep-on-failure")]
+    #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
     #[command(subcommand)]
@@ -875,6 +875,11 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Per-pane run
     let child_args = fork_build_child_args(cli);
     let layout = cli.fork_layout.as_deref().unwrap_or("tiled").to_string();
+    let layout_effective = match layout.as_str() {
+        "even-h" => "even-horizontal".to_string(),
+        "even-v" => "even-vertical".to_string(),
+        _ => "tiled".to_string(),
+    };
 
     // Write metadata skeleton
     let created_at = std::time::SystemTime::now()
@@ -968,20 +973,90 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("aifo-coder: tmux new-session failed to start: {}", e);
-                println!("One or more clones were created under {}.", session_dir.display());
-                println!("You can inspect them manually. Example:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                // Failure policy: keep clones by default; optionally remove if user disabled keep-on-failure
+                if !cli.fork_keep_on_failure {
+                    for (dir, _) in &clones {
+                        let _ = fs::remove_dir_all(dir);
+                    }
+                    println!("Removed all created pane directories under {}.", session_dir.display());
+                } else {
+                    println!("One or more clones were created under {}.", session_dir.display());
+                    println!("You can inspect them manually. Example:");
+                    if let Some((first_dir, first_branch)) = clones.first() {
+                        println!("  git -C \"{}\" status", first_dir.display());
+                        println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+                        println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+                        println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    }
                 }
+                // Update metadata with panes_created and existing pane dirs
+                let existing: Vec<(PathBuf, String)> = clones
+                    .iter()
+                    .filter(|(p, _)| p.exists())
+                    .map(|(p, b)| (p.clone(), b.clone()))
+                    .collect();
+                let panes_created = existing.len();
+                let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                let mut meta2 = format!(
+                    "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                    created_at,
+                    aifo_coder::shell_escape(&base_label),
+                    aifo_coder::shell_escape(&base_ref_or_sha),
+                    aifo_coder::shell_escape(&base_commit_sha),
+                    panes,
+                    panes_created,
+                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                    aifo_coder::shell_escape(&layout)
+                );
+                if let Some(ref snap) = snapshot_sha {
+                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                }
+                meta2.push_str(" }");
+                let _ = fs::write(session_dir.join(".meta.json"), meta2);
                 return ExitCode::from(1);
             }
         };
         if !st.success() {
             eprintln!("aifo-coder: tmux new-session failed.");
-            println!("Clones remain under {} for recovery.", session_dir.display());
+            // Best-effort: kill any stray session
+            let mut kill = Command::new(&tmux);
+            let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+            if !cli.fork_keep_on_failure {
+                for (dir, _) in &clones {
+                    let _ = fs::remove_dir_all(dir);
+                }
+                println!("Removed all created pane directories under {}.", session_dir.display());
+            } else {
+                println!("Clones remain under {} for recovery.", session_dir.display());
+            }
+            // Update metadata
+            let existing: Vec<(PathBuf, String)> = clones
+                .iter()
+                .filter(|(p, _)| p.exists())
+                .map(|(p, b)| (p.clone(), b.clone()))
+                .collect();
+            let panes_created = existing.len();
+            let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+            let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+            let mut meta2 = format!(
+                "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                created_at,
+                aifo_coder::shell_escape(&base_label),
+                aifo_coder::shell_escape(&base_ref_or_sha),
+                aifo_coder::shell_escape(&base_commit_sha),
+                panes,
+                panes_created,
+                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                aifo_coder::shell_escape(&layout)
+            );
+            if let Some(ref snap) = snapshot_sha {
+                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+            }
+            meta2.push_str(" }");
+            let _ = fs::write(session_dir.join(".meta.json"), meta2);
             return ExitCode::from(1);
         }
     }
@@ -1016,14 +1091,47 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let mut kill = Command::new(&tmux);
         let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
 
-        println!("Clones remain under {} for recovery.", session_dir.display());
-        if let Some((first_dir, first_branch)) = clones.first() {
-            println!("Example recovery:");
-            println!("  git -C \"{}\" status", first_dir.display());
-            println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+        if !cli.fork_keep_on_failure {
+            for (dir, _) in &clones {
+                let _ = fs::remove_dir_all(dir);
+            }
+            println!("Removed all created pane directories under {}.", session_dir.display());
+        } else {
+            println!("Clones remain under {} for recovery.", session_dir.display());
+            if let Some((first_dir, first_branch)) = clones.first() {
+                println!("Example recovery:");
+                println!("  git -C \"{}\" status", first_dir.display());
+                println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
+                println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
+                println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            }
         }
+        // Update metadata with panes_created and existing pane dirs
+        let existing: Vec<(PathBuf, String)> = clones
+            .iter()
+            .filter(|(p, _)| p.exists())
+            .map(|(p, b)| (p.clone(), b.clone()))
+            .collect();
+        let panes_created = existing.len();
+        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+        let mut meta2 = format!(
+            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+            created_at,
+            aifo_coder::shell_escape(&base_label),
+            aifo_coder::shell_escape(&base_ref_or_sha),
+            aifo_coder::shell_escape(&base_commit_sha),
+            panes,
+            panes_created,
+            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+            aifo_coder::shell_escape(&layout)
+        );
+        if let Some(ref snap) = snapshot_sha {
+            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+        }
+        meta2.push_str(" }");
+        let _ = fs::write(session_dir.join(".meta.json"), meta2);
         return ExitCode::from(1);
     }
 
@@ -1032,7 +1140,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     lay.arg("select-layout")
         .arg("-t")
         .arg(format!("{}:0", &session_name))
-        .arg(&layout);
+        .arg(&layout_effective);
     let _ = lay.status();
 
     let mut sync = Command::new(&tmux);
