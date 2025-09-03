@@ -1070,17 +1070,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
+                        aifo_coder::json_escape(&base_label),
+                        aifo_coder::json_escape(&base_ref_or_sha),
+                        aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1153,17 +1153,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
+                        aifo_coder::json_escape(&base_label),
+                        aifo_coder::json_escape(&base_ref_or_sha),
+                        aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1264,17 +1264,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         let mut meta2 = format!(
                             "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                             created_at,
-                            aifo_coder::shell_escape(&base_label),
-                            aifo_coder::shell_escape(&base_ref_or_sha),
-                            aifo_coder::shell_escape(&base_commit_sha),
+                            aifo_coder::json_escape(&base_label),
+                            aifo_coder::json_escape(&base_ref_or_sha),
+                            aifo_coder::json_escape(&base_commit_sha),
                             panes,
                             panes_created,
-                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                            aifo_coder::shell_escape(&layout)
+                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            aifo_coder::json_escape(&layout)
                         );
                         if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                         }
                         meta2.push_str(" }");
                         let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1302,17 +1302,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         let mut meta2 = format!(
                             "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                             created_at,
-                            aifo_coder::shell_escape(&base_label),
-                            aifo_coder::shell_escape(&base_ref_or_sha),
-                            aifo_coder::shell_escape(&base_commit_sha),
+                            aifo_coder::json_escape(&base_label),
+                            aifo_coder::json_escape(&base_ref_or_sha),
+                            aifo_coder::json_escape(&base_commit_sha),
                             panes,
                             panes_created,
-                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                            aifo_coder::shell_escape(&layout)
+                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            aifo_coder::json_escape(&layout)
                         );
                         if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                         }
                         meta2.push_str(" }");
                         let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1388,17 +1388,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let mut meta2 = format!(
                     "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                     created_at,
-                    aifo_coder::shell_escape(&base_label),
-                    aifo_coder::shell_escape(&base_ref_or_sha),
-                    aifo_coder::shell_escape(&base_commit_sha),
+                    aifo_coder::json_escape(&base_label),
+                    aifo_coder::json_escape(&base_ref_or_sha),
+                    aifo_coder::json_escape(&base_commit_sha),
                     panes,
                     panes_created,
-                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                    aifo_coder::shell_escape(&layout)
+                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    aifo_coder::json_escape(&layout)
                 );
                 if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                 }
                 meta2.push_str(" }");
                 let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1477,17 +1477,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
+                        aifo_coder::json_escape(&base_label),
+                        aifo_coder::json_escape(&base_ref_or_sha),
+                        aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1560,17 +1560,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
+                        aifo_coder::json_escape(&base_label),
+                        aifo_coder::json_escape(&base_ref_or_sha),
+                        aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1659,17 +1659,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             let mut meta2 = format!(
                 "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                 created_at,
-                aifo_coder::shell_escape(&base_label),
-                aifo_coder::shell_escape(&base_ref_or_sha),
-                aifo_coder::shell_escape(&base_commit_sha),
+                aifo_coder::json_escape(&base_label),
+                aifo_coder::json_escape(&base_ref_or_sha),
+                aifo_coder::json_escape(&base_commit_sha),
                 panes,
                 panes_created,
-                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                aifo_coder::shell_escape(&layout)
+                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
             }
             meta2.push_str(" }");
             let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1786,17 +1786,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
-                        aifo_coder::shell_escape(&base_label),
-                        aifo_coder::shell_escape(&base_ref_or_sha),
-                        aifo_coder::shell_escape(&base_commit_sha),
+                        aifo_coder::json_escape(&base_label),
+                        aifo_coder::json_escape(&base_ref_or_sha),
+                        aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                        aifo_coder::shell_escape(&layout)
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1828,17 +1828,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let mut meta2 = format!(
                     "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                     created_at,
-                    aifo_coder::shell_escape(&base_label),
-                    aifo_coder::shell_escape(&base_ref_or_sha),
-                    aifo_coder::shell_escape(&base_commit_sha),
+                    aifo_coder::json_escape(&base_label),
+                    aifo_coder::json_escape(&base_ref_or_sha),
+                    aifo_coder::json_escape(&base_commit_sha),
                     panes,
                     panes_created,
-                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                    aifo_coder::shell_escape(&layout)
+                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    aifo_coder::json_escape(&layout)
                 );
                 if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
                 }
                 meta2.push_str(" }");
                 let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1918,17 +1918,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             let mut meta2 = format!(
                 "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                 created_at,
-                aifo_coder::shell_escape(&base_label),
-                aifo_coder::shell_escape(&base_ref_or_sha),
-                aifo_coder::shell_escape(&base_commit_sha),
+                aifo_coder::json_escape(&base_label),
+                aifo_coder::json_escape(&base_ref_or_sha),
+                aifo_coder::json_escape(&base_commit_sha),
                 panes,
                 panes_created,
-                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
-                aifo_coder::shell_escape(&layout)
+                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
             }
             meta2.push_str(" }");
             let _ = fs::write(session_dir.join(".meta.json"), meta2);

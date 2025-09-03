@@ -3539,7 +3539,9 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
                 }
                 return Ok(0);
             }
-            // If workspace root is invalid, fall through to single-repo behavior.
+            // If workspace root is invalid, report error when --all-repos was requested
+            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            return Ok(1);
         }
     }
 
@@ -3700,6 +3702,41 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                 }
             }
             return Ok(1);
+        }
+    }
+
+    // Interactive confirmation before deletion (Phase 6 safety prompt)
+    if !opts.dry_run && !opts.yes {
+        if !atty::is(atty::Stream::Stdin) {
+            eprintln!("aifo-coder: refusing to delete without confirmation on non-interactive stdin. Re-run with --yes or --dry-run.");
+            return Ok(1);
+        }
+        let mut del_sessions = 0usize;
+        let mut del_panes = 0usize;
+        if opts.force {
+            del_sessions = plan.len();
+            for (_sd, panes) in &plan { del_panes += panes.len(); }
+        } else if opts.keep_dirty {
+            for (_sd, panes) in &plan {
+                let clean_count = panes.iter().filter(|ps| ps.clean).count();
+                del_panes += clean_count;
+                let remaining = panes.len().saturating_sub(clean_count);
+                if remaining == 0 { del_sessions += 1; }
+            }
+        } else {
+            del_sessions = plan.len();
+            for (_sd, panes) in &plan { del_panes += panes.len(); }
+        }
+        if del_sessions > 0 || del_panes > 0 {
+            eprint!("aifo-coder: about to delete {} session(s) and {} pane(s). Proceed? [y/N] ", del_sessions, del_panes);
+            let _ = std::io::stderr().flush();
+            let mut line = String::new();
+            let _ = std::io::stdin().read_line(&mut line);
+            let ans = line.trim().to_ascii_lowercase();
+            if ans != "y" && ans != "yes" {
+                eprintln!("aborted.");
+                return Ok(1);
+            }
         }
     }
 
