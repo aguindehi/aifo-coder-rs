@@ -971,7 +971,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg(pane1_dir)
             .arg("sh")
             .arg("-lc")
-            .arg(inner);
+            .arg(&inner);
         if cli.verbose {
             let preview_new = vec![
                 "tmux".to_string(),
@@ -1095,7 +1095,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg(pane_dir)
             .arg("sh")
             .arg("-lc")
-            .arg(inner);
+            .arg(&inner);
         if cli.verbose {
             let target = format!("{}:0", &session_name);
             let preview_split = vec![
