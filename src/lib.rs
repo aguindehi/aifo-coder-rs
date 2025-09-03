@@ -4029,6 +4029,7 @@ pub fn fork_autoclean_if_enabled() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as aifo_coder;
     use once_cell::sync::Lazy;
     use std::sync::Mutex;
 
@@ -4695,6 +4696,16 @@ mod tests {
             .status()
             .map(|s| s.success())
             .unwrap_or(false)
+    }
+
+    // Minimal helper to initialize a git repository with one commit
+    fn init_repo(dir: &std::path::Path) {
+        let _ = std::process::Command::new("git").arg("init").current_dir(dir).status();
+        let _ = std::process::Command::new("git").args(["config","user.name","UT"]).current_dir(dir).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","ut@example.com"]).current_dir(dir).status();
+        let _ = std::fs::write(dir.join("init.txt"), "x\n");
+        let _ = std::process::Command::new("git").args(["add","-A"]).current_dir(dir).status();
+        let _ = std::process::Command::new("git").args(["commit","-m","init"]).current_dir(dir).status();
     }
 
     #[test]
