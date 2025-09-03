@@ -2983,11 +2983,12 @@ pub fn fork_clone_and_checkout_panes(
                 .arg("clone")
                 .arg("--no-checkout")
                 .arg("--reference-if-able")
-                .arg(source);
+                .arg(&root_str);
             if dissociate {
                 clone.arg("--dissociate");
             }
-            clone.arg(&pane_dir);
+            // repository URL/path and destination directory
+            clone.arg(source).arg(&pane_dir);
             clone.stdout(Stdio::null()).stderr(Stdio::null());
             let st = clone.status()?;
             if st.success() {
