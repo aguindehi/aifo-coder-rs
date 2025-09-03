@@ -443,7 +443,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let mut reg = tracing_subscriber::registry().with(otel_layer);
 
     // Optional fmt layer (explicit opt-in only)
-    if std::env::var_os("AIFO_CODER_TRACING_FMT").is_some() {
+    if std::env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1") {
         let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
         reg = reg.with(tracing_subscriber::EnvFilter::new(env_filter)).with(tracing_subscriber::fmt::layer());
     }
