@@ -880,6 +880,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         "even-v" => "even-vertical".to_string(),
         _ => "tiled".to_string(),
     };
+    if cli.verbose {
+        eprintln!("aifo-coder: tmux layout requested: {} -> effective: {}", layout, layout_effective);
+    }
 
     // Write metadata skeleton
     let created_at = std::time::SystemTime::now()
@@ -969,6 +972,23 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("sh")
             .arg("-lc")
             .arg(inner);
+        if cli.verbose {
+            let preview_new = vec![
+                "tmux".to_string(),
+                "new-session".to_string(),
+                "-d".to_string(),
+                "-s".to_string(),
+                session_name.clone(),
+                "-n".to_string(),
+                "aifo-fork".to_string(),
+                "-c".to_string(),
+                pane1_dir.display().to_string(),
+                "sh".to_string(),
+                "-lc".to_string(),
+                inner.clone()
+            ];
+            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_new));
+        }
         let st = match cmd.status() {
             Ok(s) => s,
             Err(e) => {
@@ -1076,6 +1096,21 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("sh")
             .arg("-lc")
             .arg(inner);
+        if cli.verbose {
+            let target = format!("{}:0", &session_name);
+            let preview_split = vec![
+                "tmux".to_string(),
+                "split-window".to_string(),
+                "-t".to_string(),
+                target,
+                "-c".to_string(),
+                pane_dir.display().to_string(),
+                "sh".to_string(),
+                "-lc".to_string(),
+                inner.clone()
+            ];
+            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_split));
+        }
         let st = cmd.status();
         match st {
             Ok(s) if s.success() => {}
@@ -1141,6 +1176,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         .arg("-t")
         .arg(format!("{}:0", &session_name))
         .arg(&layout_effective);
+    if cli.verbose {
+        let preview_layout = vec![
+            "tmux".to_string(),
+            "select-layout".to_string(),
+            "-t".to_string(),
+            format!("{}:0", &session_name),
+            layout_effective.clone()
+        ];
+        eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_layout));
+    }
     let _ = lay.status();
 
     let mut sync = Command::new(&tmux);
@@ -1149,6 +1194,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         .arg(format!("{}:0", &session_name))
         .arg("synchronize-panes")
         .arg("off");
+    if cli.verbose {
+        let preview_sync = vec![
+            "tmux".to_string(),
+            "set-window-option".to_string(),
+            "-t".to_string(),
+            format!("{}:0", &session_name),
+            "synchronize-panes".to_string(),
+            "off".to_string()
+        ];
+        eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_sync));
+    }
     let _ = sync.status();
 
     // Attach or switch
