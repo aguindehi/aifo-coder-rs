@@ -3543,6 +3543,10 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
             // If workspace root is invalid, report error when --all-repos was requested
             eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
             return Ok(1);
+        } else {
+            // Missing env var: explicitly error when --all-repos is requested without workspace root
+            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            return Ok(1);
         }
     }
 
