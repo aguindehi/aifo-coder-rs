@@ -545,6 +545,8 @@ fn run_doctor(verbose: bool) {
     }
 
     eprintln!();
+    eprintln!("  spec status: implemented: base + 1-4 (v4); not implemented: 5-7");
+    eprintln!();
     eprintln!("doctor: completed diagnostics.");
     eprintln!();
 }
