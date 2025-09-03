@@ -3110,6 +3110,52 @@ pub fn fork_session_dir(repo_root: &Path, sid: &str) -> PathBuf {
     repo_root.join(".aifo-coder").join("forks").join(sid)
 }
 
+/// Quick heuristic to detect if a repository uses Git LFS without requiring git-lfs to be installed.
+/// Returns true if:
+/// - .lfsconfig exists at repo root, or
+/// - any .gitattributes file (top-level or nested) contains "filter=lfs".
+pub fn repo_uses_lfs_quick(repo_root: &Path) -> bool {
+    // .lfsconfig presence is a strong hint
+    if repo_root.join(".lfsconfig").exists() {
+        return true;
+    }
+    // Top-level .gitattributes
+    if let Ok(s) = fs::read_to_string(repo_root.join(".gitattributes")) {
+        if s.contains("filter=lfs") {
+            return true;
+        }
+    }
+    // Scan nested .gitattributes files (skip .git directory)
+    fn scan(dir: &Path) -> bool {
+        let rd = match fs::read_dir(dir) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+        for ent in rd {
+            let Ok(ent) = ent else { continue };
+            let path = ent.path();
+            let Ok(ft) = ent.file_type() else { continue };
+            if ft.is_dir() {
+                // Skip VCS directory
+                if ent.file_name().to_string_lossy() == ".git" {
+                    continue;
+                }
+                if scan(&path) {
+                    return true;
+                }
+            } else if ft.is_file() && ent.file_name().to_string_lossy() == ".gitattributes" {
+                if let Ok(s) = fs::read_to_string(&path) {
+                    if s.contains("filter=lfs") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+    scan(repo_root)
+}
+
 /// Clone and checkout N fork panes based on a base ref/SHA.
 /// Each pane is created under <repo-root>/.aifo-coder/forks/<sid>/pane-<i> and
 /// on success returns a vector of (pane_dir, branch_name).
@@ -3247,11 +3293,8 @@ pub fn fork_clone_and_checkout_panes(
             .map(|s| s.success())
             .unwrap_or(false);
         if lfs_available {
-            // Heuristic: check for 'filter=lfs' in top-level .gitattributes
-            let uses_lfs = fs::read_to_string(pane_dir.join(".gitattributes"))
-                .ok()
-                .map(|s| s.contains("filter=lfs"))
-                .unwrap_or(false);
+            // Heuristic: detect LFS usage via quick scan of .lfsconfig and any *.gitattributes containing filter=lfs
+            let uses_lfs = repo_uses_lfs_quick(&pane_dir);
             if uses_lfs {
                 let _ = Command::new("git")
                     .arg("-C")
@@ -4183,5 +4226,32 @@ mod tests {
         // Should not fail regardless of git-lfs availability
         let res = fork_clone_and_checkout_panes(repo, "sid-lfs", 1, &cur_branch, &base_label, false).expect("clone panes with lfs marker");
         assert_eq!(res.len(), 1);
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_top_level_gitattributes() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        // Create top-level .gitattributes with lfs filter
+        std::fs::write(repo.join(".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n").unwrap();
+        assert!(repo_uses_lfs_quick(repo), "expected repo_uses_lfs_quick to detect top-level filter=lfs");
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_nested_gitattributes() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        let nested = repo.join("assets").join("media");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join(".gitattributes"), "*.png filter=lfs diff=lfs merge=lfs -text\n").unwrap();
+        assert!(repo_uses_lfs_quick(repo), "expected repo_uses_lfs_quick to detect nested filter=lfs");
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_lfsconfig_present() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        std::fs::write(repo.join(".lfsconfig"), "[lfs]\nurl = https://example.com/lfs\n").unwrap();
+        assert!(repo_uses_lfs_quick(repo), "expected repo_uses_lfs_quick to detect .lfsconfig presence");
     }
 }
