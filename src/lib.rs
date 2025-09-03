@@ -3223,6 +3223,64 @@ pub fn fork_clone_and_checkout_panes(
             ));
         }
 
+        // Phase 5: Best-effort submodules and Git LFS
+        // Initialize and update submodules if .gitmodules exists
+        if pane_dir.join(".gitmodules").exists() {
+            let _ = Command::new("git")
+                .arg("-C")
+                .arg(&pane_dir)
+                .arg("submodule")
+                .arg("update")
+                .arg("--init")
+                .arg("--recursive")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        // Git LFS: if git lfs is available and repository appears to use LFS, perform install/fetch/checkout
+        let lfs_available = Command::new("git")
+            .arg("lfs")
+            .arg("version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if lfs_available {
+            // Heuristic: check for 'filter=lfs' in top-level .gitattributes
+            let uses_lfs = fs::read_to_string(pane_dir.join(".gitattributes"))
+                .ok()
+                .map(|s| s.contains("filter=lfs"))
+                .unwrap_or(false);
+            if uses_lfs {
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("install")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("fetch")
+                    .arg("--all")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("checkout")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
+
         results.push((pane_dir, branch));
     }
 
@@ -4037,5 +4095,93 @@ mod tests {
             let head_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
             assert_eq!(&head_branch, branch, "pane {} HEAD should be {}", idx+1, branch);
         }
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_inits_submodules() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+
+        // Create submodule repository
+        let sub = td.path().join("sm");
+        std::fs::create_dir_all(&sub).expect("mkdir sm");
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(&sub).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(&sub).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(&sub).status();
+        std::fs::write(sub.join("sub.txt"), "sub\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(&sub).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","sub init"]).current_dir(&sub).status().unwrap().success());
+
+        // Create base repository and add submodule
+        let base = td.path().join("base");
+        std::fs::create_dir_all(&base).expect("mkdir base");
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(&base).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(&base).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(&base).status();
+        std::fs::write(base.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(&base).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","base init"]).current_dir(&base).status().unwrap().success());
+
+        // Add submodule pointing to local path
+        let sub_path = sub.display().to_string();
+        assert!(std::process::Command::new("git")
+            .args(["submodule","add",&sub_path,"submod"])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git").args(["commit","-m","add submodule"]).current_dir(&base).status().unwrap().success());
+
+        // Determine current branch name
+        let out = std::process::Command::new("git")
+            .args(["rev-parse","--abbrev-ref","HEAD"])
+            .current_dir(&base)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Clone panes and ensure submodule is initialized in clone
+        let res = fork_clone_and_checkout_panes(&base, "sid-sub", 1, &cur_branch, &base_label, false).expect("clone panes with submodule");
+        assert_eq!(res.len(), 1);
+        let pane_dir = &res[0].0;
+        let sub_file = pane_dir.join("submod").join("sub.txt");
+        assert!(sub_file.exists(), "expected submodule file to exist in clone: {}", sub_file.display());
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_lfs_marker_does_not_fail_without_lfs() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with a .gitattributes marking LFS filters (may or may not have git-lfs installed)
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+
+        std::fs::write(repo.join(".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n").unwrap();
+        std::fs::write(repo.join("a.bin"), b"\x00\x01\x02").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
+        // Commit even if lfs not installed; the filter may be ignored, but commit should succeed
+        assert!(std::process::Command::new("git").args(["commit","-m","add lfs marker"]).current_dir(repo).status().unwrap().success());
+
+        let out = std::process::Command::new("git")
+            .args(["rev-parse","--abbrev-ref","HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Should not fail regardless of git-lfs availability
+        let res = fork_clone_and_checkout_panes(repo, "sid-lfs", 1, &cur_branch, &base_label, false).expect("clone panes with lfs marker");
+        assert_eq!(res.len(), 1);
     }
 }
