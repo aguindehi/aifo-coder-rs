@@ -752,6 +752,28 @@ pub fn shell_escape(s: &str) -> String {
     }
 }
 
+/// Escape a string as a JSON string literal (double-quoted) with required escapes.
+pub fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                // Control characters -> \u00XX
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 //// Repository-scoped locking helpers and candidate paths
 
 /// Try to detect the Git repository root (absolute canonical path).
@@ -3478,12 +3500,12 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
                                 first = false;
                                 out.push_str(&format!(
                                     "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
-                                    shell_escape(&repo.display().to_string()),
+                                    json_escape(&repo.display().to_string()),
                                     sid,
                                     panes,
                                     created_at,
                                     age_days,
-                                    shell_escape(&base_label),
+                                    json_escape(&base_label),
                                     if stale { "true" } else { "false" }
                                 ));
                             }
@@ -3539,7 +3561,7 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
             if idx > 0 { out.push(','); }
             out.push_str(&format!(
                 "{{\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
-                sid, panes, created_at, age_days, shell_escape(base_label), if *stale { "true" } else { "false" }
+                sid, panes, created_at, age_days, json_escape(base_label), if *stale { "true" } else { "false" }
             ));
         }
         out.push(']');
@@ -3732,18 +3754,34 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                         }
                     }
 
+                    // Enrich metadata with prior fields and use valid JSON escaping
+                    let prev = read_file_to_string(&sd.join(".meta.json"));
+                    let created_at_num = prev.as_deref()
+                        .and_then(|s| meta_extract_value(s, "created_at"))
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(0);
+                    let base_label_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
+                    let base_ref_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "base_ref_or_sha")).unwrap_or_default();
+                    let base_commit_prev = base_commit.clone().unwrap_or_default();
+                    let layout_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "layout")).unwrap_or_else(|| "tiled".to_string());
+
                     let mut meta_out = String::from("{");
-                    meta_out.push_str(&format!("\"sid\":{},", shell_escape(&sid)));
+                    meta_out.push_str(&format!("\"sid\":{},", json_escape(&sid)));
+                    meta_out.push_str(&format!("\"created_at\":{},", created_at_num));
+                    meta_out.push_str(&format!("\"base_label\":{},", json_escape(&base_label_prev)));
+                    meta_out.push_str(&format!("\"base_ref_or_sha\":{},", json_escape(&base_ref_prev)));
+                    meta_out.push_str(&format!("\"base_commit_sha\":{},", json_escape(&base_commit_prev)));
+                    meta_out.push_str(&format!("\"layout\":{},", json_escape(&layout_prev)));
                     meta_out.push_str(&format!("\"panes_remaining\":{},", remaining.len()));
                     meta_out.push_str("\"pane_dirs\":[");
                     for (idx, p) in remaining.iter().enumerate() {
                         if idx > 0 { meta_out.push(','); }
-                        meta_out.push_str(&shell_escape(&p.display().to_string()));
+                        meta_out.push_str(&json_escape(&p.display().to_string()));
                     }
                     meta_out.push_str("],\"branches\":[");
                     for (i, b) in branches.iter().enumerate() {
                         if i > 0 { meta_out.push(','); }
-                        meta_out.push_str(&shell_escape(b));
+                        meta_out.push_str(&json_escape(b));
                     }
                     meta_out.push_str("]}");
                     let _ = fs::write(sd.join(".meta.json"), meta_out);
