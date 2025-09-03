@@ -3840,7 +3840,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                         .unwrap_or(0);
                     let base_label_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
                     let base_ref_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "base_ref_or_sha")).unwrap_or_default();
-                    let base_commit_prev = base_commit.clone().unwrap_or_default();
+                    let base_commit_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "base_commit_sha")).unwrap_or_default();
                     let layout_prev = prev.as_deref().and_then(|s| meta_extract_value(s, "layout")).unwrap_or_else(|| "tiled".to_string());
 
                     let mut meta_out = String::from("{");
