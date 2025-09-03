@@ -96,6 +96,37 @@ pub fn wt_orient_for_layout(layout: &str, i: usize) -> &'static str {
     }
 }
 
+#[cfg(windows)]
+/// Build argument vector for `wt new-tab -d <dir> <psbin> -NoExit -Command <inner>`.
+pub fn wt_build_new_tab_args(psbin: &std::path::Path, pane_dir: &std::path::Path, inner: &str) -> Vec<String> {
+    vec![
+        "wt".to_string(),
+        "new-tab".to_string(),
+        "-d".to_string(),
+        pane_dir.display().to_string(),
+        psbin.display().to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        inner.to_string(),
+    ]
+}
+
+#[cfg(windows)]
+/// Build argument vector for `wt split-pane <orient> -d <dir> <psbin> -NoExit -Command <inner>`.
+pub fn wt_build_split_args(orient: &str, psbin: &std::path::Path, pane_dir: &std::path::Path, inner: &str) -> Vec<String> {
+    vec![
+        "wt".to_string(),
+        "split-pane".to_string(),
+        orient.to_string(),
+        "-d".to_string(),
+        pane_dir.display().to_string(),
+        psbin.display().to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        inner.to_string(),
+    ]
+}
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 

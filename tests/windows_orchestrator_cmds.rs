@@ -100,3 +100,33 @@ fn test_wt_orient_for_layout_mapping() {
     assert_eq!(aifo_coder::wt_orient_for_layout("tiled", 1), "-V");
     assert_eq!(aifo_coder::wt_orient_for_layout("tiled", 2), "-H");
 }
+
+#[test]
+fn test_wt_build_new_tab_args_contains_d_flag() {
+    let ps = PathBuf::from(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+    let dir = PathBuf::from(r"C:\Work\repo\fork\pane-1");
+    let inner = "echo hi";
+    let args = aifo_coder::wt_build_new_tab_args(&ps, &dir, inner);
+    assert_eq!(args.get(0), Some(&"wt".to_string()));
+    assert_eq!(args.get(1), Some(&"new-tab".to_string()));
+    let pos = args.iter().position(|s| s == "-d").expect("missing -d flag");
+    assert_eq!(args.get(pos + 1), Some(&dir.display().to_string()));
+    // Ensure powershell path and -Command are present
+    assert!(args.contains(&ps.display().to_string()), "psbin path missing in args: {:?}", args);
+    assert!(args.contains(&"-Command".to_string()), "-Command missing in args: {:?}", args);
+}
+
+#[test]
+fn test_wt_build_split_args_contains_orient_and_d() {
+    let ps = PathBuf::from(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+    let dir = PathBuf::from(r"C:\Work\repo\fork\pane-2");
+    let inner = "echo bye";
+    let args = aifo_coder::wt_build_split_args("-H", &ps, &dir, inner);
+    assert_eq!(args.get(0), Some(&"wt".to_string()));
+    assert_eq!(args.get(1), Some(&"split-pane".to_string()));
+    assert!(args.contains(&"-H".to_string()), "orientation flag missing: {:?}", args);
+    let pos = args.iter().position(|s| s == "-d").expect("missing -d flag");
+    assert_eq!(args.get(pos + 1), Some(&dir.display().to_string()));
+    assert!(args.contains(&ps.display().to_string()), "psbin path missing in args: {:?}", args);
+    assert!(args.contains(&"-Command".to_string()), "-Command missing in args: {:?}", args);
+}

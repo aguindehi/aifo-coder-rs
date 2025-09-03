@@ -760,7 +760,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .or_else(|_| which("powershell"))
             .or_else(|_| which("powershell.exe"))
             .is_ok();
-        let gb_ok = which("git-bash.exe").or_else(|_| which("bash.exe")).is_ok();
+        let gb_ok = which("git-bash.exe")
+            .or_else(|_| which("bash.exe"))
+            .or_else(|_| which("mintty.exe"))
+            .is_ok();
         if !(wt_ok || ps_ok || gb_ok) {
             eprintln!("aifo-coder: error: none of Windows Terminal (wt.exe), PowerShell, or Git Bash were found in PATH.");
             return ExitCode::from(127);
@@ -1080,8 +1083,91 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     }
                 }
                 return ExitCode::from(0);
+            } else if let Ok(mt) = which("mintty.exe") {
+                // Use mintty as a Git Bash UI launcher
+                let mut any_failed = false;
+                for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
+                    let i = idx + 1;
+                    let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+
+                    let mut cmd = Command::new(&mt);
+                    cmd.arg("-e").arg("bash").arg("-lc").arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            mt.display().to_string(),
+                            "-e".to_string(),
+                            "bash".to_string(),
+                            "-lc".to_string(),
+                            inner.clone(),
+                        ];
+                        eprintln!("aifo-coder: mintty: {}", aifo_coder::shell_join(&preview));
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        _ => {
+                            any_failed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if any_failed {
+                    eprintln!("aifo-coder: failed to launch one or more mintty windows.");
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("Clones remain under {} for recovery.", session_dir.display());
+                    }
+                    // Update metadata with panes_created
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+
+                // Print guidance and return
+                println!();
+                println!("aifo-coder: fork session {} launched (mintty).", sid);
+                println!("To inspect and merge changes, you can run:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    if base_label != "detached" {
+                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                    }
+                }
+                return ExitCode::from(0);
             } else {
-                eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash was not found in PATH.");
+                eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash/mintty were not found in PATH.");
                 return ExitCode::from(1);
             }
         } else if orch_pref.as_deref() == Some("powershell") {
@@ -1404,8 +1490,91 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     }
                 }
                 return ExitCode::from(0);
+            } else if let Ok(mt) = which("mintty.exe") {
+                // Use mintty as a Git Bash UI launcher
+                let mut any_failed = false;
+                for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
+                    let i = idx + 1;
+                    let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+
+                    let mut cmd = Command::new(&mt);
+                    cmd.arg("-e").arg("bash").arg("-lc").arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            mt.display().to_string(),
+                            "-e".to_string(),
+                            "bash".to_string(),
+                            "-lc".to_string(),
+                            inner.clone(),
+                        ];
+                        eprintln!("aifo-coder: mintty: {}", aifo_coder::shell_join(&preview));
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        _ => {
+                            any_failed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if any_failed {
+                    eprintln!("aifo-coder: failed to launch one or more mintty windows.");
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("Clones remain under {} for recovery.", session_dir.display());
+                    }
+                    // Update metadata with panes_created
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+
+                // Print guidance and return
+                println!();
+                println!("aifo-coder: fork session {} launched (mintty).", sid);
+                println!("To inspect and merge changes, you can run:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    if base_label != "detached" {
+                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                    }
+                }
+                return ExitCode::from(0);
             } else {
-                eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash found in PATH.");
+                eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
                 return ExitCode::from(1);
             }
         }
