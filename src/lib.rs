@@ -3332,6 +3332,361 @@ pub fn fork_clone_and_checkout_panes(
     Ok(results)
 }
 
+// Phase 6: fork maintenance and stale-session notice
+
+/// Options for fork clean command.
+pub struct ForkCleanOpts {
+    pub session: Option<String>,
+    pub older_than_days: Option<u64>,
+    pub all: bool,
+    pub dry_run: bool,
+    pub yes: bool,
+    pub force: bool,
+    pub keep_dirty: bool,
+}
+
+fn read_file_to_string(p: &Path) -> Option<String> { fs::read_to_string(p).ok() }
+
+fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
+    // naive key finder supporting single or double quoted or numeric values
+    let needle = format!("\"{}\":", key);
+    if let Some(pos) = meta.find(&needle) {
+        let rest = &meta[pos + needle.len()..];
+        let rest = rest.trim_start();
+        if rest.is_empty() { return None; }
+        let first = rest.as_bytes()[0] as char;
+        if first == '"' || first == '\'' {
+            let quote = first;
+            let mut out = String::new();
+            for ch in rest[1..].chars() {
+                if ch == quote {
+                    return Some(out);
+                } else {
+                    out.push(ch);
+                }
+            }
+            None
+        } else {
+            // numeric token
+            let mut num = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_digit() {
+                    num.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if num.is_empty() { None } else { Some(num) }
+        }
+    } else {
+        None
+    }
+}
+
+fn session_dirs(base: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let rd = match fs::read_dir(base) { Ok(d)=>d, Err(_)=> return out };
+    for ent in rd {
+        if let Ok(e) = ent {
+            let p = e.path();
+            if p.is_dir() {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+fn pane_dirs_for_session(session_dir: &Path) -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Ok(rd) = fs::read_dir(session_dir) {
+        for ent in rd {
+            if let Ok(e) = ent {
+                let p = e.path();
+                if p.is_dir() {
+                    if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                        if name.starts_with("pane-") {
+                            v.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    v
+}
+
+fn secs_since_epoch(t: SystemTime) -> u64 {
+    t.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|_| Duration::from_secs(0)).as_secs()
+}
+
+/// List fork sessions under the current repository.
+/// Returns exit code (0 on success).
+pub fn fork_list(repo_root: &Path, json: bool, _all_repos: bool) -> io::Result<i32> {
+    let base = repo_root.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        if json {
+            println!("[]");
+        } else {
+            println!("aifo-coder: no fork sessions found under {}", base.display());
+        }
+        return Ok(0);
+    }
+    let mut rows = Vec::new();
+    for sd in session_dirs(&base) {
+        let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        if sid.is_empty() { continue; }
+        let meta_path = sd.join(".meta.json");
+        let meta = read_file_to_string(&meta_path);
+        let created_at = meta.as_deref()
+            .and_then(|s| meta_extract_value(s, "created_at"))
+            .and_then(|s| s.parse::<u64>().ok())
+            .or_else(|| fs::metadata(&sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
+            .unwrap_or(0);
+        let base_label = meta.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
+        let panes = pane_dirs_for_session(&sd).len();
+        let now = secs_since_epoch(SystemTime::now());
+        let age_days = if created_at > 0 { (now.saturating_sub(created_at) / 86400) } else { 0 };
+        rows.push((sid, panes, created_at, age_days, base_label));
+    }
+    // sort by created_at ascending
+    rows.sort_by_key(|r| r.2);
+
+    if json {
+        let mut out = String::from("[");
+        for (idx, (sid, panes, created_at, age_days, base_label)) in rows.iter().enumerate() {
+            if idx > 0 { out.push(','); }
+            out.push_str(&format!("{{\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{}}}",
+                sid, panes, created_at, age_days, shell_escape(base_label)));
+        }
+        out.push(']');
+        println!("{}", out);
+    } else {
+        println!("aifo-coder: fork sessions under {}/.aifo-coder/forks", repo_root.display());
+        for (sid, panes, _created_at, age_days, base_label) in rows {
+            println!("  {}  panes={}  age={}d  base={}", sid, panes, age_days, base_label);
+        }
+    }
+    Ok(0)
+}
+
+/// Clean fork sessions and panes with safety protections.
+/// Returns exit code (0 on success; 1 on refusal or error).
+pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
+    let base = repo_root.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        eprintln!("aifo-coder: no fork sessions directory at {}", base.display());
+        return Ok(0);
+    }
+    let targets: Vec<PathBuf> = if let Some(ref sid) = opts.session {
+        let p = base.join(sid);
+        if p.exists() { vec![p] } else { Vec::new() }
+    } else if let Some(days) = opts.older_than_days {
+        let now = secs_since_epoch(SystemTime::now());
+        session_dirs(&base).into_iter().filter(|sd| {
+            let meta = read_file_to_string(&sd.join(".meta.json"));
+            let created_at = meta.as_deref()
+                .and_then(|s| meta_extract_value(s, "created_at"))
+                .and_then(|s| s.parse::<u64>().ok())
+                .or_else(|| fs::metadata(sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
+                .unwrap_or(0);
+            if created_at == 0 { return false; }
+            let age = (now.saturating_sub(created_at) / 86400) as u64;
+            age >= days
+        }).collect()
+    } else if opts.all {
+        session_dirs(&base)
+    } else {
+        eprintln!("aifo-coder: please specify one of --session <sid>, --older-than <days>, or --all.");
+        return Ok(1);
+    };
+
+    if targets.is_empty() {
+        eprintln!("aifo-coder: no matching fork sessions to clean.");
+        return Ok(0);
+    }
+
+    struct PaneStatus {
+        dir: PathBuf,
+        clean: bool,
+        reasons: Vec<String>,
+    }
+
+    let mut plan: Vec<(PathBuf, Vec<PaneStatus>)> = Vec::new();
+    for sd in &targets {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let base_commit = meta.as_deref().and_then(|s| meta_extract_value(s, "base_commit_sha"));
+        let mut panes_status = Vec::new();
+        for p in pane_dirs_for_session(sd) {
+            let mut reasons = Vec::new();
+            // dirty detection
+            let dirty = Command::new("git")
+                .arg("-C").arg(&p)
+                .arg("status").arg("--porcelain=v1").arg("-uall")
+                .stdout(Stdio::piped()).stderr(Stdio::null())
+                .output().ok().map(|o| !o.stdout.is_empty()).unwrap_or(false);
+            if dirty {
+                reasons.push("dirty".to_string());
+            } else {
+                // submodule changes detect
+                if let Ok(o) = Command::new("git")
+                    .arg("-C").arg(&p)
+                    .arg("submodule").arg("status").arg("--recursive")
+                    .output() {
+                    let s = String::from_utf8_lossy(&o.stdout);
+                    if s.lines().any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U')) {
+                        reasons.push("submodules-dirty".to_string());
+                    }
+                }
+            }
+            // ahead detection
+            let mut ahead = false;
+            let mut base_unknown = false;
+            if let Some(ref base_sha) = base_commit {
+                let out = Command::new("git")
+                    .arg("-C").arg(&p)
+                    .arg("rev-list").arg("--count")
+                    .arg(format!("{}..HEAD", base_sha))
+                    .output().ok();
+                if let Some(o) = out {
+                    if o.status.success() {
+                        let c = String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().unwrap_or(0);
+                        if c > 0 { ahead = true; }
+                    } else {
+                        base_unknown = true;
+                    }
+                } else {
+                    base_unknown = true;
+                }
+            } else {
+                base_unknown = true;
+            }
+            if ahead { reasons.push("ahead".to_string()); }
+            if base_unknown { reasons.push("base-unknown".to_string()); }
+
+            let clean = reasons.is_empty();
+            panes_status.push(PaneStatus { dir: p, clean, reasons });
+        }
+        plan.push((sd.clone(), panes_status));
+    }
+
+    // Default protection: if any protected pane and neither --force nor --keep-dirty, refuse
+    if !opts.force && !opts.keep_dirty {
+        let mut protected = 0usize;
+        for (_sd, panes) in &plan {
+            for ps in panes {
+                if !ps.clean { protected += 1; }
+            }
+        }
+        if protected > 0 {
+            eprintln!("aifo-coder: refusing to delete: {} pane(s) are protected (dirty/ahead/base-unknown).", protected);
+            eprintln!("Use --keep-dirty to remove only clean panes, or --force to delete everything.");
+            // Print summary
+            for (sd, panes) in &plan {
+                let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)");
+                for ps in panes {
+                    if !ps.clean {
+                        eprintln!("  {} :: {} [{}]", sid, ps.dir.display(), ps.reasons.join(","));
+                    }
+                }
+            }
+            return Ok(1);
+        }
+    }
+
+    // Execute deletions (or print in dry-run)
+    for (sd, panes) in &plan {
+        let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)").to_string();
+        if opts.force {
+            if opts.dry_run {
+                println!("DRY-RUN: rm -rf {}", sd.display());
+            } else {
+                let _ = fs::remove_dir_all(sd);
+            }
+            continue;
+        }
+        if opts.keep_dirty {
+            let mut remaining: Vec<PathBuf> = Vec::new();
+            for ps in panes {
+                if ps.clean {
+                    if opts.dry_run {
+                        println!("DRY-RUN: rm -rf {}", ps.dir.display());
+                    } else {
+                        let _ = fs::remove_dir_all(&ps.dir);
+                    }
+                } else {
+                    remaining.push(ps.dir.clone());
+                }
+            }
+            if remaining.is_empty() {
+                if opts.dry_run {
+                    println!("DRY-RUN: rmdir {}", sd.display());
+                } else {
+                    let _ = fs::remove_dir_all(sd);
+                }
+            } else {
+                // Update .meta.json with remaining panes
+                if !opts.dry_run {
+                    let mut meta_out = String::from("{");
+                    meta_out.push_str(&format!("\"sid\":{},", shell_escape(&sid)));
+                    meta_out.push_str(&format!("\"panes_remaining\":{},", remaining.len()));
+                    meta_out.push_str("\"pane_dirs\":[");
+                    for (idx, p) in remaining.iter().enumerate() {
+                        if idx > 0 { meta_out.push(','); }
+                        meta_out.push_str(&shell_escape(&p.display().to_string()));
+                    }
+                    meta_out.push_str("]}");
+                    let _ = fs::write(sd.join(".meta.json"), meta_out);
+                }
+            }
+        } else {
+            // all panes are clean here (or we would have bailed above)
+            if opts.dry_run {
+                println!("DRY-RUN: rm -rf {}", sd.display());
+            } else {
+                let _ = fs::remove_dir_all(sd);
+            }
+        }
+    }
+
+    if !opts.yes && !opts.dry_run {
+        // nothing interactive implemented; --yes is accepted to match CLI but not required
+    }
+
+    Ok(0)
+}
+
+/// Print a notice about stale fork sessions for the current repository (quiet; best-effort).
+pub fn fork_print_stale_notice() {
+    let repo = match repo_root() {
+        Some(p) => p,
+        None => return,
+    };
+    let base = repo.join(".aifo-coder").join("forks");
+    if !base.exists() { return; }
+    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
+    let now = secs_since_epoch(SystemTime::now());
+    let mut count = 0usize;
+    let mut oldest = 0u64;
+    for sd in session_dirs(&base) {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let created_at = meta.as_deref()
+            .and_then(|s| meta_extract_value(s, "created_at"))
+            .and_then(|s| s.parse::<u64>().ok())
+            .or_else(|| fs::metadata(&sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
+            .unwrap_or(0);
+        if created_at == 0 { continue; }
+        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        if age_days >= threshold_days {
+            count += 1;
+            if age_days > oldest { oldest = age_days; }
+        }
+    }
+    if count > 0 {
+        eprintln!("Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}", count, oldest, threshold_days);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

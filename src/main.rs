@@ -1985,6 +1985,43 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 }
 
 #[derive(Subcommand, Debug, Clone)]
+enum ForkCmd {
+    /// List existing fork sessions under the current repo
+    List {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Scan across repositories (currently same as current repo)
+        #[arg(long = "all-repos")]
+        all_repos: bool,
+    },
+    /// Clean fork sessions and panes with safety protections
+    Clean {
+        /// Target a single session id
+        #[arg(long = "session")]
+        session: Option<String>,
+        /// Target sessions older than N days
+        #[arg(long = "older-than")]
+        older_than: Option<u64>,
+        /// Target all sessions
+        #[arg(long = "all")]
+        all: bool,
+        /// Print what would be done without deleting
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Proceed without interactive confirmation
+        #[arg(long = "yes")]
+        yes: bool,
+        /// Override safety protections and delete everything
+        #[arg(long = "force")]
+        force: bool,
+        /// Delete only clean panes; keep dirty/ahead/base-unknown
+        #[arg(long = "keep-dirty")]
+        keep_dirty: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
 enum Agent {
     /// Run diagnostics to check environment and configuration
     Doctor,
@@ -2031,6 +2068,12 @@ enum Agent {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+
+    /// Fork maintenance commands
+    Fork {
+        #[command(subcommand)]
+        cmd: ForkCmd,
+    },
 }
 
 fn main() -> ExitCode {
@@ -2057,6 +2100,39 @@ fn main() -> ExitCode {
             return fork_run(&cli, n);
         }
     }
+    // Stale sessions notice (Phase 6): print suggestions for old fork sessions on normal runs
+    aifo_coder::fork_print_stale_notice();
+
+    // Fork maintenance subcommands (Phase 6): operate without starting agents or acquiring locks
+    if let Agent::Fork { cmd } = &cli.command {
+        let repo_root = match aifo_coder::repo_root() {
+            Some(p) => p,
+            None => {
+                eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
+                return ExitCode::from(1);
+            }
+        };
+        match cmd {
+            ForkCmd::List { json, all_repos } => {
+                let code = aifo_coder::fork_list(&repo_root, *json, *all_repos).unwrap_or(1);
+                return ExitCode::from(code as u8);
+            }
+            ForkCmd::Clean { session, older_than, all, dry_run, yes, force, keep_dirty } => {
+                let opts = aifo_coder::ForkCleanOpts {
+                    session: session.clone(),
+                    older_than_days: *older_than,
+                    all: *all,
+                    dry_run: *dry_run,
+                    yes: *yes,
+                    force: *force,
+                    keep_dirty: *keep_dirty,
+                };
+                let code = aifo_coder::fork_clean(&repo_root, &opts).unwrap_or(1);
+                return ExitCode::from(code as u8);
+            }
+        }
+    }
+
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
