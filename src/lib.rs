@@ -3687,6 +3687,39 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
         plan.push((sd.clone(), panes_status));
     }
 
+    // If JSON + dry-run requested, print plan and exit before confirmation/execution (placed before refusal to allow planning even when protected)
+    if opts.json && opts.dry_run {
+        let mut out = String::from("{\"plan\":true,\"sessions\":[");
+        for (idx, (sd, panes)) in plan.iter().enumerate() {
+            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)");
+            let total = panes.len();
+            let clean_count = panes.iter().filter(|ps| ps.clean).count();
+            let protected = total.saturating_sub(clean_count);
+            // Determine deletion scope per session
+            let will_delete_session = if opts.force {
+                true
+            } else if opts.keep_dirty {
+                clean_count == total
+            } else {
+                // When not keeping dirty and not forcing, a full session delete would be attempted,
+                // but may be refused later if protected panes exist.
+                true
+            };
+            if idx > 0 { out.push(','); }
+            out.push_str(&format!(
+                "{{\"sid\":{},\"panes_total\":{},\"panes_clean\":{},\"panes_protected\":{},\"will_delete_session\":{}}}",
+                json_escape(sid),
+                total,
+                clean_count,
+                protected,
+                if will_delete_session { "true" } else { "false" }
+            ));
+        }
+        out.push_str("]}");
+        println!("{}", out);
+        return Ok(0);
+    }
+
     // Default protection: if any protected pane and neither --force nor --keep-dirty, refuse
     if !opts.force && !opts.keep_dirty {
         let mut protected = 0usize;
@@ -3711,36 +3744,6 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
         }
     }
 
-    // If JSON + dry-run requested, print plan and exit before confirmation/execution
-    if opts.json && opts.dry_run {
-        let mut out = String::from("{\"plan\":true,\"sessions\":[");
-        for (idx, (sd, panes)) in plan.iter().enumerate() {
-            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("(unknown)");
-            let total = panes.len();
-            let clean_count = panes.iter().filter(|ps| ps.clean).count();
-            let protected = total.saturating_sub(clean_count);
-            // Determine deletion scope per session
-            let will_delete_session = if opts.force {
-                true
-            } else if opts.keep_dirty {
-                clean_count == total
-            } else {
-                true // at this point, non-clean cases were refused unless --force/--keep-dirty handled above
-            };
-            if idx > 0 { out.push(','); }
-            out.push_str(&format!(
-                "{{\"sid\":{},\"panes_total\":{},\"panes_clean\":{},\"panes_protected\":{},\"will_delete_session\":{}}}",
-                json_escape(sid),
-                total,
-                clean_count,
-                protected,
-                if will_delete_session { "true" } else { "false" }
-            ));
-        }
-        out.push_str("]}");
-        println!("{}", out);
-        return Ok(0);
-    }
 
     // Interactive confirmation before deletion (Phase 6 safety prompt)
     if !opts.dry_run && !opts.yes && !opts.json {
@@ -3945,6 +3948,9 @@ pub fn fork_autoclean_if_enabled() {
 
     let mut deleted = 0usize;
     let mut kept = 0usize;
+    let autoclean_verbose = env::var("AIFO_CODER_FORK_AUTOCLEAN_VERBOSE").ok().as_deref() == Some("1");
+    let mut deleted_sids: Vec<String> = Vec::new();
+    let mut kept_sids: Vec<String> = Vec::new();
 
     for sd in session_dirs(&base) {
         let meta = read_file_to_string(&sd.join(".meta.json"));
@@ -4012,8 +4018,12 @@ pub fn fork_autoclean_if_enabled() {
         }
         if all_clean {
             let _ = fs::remove_dir_all(&sd);
+            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            if !sid.is_empty() { deleted_sids.push(sid); }
             deleted += 1;
         } else {
+            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            if !sid.is_empty() { kept_sids.push(sid); }
             kept += 1;
         }
     }
@@ -4023,6 +4033,14 @@ pub fn fork_autoclean_if_enabled() {
             "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
             deleted, threshold_days, kept
         );
+        if autoclean_verbose {
+            if !deleted_sids.is_empty() {
+                eprintln!("  deleted sessions: {}", deleted_sids.join(" "));
+            }
+            if !kept_sids.is_empty() {
+                eprintln!("  protected sessions kept: {}", kept_sids.join(" "));
+            }
+        }
     }
 }
 
