@@ -2131,19 +2131,33 @@ fn main() -> ExitCode {
 
     // Fork maintenance subcommands (Phase 6): operate without starting agents or acquiring locks
     if let Agent::Fork { cmd } = &cli.command {
-        let repo_root = match aifo_coder::repo_root() {
-            Some(p) => p,
-            None => {
-                eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
-                return ExitCode::from(1);
-            }
-        };
         match cmd {
             ForkCmd::List { json, all_repos } => {
-                let code = aifo_coder::fork_list(&repo_root, *json, *all_repos).unwrap_or(1);
-                return ExitCode::from(code as u8);
+                if *all_repos {
+                    // In all-repos mode, do not require being inside a Git repo; workspace root is taken from env
+                    let dummy = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let code = aifo_coder::fork_list(&dummy, *json, true).unwrap_or(1);
+                    return ExitCode::from(code as u8);
+                } else {
+                    let repo_root = match aifo_coder::repo_root() {
+                        Some(p) => p,
+                        None => {
+                            eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
+                            return ExitCode::from(1);
+                        }
+                    };
+                    let code = aifo_coder::fork_list(&repo_root, *json, false).unwrap_or(1);
+                    return ExitCode::from(code as u8);
+                }
             }
             ForkCmd::Clean { session, older_than, all, dry_run, yes, force, keep_dirty, json } => {
+                let repo_root = match aifo_coder::repo_root() {
+                    Some(p) => p,
+                    None => {
+                        eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
+                        return ExitCode::from(1);
+                    }
+                };
                 let opts = aifo_coder::ForkCleanOpts {
                     session: session.clone(),
                     older_than_days: *older_than,
