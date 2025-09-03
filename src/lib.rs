@@ -2593,10 +2593,22 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
-            // Now enforce Authorization for allowed tools (protocol already validated)
+            // Now enforce Authorization for allowed tools, then protocol
             if !auth_ok {
                 let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
+            if !proto_ok {
+                let msg = b"Unsupported shim protocol; expected 1\n";
+                let header = format!(
+                    "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    msg.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(msg);
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
