@@ -753,9 +753,23 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         eprintln!("aifo-coder: error: git is required and was not found in PATH.");
         return ExitCode::from(1);
     }
-    if which("tmux").is_err() {
-        eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
-        return ExitCode::from(127);
+    if cfg!(target_os = "windows") {
+        // Windows preflight: require at least one orchestrator (wt.exe, PowerShell, or Git Bash)
+        let wt_ok = which("wt").or_else(|_| which("wt.exe")).is_ok();
+        let ps_ok = which("pwsh")
+            .or_else(|_| which("powershell"))
+            .or_else(|_| which("powershell.exe"))
+            .is_ok();
+        let gb_ok = which("git-bash.exe").or_else(|_| which("bash.exe")).is_ok();
+        if !(wt_ok || ps_ok || gb_ok) {
+            eprintln!("aifo-coder: error: none of Windows Terminal (wt.exe), PowerShell, or Git Bash were found in PATH.");
+            return ExitCode::from(127);
+        }
+    } else {
+        if which("tmux").is_err() {
+            eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
+            return ExitCode::from(127);
+        }
     }
     let repo_root = match aifo_coder::repo_root() {
         Some(p) => p,
@@ -935,7 +949,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             format!("'{}'", esc)
         };
         // Build inner PowerShell command string setting env per pane, then invoking aifo-coder with args
-        let build_ps_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
+        let build_ps_inner = |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
             let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
             let kv = [
                 ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
@@ -956,7 +970,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .map(|w| ps_quote(w))
                 .collect::<Vec<_>>()
                 .join(" ");
-            format!("{}; {}", assigns.join("; "), cmd)
+            let setloc = format!("Set-Location {}", ps_quote(&pane_dir.display().to_string()));
+            format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
+        };
+        // Build inner Git Bash command string setting env per pane, then invoking aifo-coder with args; keeps shell open
+        let build_bash_inner = |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
+            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+            let kv = [
+                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+                ("AIFO_CODER_HOSTNAME", cname),
+                ("AIFO_CODER_FORK_SESSION", sid.clone()),
+                ("AIFO_CODER_FORK_INDEX", i.to_string()),
+                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+            ];
+            let mut exports: Vec<String> = Vec::new();
+            for (k, v) in kv {
+                exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
+            }
+            let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+            words.extend(child_args.clone());
+            let cmd = aifo_coder::shell_join(&words);
+            let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
+            format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
         };
 
         // Prefer Windows Terminal (wt.exe)
@@ -966,6 +1002,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 eprintln!("aifo-coder: no panes to create.");
                 return ExitCode::from(1);
             }
+            let psbin = which("pwsh")
+                .or_else(|_| which("powershell"))
+                .or_else(|_| which("powershell.exe"))
+                .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
             let orient_for_layout = |i: usize| -> &'static str {
                 match layout.as_str() {
                     "even-h" => "-H",
@@ -981,12 +1021,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             {
                 let (pane1_dir, _b) = &clones[0];
                 let pane_state_dir = state_base.join(&sid).join("pane-1");
-                let inner = build_ps_inner(1, &pane_state_dir);
+                let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
                 let mut cmd = Command::new(&wtbin);
                 cmd.arg("new-tab")
                     .arg("-d")
                     .arg(pane1_dir)
-                    .arg("powershell")
+                    .arg(&psbin)
                     .arg("-NoExit")
                     .arg("-Command")
                     .arg(&inner);
@@ -1048,14 +1088,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
                 let i = idx + 1;
                 let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                let inner = build_ps_inner(i, &pane_state_dir);
+                let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
                 let orient = orient_for_layout(i);
                 let mut cmd = Command::new(&wtbin);
                 cmd.arg("split-pane")
                     .arg(orient)
                     .arg("-d")
                     .arg(pane_dir)
-                    .arg("powershell")
+                    .arg(&psbin)
                     .arg("-NoExit")
                     .arg("-Command")
                     .arg(&inner);
@@ -1149,8 +1189,92 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .or_else(|_| which("powershell"))
             .or_else(|_| which("powershell.exe"));
         if powershell.is_err() {
-            eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe) nor PowerShell found in PATH.");
-            return ExitCode::from(1);
+            // Fallback: Git Bash (Git Shell / mintty)
+            let gitbash = which("git-bash.exe").or_else(|_| which("bash.exe"));
+            if let Ok(gb) = gitbash {
+                let mut any_failed = false;
+                for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
+                    let i = idx + 1;
+                    let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+
+                    let mut cmd = Command::new(&gb);
+                    cmd.arg("-c").arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            gb.display().to_string(),
+                            "-c".to_string(),
+                            inner.clone(),
+                        ];
+                        eprintln!("aifo-coder: git-bash: {}", aifo_coder::shell_join(&preview));
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        _ => {
+                            any_failed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if any_failed {
+                    eprintln!("aifo-coder: failed to launch one or more Git Bash windows.");
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
+                        println!("Removed all created pane directories under {}.", session_dir.display());
+                    } else {
+                        println!("Clones remain under {} for recovery.", session_dir.display());
+                    }
+                    // Update metadata with panes_created
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
+                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                        created_at,
+                        aifo_coder::shell_escape(&base_label),
+                        aifo_coder::shell_escape(&base_ref_or_sha),
+                        aifo_coder::shell_escape(&base_commit_sha),
+                        panes,
+                        panes_created,
+                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| format!("{}", aifo_coder::shell_escape(s))).collect::<Vec<_>>().join(", "),
+                        aifo_coder::shell_escape(&layout)
+                    );
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::shell_escape(snap)));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
+                }
+
+                // Print guidance and return
+                println!();
+                println!("aifo-coder: fork session {} launched (Git Bash).", sid);
+                println!("To inspect and merge changes, you can run:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
+                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
+                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
+                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    if base_label != "detached" {
+                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
+                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                    }
+                }
+                return ExitCode::from(0);
+            } else {
+                eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash found in PATH.");
+                return ExitCode::from(1);
+            }
         }
         let ps_name = powershell.unwrap(); // used only for reference in logs
 
@@ -1158,7 +1282,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-            let inner = build_ps_inner(i, &pane_state_dir);
+            let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
 
             let mut cmd = Command::new("cmd");
             cmd.arg("/c")
@@ -1166,7 +1290,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .arg(format!("aifo-{}-{}", sid, i)) // window title
                 .arg("/D")
                 .arg(pane_dir)
-                .arg("powershell")
+                .arg(ps_name.display().to_string())
                 .arg("-NoExit")
                 .arg("-Command")
                 .arg(&inner);
