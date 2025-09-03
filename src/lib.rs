@@ -3422,49 +3422,137 @@ fn secs_since_epoch(t: SystemTime) -> u64 {
 
 /// List fork sessions under the current repository.
 /// Returns exit code (0 on success).
-pub fn fork_list(repo_root: &Path, json: bool, _all_repos: bool) -> io::Result<i32> {
-    let base = repo_root.join(".aifo-coder").join("forks");
-    if !base.exists() {
+pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i32> {
+    // Threshold for stale highlighting in list output (default 14d)
+    let list_stale_days: u64 = env::var("AIFO_CODER_FORK_LIST_STALE_DAYS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(14);
+
+    // Helper to collect rows for a single repo
+    fn collect_rows(repo_root: &Path, list_stale_days: u64) -> Vec<(String, usize, u64, u64, String, bool)> {
+        let mut rows = Vec::new();
+        let base = repo_root.join(".aifo-coder").join("forks");
+        if !base.exists() {
+            return rows;
+        }
+        for sd in session_dirs(&base) {
+            let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            if sid.is_empty() { continue; }
+            let meta_path = sd.join(".meta.json");
+            let meta = read_file_to_string(&meta_path);
+            let created_at = meta.as_deref()
+                .and_then(|s| meta_extract_value(s, "created_at"))
+                .and_then(|s| s.parse::<u64>().ok())
+                .or_else(|| fs::metadata(&sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
+                .unwrap_or(0);
+            let base_label = meta.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
+            let panes = pane_dirs_for_session(&sd).len();
+            let now = secs_since_epoch(SystemTime::now());
+            let age_days = if created_at > 0 { (now.saturating_sub(created_at) / 86400) } else { 0 };
+            let stale = (age_days as u64) >= list_stale_days;
+            rows.push((sid, panes, created_at, age_days, base_label, stale));
+        }
+        rows.sort_by_key(|r| r.2);
+        rows
+    }
+
+    if all_repos {
+        // Optional workspace scan when AIFO_CODER_WORKSPACE_ROOT is set
+        if let Ok(ws) = env::var("AIFO_CODER_WORKSPACE_ROOT") {
+            let ws_path = Path::new(&ws);
+            if ws_path.is_dir() {
+                let mut any = false;
+                if json {
+                    let mut out = String::from("[");
+                    let mut first = true;
+                    if let Ok(rd) = fs::read_dir(ws_path) {
+                        for ent in rd.flatten() {
+                            let repo = ent.path();
+                            if !repo.is_dir() { continue; }
+                            let forks_dir = repo.join(".aifo-coder").join("forks");
+                            if !forks_dir.exists() { continue; }
+                            let rows = collect_rows(&repo, list_stale_days);
+                            for (sid, panes, created_at, age_days, base_label, stale) in rows {
+                                if !first { out.push(','); }
+                                first = false;
+                                out.push_str(&format!(
+                                    "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                                    shell_escape(&repo.display().to_string()),
+                                    sid,
+                                    panes,
+                                    created_at,
+                                    age_days,
+                                    shell_escape(&base_label),
+                                    if stale { "true" } else { "false" }
+                                ));
+                                any = true;
+                            }
+                        }
+                    }
+                    out.push(']');
+                    println!("{}", out);
+                } else {
+                    if let Ok(rd) = fs::read_dir(ws_path) {
+                        for ent in rd.flatten() {
+                            let repo = ent.path();
+                            if !repo.is_dir() { continue; }
+                            let forks_dir = repo.join(".aifo-coder").join("forks");
+                            if !forks_dir.exists() { continue; }
+                            let rows = collect_rows(&repo, list_stale_days);
+                            if rows.is_empty() { continue; }
+                            any = true;
+                            println!("aifo-coder: fork sessions under {}/.aifo-coder/forks", repo.display());
+                            for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+                                if stale {
+                                    println!("  {}  panes={}  age={}d  base={}  (stale)", sid, panes, age_days, base_label);
+                                } else {
+                                    println!("  {}  panes={}  age={}d  base={}", sid, panes, age_days, base_label);
+                                }
+                            }
+                        }
+                    }
+                    if !any {
+                        println!("aifo-coder: no fork sessions found under workspace {}", ws_path.display());
+                    }
+                }
+                return Ok(0);
+            }
+            // If workspace root is invalid, fall through to single-repo behavior.
+        }
+    }
+
+    // Single repository case (default)
+    let rows = collect_rows(repo_root, list_stale_days);
+    if rows.is_empty() {
         if json {
             println!("[]");
         } else {
+            let base = repo_root.join(".aifo-coder").join("forks");
             println!("aifo-coder: no fork sessions found under {}", base.display());
         }
         return Ok(0);
     }
-    let mut rows = Vec::new();
-    for sd in session_dirs(&base) {
-        let sid = sd.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-        if sid.is_empty() { continue; }
-        let meta_path = sd.join(".meta.json");
-        let meta = read_file_to_string(&meta_path);
-        let created_at = meta.as_deref()
-            .and_then(|s| meta_extract_value(s, "created_at"))
-            .and_then(|s| s.parse::<u64>().ok())
-            .or_else(|| fs::metadata(&sd).ok().and_then(|m| m.modified().ok()).map(secs_since_epoch))
-            .unwrap_or(0);
-        let base_label = meta.as_deref().and_then(|s| meta_extract_value(s, "base_label")).unwrap_or_else(|| "(unknown)".to_string());
-        let panes = pane_dirs_for_session(&sd).len();
-        let now = secs_since_epoch(SystemTime::now());
-        let age_days = if created_at > 0 { (now.saturating_sub(created_at) / 86400) } else { 0 };
-        rows.push((sid, panes, created_at, age_days, base_label));
-    }
-    // sort by created_at ascending
-    rows.sort_by_key(|r| r.2);
 
     if json {
         let mut out = String::from("[");
-        for (idx, (sid, panes, created_at, age_days, base_label)) in rows.iter().enumerate() {
+        for (idx, (sid, panes, created_at, age_days, base_label, stale)) in rows.iter().enumerate() {
             if idx > 0 { out.push(','); }
-            out.push_str(&format!("{{\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{}}}",
-                sid, panes, created_at, age_days, shell_escape(base_label)));
+            out.push_str(&format!(
+                "{{\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                sid, panes, created_at, age_days, shell_escape(base_label), if *stale { "true" } else { "false" }
+            ));
         }
         out.push(']');
         println!("{}", out);
     } else {
         println!("aifo-coder: fork sessions under {}/.aifo-coder/forks", repo_root.display());
-        for (sid, panes, _created_at, age_days, base_label) in rows {
-            println!("  {}  panes={}  age={}d  base={}", sid, panes, age_days, base_label);
+        for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+            if stale {
+                println!("  {}  panes={}  age={}d  base={}  (stale)", sid, panes, age_days, base_label);
+            } else {
+                println!("  {}  panes={}  age={}d  base={}", sid, panes, age_days, base_label);
+            }
         }
     }
     Ok(0)
@@ -3625,8 +3713,26 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     let _ = fs::remove_dir_all(sd);
                 }
             } else {
-                // Update .meta.json with remaining panes
+                // Update .meta.json with remaining panes (also refresh branches best-effort)
                 if !opts.dry_run {
+                    // Collect current branches for remaining panes
+                    let mut branches: Vec<String> = Vec::new();
+                    for p in &remaining {
+                        if let Ok(out) = Command::new("git")
+                            .arg("-C").arg(p)
+                            .arg("rev-parse").arg("--abbrev-ref").arg("HEAD")
+                            .stdout(Stdio::piped()).stderr(Stdio::null())
+                            .output()
+                        {
+                            if out.status.success() {
+                                let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                                if !b.is_empty() {
+                                    branches.push(b);
+                                }
+                            }
+                        }
+                    }
+
                     let mut meta_out = String::from("{");
                     meta_out.push_str(&format!("\"sid\":{},", shell_escape(&sid)));
                     meta_out.push_str(&format!("\"panes_remaining\":{},", remaining.len()));
@@ -3634,6 +3740,11 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     for (idx, p) in remaining.iter().enumerate() {
                         if idx > 0 { meta_out.push(','); }
                         meta_out.push_str(&shell_escape(&p.display().to_string()));
+                    }
+                    meta_out.push_str("],\"branches\":[");
+                    for (i, b) in branches.iter().enumerate() {
+                        if i > 0 { meta_out.push(','); }
+                        meta_out.push_str(&shell_escape(b));
                     }
                     meta_out.push_str("]}");
                     let _ = fs::write(sd.join(".meta.json"), meta_out);

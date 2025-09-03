@@ -906,6 +906,25 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_secs();
+    // Determine the commit SHA used as the checkout base for metadata:
+    // - Use snapshot SHA when include-dirty snapshot was created
+    // - Otherwise resolve base_ref_or_sha to a SHA (branch or SHA), fall back to HEAD SHA from fork_base_info
+    let base_commit_sha_for_meta = if let Some(ref snap) = snapshot_sha {
+        snap.clone()
+    } else {
+        let out = Command::new("git")
+            .arg("-C").arg(&repo_root)
+            .arg("rev-parse").arg("--verify").arg(&base_ref_or_sha)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok();
+        out.and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| base_commit_sha.clone())
+    };
+    // Shadow base_commit_sha so existing metadata builders pick the correct SHA
+    let base_commit_sha = base_commit_sha_for_meta.clone();
     let pane_dirs_vec: Vec<String> = clones.iter().map(|(p, _b)| p.display().to_string()).collect();
     let branches_vec: Vec<String> = clones.iter().map(|(_p, b)| b.clone()).collect();
     let mut meta = format!(
