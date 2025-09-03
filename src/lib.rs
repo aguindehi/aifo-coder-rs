@@ -2208,8 +2208,12 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         let lower = l.to_ascii_lowercase();
                         if lower.starts_with("authorization:") {
                             if let Some(v) = l.splitn(2, ':').nth(1) {
-                                let v = v.trim();
-                                if v == format!("Bearer {}", token_for_thread2) {
+                                let value = v.trim();
+                                // Accept case-insensitive "Bearer" scheme and tolerate extra spaces
+                                let mut it = value.split_whitespace();
+                                let scheme = it.next().unwrap_or("");
+                                let cred = it.next().unwrap_or("");
+                                if scheme.eq_ignore_ascii_case("bearer") && cred == token_for_thread2 {
                                     auth_ok = true;
                                 }
                             }
@@ -2465,8 +2469,12 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 let lower = l.to_ascii_lowercase();
                 if lower.starts_with("authorization:") {
                     if let Some(v) = l.splitn(2, ':').nth(1) {
-                        let v = v.trim();
-                        if v == format!("Bearer {}", token_for_thread) {
+                        let value = v.trim();
+                        // Accept case-insensitive "Bearer" scheme and tolerate extra spaces
+                        let mut it = value.split_whitespace();
+                        let scheme = it.next().unwrap_or("");
+                        let cred = it.next().unwrap_or("");
+                        if scheme.eq_ignore_ascii_case("bearer") && cred == token_for_thread {
                             auth_ok = true;
                         }
                     }
