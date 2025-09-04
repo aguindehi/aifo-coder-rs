@@ -2010,7 +2010,7 @@ enum ForkCmd {
         /// Emit machine-readable JSON
         #[arg(long)]
         json: bool,
-        /// Scan across repositories (currently same as current repo)
+        /// Scan across repositories under AIFO_CODER_WORKSPACE_ROOT (non-recursive; requires env)
         #[arg(long = "all-repos")]
         all_repos: bool,
     },
