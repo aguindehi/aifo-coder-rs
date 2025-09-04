@@ -4361,7 +4361,13 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
 pub fn fork_print_stale_notice() {
     let repo = match repo_root() {
         Some(p) => p,
-        None => return,
+        None => {
+            // Fallback to current working directory (best-effort), e.g., for doctor runs
+            match env::current_dir() {
+                Ok(p) => p,
+                Err(_) => return,
+            }
+        }
     };
     let base = repo.join(".aifo-coder").join("forks");
     if !base.exists() {
