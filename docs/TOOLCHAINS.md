@@ -15,6 +15,8 @@ Overview
 - Sidecars share the same workspace bind mount and use named Docker volumes for caching (cargo, npm, pip, ccache, go) to speed up builds across runs.
 - No Docker socket is mounted into containers; AppArmor is used when available.
 
+See also: Fork mode documentation in README (Fork mode section) and the man page (aifo-coder(1), FORK MODE).
+
 Commands and flags
 - Global agent invocation with toolchains:
   - Use one or more --toolchain flags (repeatable).

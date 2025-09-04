@@ -235,6 +235,63 @@ All trailing arguments after the agent subcommand are passed through to the agen
 For transparent PATH shims, the toolexec proxy (TCP and Linux unix sockets), per-language caches, the C/C++ sidecar image, and optional smokes, see:
 - docs/TOOLCHAINS.md
 
+## Fork mode
+
+Run multiple containerized agent panes side by side on cloned workspaces to explore different approaches in parallel, then merge back when done.
+
+When to use:
+- Compare alternative fixes/implementations safely without touching your base working tree.
+- Split tasks across panes while keeping isolation and reproducibility.
+- Preserve clones for later inspection or merging even if orchestration fails (default).
+
+Usage and flags:
+- Basic:
+  - aifo-coder --fork 2 aider --
+  - aifo-coder --fork 3 --fork-session-name aifo-exp aider --
+- Include dirty working tree via snapshot (no hooks/signing; temporary index + commit-tree):
+  - aifo-coder --fork 2 --fork-include-dirty aider --
+- Independent object stores (slower, more disk):
+  - aifo-coder --fork 2 --fork-dissociate aider --
+- Layouts (tmux): tiled (default), even-h, even-v:
+  - aifo-coder --fork 3 --fork-layout even-h aider --
+- Keep clones on orchestration failure (default: keep; can disable):
+  - aifo-coder --fork 2 --fork-keep-on-failure=false aider --
+
+Paths and naming:
+- Clones live under: <repo-root>/.aifo-coder/forks/<sid>/pane-1..N
+- Branch names: fork/<base|detached>/<sid>-<i> (i starts at 1)
+
+Per-pane state:
+- Each pane mounts its own state directory to avoid concurrent writes:
+  - Default base: ~/.aifo-coder/state/<sid>/pane-<i>/{.aider,.codex,.crush}
+  - Override base with AIFO_CODER_FORK_STATE_BASE
+
+Post-session merging guidance:
+- Fetch/merge from a pane:
+  - git -C "<root>" remote add "fork-<sid>-1" "<pane-1-dir>"
+  - git -C "<root>" fetch "fork-<sid>-1" "fork/<base>/<sid>-1"
+  - git -C "<root>" merge --no-ff "fork/<base>/<sid>-1"
+- Cherry-pick:
+  - git -C "<root>" cherry-pick <sha1> [...]
+- Rebase:
+  - git -C "<root>" checkout -b "tmp/fork-<sid>-1" "fork/<base>/<sid>-1"
+  - git -C "<root>" rebase "<base-branch>"
+- Format-patch/am:
+  - git -C "<pane-1-dir>" format-patch -o "<out-dir>" "<base-ref>"
+  - git -C "<root>" am "<out-dir>/*.patch"
+- Push a branch to a remote and open PR/MR.
+
+Performance notes:
+- N>8 panes will stress I/O and memory; consider fewer panes or --fork-dissociate to avoid shared object GC interactions.
+
+Orchestrators:
+- Linux/macOS/WSL: tmux session with N panes (required).
+- Windows: Windows Terminal (wt.exe) preferred; falls back to PowerShell windows or Git Bash/mintty.
+
+Tip: Maintenance commands help manage sessions:
+- aifo-coder fork list [--json] [--all-repos]
+- aifo-coder fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]
+
 ### Toolchain sidecars (Phase 1)
 
 Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.

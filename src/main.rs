@@ -545,7 +545,7 @@ fn run_doctor(verbose: bool) {
     }
 
     eprintln!();
-    eprintln!("  spec status: implemented: base + 1-6 (v4); not implemented: 7");
+    eprintln!("  spec status: implemented: base + 1-7 (v4)");
     eprintln!();
     eprintln!("doctor: completed diagnostics.");
     eprintln!();
@@ -556,7 +556,8 @@ fn run_doctor(verbose: bool) {
     name = "aifo-coder",
     version,
     about = "Run Codex, Crush or Aider inside Docker with current directory mounted.",
-    override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]"
+    override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]",
+    after_long_help = "Examples:\n  aifo-coder --fork 2 aider -- --help\n  aifo-coder --fork 3 --fork-include-dirty --fork-session-name aifo-work aider --\n  aifo-coder fork list --json\n  aifo-coder fork clean --older-than 14 --yes\n"
 )]
 struct Cli {
     /// Override Docker image (full ref). If unset, use per-agent default: {prefix}-{agent}:{tag}
@@ -603,11 +604,11 @@ struct Cli {
     #[arg(long)]
     dry_run: bool,
 
-    /// Fork mode: create N panes (N>=2) in tmux with cloned workspaces
+    /// Fork mode: create N panes (N>=2) in tmux/Windows Terminal with cloned workspaces
     #[arg(long)]
     fork: Option<usize>,
 
-    /// Include uncommitted changes via snapshot commit
+    /// Include uncommitted changes via snapshot commit (temporary index + commit-tree; no hooks/signing)
     #[arg(long = "fork-include-dirty")]
     fork_include_dirty: bool,
 
@@ -2092,6 +2093,7 @@ enum Agent {
     },
 
     /// Fork maintenance commands
+    #[command(after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n")]
     Fork {
         #[command(subcommand)]
         cmd: ForkCmd,
