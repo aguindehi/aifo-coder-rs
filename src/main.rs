@@ -339,6 +339,10 @@ fn run_doctor(verbose: bool) {
     // (registry source suppressed)
     eprintln!();
 
+    // Print stale fork sessions notice during doctor runs (Phase 6)
+    aifo_coder::fork_print_stale_notice();
+    eprintln!();
+
     // Helpful config/state locations (display with ~)
     let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("~"));
     let home_str = home.to_string_lossy().to_string();
