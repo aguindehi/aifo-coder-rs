@@ -136,8 +136,9 @@ When unset, the launcher chooses a sensible default (a custom profile on
 native Linux; docker\-default on macOS/Windows Docker\-in\-VM).
 .TP
 .B XDG_RUNTIME_DIR
-Considered as a higher\-priority location for the lock file. If set to a
-non\-empty directory, the lock may be created at
+When inside a Git repository, used for the repository\-scoped fallback lock path:
+.BR $XDG_RUNTIME_DIR/aifo\-coder.\fIhash(repo_root)\fR.lock .
+When not inside a Git repository, the legacy candidate path is:
 .BR $XDG_RUNTIME_DIR/aifo\-coder.lock .
 .TP
 .B HOME

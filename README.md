@@ -53,7 +53,7 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|toolchain|toolchain-cache-clear|doctor|images|cache-clear} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|toolchain|toolchain-cache-clear|doctor|images|cache-clear|fork} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
@@ -81,6 +81,8 @@ Subcommands:
 - doctor                         Run environment diagnostics (Docker/AppArmor/UID mapping)
 - images                         Print effective image references (honoring flavor/registry)
 - cache-clear                    Clear the on-disk registry probe cache (alias: cache-invalidate)
+- fork list [--json] [--all-repos]  List fork sessions under the current repo or workspace
+- fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]  Clean fork sessions safely
 
 Tips:
 - Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.
@@ -593,7 +595,9 @@ Override the image used by the launcher (use a specific per‑agent image):
 
 When you run `aifo-coder ...` it will:
 
-1. Acquire a lock to ensure only one agent runs at a time (prefers `~/.aifo-coder.lock`, falls back to XDG_RUNTIME_DIR or `/tmp`).
+1. Acquire a lock to ensure only one agent runs at a time:
+   - If inside a Git repository: prefer `<repo-root>/.aifo-coder.lock`; fallback to `$XDG_RUNTIME_DIR/aifo-coder.<hash(repo_root)>.lock`; legacy fallback `/tmp/aifo-coder.lock`.
+   - If not inside a Git repository: legacy candidates `~/.aifo-coder.lock`, `$XDG_RUNTIME_DIR/aifo-coder.lock`, `/tmp/aifo-coder.lock`, and `./.aifo-coder.lock`.
 2. Locate Docker.
 3. Build a `docker run` command with:
    - `--rm` removal after exit
