@@ -12,7 +12,8 @@ fn test_proxy_unauthorized_and_unknown_tool() {
     let overrides: Vec<(String, String)> = Vec::new();
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("failed to start sidecar session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
     fn extract_port(u: &str) -> u16 {
@@ -37,7 +38,11 @@ fn test_proxy_unauthorized_and_unknown_tool() {
     let mut resp = Vec::new();
     stream.read_to_end(&mut resp).ok();
     let text = String::from_utf8_lossy(&resp).to_string();
-    assert!(text.contains("401 Unauthorized"), "expected 401, got:\n{}", text);
+    assert!(
+        text.contains("401 Unauthorized"),
+        "expected 401, got:\n{}",
+        text
+    );
 
     // Unknown tool name with valid token -> expect 403
     let mut stream2 = TcpStream::connect(("127.0.0.1", port)).expect("connect2 failed");
@@ -52,7 +57,11 @@ fn test_proxy_unauthorized_and_unknown_tool() {
     let mut resp2 = Vec::new();
     stream2.read_to_end(&mut resp2).ok();
     let text2 = String::from_utf8_lossy(&resp2).to_string();
-    assert!(text2.contains("403 Forbidden"), "expected 403, got:\n{}", text2);
+    assert!(
+        text2.contains("403 Forbidden"),
+        "expected 403, got:\n{}",
+        text2
+    );
 
     // Cleanup
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

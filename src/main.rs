@@ -1,24 +1,32 @@
+use aifo_coder::{
+    acquire_lock, build_docker_cmd, desired_apparmor_profile, preferred_registry_prefix,
+};
 use clap::{Parser, Subcommand};
 use std::env;
-use std::process::{Command, ExitCode};
-use std::io;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
-use aifo_coder::{desired_apparmor_profile, preferred_registry_prefix, build_docker_cmd, acquire_lock};
+use std::process::{Command, ExitCode};
 use which::which;
-
 
 fn print_startup_banner() {
     let version = env!("CARGO_PKG_VERSION");
     println!();
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🚀  Welcome to the Migros AI Foundaton Coder v{}  🚀 ", version);
+    println!(
+        " 🚀  Welcome to the Migros AI Foundaton Coder v{}  🚀 ",
+        version
+    );
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO");
+    println!(
+        " 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO"
+    );
     println!();
     println!(" ✨ Features:");
     println!("    - Linux: Coding agents run securely inside Docker containers with AppArmor.");
-    println!("    - macOS: Transparent VM with Docker ensures isolated and secure agent execution.");
+    println!(
+        "    - macOS: Transparent VM with Docker ensures isolated and secure agent execution."
+    );
     println!();
     println!(" ⚙️  Starting up coding agents...");
     println!("    - Environment: [Secure Containerization Enabled]");
@@ -46,12 +54,21 @@ fn run_doctor(verbose: bool) {
     eprintln!("aifo-coder doctor");
     eprintln!();
     eprintln!("  version: v{}", version);
-    eprintln!("  host:    {} / {}", std::env::consts::OS, std::env::consts::ARCH);
+    eprintln!(
+        "  host:    {} / {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     eprintln!();
 
     // Virtualization environment
     let virtualization = if cfg!(target_os = "macos") {
-        match Command::new("colima").arg("status").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).output() {
+        match Command::new("colima")
+            .arg("status")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+        {
             Ok(out) => {
                 let s = String::from_utf8_lossy(&out.stdout).to_lowercase();
                 if s.contains("running") {
@@ -71,7 +88,11 @@ fn run_doctor(verbose: bool) {
     // Docker/AppArmor capabilities
     let apparmor_supported = aifo_coder::docker_supports_apparmor();
     let das = if apparmor_supported { "yes" } else { "no" };
-    let das_val = if atty::is(atty::Stream::Stderr) { format!("\x1b[34;1m{}\x1b[0m", das) } else { das.to_string() };
+    let das_val = if atty::is(atty::Stream::Stderr) {
+        format!("\x1b[34;1m{}\x1b[0m", das)
+    } else {
+        das.to_string()
+    };
     eprintln!("  docker apparmor support: {}", das_val);
 
     // Parse and display Docker security options (from `docker info`)
@@ -220,12 +241,18 @@ fn run_doctor(verbose: bool) {
         args.push("sh".to_string());
         args.push(image);
         args.push("-lc".to_string());
-        args.push("cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined".to_string());
+        args.push(
+            "cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined".to_string(),
+        );
         let mut cmd = Command::new("docker");
         for a in &args {
             cmd.arg(a);
         }
-        let current = cmd.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|| "(unknown)".to_string());
+        let current = cmd
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "(unknown)".to_string());
         let current_trim = current.trim().to_string();
         eprintln!("  apparmor in-container: {}", current_trim);
 
@@ -250,14 +277,21 @@ fn run_doctor(verbose: bool) {
                 "PASS".to_string()
             }
         };
-        eprintln!("  apparmor validation:   {} (expected: {})", status_plain, expected_disp);
+        eprintln!(
+            "  apparmor validation:   {} (expected: {})",
+            status_plain, expected_disp
+        );
         if verbose {
             match status_plain.as_str() {
                 "FAIL" => {
                     if cfg!(target_os = "linux") {
-                        eprintln!("    tip: Container is unconfined. Generate and load the profile:");
+                        eprintln!(
+                            "    tip: Container is unconfined. Generate and load the profile:"
+                        );
                         eprintln!("    tip:   make apparmor");
-                        eprintln!("    tip:   sudo apparmor_parser -r -W \"build/apparmor/aifo-coder\"");
+                        eprintln!(
+                            "    tip:   sudo apparmor_parser -r -W \"build/apparmor/aifo-coder\""
+                        );
                         eprintln!("    tip: Then re-run with AppArmor enabled.");
                     } else {
                         eprintln!("    tip: Container appears unconfined. Ensure your Docker VM/distribution supports AppArmor and it is enabled.");
@@ -320,12 +354,16 @@ fn run_doctor(verbose: bool) {
 
         // Column widths
         let label_width: usize = 16;
-        let path_col: usize = 44;    // target visible width for path column (moved left)
-        let _status_col: usize = 14;  // deprecated: second status column removed
+        let path_col: usize = 44; // target visible width for path column (moved left)
+        let _status_col: usize = 14; // deprecated: second status column removed
 
         // Compute visible width before building colored_path to avoid moving 'shown' prematurely.
         let visible_len = shown.chars().count();
-        let pad_spaces = if visible_len < path_col { path_col - visible_len } else { 1 };
+        let pad_spaces = if visible_len < path_col {
+            path_col - visible_len
+        } else {
+            1
+        };
         let padding = " ".repeat(pad_spaces);
 
         // Colorize the path itself as a value (strong blue)
@@ -336,7 +374,11 @@ fn run_doctor(verbose: bool) {
         };
 
         // Build status cells (plain)
-        let (icon1, text1) = if exists { ("✅", "found") } else { ("❌", "missing") };
+        let (icon1, text1) = if exists {
+            ("✅", "found")
+        } else {
+            ("❌", "missing")
+        };
         let cell1_plain = format!("{} {}", icon1, text1);
 
         // Colorize status
@@ -362,7 +404,8 @@ fn run_doctor(verbose: bool) {
 
     // Editor availability for installed images (full and/or slim) via crush image
     if aifo_coder::container_runtime_path().is_ok() {
-        let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+        let prefix =
+            std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
         let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
         let candidates = vec![
             ("full", format!("{}-crush:{}", prefix, tag)),
@@ -381,15 +424,25 @@ fn run_doctor(verbose: bool) {
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
-            if !present { continue; }
+            if !present {
+                continue;
+            }
 
             if let Ok(out) = Command::new("docker")
                 .args(["run", "--rm", "--entrypoint", "sh", &img, "-lc", check])
                 .output()
             {
                 let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let show = if list.is_empty() { "(none)".to_string() } else { list };
-                let val = if use_color { format!("\x1b[34;1m{}\x1b[0m", show) } else { show };
+                let show = if list.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    list
+                };
+                let val = if use_color {
+                    format!("\x1b[34;1m{}\x1b[0m", show)
+                } else {
+                    show
+                };
                 eprintln!("  editors ({}):  {}", label, val);
                 printed_any = true;
             }
@@ -403,8 +456,16 @@ fn run_doctor(verbose: bool) {
                 .output()
             {
                 let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let show = if list.is_empty() { "(none)".to_string() } else { list };
-                let val = if use_color { format!("\x1b[34;1m{}\x1b[0m", show) } else { show };
+                let show = if list.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    list
+                };
+                let val = if use_color {
+                    format!("\x1b[34;1m{}\x1b[0m", show)
+                } else {
+                    show
+                };
                 eprintln!("  editors:        {}", val);
             }
         }
@@ -425,26 +486,39 @@ fn run_doctor(verbose: bool) {
     eprintln!();
 
     // Git and GnuPG
-    let agent_ctx = std::env::var("AIFO_CODER_DOCTOR_AGENT").unwrap_or_else(|_| "aider".to_string());
+    let agent_ctx =
+        std::env::var("AIFO_CODER_DOCTOR_AGENT").unwrap_or_else(|_| "aider".to_string());
     let mount_git = true;
     let mount_gnupg = true;
     let mount_aider = agent_ctx.eq_ignore_ascii_case("aider");
     let mount_crush = agent_ctx.eq_ignore_ascii_case("crush");
     let mount_codex = agent_ctx.eq_ignore_ascii_case("codex");
 
-    show("git config:",   home.join(".gitconfig"), mount_git);
+    show("git config:", home.join(".gitconfig"), mount_git);
     show("gnupg config:", home.join(".gnupg"), mount_gnupg);
     eprintln!();
 
     // Aider files
-    show("aider config:",   home.join(".aider.conf.yml"), mount_aider);
-    show("aider metadata:", home.join(".aider.model.metadata.json"), mount_aider);
-    show("aider settings:", home.join(".aider.model.settings.yml"), mount_aider);
+    show("aider config:", home.join(".aider.conf.yml"), mount_aider);
+    show(
+        "aider metadata:",
+        home.join(".aider.model.metadata.json"),
+        mount_aider,
+    );
+    show(
+        "aider settings:",
+        home.join(".aider.model.settings.yml"),
+        mount_aider,
+    );
     eprintln!();
 
     // Crush paths
-    show("crush config:", home.join(".local").join("share").join("crush"), mount_crush);
-    show("crush state:",  home.join(".crush"), mount_crush);
+    show(
+        "crush config:",
+        home.join(".local").join("share").join("crush"),
+        mount_crush,
+    );
+    show("crush state:", home.join(".crush"), mount_crush);
     eprintln!();
 
     // Codex path
@@ -456,52 +530,103 @@ fn run_doctor(verbose: bool) {
         let use_color = atty::is(atty::Stream::Stderr);
         let icon = |present: bool| -> String {
             if present {
-                if use_color { "\x1b[32m✅ found\x1b[0m".to_string() } else { "✅ found".to_string() }
+                if use_color {
+                    "\x1b[32m✅ found\x1b[0m".to_string()
+                } else {
+                    "✅ found".to_string()
+                }
             } else {
-                if use_color { "\x1b[31m❌ missing\x1b[0m".to_string() } else { "❌ missing".to_string() }
+                if use_color {
+                    "\x1b[31m❌ missing\x1b[0m".to_string()
+                } else {
+                    "❌ missing".to_string()
+                }
             }
         };
-        let present = |name: &str| std::env::var(name).map(|v| !v.trim().is_empty()).unwrap_or(false);
+        let present = |name: &str| {
+            std::env::var(name)
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or(false)
+        };
         let has_key = present("AIFO_API_KEY");
         let has_base = present("AIFO_API_BASE");
         let has_version = present("AIFO_API_VERSION");
 
         let label_w: usize = 16;
         let name_w: usize = 44;
-        eprintln!("  {:<label_w$} {:<name_w$} {}", "environment:", "AIFO_API_KEY", icon(has_key), label_w = label_w, name_w = name_w);
-        eprintln!("  {:<label_w$} {:<name_w$} {}", "", "AIFO_API_BASE", icon(has_base), label_w = label_w, name_w = name_w);
-        eprintln!("  {:<label_w$} {:<name_w$} {}", "", "AIFO_API_VERSION", icon(has_version), label_w = label_w, name_w = name_w);
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "environment:",
+            "AIFO_API_KEY",
+            icon(has_key),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "AIFO_API_BASE",
+            icon(has_base),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "AIFO_API_VERSION",
+            icon(has_version),
+            label_w = label_w,
+            name_w = name_w
+        );
     }
     eprintln!();
 
     // Workspace write test to validate mounts and UID mapping
     if aifo_coder::container_runtime_path().is_ok() {
         let image = default_image_for_quiet("crush");
-        let tmpname = format!(".aifo-coder-doctor-{}-{}.tmp",
+        let tmpname = format!(
+            ".aifo-coder-doctor-{}-{}.tmp",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
         );
         let pwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let uid = Command::new("id").arg("-u").output()
+        let uid = Command::new("id")
+            .arg("-u")
+            .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_else(|| "0".to_string());
-        let gid = Command::new("id").arg("-g").output()
+        let gid = Command::new("id")
+            .arg("-g")
+            .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_else(|| "0".to_string());
 
         let _ = Command::new("docker")
             .args([
-                "run", "--rm",
-                "--user", &format!("{uid}:{gid}"),
-                "-v", &format!("{}:/workspace", pwd.display()),
-                "-w", "/workspace",
-                "-e", "HOME=/home/coder",
-                "-e", "GNUPGHOME=/home/coder/.gnupg",
+                "run",
+                "--rm",
+                "--user",
+                &format!("{uid}:{gid}"),
+                "-v",
+                &format!("{}:/workspace", pwd.display()),
+                "-w",
+                "/workspace",
+                "-e",
+                "HOME=/home/coder",
+                "-e",
+                "GNUPGHOME=/home/coder/.gnupg",
                 &image,
-                "sh", "-lc",
-                &format!("echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid", tmp = tmpname),
+                "sh",
+                "-lc",
+                &format!(
+                    "echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid",
+                    tmp = tmpname
+                ),
             ])
             .status();
 
@@ -512,9 +637,17 @@ fn run_doctor(verbose: bool) {
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
             let path_col: usize = 52;
-            let yes_val = if use_color { "\x1b[34;1myes\x1b[0m".to_string() } else { "yes".to_string() };
+            let yes_val = if use_color {
+                "\x1b[34;1myes\x1b[0m".to_string()
+            } else {
+                "yes".to_string()
+            };
             let status_plain = "✅ workspace ready".to_string();
-            let status_colored = if use_color { format!("\x1b[32m{}\x1b[0m", status_plain) } else { status_plain };
+            let status_colored = if use_color {
+                format!("\x1b[32m{}\x1b[0m", status_plain)
+            } else {
+                status_plain
+            };
             eprintln!(
                 "  {:label_width$} {:<path_col$} {}",
                 "workspace writable:",
@@ -530,9 +663,17 @@ fn run_doctor(verbose: bool) {
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
             let path_col: usize = 44;
-            let yes_val = if use_color { "\x1b[34;1myes\x1b[0m".to_string() } else { "yes".to_string() };
+            let yes_val = if use_color {
+                "\x1b[34;1myes\x1b[0m".to_string()
+            } else {
+                "yes".to_string()
+            };
             let status_plain = "✅ workspace ready".to_string();
-            let status_colored = if use_color { format!("\x1b[32m{}\x1b[0m", status_plain) } else { status_plain };
+            let status_colored = if use_color {
+                format!("\x1b[32m{}\x1b[0m", status_plain)
+            } else {
+                status_plain
+            };
             eprintln!(
                 "  {:label_width$} {:<path_col$} {}",
                 "workspace writable:",
@@ -712,10 +853,13 @@ fn fork_build_child_args(cli: &Cli) -> Vec<String> {
     }
     if let Some(fl) = cli.flavor {
         args.push("--flavor".to_string());
-        args.push(match fl {
-            Flavor::Full => "full",
-            Flavor::Slim => "slim",
-        }.to_string());
+        args.push(
+            match fl {
+                Flavor::Full => "full",
+                Flavor::Slim => "slim",
+            }
+            .to_string(),
+        );
     }
     if cli.invalidate_registry_cache {
         args.push("--invalidate-registry-cache".to_string());
@@ -790,13 +934,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     }
 
     // Identify base
-    let (base_label, mut base_ref_or_sha, base_commit_sha) = match aifo_coder::fork_base_info(&repo_root) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("aifo-coder: error determining base: {}", e);
-            return ExitCode::from(1);
-        }
-    };
+    let (base_label, mut base_ref_or_sha, base_commit_sha) =
+        match aifo_coder::fork_base_info(&repo_root) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("aifo-coder: error determining base: {}", e);
+                return ExitCode::from(1);
+            }
+        };
 
     // Session id and name
     let sid = aifo_coder::create_session_id();
@@ -876,11 +1021,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         "aifo-coder: fork session {} on base {} ({})",
         sid, base_label, base_ref_or_sha
     );
-    println!(
-        "created {} clones under {}",
-        panes,
-        session_dir.display()
-    );
+    println!("created {} clones under {}", panes, session_dir.display());
     if let Some(ref snap) = snapshot_sha {
         println!("included dirty working tree via snapshot {}", snap);
     } else if cli.fork_include_dirty {
@@ -899,7 +1040,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         _ => "tiled".to_string(),
     };
     if cli.verbose {
-        eprintln!("aifo-coder: tmux layout requested: {} -> effective: {}", layout, layout_effective);
+        eprintln!(
+            "aifo-coder: tmux layout requested: {} -> effective: {}",
+            layout, layout_effective
+        );
     }
 
     // Write metadata skeleton
@@ -914,19 +1058,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         snap.clone()
     } else {
         let out = Command::new("git")
-            .arg("-C").arg(&repo_root)
-            .arg("rev-parse").arg("--verify").arg(&base_ref_or_sha)
+            .arg("-C")
+            .arg(&repo_root)
+            .arg("rev-parse")
+            .arg("--verify")
+            .arg(&base_ref_or_sha)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .output()
             .ok();
-        out.and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| base_commit_sha.clone())
+        out.and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| base_commit_sha.clone())
     };
     // Shadow base_commit_sha so existing metadata builders pick the correct SHA
     let base_commit_sha = base_commit_sha_for_meta.clone();
-    let pane_dirs_vec: Vec<String> = clones.iter().map(|(p, _b)| p.display().to_string()).collect();
+    let pane_dirs_vec: Vec<String> = clones
+        .iter()
+        .map(|(p, _b)| p.display().to_string())
+        .collect();
     let branches_vec: Vec<String> = clones.iter().map(|(_p, b)| b.clone()).collect();
     let mut meta = format!(
         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
@@ -940,7 +1096,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         aifo_coder::json_escape(&layout)
     );
     if let Some(ref snap) = snapshot_sha {
-        meta.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+        meta.push_str(&format!(
+            ", \"snapshot_sha\": {}",
+            aifo_coder::json_escape(snap)
+        ));
     }
     meta.push_str(" }");
     let _ = fs::create_dir_all(&session_dir);
@@ -972,54 +1131,64 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             format!("'{}'", esc)
         };
         // Build inner PowerShell command string setting env per pane, then invoking aifo-coder with args
-        let build_ps_inner = |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
-            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-            let kv = [
-                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-                ("AIFO_CODER_HOSTNAME", cname),
-                ("AIFO_CODER_FORK_SESSION", sid.clone()),
-                ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
-            ];
-            let mut assigns: Vec<String> = Vec::new();
-            for (k, v) in kv {
-                assigns.push(format!("$env:{}={}", k, ps_quote(&v)));
-            }
-            let mut words: Vec<String> = vec!["aifo-coder".to_string()];
-            words.extend(child_args.clone());
-            let cmd = words
-                .iter()
-                .map(|w| ps_quote(w))
-                .collect::<Vec<_>>()
-                .join(" ");
-            let setloc = format!("Set-Location {}", ps_quote(&pane_dir.display().to_string()));
-            format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
-        };
+        let build_ps_inner =
+            |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
+                let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+                let kv = [
+                    ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+                    ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+                    ("AIFO_CODER_HOSTNAME", cname),
+                    ("AIFO_CODER_FORK_SESSION", sid.clone()),
+                    ("AIFO_CODER_FORK_INDEX", i.to_string()),
+                    (
+                        "AIFO_CODER_FORK_STATE_DIR",
+                        pane_state_dir.display().to_string(),
+                    ),
+                ];
+                let mut assigns: Vec<String> = Vec::new();
+                for (k, v) in kv {
+                    assigns.push(format!("$env:{}={}", k, ps_quote(&v)));
+                }
+                let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+                words.extend(child_args.clone());
+                let cmd = words
+                    .iter()
+                    .map(|w| ps_quote(w))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let setloc = format!("Set-Location {}", ps_quote(&pane_dir.display().to_string()));
+                format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
+            };
         // Build inner Git Bash command string setting env per pane, then invoking aifo-coder with args; keeps shell open
-        let build_bash_inner = |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
-            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-            let kv = [
-                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-                ("AIFO_CODER_HOSTNAME", cname),
-                ("AIFO_CODER_FORK_SESSION", sid.clone()),
-                ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
-            ];
-            let mut exports: Vec<String> = Vec::new();
-            for (k, v) in kv {
-                exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
-            }
-            let mut words: Vec<String> = vec!["aifo-coder".to_string()];
-            words.extend(child_args.clone());
-            let cmd = aifo_coder::shell_join(&words);
-            let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
-            format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
-        };
+        let build_bash_inner =
+            |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
+                let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+                let kv = [
+                    ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+                    ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+                    ("AIFO_CODER_HOSTNAME", cname),
+                    ("AIFO_CODER_FORK_SESSION", sid.clone()),
+                    ("AIFO_CODER_FORK_INDEX", i.to_string()),
+                    (
+                        "AIFO_CODER_FORK_STATE_DIR",
+                        pane_state_dir.display().to_string(),
+                    ),
+                ];
+                let mut exports: Vec<String> = Vec::new();
+                for (k, v) in kv {
+                    exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
+                }
+                let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+                words.extend(child_args.clone());
+                let cmd = aifo_coder::shell_join(&words);
+                let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
+                format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
+            };
 
         // Orchestrator preference override (optional): AIFO_CODER_FORK_ORCH={gitbash|powershell}
-        let orch_pref = env::var("AIFO_CODER_FORK_ORCH").ok().map(|s| s.to_ascii_lowercase());
+        let orch_pref = env::var("AIFO_CODER_FORK_ORCH")
+            .ok()
+            .map(|s| s.to_ascii_lowercase());
         if orch_pref.as_deref() == Some("gitbash") {
             // Force Git Bash orchestrator if available
             let gitbash = which("git-bash.exe").or_else(|_| which("bash.exe"));
@@ -1033,11 +1202,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut cmd = Command::new(&gb);
                     cmd.arg("-c").arg(&inner);
                     if cli.verbose {
-                        let preview = vec![
-                            gb.display().to_string(),
-                            "-c".to_string(),
-                            inner.clone(),
-                        ];
+                        let preview =
+                            vec![gb.display().to_string(), "-c".to_string(), inner.clone()];
                         eprintln!("aifo-coder: git-bash: {}", aifo_coder::shell_join(&preview));
                     }
                     match cmd.status() {
@@ -1055,9 +1221,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         for (dir, _) in &clones {
                             let _ = fs::remove_dir_all(dir);
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
+                        println!(
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
+                        );
                     } else {
-                        println!("Clones remain under {} for recovery.", session_dir.display());
+                        println!(
+                            "Clones remain under {} for recovery.",
+                            session_dir.display()
+                        );
                     }
                     // Update metadata with panes_created
                     let existing: Vec<(PathBuf, String)> = clones
@@ -1066,8 +1238,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
                     let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
@@ -1081,7 +1257,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1094,12 +1273,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!("To inspect and merge changes, you can run:");
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    println!(
+                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                        repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
+                        first_branch
+                    );
                     if base_label != "detached" {
-                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                        println!(
+                            "  git -C \"{}\" checkout {}",
+                            repo_root.display(),
+                            base_ref_or_sha
+                        );
+                        println!(
+                            "  git -C \"{}\" merge --no-ff {}",
+                            repo_root.display(),
+                            first_branch
+                        );
                     }
                 }
                 return ExitCode::from(0);
@@ -1138,9 +1338,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         for (dir, _) in &clones {
                             let _ = fs::remove_dir_all(dir);
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
+                        println!(
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
+                        );
                     } else {
-                        println!("Clones remain under {} for recovery.", session_dir.display());
+                        println!(
+                            "Clones remain under {} for recovery.",
+                            session_dir.display()
+                        );
                     }
                     // Update metadata with panes_created
                     let existing: Vec<(PathBuf, String)> = clones
@@ -1149,8 +1355,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
                     let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
@@ -1164,7 +1374,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1177,12 +1390,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!("To inspect and merge changes, you can run:");
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    println!(
+                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                        repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
+                        first_branch
+                    );
                     if base_label != "detached" {
-                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                        println!(
+                            "  git -C \"{}\" checkout {}",
+                            repo_root.display(),
+                            base_ref_or_sha
+                        );
+                        println!(
+                            "  git -C \"{}\" merge --no-ff {}",
+                            repo_root.display(),
+                            first_branch
+                        );
                     }
                 }
                 return ExitCode::from(0);
@@ -1210,7 +1444,11 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "even-v" => "-V",
                     _ => {
                         // tiled: alternate for some balance
-                        if i % 2 == 0 { "-H" } else { "-V" }
+                        if i % 2 == 0 {
+                            "-H"
+                        } else {
+                            "-V"
+                        }
                     }
                 }
             };
@@ -1239,7 +1477,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "-Command".to_string(),
                         inner.clone(),
                     ];
-                    eprintln!("aifo-coder: windows-terminal: {}", aifo_coder::shell_join(&preview));
+                    eprintln!(
+                        "aifo-coder: windows-terminal: {}",
+                        aifo_coder::shell_join(&preview)
+                    );
                 }
                 match cmd.status() {
                     Ok(s) if s.success() => {}
@@ -1249,9 +1490,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             for (dir, _) in &clones {
                                 let _ = fs::remove_dir_all(dir);
                             }
-                            println!("Removed all created pane directories under {}.", session_dir.display());
+                            println!(
+                                "Removed all created pane directories under {}.",
+                                session_dir.display()
+                            );
                         } else {
-                            println!("Clones remain under {} for recovery.", session_dir.display());
+                            println!(
+                                "Clones remain under {} for recovery.",
+                                session_dir.display()
+                            );
                         }
                         // Update metadata with panes_created
                         let existing: Vec<(PathBuf, String)> = clones
@@ -1260,8 +1507,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .map(|(p, b)| (p.clone(), b.clone()))
                             .collect();
                         let panes_created = existing.len();
-                        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                        let pane_dirs_vec: Vec<String> = existing
+                            .iter()
+                            .map(|(p, _)| p.display().to_string())
+                            .collect();
+                        let branches_vec: Vec<String> =
+                            existing.iter().map(|(_, b)| b.clone()).collect();
                         let mut meta2 = format!(
                             "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                             created_at,
@@ -1275,21 +1526,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::json_escape(&layout)
                         );
                         if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                            meta2.push_str(&format!(
+                                ", \"snapshot_sha\": {}",
+                                aifo_coder::json_escape(snap)
+                            ));
                         }
                         meta2.push_str(" }");
                         let _ = fs::write(session_dir.join(".meta.json"), meta2);
                         return ExitCode::from(1);
                     }
                     Err(e) => {
-                        eprintln!("aifo-coder: Windows Terminal failed to start first pane: {}", e);
+                        eprintln!(
+                            "aifo-coder: Windows Terminal failed to start first pane: {}",
+                            e
+                        );
                         if !cli.fork_keep_on_failure {
                             for (dir, _) in &clones {
                                 let _ = fs::remove_dir_all(dir);
                             }
-                            println!("Removed all created pane directories under {}.", session_dir.display());
+                            println!(
+                                "Removed all created pane directories under {}.",
+                                session_dir.display()
+                            );
                         } else {
-                            println!("Clones remain under {} for recovery.", session_dir.display());
+                            println!(
+                                "Clones remain under {} for recovery.",
+                                session_dir.display()
+                            );
                         }
                         // Update metadata with panes_created
                         let existing: Vec<(PathBuf, String)> = clones
@@ -1298,8 +1561,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .map(|(p, b)| (p.clone(), b.clone()))
                             .collect();
                         let panes_created = existing.len();
-                        let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                        let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                        let pane_dirs_vec: Vec<String> = existing
+                            .iter()
+                            .map(|(p, _)| p.display().to_string())
+                            .collect();
+                        let branches_vec: Vec<String> =
+                            existing.iter().map(|(_, b)| b.clone()).collect();
                         let mut meta2 = format!(
                             "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                             created_at,
@@ -1313,7 +1580,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::json_escape(&layout)
                         );
                         if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                            meta2.push_str(&format!(
+                                ", \"snapshot_sha\": {}",
+                                aifo_coder::json_escape(snap)
+                            ));
                         }
                         meta2.push_str(" }");
                         let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1350,7 +1620,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "-Command".to_string(),
                         inner.clone(),
                     ];
-                    eprintln!("aifo-coder: windows-terminal: {}", aifo_coder::shell_join(&preview));
+                    eprintln!(
+                        "aifo-coder: windows-terminal: {}",
+                        aifo_coder::shell_join(&preview)
+                    );
                 }
                 match cmd.status() {
                     Ok(s) if s.success() => {}
@@ -1366,15 +1639,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     for (dir, _) in &clones {
                         let _ = fs::remove_dir_all(dir);
                     }
-                    println!("Removed all created pane directories under {}.", session_dir.display());
+                    println!(
+                        "Removed all created pane directories under {}.",
+                        session_dir.display()
+                    );
                 } else {
-                    println!("Clones remain under {} for recovery.", session_dir.display());
+                    println!(
+                        "Clones remain under {} for recovery.",
+                        session_dir.display()
+                    );
                     if let Some((first_dir, first_branch)) = clones.first() {
                         println!("Example recovery:");
                         println!("  git -C \"{}\" status", first_dir.display());
-                        println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-                        println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-                        println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                        println!(
+                            "  git -C \"{}\" log --oneline --decorate -n 20",
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
+                            repo_root.display(),
+                            sid,
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" fetch fork-{}-1 {}",
+                            repo_root.display(),
+                            sid,
+                            first_branch
+                        );
                     }
                 }
                 // Update metadata
@@ -1384,7 +1676,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     .map(|(p, b)| (p.clone(), b.clone()))
                     .collect();
                 let panes_created = existing.len();
-                let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                let pane_dirs_vec: Vec<String> = existing
+                    .iter()
+                    .map(|(p, _)| p.display().to_string())
+                    .collect();
                 let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
                 let mut meta2 = format!(
                     "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
@@ -1399,7 +1694,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     aifo_coder::json_escape(&layout)
                 );
                 if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                    meta2.push_str(&format!(
+                        ", \"snapshot_sha\": {}",
+                        aifo_coder::json_escape(snap)
+                    ));
                 }
                 meta2.push_str(" }");
                 let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1408,16 +1706,40 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
             // Print guidance and return (wt.exe is detached)
             println!();
-            println!("aifo-coder: fork session {} launched in Windows Terminal.", sid);
+            println!(
+                "aifo-coder: fork session {} launched in Windows Terminal.",
+                sid
+            );
             println!("To inspect and merge changes, you can run:");
             if let Some((first_dir, first_branch)) = clones.first() {
                 println!("  git -C \"{}\" status", first_dir.display());
-                println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-                println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-                println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                println!(
+                    "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                    first_dir.display()
+                );
+                println!(
+                    "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                    repo_root.display(),
+                    sid,
+                    first_dir.display()
+                );
+                println!(
+                    "  git -C \"{}\" fetch fork-{}-1 {}",
+                    repo_root.display(),
+                    sid,
+                    first_branch
+                );
                 if base_label != "detached" {
-                    println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                    println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                    println!(
+                        "  git -C \"{}\" checkout {}",
+                        repo_root.display(),
+                        base_ref_or_sha
+                    );
+                    println!(
+                        "  git -C \"{}\" merge --no-ff {}",
+                        repo_root.display(),
+                        first_branch
+                    );
                 }
             }
             return ExitCode::from(0);
@@ -1440,11 +1762,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let mut cmd = Command::new(&gb);
                     cmd.arg("-c").arg(&inner);
                     if cli.verbose {
-                        let preview = vec![
-                            gb.display().to_string(),
-                            "-c".to_string(),
-                            inner.clone(),
-                        ];
+                        let preview =
+                            vec![gb.display().to_string(), "-c".to_string(), inner.clone()];
                         eprintln!("aifo-coder: git-bash: {}", aifo_coder::shell_join(&preview));
                     }
                     match cmd.status() {
@@ -1462,9 +1781,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         for (dir, _) in &clones {
                             let _ = fs::remove_dir_all(dir);
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
+                        println!(
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
+                        );
                     } else {
-                        println!("Clones remain under {} for recovery.", session_dir.display());
+                        println!(
+                            "Clones remain under {} for recovery.",
+                            session_dir.display()
+                        );
                     }
                     // Update metadata with panes_created
                     let existing: Vec<(PathBuf, String)> = clones
@@ -1473,8 +1798,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
                     let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
@@ -1488,7 +1817,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1501,12 +1833,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!("To inspect and merge changes, you can run:");
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    println!(
+                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                        repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
+                        first_branch
+                    );
                     if base_label != "detached" {
-                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                        println!(
+                            "  git -C \"{}\" checkout {}",
+                            repo_root.display(),
+                            base_ref_or_sha
+                        );
+                        println!(
+                            "  git -C \"{}\" merge --no-ff {}",
+                            repo_root.display(),
+                            first_branch
+                        );
                     }
                 }
                 return ExitCode::from(0);
@@ -1545,9 +1898,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         for (dir, _) in &clones {
                             let _ = fs::remove_dir_all(dir);
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
+                        println!(
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
+                        );
                     } else {
-                        println!("Clones remain under {} for recovery.", session_dir.display());
+                        println!(
+                            "Clones remain under {} for recovery.",
+                            session_dir.display()
+                        );
                     }
                     // Update metadata with panes_created
                     let existing: Vec<(PathBuf, String)> = clones
@@ -1556,8 +1915,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
                     let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
@@ -1571,7 +1934,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1584,12 +1950,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!("To inspect and merge changes, you can run:");
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    println!(
+                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                        repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
+                        first_branch
+                    );
                     if base_label != "detached" {
-                        println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                        println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                        println!(
+                            "  git -C \"{}\" checkout {}",
+                            repo_root.display(),
+                            base_ref_or_sha
+                        );
+                        println!(
+                            "  git -C \"{}\" merge --no-ff {}",
+                            repo_root.display(),
+                            first_branch
+                        );
                     }
                 }
                 return ExitCode::from(0);
@@ -1644,9 +2031,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (dir, _) in &clones {
                     let _ = fs::remove_dir_all(dir);
                 }
-                println!("Removed all created pane directories under {}.", session_dir.display());
+                println!(
+                    "Removed all created pane directories under {}.",
+                    session_dir.display()
+                );
             } else {
-                println!("Clones remain under {} for recovery.", session_dir.display());
+                println!(
+                    "Clones remain under {} for recovery.",
+                    session_dir.display()
+                );
             }
             // Update metadata with panes_created
             let existing: Vec<(PathBuf, String)> = clones
@@ -1655,7 +2048,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .map(|(p, b)| (p.clone(), b.clone()))
                 .collect();
             let panes_created = existing.len();
-            let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+            let pane_dirs_vec: Vec<String> = existing
+                .iter()
+                .map(|(p, _)| p.display().to_string())
+                .collect();
             let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
             let mut meta2 = format!(
                 "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
@@ -1670,7 +2066,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                meta2.push_str(&format!(
+                    ", \"snapshot_sha\": {}",
+                    aifo_coder::json_escape(snap)
+                ));
             }
             meta2.push_str(" }");
             let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1679,16 +2078,40 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
         // Print guidance and return
         println!();
-        println!("aifo-coder: fork session {} launched (PowerShell windows).", sid);
+        println!(
+            "aifo-coder: fork session {} launched (PowerShell windows).",
+            sid
+        );
         println!("To inspect and merge changes, you can run:");
         if let Some((first_dir, first_branch)) = clones.first() {
             println!("  git -C \"{}\" status", first_dir.display());
-            println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            println!(
+                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                repo_root.display(),
+                sid,
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" fetch fork-{}-1 {}",
+                repo_root.display(),
+                sid,
+                first_branch
+            );
             if base_label != "detached" {
-                println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                println!(
+                    "  git -C \"{}\" checkout {}",
+                    repo_root.display(),
+                    base_ref_or_sha
+                );
+                println!(
+                    "  git -C \"{}\" merge --no-ff {}",
+                    repo_root.display(),
+                    first_branch
+                );
             }
         }
         return ExitCode::from(0);
@@ -1710,7 +2133,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 ("AIFO_CODER_HOSTNAME", cname),
                 ("AIFO_CODER_FORK_SESSION", sid.clone()),
                 ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                ("AIFO_CODER_FORK_STATE_DIR", pane_state_dir.display().to_string()),
+                (
+                    "AIFO_CODER_FORK_STATE_DIR",
+                    pane_state_dir.display().to_string(),
+                ),
             ];
             for (k, v) in kv {
                 exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
@@ -1751,7 +2177,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     pane1_dir.display().to_string(),
                     "sh".to_string(),
                     "-lc".to_string(),
-                    inner.clone()
+                    inner.clone(),
                 ];
                 eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_new));
             }
@@ -1764,15 +2190,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         for (dir, _) in &clones {
                             let _ = fs::remove_dir_all(dir);
                         }
-                        println!("Removed all created pane directories under {}.", session_dir.display());
+                        println!(
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
+                        );
                     } else {
-                        println!("One or more clones were created under {}.", session_dir.display());
+                        println!(
+                            "One or more clones were created under {}.",
+                            session_dir.display()
+                        );
                         println!("You can inspect them manually. Example:");
                         if let Some((first_dir, first_branch)) = clones.first() {
                             println!("  git -C \"{}\" status", first_dir.display());
-                            println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-                            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-                            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                            println!(
+                                "  git -C \"{}\" log --oneline --decorate -n 20",
+                                first_dir.display()
+                            );
+                            println!(
+                                "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
+                                repo_root.display(),
+                                sid,
+                                first_dir.display()
+                            );
+                            println!(
+                                "  git -C \"{}\" fetch fork-{}-1 {}",
+                                repo_root.display(),
+                                sid,
+                                first_branch
+                            );
                         }
                     }
                     // Update metadata with panes_created and existing pane dirs
@@ -1782,8 +2227,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
                     let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
-                    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
                     let mut meta2 = format!(
                         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                         created_at,
@@ -1797,7 +2246,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
                     }
                     meta2.push_str(" }");
                     let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1808,14 +2260,24 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 eprintln!("aifo-coder: tmux new-session failed.");
                 // Best-effort: kill any stray session
                 let mut kill = Command::new(&tmux);
-                let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+                let _ = kill
+                    .arg("kill-session")
+                    .arg("-t")
+                    .arg(&session_name)
+                    .status();
                 if !cli.fork_keep_on_failure {
                     for (dir, _) in &clones {
                         let _ = fs::remove_dir_all(dir);
                     }
-                    println!("Removed all created pane directories under {}.", session_dir.display());
+                    println!(
+                        "Removed all created pane directories under {}.",
+                        session_dir.display()
+                    );
                 } else {
-                    println!("Clones remain under {} for recovery.", session_dir.display());
+                    println!(
+                        "Clones remain under {} for recovery.",
+                        session_dir.display()
+                    );
                 }
                 // Update metadata
                 let existing: Vec<(PathBuf, String)> = clones
@@ -1824,7 +2286,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     .map(|(p, b)| (p.clone(), b.clone()))
                     .collect();
                 let panes_created = existing.len();
-                let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+                let pane_dirs_vec: Vec<String> = existing
+                    .iter()
+                    .map(|(p, _)| p.display().to_string())
+                    .collect();
                 let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
                 let mut meta2 = format!(
                     "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
@@ -1839,7 +2304,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     aifo_coder::json_escape(&layout)
                 );
                 if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                    meta2.push_str(&format!(
+                        ", \"snapshot_sha\": {}",
+                        aifo_coder::json_escape(snap)
+                    ));
                 }
                 meta2.push_str(" }");
                 let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1873,9 +2341,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     pane_dir.display().to_string(),
                     "sh".to_string(),
                     "-lc".to_string(),
-                    inner.clone()
+                    inner.clone(),
                 ];
-                eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_split));
+                eprintln!(
+                    "aifo-coder: tmux: {}",
+                    aifo_coder::shell_join(&preview_split)
+                );
             }
             let st = cmd.status();
             match st {
@@ -1890,21 +2361,44 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             eprintln!("aifo-coder: tmux split-window failed for one or more panes.");
             // Best-effort: kill the tmux session to avoid leaving a half-configured window
             let mut kill = Command::new(&tmux);
-            let _ = kill.arg("kill-session").arg("-t").arg(&session_name).status();
+            let _ = kill
+                .arg("kill-session")
+                .arg("-t")
+                .arg(&session_name)
+                .status();
 
             if !cli.fork_keep_on_failure {
                 for (dir, _) in &clones {
                     let _ = fs::remove_dir_all(dir);
                 }
-                println!("Removed all created pane directories under {}.", session_dir.display());
+                println!(
+                    "Removed all created pane directories under {}.",
+                    session_dir.display()
+                );
             } else {
-                println!("Clones remain under {} for recovery.", session_dir.display());
+                println!(
+                    "Clones remain under {} for recovery.",
+                    session_dir.display()
+                );
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("Example recovery:");
                     println!("  git -C \"{}\" status", first_dir.display());
-                    println!("  git -C \"{}\" log --oneline --decorate -n 20", first_dir.display());
-                    println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"", repo_root.display(), sid, first_dir.display());
-                    println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+                    println!(
+                        "  git -C \"{}\" log --oneline --decorate -n 20",
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
+                        repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
+                        first_branch
+                    );
                 }
             }
             // Update metadata with panes_created and existing pane dirs
@@ -1914,7 +2408,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .map(|(p, b)| (p.clone(), b.clone()))
                 .collect();
             let panes_created = existing.len();
-            let pane_dirs_vec: Vec<String> = existing.iter().map(|(p, _)| p.display().to_string()).collect();
+            let pane_dirs_vec: Vec<String> = existing
+                .iter()
+                .map(|(p, _)| p.display().to_string())
+                .collect();
             let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
             let mut meta2 = format!(
                 "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
@@ -1929,7 +2426,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+                meta2.push_str(&format!(
+                    ", \"snapshot_sha\": {}",
+                    aifo_coder::json_escape(snap)
+                ));
             }
             meta2.push_str(" }");
             let _ = fs::write(session_dir.join(".meta.json"), meta2);
@@ -1948,9 +2448,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 "select-layout".to_string(),
                 "-t".to_string(),
                 format!("{}:0", &session_name),
-                layout_effective.clone()
+                layout_effective.clone(),
             ];
-            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_layout));
+            eprintln!(
+                "aifo-coder: tmux: {}",
+                aifo_coder::shell_join(&preview_layout)
+            );
         }
         let _ = lay.status();
 
@@ -1967,17 +2470,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 "-t".to_string(),
                 format!("{}:0", &session_name),
                 "synchronize-panes".to_string(),
-                "off".to_string()
+                "off".to_string(),
             ];
-            eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_sync));
+            eprintln!(
+                "aifo-coder: tmux: {}",
+                aifo_coder::shell_join(&preview_sync)
+            );
         }
         let _ = sync.status();
 
         // Attach or switch
         let attach_cmd = if env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
-            vec!["switch-client".to_string(), "-t".to_string(), session_name.clone()]
+            vec![
+                "switch-client".to_string(),
+                "-t".to_string(),
+                session_name.clone(),
+            ]
         } else {
-            vec!["attach-session".to_string(), "-t".to_string(), session_name.clone()]
+            vec![
+                "attach-session".to_string(),
+                "-t".to_string(),
+                session_name.clone(),
+            ]
         };
         let mut att = Command::new(&tmux);
         for a in &attach_cmd {
@@ -1991,12 +2505,33 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         println!("To inspect and merge changes, you can run:");
         if let Some((first_dir, first_branch)) = clones.first() {
             println!("  git -C \"{}\" status", first_dir.display());
-            println!("  git -C \"{}\" log --oneline --decorate --graph -n 20", first_dir.display());
-            println!("  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once", repo_root.display(), sid, first_dir.display());
-            println!("  git -C \"{}\" fetch fork-{}-1 {}", repo_root.display(), sid, first_branch);
+            println!(
+                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                repo_root.display(),
+                sid,
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" fetch fork-{}-1 {}",
+                repo_root.display(),
+                sid,
+                first_branch
+            );
             if base_label != "detached" {
-                println!("  git -C \"{}\" checkout {}", repo_root.display(), base_ref_or_sha);
-                println!("  git -C \"{}\" merge --no-ff {}", repo_root.display(), first_branch);
+                println!(
+                    "  git -C \"{}\" checkout {}",
+                    repo_root.display(),
+                    base_ref_or_sha
+                );
+                println!(
+                    "  git -C \"{}\" merge --no-ff {}",
+                    repo_root.display(),
+                    first_branch
+                );
             }
         }
 
@@ -2093,7 +2628,9 @@ enum Agent {
     },
 
     /// Fork maintenance commands
-    #[command(after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n")]
+    #[command(
+        after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n"
+    )]
     Fork {
         #[command(subcommand)]
         cmd: ForkCmd,
@@ -2152,7 +2689,16 @@ fn main() -> ExitCode {
                     return ExitCode::from(code as u8);
                 }
             }
-            ForkCmd::Clean { session, older_than, all, dry_run, yes, force, keep_dirty, json } => {
+            ForkCmd::Clean {
+                session,
+                older_than,
+                all,
+                dry_run,
+                yes,
+                force,
+                keep_dirty,
+                json,
+            } => {
                 let repo_root = match aifo_coder::repo_root() {
                     Some(p) => p,
                     None => {
@@ -2188,13 +2734,29 @@ fn main() -> ExitCode {
 
         // Flavor and registry display
         let flavor_env = std::env::var("AIFO_CODER_IMAGE_FLAVOR").unwrap_or_default();
-        let flavor = if flavor_env.trim().eq_ignore_ascii_case("slim") { "slim" } else { "full" };
+        let flavor = if flavor_env.trim().eq_ignore_ascii_case("slim") {
+            "slim"
+        } else {
+            "full"
+        };
         let rp = aifo_coder::preferred_registry_prefix_quiet();
-        let reg_display = if rp.is_empty() { "Docker Hub".to_string() } else { rp.trim_end_matches('/').to_string() };
+        let reg_display = if rp.is_empty() {
+            "Docker Hub".to_string()
+        } else {
+            rp.trim_end_matches('/').to_string()
+        };
 
         let use_color = atty::is(atty::Stream::Stderr);
-        let flavor_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", flavor) } else { flavor.to_string() };
-        let reg_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", reg_display) } else { reg_display };
+        let flavor_val = if use_color {
+            format!("\x1b[34;1m{}\x1b[0m", flavor)
+        } else {
+            flavor.to_string()
+        };
+        let reg_val = if use_color {
+            format!("\x1b[34;1m{}\x1b[0m", reg_display)
+        } else {
+            reg_display
+        };
 
         eprintln!("  flavor:   {}", flavor_val);
         eprintln!("  registry: {}", reg_val);
@@ -2204,9 +2766,21 @@ fn main() -> ExitCode {
         let codex_img = default_image_for("codex");
         let crush_img = default_image_for("crush");
         let aider_img = default_image_for("aider");
-        let codex_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", codex_img) } else { codex_img };
-        let crush_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", crush_img) } else { crush_img };
-        let aider_val = if use_color { format!("\x1b[34;1m{}\x1b[0m", aider_img) } else { aider_img };
+        let codex_val = if use_color {
+            format!("\x1b[34;1m{}\x1b[0m", codex_img)
+        } else {
+            codex_img
+        };
+        let crush_val = if use_color {
+            format!("\x1b[34;1m{}\x1b[0m", crush_img)
+        } else {
+            crush_img
+        };
+        let aider_val = if use_color {
+            format!("\x1b[34;1m{}\x1b[0m", aider_img)
+        } else {
+            aider_img
+        };
         eprintln!("  codex: {}", codex_val);
         eprintln!("  crush: {}", crush_val);
         eprintln!("  aider: {}", aider_val);
@@ -2229,7 +2803,13 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
         }
-    } else if let Agent::Toolchain { kind, image, no_cache, args } = &cli.command {
+    } else if let Agent::Toolchain {
+        kind,
+        image,
+        no_cache,
+        args,
+    } = &cli.command
+    {
         print_startup_banner();
         if cli.verbose {
             eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
@@ -2241,32 +2821,60 @@ fn main() -> ExitCode {
             }
         }
         if cli.dry_run {
-            let _ = aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, true, true);
+            let _ = aifo_coder::toolchain_run(
+                kind.as_str(),
+                args,
+                image.as_deref(),
+                *no_cache,
+                true,
+                true,
+            );
             return ExitCode::from(0);
         }
-        let code = match aifo_coder::toolchain_run(kind.as_str(), args, image.as_deref(), *no_cache, cli.verbose, false) {
+        let code = match aifo_coder::toolchain_run(
+            kind.as_str(),
+            args,
+            image.as_deref(),
+            *no_cache,
+            cli.verbose,
+            false,
+        ) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("{e}");
-                if e.kind() == io::ErrorKind::NotFound { 127 } else { 1 }
+                if e.kind() == io::ErrorKind::NotFound {
+                    127
+                } else {
+                    1
+                }
             }
         };
         return ExitCode::from((code & 0xff) as u8);
     }
-
-
 
     // Build docker command and run it
     let (agent, args) = match &cli.command {
         Agent::Codex { args } => ("codex", args.clone()),
         Agent::Crush { args } => ("crush", args.clone()),
         Agent::Aider { args } => ("aider", args.clone()),
-        Agent::Doctor => unreachable!("Doctor subcommand is handled earlier and returns immediately"),
-        Agent::Images => unreachable!("Images subcommand is handled earlier and returns immediately"),
-        Agent::CacheClear => unreachable!("CacheClear subcommand is handled earlier and returns immediately"),
-        Agent::ToolchainCacheClear => unreachable!("ToolchainCacheClear subcommand is handled earlier and returns immediately"),
-        Agent::Toolchain { .. } => unreachable!("Toolchain subcommand is handled earlier and returns immediately"),
-        Agent::Fork { .. } => unreachable!("Fork maintenance subcommands are handled earlier and return immediately"),
+        Agent::Doctor => {
+            unreachable!("Doctor subcommand is handled earlier and returns immediately")
+        }
+        Agent::Images => {
+            unreachable!("Images subcommand is handled earlier and returns immediately")
+        }
+        Agent::CacheClear => {
+            unreachable!("CacheClear subcommand is handled earlier and returns immediately")
+        }
+        Agent::ToolchainCacheClear => unreachable!(
+            "ToolchainCacheClear subcommand is handled earlier and returns immediately"
+        ),
+        Agent::Toolchain { .. } => {
+            unreachable!("Toolchain subcommand is handled earlier and returns immediately")
+        }
+        Agent::Fork { .. } => {
+            unreachable!("Fork maintenance subcommands are handled earlier and return immediately")
+        }
     };
 
     // Print startup banner before any further diagnostics
@@ -2279,7 +2887,11 @@ fn main() -> ExitCode {
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
         // kinds as strings (from enum flag)
-        let mut kinds: Vec<String> = cli.toolchain.iter().map(|k| k.as_str().to_string()).collect();
+        let mut kinds: Vec<String> = cli
+            .toolchain
+            .iter()
+            .map(|k| k.as_str().to_string())
+            .collect();
 
         // Parse spec strings kind[@version]
         fn parse_spec(s: &str) -> (String, Option<String>) {
@@ -2317,7 +2929,10 @@ fn main() -> ExitCode {
         for s in &cli.toolchain_image {
             if let Some((k, v)) = s.split_once('=') {
                 if !k.trim().is_empty() && !v.trim().is_empty() {
-                    overrides.push((aifo_coder::normalize_toolchain_kind(k), v.trim().to_string()));
+                    overrides.push((
+                        aifo_coder::normalize_toolchain_kind(k),
+                        v.trim().to_string(),
+                    ));
                 }
             }
         }
@@ -2359,7 +2974,12 @@ fn main() -> ExitCode {
             }
 
             // Start sidecars
-            match aifo_coder::toolchain_start_session(&kinds, &overrides, cli.no_toolchain_cache, cli.verbose) {
+            match aifo_coder::toolchain_start_session(
+                &kinds,
+                &overrides,
+                cli.no_toolchain_cache,
+                cli.verbose,
+            ) {
                 Ok(sid) => {
                     // Set network env for agent container to join
                     let net = format!("aifo-net-{}", sid);
@@ -2387,7 +3007,9 @@ fn main() -> ExitCode {
                         t == "typescript=global" || t == "ts=global"
                     });
                     if want_ts_global && kinds.iter().any(|k| k == "node") {
-                        if let Err(e) = aifo_coder::toolchain_bootstrap_typescript_global(sid, cli.verbose) {
+                        if let Err(e) =
+                            aifo_coder::toolchain_bootstrap_typescript_global(sid, cli.verbose)
+                        {
                             eprintln!("aifo-coder: typescript bootstrap failed: {}", e);
                         }
                     }
@@ -2432,7 +3054,11 @@ fn main() -> ExitCode {
                 );
                 // Show chosen registry and source for transparency
                 let rp = aifo_coder::preferred_registry_prefix_quiet();
-                let reg_display = if rp.is_empty() { "Docker Hub".to_string() } else { rp.trim_end_matches('/').to_string() };
+                let reg_display = if rp.is_empty() {
+                    "Docker Hub".to_string()
+                } else {
+                    rp.trim_end_matches('/').to_string()
+                };
                 let reg_src = aifo_coder::preferred_registry_source();
                 eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
                 eprintln!("aifo-coder: image: {image}");
@@ -2503,7 +3129,8 @@ fn default_image_for(agent: &str) -> String {
             return img;
         }
     }
-    let name_prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+    let name_prefix =
+        env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
@@ -2524,7 +3151,8 @@ fn default_image_for_quiet(agent: &str) -> String {
             return img;
         }
     }
-    let name_prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+    let name_prefix =
+        env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",

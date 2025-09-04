@@ -8,7 +8,8 @@ fn test_agent_preview_includes_apparmor_flag_when_supported() {
     let profile = aifo_coder::desired_apparmor_profile().expect("expected some apparmor profile");
     let args = vec!["--help".to_string()];
     let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", Some(&profile)).expect("build_docker_cmd failed");
+        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", Some(&profile))
+            .expect("build_docker_cmd failed");
     assert!(
         preview.contains(&format!("--security-opt apparmor={}", profile)),
         "preview missing AppArmor flag: {preview}"
@@ -28,7 +29,8 @@ fn test_agent_preview_omits_apparmor_flag_when_unsupported() {
     }
     let args = vec!["--help".to_string()];
     let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", Some("docker-default")).expect("build_docker_cmd failed");
+        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", Some("docker-default"))
+            .expect("build_docker_cmd failed");
     assert!(
         !preview.contains("--security-opt apparmor="),
         "preview should not include AppArmor flag when unsupported: {preview}"

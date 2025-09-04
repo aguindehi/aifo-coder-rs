@@ -35,6 +35,8 @@ fn test_apparmor_portability_linux_nonflaky() {
             p
         );
     } else {
-        eprintln!("AppArmor not in use or not supported; returning None is acceptable on this host");
+        eprintln!(
+            "AppArmor not in use or not supported; returning None is acceptable on this host"
+        );
     }
 }

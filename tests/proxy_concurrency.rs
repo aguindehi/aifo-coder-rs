@@ -16,7 +16,11 @@ fn parse_http_url(url: &str) -> (String, u16, String) {
 }
 
 fn send_raw(host: &str, port: u16, req: &str) -> String {
-    let connect_host = if host == "host.docker.internal" { "127.0.0.1" } else { host };
+    let connect_host = if host == "host.docker.internal" {
+        "127.0.0.1"
+    } else {
+        host
+    };
     let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
     stream.write_all(req.as_bytes()).expect("write");
     let mut buf = String::new();
@@ -34,11 +38,15 @@ fn send_raw(host: &str, port: u16, req: &str) -> String {
 #[test]
 fn test_proxy_concurrency_mixed_requests() {
     let sid = "unit-test-session";
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
     let (host, port, path) = parse_http_url(&url);
 
     // Build requests
-    let no_auth_req = format!("POST {} HTTP/1.1\r\nHost: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", path, host);
+    let no_auth_req = format!(
+        "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        path, host
+    );
     let bad_proto_req = format!(
         "POST {} HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         path, host, token
@@ -61,9 +69,17 @@ fn test_proxy_concurrency_mixed_requests() {
     for (i, t) in threads.into_iter().enumerate() {
         let resp = t.join().expect("thread join");
         if i % 2 == 0 {
-            assert!(resp.starts_with("HTTP/1.1 401"), "expected 401 for missing auth, got:\n{}", resp);
+            assert!(
+                resp.starts_with("HTTP/1.1 401"),
+                "expected 401 for missing auth, got:\n{}",
+                resp
+            );
         } else {
-            assert!(resp.starts_with("HTTP/1.1 426"), "expected 426 for bad proto, got:\n{}", resp);
+            assert!(
+                resp.starts_with("HTTP/1.1 426"),
+                "expected 426 for bad proto, got:\n{}",
+                resp
+            );
         }
     }
 

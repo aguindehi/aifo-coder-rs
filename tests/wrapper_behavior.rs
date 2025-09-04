@@ -59,10 +59,7 @@ fn test_wrapper_prefers_system_binary() {
 
     // Prepend stub dir to PATH so command -v aifo-coder finds our stub first
     let old_path = env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}",
-        stub_dir.display(),
-        old_path
-    );
+    let new_path = format!("{}:{}", stub_dir.display(), old_path);
 
     // Run the wrapper script; it should exec our stub and print SYSBIN_OK
     let root = repo_root();
@@ -74,7 +71,10 @@ fn test_wrapper_prefers_system_binary() {
         .output()
         .expect("run wrapper with stub sysbin");
 
-    assert!(out.status.success(), "wrapper should exec system binary successfully");
+    assert!(
+        out.status.success(),
+        "wrapper should exec system binary successfully"
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("SYSBIN_OK"),

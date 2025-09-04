@@ -10,7 +10,10 @@ fn test_build_docker_cmd_includes_proxy_env() {
     let old_url = std::env::var("AIFO_TOOLEEXEC_URL").ok();
     let old_tok = std::env::var("AIFO_TOOLEEXEC_TOKEN").ok();
 
-    std::env::set_var("AIFO_TOOLEEXEC_URL", "http://host.docker.internal:54321/exec");
+    std::env::set_var(
+        "AIFO_TOOLEEXEC_URL",
+        "http://host.docker.internal:54321/exec",
+    );
     std::env::set_var("AIFO_TOOLEEXEC_TOKEN", "t0k");
 
     let args = vec!["--help".to_string()];
@@ -27,6 +30,14 @@ fn test_build_docker_cmd_includes_proxy_env() {
     );
 
     // Restore env
-    if let Some(v) = old_url { std::env::set_var("AIFO_TOOLEEXEC_URL", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_URL"); }
-    if let Some(v) = old_tok { std::env::set_var("AIFO_TOOLEEXEC_TOKEN", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_TOKEN"); }
+    if let Some(v) = old_url {
+        std::env::set_var("AIFO_TOOLEEXEC_URL", v);
+    } else {
+        std::env::remove_var("AIFO_TOOLEEXEC_URL");
+    }
+    if let Some(v) = old_tok {
+        std::env::set_var("AIFO_TOOLEEXEC_TOKEN", v);
+    } else {
+        std::env::remove_var("AIFO_TOOLEEXEC_TOKEN");
+    }
 }

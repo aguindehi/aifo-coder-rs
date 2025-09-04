@@ -14,12 +14,20 @@ fn test_build_docker_cmd_respects_hostname_env_separately_from_name() {
     env::set_var("AIFO_CODER_HOSTNAME", "unit-test-hn");
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd");
 
     // Restore env
-    if let Some(v) = old_name { env::set_var("AIFO_CODER_CONTAINER_NAME", v); } else { env::remove_var("AIFO_CODER_CONTAINER_NAME"); }
-    if let Some(v) = old_host { env::set_var("AIFO_CODER_HOSTNAME", v); } else { env::remove_var("AIFO_CODER_HOSTNAME"); }
+    if let Some(v) = old_name {
+        env::set_var("AIFO_CODER_CONTAINER_NAME", v);
+    } else {
+        env::remove_var("AIFO_CODER_CONTAINER_NAME");
+    }
+    if let Some(v) = old_host {
+        env::set_var("AIFO_CODER_HOSTNAME", v);
+    } else {
+        env::remove_var("AIFO_CODER_HOSTNAME");
+    }
 
     assert!(
         preview.contains("--name unit-test-cn"),

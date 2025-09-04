@@ -8,13 +8,18 @@ fn test_proxy_allowlist_rejects_disallowed_tool() {
 
     // Start proxy without launching sidecars; allowlist check happens before docker exec
     let sid = format!("allowlist-{}", std::process::id());
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after_scheme = u.split("://").nth(1).unwrap_or(u);
         let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse::<u16>()
+            .unwrap_or(0)
     }
     let port = extract_port(&url);
 
@@ -31,7 +36,11 @@ fn test_proxy_allowlist_rejects_disallowed_tool() {
     let mut resp = Vec::new();
     stream.read_to_end(&mut resp).ok();
     let text = String::from_utf8_lossy(&resp).to_string();
-    assert!(text.contains("403 Forbidden"), "expected 403, got:\n{}", text);
+    assert!(
+        text.contains("403 Forbidden"),
+        "expected 403, got:\n{}",
+        text
+    );
 
     // Cleanup
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

@@ -34,7 +34,12 @@ fn test_toolchain_cleanup_removes_containers_and_network() {
         .output()
         .expect("docker ps failed");
     let list = String::from_utf8_lossy(&st_c.stdout);
-    assert!(list.contains(&cname), "expected container {} to exist, got: {}", cname, list);
+    assert!(
+        list.contains(&cname),
+        "expected container {} to exist, got: {}",
+        cname,
+        list
+    );
 
     // Cleanup session
     aifo_coder::toolchain_cleanup_session(&sid, true);
@@ -46,7 +51,11 @@ fn test_toolchain_cleanup_removes_containers_and_network() {
         .stderr(std::process::Stdio::null())
         .status()
         .expect("docker inspect failed to run");
-    assert!(!st_inspect.success(), "container {} still exists after cleanup", cname);
+    assert!(
+        !st_inspect.success(),
+        "container {} still exists after cleanup",
+        cname
+    );
 
     // Assert network removed (network inspect should fail)
     let st_net = std::process::Command::new("docker")
@@ -55,5 +64,9 @@ fn test_toolchain_cleanup_removes_containers_and_network() {
         .stderr(std::process::Stdio::null())
         .status()
         .expect("docker network inspect failed to run");
-    assert!(!st_net.success(), "network {} still exists after cleanup", net);
+    assert!(
+        !st_net.success(),
+        "network {} still exists after cleanup",
+        net
+    );
 }

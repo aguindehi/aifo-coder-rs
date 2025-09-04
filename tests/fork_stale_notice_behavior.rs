@@ -14,11 +14,23 @@ fn have_git() -> bool {
 
 fn init_repo(dir: &PathBuf) {
     let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git").args(["config","user.name","UT"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["config","user.email","ut@example.com"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["config", "user.name", "UT"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "ut@example.com"])
+        .current_dir(dir)
+        .status();
     let _ = fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git").args(["add","-A"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["commit","-m","init"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .status();
 }
 
 #[test]
@@ -39,13 +51,19 @@ fn test_stale_notice_suppressed_during_maintenance() {
     init_repo(&pane);
     let head = String::from_utf8_lossy(
         &Command::new("git")
-            .args(["rev-parse","--verify","HEAD"])
+            .args(["rev-parse", "--verify", "HEAD"])
             .current_dir(&pane)
             .output()
             .unwrap()
-            .stdout
-    ).trim().to_string();
-    let old_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 5 * 86400;
+            .stdout,
+    )
+    .trim()
+    .to_string();
+    let old_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - 5 * 86400;
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
         old_secs, head, pane.display()
@@ -55,7 +73,7 @@ fn test_stale_notice_suppressed_during_maintenance() {
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)
-        .args(["fork","list","--json"])
+        .args(["fork", "list", "--json"])
         .env("AIFO_CODER_FORK_STALE_DAYS", "1")
         .current_dir(&root)
         .output()
@@ -87,13 +105,19 @@ fn test_stale_notice_printed_for_doctor() {
     init_repo(&pane);
     let head = String::from_utf8_lossy(
         &Command::new("git")
-            .args(["rev-parse","--verify","HEAD"])
+            .args(["rev-parse", "--verify", "HEAD"])
             .current_dir(&pane)
             .output()
             .unwrap()
-            .stdout
-    ).trim().to_string();
-    let old_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 5 * 86400;
+            .stdout,
+    )
+    .trim()
+    .to_string();
+    let old_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - 5 * 86400;
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
         old_secs, head, pane.display()

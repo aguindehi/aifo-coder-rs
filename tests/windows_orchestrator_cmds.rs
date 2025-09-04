@@ -11,14 +11,8 @@ fn test_ps_inner_contains_set_location_and_env() {
     let pane_state_dir = PathBuf::from(r"C:\State Base\sid123\pane-2");
     let child_args = vec!["aider".to_string(), "--help".to_string()];
 
-    let inner = aifo_coder::fork_ps_inner_string(
-        agent,
-        sid,
-        i,
-        &pane_dir,
-        &pane_state_dir,
-        &child_args,
-    );
+    let inner =
+        aifo_coder::fork_ps_inner_string(agent, sid, i, &pane_dir, &pane_state_dir, &child_args);
 
     let setloc = format!("Set-Location '{}'", pane_dir.display());
     assert!(
@@ -26,7 +20,10 @@ fn test_ps_inner_contains_set_location_and_env() {
         "PowerShell inner missing Set-Location: {}",
         inner
     );
-    let fsd = format!("$env:AIFO_CODER_FORK_STATE_DIR='{}'", pane_state_dir.display());
+    let fsd = format!(
+        "$env:AIFO_CODER_FORK_STATE_DIR='{}'",
+        pane_state_dir.display()
+    );
     assert!(
         inner.contains(&fsd),
         "PowerShell inner missing FORK_STATE_DIR env: {}",
@@ -54,14 +51,8 @@ fn test_bash_inner_format_and_exports() {
     let pane_state_dir = PathBuf::from(r"C:\State Dir\sidX\pane-1");
     let child_args = vec!["aider".to_string(), "--version".to_string()];
 
-    let inner = aifo_coder::fork_bash_inner_string(
-        agent,
-        sid,
-        i,
-        &pane_dir,
-        &pane_state_dir,
-        &child_args,
-    );
+    let inner =
+        aifo_coder::fork_bash_inner_string(agent, sid, i, &pane_dir, &pane_state_dir, &child_args);
 
     let cddir = format!("cd '{}'", pane_dir.display());
     assert!(
@@ -109,11 +100,22 @@ fn test_wt_build_new_tab_args_contains_d_flag() {
     let args = aifo_coder::wt_build_new_tab_args(&ps, &dir, inner);
     assert_eq!(args.get(0), Some(&"wt".to_string()));
     assert_eq!(args.get(1), Some(&"new-tab".to_string()));
-    let pos = args.iter().position(|s| s == "-d").expect("missing -d flag");
+    let pos = args
+        .iter()
+        .position(|s| s == "-d")
+        .expect("missing -d flag");
     assert_eq!(args.get(pos + 1), Some(&dir.display().to_string()));
     // Ensure powershell path and -Command are present
-    assert!(args.contains(&ps.display().to_string()), "psbin path missing in args: {:?}", args);
-    assert!(args.contains(&"-Command".to_string()), "-Command missing in args: {:?}", args);
+    assert!(
+        args.contains(&ps.display().to_string()),
+        "psbin path missing in args: {:?}",
+        args
+    );
+    assert!(
+        args.contains(&"-Command".to_string()),
+        "-Command missing in args: {:?}",
+        args
+    );
 }
 
 #[test]
@@ -124,9 +126,24 @@ fn test_wt_build_split_args_contains_orient_and_d() {
     let args = aifo_coder::wt_build_split_args("-H", &ps, &dir, inner);
     assert_eq!(args.get(0), Some(&"wt".to_string()));
     assert_eq!(args.get(1), Some(&"split-pane".to_string()));
-    assert!(args.contains(&"-H".to_string()), "orientation flag missing: {:?}", args);
-    let pos = args.iter().position(|s| s == "-d").expect("missing -d flag");
+    assert!(
+        args.contains(&"-H".to_string()),
+        "orientation flag missing: {:?}",
+        args
+    );
+    let pos = args
+        .iter()
+        .position(|s| s == "-d")
+        .expect("missing -d flag");
     assert_eq!(args.get(pos + 1), Some(&dir.display().to_string()));
-    assert!(args.contains(&ps.display().to_string()), "psbin path missing in args: {:?}", args);
-    assert!(args.contains(&"-Command".to_string()), "-Command missing in args: {:?}", args);
+    assert!(
+        args.contains(&ps.display().to_string()),
+        "psbin path missing in args: {:?}",
+        args
+    );
+    assert!(
+        args.contains(&"-Command".to_string()),
+        "-Command missing in args: {:?}",
+        args
+    );
 }

@@ -47,13 +47,18 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
 
     // Start proxy without launching sidecars (notifications-cmd does not require sidecars)
     let sid = format!("notif-{}", std::process::id());
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, false)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after_scheme = u.split("://").nth(1).unwrap_or(u);
         let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse::<u16>()
+            .unwrap_or(0)
     }
     let port = extract_port(&url);
 
@@ -71,7 +76,11 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
         s.read_to_end(&mut resp).ok();
         let txt = String::from_utf8_lossy(&resp);
         assert!(txt.contains("200 OK"), "expected 200: {}", txt);
-        assert!(txt.contains("X-Exit-Code: 0"), "exit code mismatch: {}", txt);
+        assert!(
+            txt.contains("X-Exit-Code: 0"),
+            "exit code mismatch: {}",
+            txt
+        );
         assert!(
             txt.contains("say---title AIFO"),
             "output mismatch (say args missing): {}",
@@ -94,7 +103,10 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
         let txt = String::from_utf8_lossy(&resp);
         assert!(txt.contains("403 Forbidden"), "expected 403: {}", txt);
         assert!(txt.contains("X-Exit-Code: 86"), "expected exit 86: {}", txt);
-        assert!(txt.contains("arguments mismatch"), "expected mismatch reason");
+        assert!(
+            txt.contains("arguments mismatch"),
+            "expected mismatch reason"
+        );
     }
 
     // Cleanup proxy/session
@@ -103,6 +115,10 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     aifo_coder::toolchain_cleanup_session(&sid, false);
 
     // Restore environment
-    if let Some(v) = old_home { std::env::set_var("HOME", v); }
-    if let Some(v) = old_path { std::env::set_var("PATH", v); }
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    }
+    if let Some(v) = old_path {
+        std::env::set_var("PATH", v);
+    }
 }

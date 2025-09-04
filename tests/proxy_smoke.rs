@@ -16,8 +16,8 @@ fn test_proxy_shim_route_rust_and_node() {
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
         .expect("failed to start toolchain session");
 
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, verbose)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, verbose).expect("failed to start proxy");
 
     // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
     fn extract_port(u: &str) -> u16 {
@@ -33,7 +33,11 @@ fn test_proxy_shim_route_rust_and_node() {
 
         let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
 
-        let mut body = format!("tool={}&cwd={}", urlencoding::Encoded::new(tool), urlencoding::Encoded::new("."));
+        let mut body = format!(
+            "tool={}&cwd={}",
+            urlencoding::Encoded::new(tool),
+            urlencoding::Encoded::new(".")
+        );
         for a in args {
             body.push('&');
             body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));

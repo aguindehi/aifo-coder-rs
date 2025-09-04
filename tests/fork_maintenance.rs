@@ -13,12 +13,27 @@ fn have_git() -> bool {
 
 // Helper: initialize a minimal git repo with one commit
 fn init_repo(dir: &PathBuf) {
-    let _ = std::process::Command::new("git").arg("init").current_dir(dir).status();
-    let _ = std::process::Command::new("git").args(["config","user.name","UT"]).current_dir(dir).status();
-    let _ = std::process::Command::new("git").args(["config","user.email","ut@example.com"]).current_dir(dir).status();
+    let _ = std::process::Command::new("git")
+        .arg("init")
+        .current_dir(dir)
+        .status();
+    let _ = std::process::Command::new("git")
+        .args(["config", "user.name", "UT"])
+        .current_dir(dir)
+        .status();
+    let _ = std::process::Command::new("git")
+        .args(["config", "user.email", "ut@example.com"])
+        .current_dir(dir)
+        .status();
     fs::write(dir.join("init.txt"), "x\n").unwrap();
-    let _ = std::process::Command::new("git").args(["add","-A"]).current_dir(dir).status();
-    let _ = std::process::Command::new("git").args(["commit","-m","init"]).current_dir(dir).status();
+    let _ = std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status();
+    let _ = std::process::Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .status();
 }
 
 #[test]
@@ -41,9 +56,10 @@ fn test_fork_clean_refuses_when_protected_without_overrides() {
 
     // Write .meta.json with base_commit_sha matching current HEAD
     let head = std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"])
+        .args(["rev-parse", "--verify", "HEAD"])
         .current_dir(&pane1)
-        .output().unwrap();
+        .output()
+        .unwrap();
     let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
@@ -93,8 +109,16 @@ fn test_fork_clean_keep_dirty_removes_only_clean_panes_and_updates_meta() {
     init_repo(&pane_dirty);
 
     // HEAD sha
-    let head_clean = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane_clean).output().unwrap().stdout).trim().to_string();
+    let head_clean = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_clean)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
 
     // Make pane-2 dirty
     fs::write(pane_dirty.join("dirty.txt"), "d\n").unwrap();
@@ -115,7 +139,7 @@ fn test_fork_clean_keep_dirty_removes_only_clean_panes_and_updates_meta() {
         older_than_days: None,
         all: false,
         dry_run: false,
-        yes: true,   // skip prompt in CI
+        yes: true, // skip prompt in CI
         force: false,
         keep_dirty: true,
         json: false,
@@ -126,8 +150,14 @@ fn test_fork_clean_keep_dirty_removes_only_clean_panes_and_updates_meta() {
     assert!(pane_dirty.exists(), "dirty pane should remain");
     // Meta should still exist and list remaining pane-2 directory
     let meta2 = fs::read_to_string(base.join(".meta.json")).expect("read meta");
-    assert!(meta2.contains("panes_remaining"), "meta should contain panes_remaining");
-    assert!(meta2.contains(&format!("\"{}\"", pane_dirty.display())), "meta should include remaining pane dir");
+    assert!(
+        meta2.contains("panes_remaining"),
+        "meta should contain panes_remaining"
+    );
+    assert!(
+        meta2.contains(&format!("\"{}\"", pane_dirty.display())),
+        "meta should include remaining pane dir"
+    );
 }
 
 #[test]
@@ -146,9 +176,21 @@ fn test_fork_autoclean_deletes_old_clean_session() {
     let pane = base.join("pane-1");
     fs::create_dir_all(&pane).unwrap();
     init_repo(&pane);
-    let head = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane).output().unwrap().stdout).trim().to_string();
-    let old_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 40 * 86400;
+    let head = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
+    let old_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - 40 * 86400;
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
         old_secs,
@@ -168,7 +210,10 @@ fn test_fork_autoclean_deletes_old_clean_session() {
     aifo_coder::fork_autoclean_if_enabled();
     std::env::set_current_dir(old_cwd).unwrap();
 
-    assert!(!base.exists(), "old clean session should have been auto-removed");
+    assert!(
+        !base.exists(),
+        "old clean session should have been auto-removed"
+    );
 }
 
 #[test]
@@ -188,9 +233,21 @@ fn test_fork_list_json_stale_flag() {
     let pane = base.join("pane-1");
     fs::create_dir_all(&pane).unwrap();
     init_repo(&pane);
-    let head = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane).output().unwrap().stdout).trim().to_string();
-    let old_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 2 * 86400;
+    let head = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
+    let old_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - 2 * 86400;
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
         old_secs, head, pane.display()
@@ -201,15 +258,23 @@ fn test_fork_list_json_stale_flag() {
     // Run CLI and assert stale=true in JSON
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = std::process::Command::new(bin)
-        .args(["fork","list","--json"])
+        .args(["fork", "list", "--json"])
         .env("AIFO_CODER_FORK_LIST_STALE_DAYS", "1")
         .current_dir(&root)
         .output()
         .expect("run aifo-coder fork list --json");
     assert!(out.status.success(), "fork list should succeed");
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("\"sid\":\"sid-stale\""), "json must include sid-stale: {}", s);
-    assert!(s.contains("\"stale\":true"), "json must mark stale=true: {}", s);
+    assert!(
+        s.contains("\"sid\":\"sid-stale\""),
+        "json must include sid-stale: {}",
+        s
+    );
+    assert!(
+        s.contains("\"stale\":true"),
+        "json must mark stale=true: {}",
+        s
+    );
 }
 
 #[test]
@@ -230,8 +295,16 @@ fn test_fork_list_all_repos_json_and_env_requirement() {
     let pane_a = base_a.join("pane-1");
     fs::create_dir_all(&pane_a).unwrap();
     init_repo(&pane_a);
-    let head_a = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane_a).output().unwrap().stdout).trim().to_string();
+    let head_a = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_a)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
     let meta_a = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid_a}-1\"], \"layout\": \"tiled\" }}",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), head_a, pane_a.display()
@@ -248,8 +321,16 @@ fn test_fork_list_all_repos_json_and_env_requirement() {
     let pane_b = base_b.join("pane-1");
     fs::create_dir_all(&pane_b).unwrap();
     init_repo(&pane_b);
-    let head_b = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane_b).output().unwrap().stdout).trim().to_string();
+    let head_b = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_b)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
     let meta_b = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid_b}-1\"], \"layout\": \"tiled\" }}",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), head_b, pane_b.display()
@@ -260,23 +341,34 @@ fn test_fork_list_all_repos_json_and_env_requirement() {
     // Run CLI with --all-repos and WORKSPACE root set
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = std::process::Command::new(bin)
-        .args(["fork","list","--json","--all-repos"])
+        .args(["fork", "list", "--json", "--all-repos"])
         .env("AIFO_CODER_WORKSPACE_ROOT", &ws_path)
         .current_dir(&ws_path)
         .output()
         .expect("run aifo-coder fork list --json --all-repos");
     assert!(out.status.success(), "fork list --all-repos should succeed");
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("\"sid\":\"sid-a\""), "json must include sid-a: {}", s);
-    assert!(s.contains("\"sid\":\"sid-b\""), "json must include sid-b: {}", s);
+    assert!(
+        s.contains("\"sid\":\"sid-a\""),
+        "json must include sid-a: {}",
+        s
+    );
+    assert!(
+        s.contains("\"sid\":\"sid-b\""),
+        "json must include sid-b: {}",
+        s
+    );
 
     // Now run without workspace env and expect failure
     let out2 = std::process::Command::new(bin)
-        .args(["fork","list","--all-repos"])
+        .args(["fork", "list", "--all-repos"])
         .current_dir(&ws_path)
         .output()
         .expect("run aifo-coder fork list --all-repos");
-    assert!(!out2.status.success(), "fork list --all-repos without env should fail");
+    assert!(
+        !out2.status.success(),
+        "fork list --all-repos without env should fail"
+    );
 }
 
 #[test]
@@ -291,13 +383,17 @@ fn test_fork_list_json_empty_when_no_sessions() {
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = std::process::Command::new(bin)
-        .args(["fork","list","--json"])
+        .args(["fork", "list", "--json"])
         .current_dir(&root)
         .output()
         .expect("run aifo-coder fork list --json");
     assert!(out.status.success(), "fork list should succeed");
     let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert_eq!(s, "[]", "expected empty JSON array when no sessions, got: {}", s);
+    assert_eq!(
+        s, "[]",
+        "expected empty JSON array when no sessions, got: {}",
+        s
+    );
 }
 
 #[test]
@@ -316,8 +412,16 @@ fn test_fork_clean_json_plan_and_exec() {
     let pane = base.join("pane-1");
     fs::create_dir_all(&pane).unwrap();
     init_repo(&pane);
-    let head = String::from_utf8_lossy(&std::process::Command::new("git")
-        .args(["rev-parse","--verify","HEAD"]).current_dir(&pane).output().unwrap().stdout).trim().to_string();
+    let head = String::from_utf8_lossy(
+        &std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .trim()
+    .to_string();
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), head, pane.display()
@@ -328,24 +432,36 @@ fn test_fork_clean_json_plan_and_exec() {
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     // Dry-run plan JSON
     let out = std::process::Command::new(bin)
-        .args(["fork","clean","--session",sid,"--json","--dry-run"])
+        .args(["fork", "clean", "--session", sid, "--json", "--dry-run"])
         .current_dir(&root)
         .output()
         .expect("run aifo-coder fork clean --json --dry-run");
     assert!(out.status.success(), "clean dry-run should succeed");
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("\"plan\":true"), "plan JSON must include plan=true: {}", s);
-    assert!(s.contains("\"sid\":\"sid-plan\"") || s.contains("\"sid\":\"sid-plan\""), "plan JSON should include sid-plan: {}", s);
+    assert!(
+        s.contains("\"plan\":true"),
+        "plan JSON must include plan=true: {}",
+        s
+    );
+    assert!(
+        s.contains("\"sid\":\"sid-plan\"") || s.contains("\"sid\":\"sid-plan\""),
+        "plan JSON should include sid-plan: {}",
+        s
+    );
 
     // Execute JSON
     let out2 = std::process::Command::new(bin)
-        .args(["fork","clean","--session",sid,"--json","--yes"])
+        .args(["fork", "clean", "--session", sid, "--json", "--yes"])
         .current_dir(&root)
         .output()
         .expect("run aifo-coder fork clean --json --yes");
     assert!(out2.status.success(), "clean exec should succeed");
     let s2 = String::from_utf8_lossy(&out2.stdout);
-    assert!(s2.contains("\"deleted_sessions\":1"), "result JSON should report deleted_sessions=1: {}", s2);
+    assert!(
+        s2.contains("\"deleted_sessions\":1"),
+        "result JSON should report deleted_sessions=1: {}",
+        s2
+    );
     assert!(!base.exists(), "session directory should be deleted");
 }
 

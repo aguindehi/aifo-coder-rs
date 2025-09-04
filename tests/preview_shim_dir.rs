@@ -25,5 +25,9 @@ fn test_build_docker_cmd_includes_shim_dir_mount() {
     );
 
     // Restore env
-    if let Some(v) = old { std::env::set_var("AIFO_SHIM_DIR", v); } else { std::env::remove_var("AIFO_SHIM_DIR"); }
+    if let Some(v) = old {
+        std::env::set_var("AIFO_SHIM_DIR", v);
+    } else {
+        std::env::remove_var("AIFO_SHIM_DIR");
+    }
 }
