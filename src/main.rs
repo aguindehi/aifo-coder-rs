@@ -2369,7 +2369,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             for (k, v) in kv {
                 exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
             }
-            let mut child_cmd_words = vec!["aifo-coder".to_string()];
+            let launcher = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.canonicalize().ok())
+                .and_then(|p| p.to_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "./aifo-coder".to_string());
+            let mut child_cmd_words = vec![launcher];
             child_cmd_words.extend(child_args.clone());
             let child_joined = aifo_coder::shell_join(&child_cmd_words);
             format!("set -e; {}; exec {}", exports.join("; "), child_joined)
