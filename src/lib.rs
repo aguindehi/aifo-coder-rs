@@ -1274,8 +1274,11 @@ pub fn build_docker_cmd(
     let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
 
     // Container name/hostname
-    let container_name =
-        env::var("AIFO_CODER_CONTAINER_NAME").unwrap_or_else(|_| format!("{}-{}", prefix, agent));
+    // Default to a unique per-run container name to avoid conflicts across concurrent runs,
+    // while still honoring explicit overrides via environment variables.
+    let container_name = env::var("AIFO_CODER_CONTAINER_NAME").unwrap_or_else(|_| {
+        format!("{}-{}-{}", prefix, agent, create_session_id())
+    });
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
     let name_flags = vec![
         OsString::from("--name"),
