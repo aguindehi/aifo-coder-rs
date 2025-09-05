@@ -6,7 +6,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 use which::which;
 
 fn print_startup_banner() {
@@ -737,29 +737,28 @@ fn run_doctor(verbose: bool) {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_else(|| "0".to_string());
 
-        let _ = Command::new("docker")
-            .args([
-                "run",
-                "--rm",
-                "--user",
-                &format!("{uid}:{gid}"),
-                "-v",
-                &format!("{}:/workspace", pwd.display()),
-                "-w",
-                "/workspace",
-                "-e",
-                "HOME=/home/coder",
-                "-e",
-                "GNUPGHOME=/home/coder/.gnupg",
-                &image,
-                "sh",
-                "-lc",
-                &format!(
-                    "echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid",
-                    tmp = tmpname
-                ),
-            ])
-            .status();
+        // Run a short-lived container to validate workspace mount writeability; silence its output
+        let mut cmd = Command::new("docker");
+        cmd.arg("run")
+            .arg("--rm")
+            .arg("--user")
+            .arg(format!("{uid}:{gid}"))
+            .arg("-v")
+            .arg(format!("{}:/workspace", pwd.display()))
+            .arg("-w")
+            .arg("/workspace")
+            .arg("-e")
+            .arg("HOME=/home/coder")
+            .arg("-e")
+            .arg("GNUPGHOME=/home/coder/.gnupg")
+            .arg(&image)
+            .arg("sh")
+            .arg("-lc")
+            .arg(format!(
+                "echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid",
+                tmp = tmpname
+            ));
+        let _ = cmd.stdout(Stdio::null()).stderr(Stdio::null()).status();
 
         let host_file = pwd.join(&tmpname);
         let host_uid_file = pwd.join(format!("{tmp}.uid", tmp = tmpname));
@@ -790,25 +789,25 @@ fn run_doctor(verbose: bool) {
             let _ = fs::remove_file(&host_file);
             let _ = fs::remove_file(&host_uid_file);
         } else {
-            // Even if skipped/failed to create files, present a readiness line aligned with the first status column
+            // On failure, report clearly without polluting stderr with container logs
             let use_color = atty::is(atty::Stream::Stderr);
             let label_width: usize = 16;
             let path_col: usize = 44;
-            let yes_val = if use_color {
-                "\x1b[34;1myes\x1b[0m".to_string()
+            let no_val = if use_color {
+                "\x1b[34;1mno\x1b[0m".to_string()
             } else {
-                "yes".to_string()
+                "no".to_string()
             };
-            let status_plain = "✅ workspace ready".to_string();
+            let status_plain = "❌ workspace not writable".to_string();
             let status_colored = if use_color {
-                format!("\x1b[32m{}\x1b[0m", status_plain)
+                format!("\x1b[31m{}\x1b[0m", status_plain)
             } else {
                 status_plain
             };
             eprintln!(
                 "  {:label_width$} {:<path_col$} {}",
                 "workspace writable:",
-                yes_val,
+                no_val,
                 status_colored,
                 label_width = label_width,
                 path_col = path_col
@@ -2791,7 +2790,8 @@ fn main() -> ExitCode {
         }
     }
     // Optional auto-clean of stale fork sessions and stale notice (Phase 6)
-    if !matches!(cli.command, Agent::Fork { .. }) {
+    // Suppress stale notice here when running 'doctor' (doctor prints its own notice).
+    if !matches!(cli.command, Agent::Fork { .. }) && !matches!(cli.command, Agent::Doctor) {
         aifo_coder::fork_autoclean_if_enabled();
         // Stale sessions notice (Phase 6): print suggestions for old fork sessions on normal runs
         aifo_coder::fork_print_stale_notice();
