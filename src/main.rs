@@ -49,6 +49,113 @@ fn print_startup_banner() {
     println!();
 }
 
+#[cfg(test)]
+mod tests_main_cli_child_args {
+    use super::*;
+
+    fn make_cli_for_test() -> super::Cli {
+        super::Cli {
+            image: Some("example.com/org/agent:tag".to_string()),
+            toolchain: vec![super::ToolchainKind::Rust, super::ToolchainKind::Node],
+            toolchain_spec: vec!["python@3.12".to_string()],
+            toolchain_image: vec!["go=golang:1.22-bookworm".to_string()],
+            no_toolchain_cache: true,
+            toolchain_unix_socket: false,
+            toolchain_bootstrap: vec!["typescript=global".to_string()],
+            verbose: true,
+            flavor: Some(super::Flavor::Slim),
+            invalidate_registry_cache: false,
+            dry_run: true,
+            // fork flags that must be stripped from child args
+            fork: Some(3),
+            fork_include_dirty: true,
+            fork_dissociate: true,
+            fork_session_name: Some("ut-session".to_string()),
+            fork_layout: Some("even-h".to_string()),
+            fork_keep_on_failure: true,
+            command: super::Agent::Aider {
+                args: vec!["--help".to_string(), "--".to_string(), "extra".to_string()],
+            },
+        }
+    }
+
+    #[test]
+    fn test_fork_build_child_args_strips_fork_flags_and_preserves_agent_args() {
+        let cli = make_cli_for_test();
+        let args = super::fork_build_child_args(&cli);
+        // Must start with agent subcommand
+        assert!(
+            args.first().map(|s| s == "aider").unwrap_or(false),
+            "child args must begin with agent subcommand, got: {:?}",
+            args
+        );
+        // Must include some global flags we set
+        let joined = args.join(" ");
+        assert!(
+            joined.contains("--image example.com/org/agent:tag"),
+            "expected --image in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--toolchain rust") && joined.contains("--toolchain node"),
+            "expected --toolchain flags in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--toolchain-spec python@3.12"),
+            "expected --toolchain-spec in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--toolchain-image go=golang:1.22-bookworm"),
+            "expected --toolchain-image in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--no-toolchain-cache"),
+            "expected --no-toolchain-cache in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--flavor slim"),
+            "expected --flavor slim in child args: {}",
+            joined
+        );
+        assert!(
+            joined.contains("--dry-run"),
+            "expected --dry-run in child args: {}",
+            joined
+        );
+        // Must NOT contain any fork flags
+        for bad in [
+            "--fork ",
+            "--fork-include-dirty",
+            "--fork-dissociate",
+            "--fork-session-name",
+            "--fork-layout",
+            "--fork-keep-on-failure",
+        ] {
+            assert!(
+                !joined.contains(bad),
+                "fork flag leaked into child args: {} in {}",
+                bad,
+                joined
+            );
+        }
+        // Agent args should be preserved (note: we don't pass literal '--' through; arg list contains values)
+        assert!(
+            joined.contains("aider --help"),
+            "expected agent arg '--help' to be present: {}",
+            joined
+        );
+        assert!(
+            joined.contains("extra"),
+            "expected trailing agent arg to be present: {}",
+            joined
+        );
+    }
+}
+
 fn run_doctor(verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");

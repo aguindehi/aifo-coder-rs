@@ -6218,4 +6218,229 @@ mod tests {
         assert!(!base_old.exists(), "old session should be deleted");
         assert!(base_new.exists(), "recent session should remain");
     }
+
+    #[test]
+    fn test_fork_create_snapshot_on_empty_repo() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        // Create an untracked file; snapshot should still succeed by indexing working tree
+        std::fs::write(repo.join("a.txt"), "a\n").unwrap();
+        let sid = "empty";
+        let snap = fork_create_snapshot(repo, sid).expect("snapshot on empty repo");
+        assert_eq!(snap.len(), 40, "snapshot sha length");
+        let out = std::process::Command::new("git")
+            .args(["cat-file", "-t", &snap])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert_eq!(t, "commit", "snapshot object must be a commit");
+    }
+
+    #[test]
+    fn test_fork_clone_with_dissociate() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        // init repo with one commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+        std::fs::write(repo.join("f.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        // Determine branch
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+        // Clone with dissociate should succeed
+        let res =
+            fork_clone_and_checkout_panes(repo, "sid-dissoc", 1, &cur_branch, &base_label, true)
+                .expect("clone with --dissociate");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].0.exists());
+    }
+
+    #[test]
+    fn test_fork_autoclean_removes_only_clean_sessions() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        // Initialize base repo to ensure repo_root() detects it
+        init_repo(&root);
+
+        // Old clean session
+        let sid_clean = "sid-clean-old";
+        let base_clean = root.join(".aifo-coder").join("forks").join(sid_clean);
+        let pane_clean = base_clean.join("pane-1");
+        std::fs::create_dir_all(&pane_clean).unwrap();
+        init_repo(&pane_clean);
+        // Record base_commit_sha as current HEAD
+        let head_clean = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_clean)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        let old_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 40 * 86400;
+        std::fs::create_dir_all(&base_clean).unwrap();
+        let meta_clean = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            old_secs, head_clean, pane_clean.display(), sid = sid_clean
+        );
+        std::fs::write(base_clean.join(".meta.json"), meta_clean).unwrap();
+
+        // Old protected (ahead) session
+        let sid_prot = "sid-protected-old";
+        let base_prot = root.join(".aifo-coder").join("forks").join(sid_prot);
+        let pane_prot = base_prot.join("pane-1");
+        std::fs::create_dir_all(&pane_prot).unwrap();
+        init_repo(&pane_prot);
+        let head_prot = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_prot)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        std::fs::create_dir_all(&base_prot).unwrap();
+        let meta_prot = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            old_secs, head_prot, pane_prot.display(), sid = sid_prot
+        );
+        std::fs::write(base_prot.join(".meta.json"), meta_prot).unwrap();
+        // Make pane ahead of base_commit_sha
+        std::fs::write(pane_prot.join("new.txt"), "y\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane_prot)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "advance pane"])
+            .current_dir(&pane_prot)
+            .status()
+            .unwrap()
+            .success());
+
+        // Run autoclean with threshold 1 day
+        let old_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&root).unwrap();
+        let old_env1 = std::env::var("AIFO_CODER_FORK_AUTOCLEAN").ok();
+        let old_env2 = std::env::var("AIFO_CODER_FORK_STALE_DAYS").ok();
+        std::env::set_var("AIFO_CODER_FORK_AUTOCLEAN", "1");
+        std::env::set_var("AIFO_CODER_FORK_STALE_DAYS", "1");
+        fork_autoclean_if_enabled();
+        // Restore cwd and env
+        std::env::set_current_dir(old_cwd).ok();
+        if let Some(v) = old_env1 {
+            std::env::set_var("AIFO_CODER_FORK_AUTOCLEAN", v);
+        } else {
+            std::env::remove_var("AIFO_CODER_FORK_AUTOCLEAN");
+        }
+        if let Some(v) = old_env2 {
+            std::env::set_var("AIFO_CODER_FORK_STALE_DAYS", v);
+        } else {
+            std::env::remove_var("AIFO_CODER_FORK_STALE_DAYS");
+        }
+
+        assert!(
+            !base_clean.exists(),
+            "clean old session should have been deleted by autoclean"
+        );
+        assert!(
+            base_prot.exists(),
+            "protected old session should have been kept by autoclean"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_helpers_orient_and_builders() {
+        use crate::{fork_bash_inner_string, fork_ps_inner_string, wt_build_new_tab_args, wt_build_split_args, wt_orient_for_layout};
+        let agent = "aider";
+        let sid = "sidw";
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let pane_dir = tmp.path().join("p");
+        std::fs::create_dir_all(&pane_dir).unwrap();
+        let state_dir = tmp.path().join("s");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let child = vec!["aider".to_string(), "--help".to_string()];
+        let ps = fork_ps_inner_string(agent, sid, 1, &pane_dir, &state_dir, &child);
+        assert!(ps.contains("Set-Location '"), "ps inner should set location: {}", ps);
+        assert!(ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"), "ps inner should set env");
+        let bash = fork_bash_inner_string(agent, sid, 2, &pane_dir, &state_dir, &child);
+        assert!(bash.contains("cd "), "bash inner should cd");
+        assert!(bash.contains("export AIFO_CODER_SKIP_LOCK='1'"), "bash inner export env");
+        // wt orientation
+        assert_eq!(wt_orient_for_layout("even-h", 3), "-H");
+        assert_eq!(wt_orient_for_layout("even-v", 4), "-V");
+        // tiled alternates
+        let o2 = wt_orient_for_layout("tiled", 2);
+        let o3 = wt_orient_for_layout("tiled", 3);
+        assert!(o2 == "-H" || o2 == "-V");
+        assert!(o3 == "-H" || o3 == "-V");
+        // arg builders
+        let psbin = std::path::PathBuf::from("powershell.exe");
+        let inner = "cmds";
+        let newtab = wt_build_new_tab_args(&psbin, &pane_dir, inner);
+        assert_eq!(newtab[0], "wt");
+        assert_eq!(newtab[1], "new-tab");
+        let split = wt_build_split_args("-H", &psbin, &pane_dir, inner);
+        assert_eq!(split[1], "split-pane");
+        assert_eq!(split[2], "-H");
+    }
 }
