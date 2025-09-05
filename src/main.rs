@@ -2388,10 +2388,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .arg("-n")
                 .arg("aifo-fork")
                 .arg("-c")
-                .arg(pane1_dir)
-                .arg("sh")
-                .arg("-lc")
-                .arg(&inner);
+                .arg(pane1_dir);
             if cli.verbose {
                 let preview_new = vec![
                     "tmux".to_string(),
@@ -2403,9 +2400,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "aifo-fork".to_string(),
                     "-c".to_string(),
                     pane1_dir.display().to_string(),
-                    "sh".to_string(),
-                    "-lc".to_string(),
-                    inner.clone(),
                 ];
                 eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview_new));
             }
@@ -2548,16 +2542,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-            let inner = build_inner(i, &pane_state_dir);
             let mut cmd = Command::new(&tmux);
             cmd.arg("split-window")
                 .arg("-t")
                 .arg(format!("{}:0", &session_name))
                 .arg("-c")
-                .arg(pane_dir)
-                .arg("sh")
-                .arg("-lc")
-                .arg(&inner);
+                .arg(pane_dir);
             if cli.verbose {
                 let target = format!("{}:0", &session_name);
                 let preview_split = vec![
@@ -2567,9 +2557,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     target,
                     "-c".to_string(),
                     pane_dir.display().to_string(),
-                    "sh".to_string(),
-                    "-lc".to_string(),
-                    inner.clone(),
                 ];
                 eprintln!(
                     "aifo-coder: tmux: {}",
@@ -2706,6 +2693,36 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             );
         }
         let _ = sync.status();
+
+        // Start commands in each pane via tmux send-keys now that the layout is ready
+        for (idx, (_pane_dir, _b)) in clones.iter().enumerate() {
+            let i = idx + 1;
+            let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+            let inner = build_inner(i, &pane_state_dir);
+            let target = format!("{}:0.{}", &session_name, idx);
+            let shwrap = format!("sh -lc {}", aifo_coder::shell_escape(&inner));
+            let mut sk = Command::new(&tmux);
+            sk.arg("send-keys")
+                .arg("-t")
+                .arg(&target)
+                .arg(&shwrap)
+                .arg("C-m");
+            if cli.verbose {
+                let preview = vec![
+                    "tmux".to_string(),
+                    "send-keys".to_string(),
+                    "-t".to_string(),
+                    target.clone(),
+                    shwrap.clone(),
+                    "C-m".to_string(),
+                ];
+                eprintln!(
+                    "aifo-coder: tmux: {}",
+                    aifo_coder::shell_join(&preview)
+                );
+            }
+            let _ = sk.status();
+        }
 
         // Attach or switch
         let attach_cmd = if env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
