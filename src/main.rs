@@ -141,7 +141,19 @@ mod tests_main_cli_child_args {
                 joined
             );
         }
-        // Agent args should be preserved (note: we don't pass literal '--' through; arg list contains values)
+        // Agent args should be preserved; literal '--' boundary must be present and ordering intact
+        assert!(
+            args.contains(&"--".to_string()),
+            "expected literal '--' argument to be present in child args: {:?}",
+            args
+        );
+        let idx_boundary = args.iter().position(|s| s == "--");
+        let idx_extra = args.iter().position(|s| s == "extra");
+        assert!(
+            idx_boundary.is_some() && idx_extra.is_some() && idx_boundary < idx_extra,
+            "expected '--' to appear before trailing agent args, got: {:?}",
+            args
+        );
         assert!(
             joined.contains("aider --help"),
             "expected agent arg '--help' to be present: {}",

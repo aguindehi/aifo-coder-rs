@@ -1513,6 +1513,12 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
     }
 }
 
+/// Return true if the launcher should acquire a repository/user lock for this process.
+/// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
+pub fn should_acquire_lock() -> bool {
+    env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
+}
+
 pub fn create_session_id() -> String {
     // Compose a short, mostly-unique ID from time and pid without extra deps
     let now = SystemTime::now()
@@ -5213,6 +5219,74 @@ mod tests {
         );
         let g = shell_join(&go);
         assert!(!g.contains("aifo-go:/go"), "unexpected go volume: {}", g);
+    }
+
+    #[test]
+    fn test_should_acquire_lock_env() {
+        // Default: acquire
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+        assert!(should_acquire_lock(), "should acquire lock by default");
+        // Skip when set to "1"
+        std::env::set_var("AIFO_CODER_SKIP_LOCK", "1");
+        assert!(
+            !should_acquire_lock(),
+            "should not acquire lock when AIFO_CODER_SKIP_LOCK=1"
+        );
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_hashed_lock_path_diff_for_two_repos() {
+        // Create two separate repos and ensure their hashed XDG lock paths differ
+        let td = tempfile::tempdir().expect("tmpdir");
+        let ws = td.path().to_path_buf();
+        let old_xdg = std::env::var("XDG_RUNTIME_DIR").ok();
+        std::env::set_var("XDG_RUNTIME_DIR", &ws);
+
+        // repo A
+        let repo_a = ws.join("repo-a");
+        std::fs::create_dir_all(&repo_a).unwrap();
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&repo_a)
+            .status();
+        std::env::set_current_dir(&repo_a).unwrap();
+        let paths_a = candidate_lock_paths();
+        assert!(
+            paths_a.len() >= 2,
+            "expected at least two candidates for repo A"
+        );
+        let hashed_a = paths_a[1].clone();
+
+        // repo B
+        let repo_b = ws.join("repo-b");
+        std::fs::create_dir_all(&repo_b).unwrap();
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&repo_b)
+            .status();
+        std::env::set_current_dir(&repo_b).unwrap();
+        let paths_b = candidate_lock_paths();
+        assert!(
+            paths_b.len() >= 2,
+            "expected at least two candidates for repo B"
+        );
+        let hashed_b = paths_b[1].clone();
+
+        assert_ne!(
+            hashed_a, hashed_b,
+            "hashed runtime lock path should differ across repos: A={} B={}",
+            hashed_a.display(),
+            hashed_b.display()
+        );
+
+        // restore env/cwd
+        if let Some(v) = old_xdg {
+            std::env::set_var("XDG_RUNTIME_DIR", v);
+        } else {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
     }
 
     #[test]
