@@ -73,22 +73,22 @@ fn warn_if_tmp_workspace() {
             let use_color = atty::is(atty::Stream::Stderr);
             if use_color {
                 eprintln!(
-                    "\x1b[31m⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    "\x1b[31maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
                     s
                 );
             } else {
                 eprintln!(
-                    "⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).",
+                    "aifo-coder: warning: current workspace is under a temporary path ({}).",
                     s
                 );
             }
             eprintln!();
-            eprintln!("  On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
+            eprintln!("⚠️   On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
             eprintln!(
-                "  This can result in an empty or non-writable /workspace inside the container."
+                "     This can result in an empty or non-writable /workspace inside the container."
             );
             eprintln!(
-                "  Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+                "     Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
             );
             eprintln!();
         }
@@ -97,21 +97,21 @@ fn warn_if_tmp_workspace() {
             let use_color = atty::is(atty::Stream::Stderr);
             if use_color {
                 eprintln!(
-                    "\x1b[31m⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    "\x1b[31maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
                     s
                 );
             } else {
                 eprintln!(
-                    "⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).",
+                    "aifo-coder: warning: current workspace is under a temporary path ({}).",
                     s
                 );
             }
             eprintln!();
             eprintln!(
-                "  Some Docker setups do not share temporary folders reliably with containers."
+                "⚠️   Some Docker setups do not share temporary folders reliably with containers."
             );
             eprintln!(
-                "  You may see an empty or read-only /workspace. Move the project under your home directory and retry."
+                "     You may see an empty or read-only /workspace. Move the project under your home directory and retry."
             );
             eprintln!();
         }
