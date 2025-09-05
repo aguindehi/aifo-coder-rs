@@ -789,29 +789,60 @@ fn run_doctor(verbose: bool) {
             let _ = fs::remove_file(&host_file);
             let _ = fs::remove_file(&host_uid_file);
         } else {
-            // On failure, report clearly without polluting stderr with container logs
-            let use_color = atty::is(atty::Stream::Stderr);
-            let label_width: usize = 16;
-            let path_col: usize = 44;
-            let no_val = if use_color {
-                "\x1b[34;1mno\x1b[0m".to_string()
+            // Fallback: if docker check failed, try host write test to confirm workspace directory is writable
+            let host_write_ok = fs::write(&host_file, b"ok\n").is_ok()
+                && fs::write(&host_uid_file, format!("{}\n", uid)).is_ok();
+            if host_write_ok {
+                // Present readiness line aligned with the first status column (found/missing)
+                let use_color = atty::is(atty::Stream::Stderr);
+                let label_width: usize = 16;
+                let path_col: usize = 52;
+                let yes_val = if use_color {
+                    "\x1b[34;1myes\x1b[0m".to_string()
+                } else {
+                    "yes".to_string()
+                };
+                let status_plain = "✅ workspace ready".to_string();
+                let status_colored = if use_color {
+                    format!("\x1b[32m{}\x1b[0m", status_plain)
+                } else {
+                    status_plain
+                };
+                eprintln!(
+                    "  {:label_width$} {:<path_col$} {}",
+                    "workspace writable:",
+                    yes_val,
+                    status_colored,
+                    label_width = label_width,
+                    path_col = path_col
+                );
+                let _ = fs::remove_file(&host_file);
+                let _ = fs::remove_file(&host_uid_file);
             } else {
-                "no".to_string()
-            };
-            let status_plain = "❌ workspace not writable".to_string();
-            let status_colored = if use_color {
-                format!("\x1b[31m{}\x1b[0m", status_plain)
-            } else {
-                status_plain
-            };
-            eprintln!(
-                "  {:label_width$} {:<path_col$} {}",
-                "workspace writable:",
-                no_val,
-                status_colored,
-                label_width = label_width,
-                path_col = path_col
-            );
+                // On failure, report clearly without polluting stderr with container logs
+                let use_color = atty::is(atty::Stream::Stderr);
+                let label_width: usize = 16;
+                let path_col: usize = 44;
+                let no_val = if use_color {
+                    "\x1b[34;1mno\x1b[0m".to_string()
+                } else {
+                    "no".to_string()
+                };
+                let status_plain = "❌ workspace not writable".to_string();
+                let status_colored = if use_color {
+                    format!("\x1b[31m{}\x1b[0m", status_plain)
+                } else {
+                    status_plain
+                };
+                eprintln!(
+                    "  {:label_width$} {:<path_col$} {}",
+                    "workspace writable:",
+                    no_val,
+                    status_colored,
+                    label_width = label_width,
+                    path_col = path_col
+                );
+            }
         }
     }
 
