@@ -1,5 +1,6 @@
 use std::process::Command;
 
+#[cfg(windows)]
 fn which(bin: &str) -> bool {
     Command::new("where")
         .arg(bin)
@@ -10,6 +11,7 @@ fn which(bin: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(windows)]
 fn init_repo(dir: &std::path::Path) {
     let _ = std::process::Command::new("git")
         .arg("init")

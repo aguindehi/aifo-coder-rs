@@ -5113,8 +5113,17 @@ mod tests {
         // Unset repo-related envs to avoid confusing repo detection
         let paths = candidate_lock_paths();
         let expected = td.path().join(".aifo-coder.lock");
+        // On macOS, /var is often a symlink to /private/var. Canonicalize parent dirs for comparison.
+        let expected_dir_canon = std::fs::canonicalize(td.path()).unwrap_or_else(|_| td.path().to_path_buf());
+        let found = paths.iter().any(|p| {
+            p.file_name().map(|n| n == ".aifo-coder.lock").unwrap_or(false)
+                && p.parent()
+                    .and_then(|d| std::fs::canonicalize(d).ok())
+                    .map(|d| d == expected_dir_canon)
+                    .unwrap_or(false)
+        });
         assert!(
-            paths.iter().any(|p| p == &expected),
+            found,
             "candidate_lock_paths missing expected CWD lock path: {:?} in {:?}",
             expected,
             paths
