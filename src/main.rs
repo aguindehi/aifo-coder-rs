@@ -49,6 +49,55 @@ fn print_startup_banner() {
     println!();
 }
 
+fn warn_if_tmp_workspace() {
+    if std::env::var("AIFO_CODER_SUPPRESS_TMP_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return;
+    }
+    let pwd = match std::env::current_dir() {
+        Ok(p) => std::fs::canonicalize(&p).unwrap_or(p),
+        Err(_) => return,
+    };
+    let s = pwd.display().to_string();
+
+    if cfg!(target_os = "macos") {
+        if s == "/tmp"
+            || s.starts_with("/tmp/")
+            || s == "/private/tmp"
+            || s.starts_with("/private/tmp/")
+            || s.starts_with("/private/var/folders/")
+        {
+            eprintln!(
+                "aifo-coder: warning: current workspace is under a temporary path ({}).",
+                s
+            );
+            eprintln!("  On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
+            eprintln!(
+                "  This can result in an empty or non-writable /workspace inside the container."
+            );
+            eprintln!(
+                "  Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+            );
+        }
+    } else {
+        if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
+            eprintln!(
+                "aifo-coder: warning: current workspace is under a temporary path ({}).",
+                s
+            );
+            eprintln!(
+                "  Some Docker setups do not share temporary folders reliably with containers."
+            );
+            eprintln!(
+                "  You may see an empty or read-only /workspace. Move the project under your home directory and retry."
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests_main_cli_child_args {
 
@@ -2885,10 +2934,12 @@ fn main() -> ExitCode {
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
+        warn_if_tmp_workspace();
         run_doctor(cli.verbose);
         return ExitCode::from(0);
     } else if let Agent::Images = &cli.command {
         print_startup_banner();
+        warn_if_tmp_workspace();
         eprintln!("aifo-coder images");
         eprintln!();
 
@@ -2953,6 +3004,7 @@ fn main() -> ExitCode {
         return ExitCode::from(0);
     } else if let Agent::ToolchainCacheClear = &cli.command {
         print_startup_banner();
+        warn_if_tmp_workspace();
         match aifo_coder::toolchain_purge_caches(cli.verbose) {
             Ok(()) => {
                 eprintln!("aifo-coder: purged toolchain cache volumes.");
@@ -2971,6 +3023,7 @@ fn main() -> ExitCode {
     } = &cli.command
     {
         print_startup_banner();
+        warn_if_tmp_workspace();
         if cli.verbose {
             eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
             if let Some(img) = image.as_deref() {
@@ -3039,6 +3092,7 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
+    warn_if_tmp_workspace();
 
     // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
     let mut tc_session_id: Option<String> = None;
