@@ -70,10 +70,18 @@ fn warn_if_tmp_workspace() {
             || s.starts_with("/private/tmp/")
             || s.starts_with("/private/var/folders/")
         {
-            eprintln!(
-                "aifo-coder: warning: current workspace is under a temporary path ({}).",
-                s
-            );
+            let use_color = atty::is(atty::Stream::Stderr);
+            if use_color {
+                eprintln!(
+                    "\x1b[31m⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    s
+                );
+            } else {
+                eprintln!(
+                    "⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).",
+                    s
+                );
+            }
             eprintln!();
             eprintln!("  On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
             eprintln!(
@@ -86,10 +94,18 @@ fn warn_if_tmp_workspace() {
         }
     } else {
         if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
-            eprintln!(
-                "aifo-coder: warning: current workspace is under a temporary path ({}).",
-                s
-            );
+            let use_color = atty::is(atty::Stream::Stderr);
+            if use_color {
+                eprintln!(
+                    "\x1b[31m⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    s
+                );
+            } else {
+                eprintln!(
+                    "⚠️ aifo-coder: warning: current workspace is under a temporary path ({}).",
+                    s
+                );
+            }
             eprintln!();
             eprintln!(
                 "  Some Docker setups do not share temporary folders reliably with containers."
