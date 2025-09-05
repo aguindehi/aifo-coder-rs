@@ -5105,6 +5105,24 @@ mod tests {
     }
 
     #[test]
+    fn test_candidate_lock_paths_includes_cwd_lock_outside_repo() {
+        // In a non-repo directory, ensure CWD/.aifo-coder.lock appears among legacy candidates
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old_cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(td.path()).expect("chdir");
+        // Unset repo-related envs to avoid confusing repo detection
+        let paths = candidate_lock_paths();
+        let expected = td.path().join(".aifo-coder.lock");
+        assert!(
+            paths.iter().any(|p| p == &expected),
+            "candidate_lock_paths missing expected CWD lock path: {:?} in {:?}",
+            expected,
+            paths
+        );
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[test]
     fn test_parse_form_urlencoded_empty_and_missing_values() {
         let pairs = parse_form_urlencoded("a=1&b=&c");
         assert!(
