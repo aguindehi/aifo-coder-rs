@@ -73,7 +73,7 @@ fn warn_if_tmp_workspace() {
             let use_color = atty::is(atty::Stream::Stderr);
             if use_color {
                 eprintln!(
-                    "\x1b[31maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    "\x1b[31;1maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
                     s
                 );
             } else {
@@ -97,7 +97,7 @@ fn warn_if_tmp_workspace() {
             let use_color = atty::is(atty::Stream::Stderr);
             if use_color {
                 eprintln!(
-                    "\x1b[31maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
+                    "\x1b[31;1maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
                     s
                 );
             } else {
