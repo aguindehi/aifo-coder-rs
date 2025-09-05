@@ -1841,7 +1841,10 @@ pub fn toolchain_run(
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
-    let session_id = create_session_id();
+    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| create_session_id());
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
@@ -1870,26 +1873,55 @@ pub fn toolchain_run(
     }
 
     if !dry_run {
-        let mut run_cmd = Command::new(&runtime);
-        for a in &run_preview_args[1..] {
-            run_cmd.arg(a);
-        }
-        if !verbose {
-            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        }
-        let status = run_cmd
+        // If a sidecar with this name already exists, reuse it (another pane may have started it)
+        let exists = Command::new(&runtime)
+            .arg("inspect")
+            .arg(&name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
-            .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
-        if !status.success() {
-            // Cleanup network
-            remove_network(&runtime, &net_name, verbose);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "sidecar container failed to start (exit: {:?})",
-                    status.code()
-                ),
-            ));
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            let mut run_cmd = Command::new(&runtime);
+            for a in &run_preview_args[1..] {
+                run_cmd.arg(a);
+            }
+            if !verbose {
+                run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+            }
+            let status = run_cmd
+                .status()
+                .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+            if !status.success() {
+                // Race-safe fallback: consider success if the container exists now (started by a peer)
+                let mut exists_after = false;
+                for _ in 0..5 {
+                    exists_after = Command::new(&runtime)
+                        .arg("inspect")
+                        .arg(&name)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    if exists_after {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !exists_after {
+                    // Cleanup network if container didn't start
+                    remove_network(&runtime, &net_name, verbose);
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "sidecar container failed to start (exit: {:?})",
+                            status.code()
+                        ),
+                    ));
+                }
+            }
         }
     }
 
@@ -2401,7 +2433,10 @@ pub fn toolchain_start_session(
     #[cfg(not(unix))]
     let (_uid, _gid) = (0u32, 0u32);
 
-    let session_id = create_session_id();
+    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| create_session_id());
     let net_name = sidecar_network_name(&session_id);
     create_network_if_possible(&runtime, &net_name, verbose);
 
@@ -2429,22 +2464,51 @@ pub fn toolchain_start_session(
         if verbose {
             eprintln!("aifo-coder: docker: {}", shell_join(&args));
         }
-        let mut run_cmd = Command::new(&runtime);
-        for a in &args[1..] {
-            run_cmd.arg(a);
-        }
-        if !verbose {
-            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        }
-        let st = run_cmd
+        // If a sidecar with this name already exists, reuse it (another pane may have started it)
+        let exists = Command::new(&runtime)
+            .arg("inspect")
+            .arg(&name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
-            .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
-        if !st.success() {
-            remove_network(&runtime, &net_name, verbose);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "failed to start one or more sidecars",
-            ));
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            let mut run_cmd = Command::new(&runtime);
+            for a in &args[1..] {
+                run_cmd.arg(a);
+            }
+            if !verbose {
+                run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+            }
+            let st = run_cmd
+                .status()
+                .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+            if !st.success() {
+                // Race-safe fallback: if the container exists now, proceed; otherwise fail
+                let mut exists_after = false;
+                for _ in 0..5 {
+                    exists_after = Command::new(&runtime)
+                        .arg("inspect")
+                        .arg(&name)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    if exists_after {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !exists_after {
+                    remove_network(&runtime, &net_name, verbose);
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "failed to start one or more sidecars",
+                    ));
+                }
+            }
         }
     }
     Ok(session_id)

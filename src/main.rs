@@ -3354,7 +3354,14 @@ fn main() -> ExitCode {
                 let _ = h.join();
             }
             if let Some(ref sid) = tc_session_id {
-                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+                // In fork panes, sidecars may be shared across panes; defer cleanup to user (fork clean)
+                if std::env::var("AIFO_CODER_FORK_SESSION")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+                    .is_none()
+                {
+                    aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+                }
             }
 
             ExitCode::from(status.code().unwrap_or(1) as u8)
@@ -3369,7 +3376,14 @@ fn main() -> ExitCode {
                 let _ = h.join();
             }
             if let Some(ref sid) = tc_session_id {
-                aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+                // In fork panes, sidecars may be shared across panes; defer cleanup to user (fork clean)
+                if std::env::var("AIFO_CODER_FORK_SESSION")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+                    .is_none()
+                {
+                    aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
+                }
             }
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
