@@ -993,7 +993,10 @@ pub fn build_docker_cmd(
         vec!["-i"]
     };
 
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     // UID/GID mapping
     #[cfg(unix)]
@@ -1817,7 +1820,10 @@ pub fn toolchain_run(
     dry_run: bool,
 ) -> io::Result<i32> {
     let runtime = container_runtime_path()?;
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     #[cfg(unix)]
     let uid: u32 = u32::from(getuid());
@@ -2380,7 +2386,10 @@ pub fn toolchain_start_session(
     verbose: bool,
 ) -> io::Result<String> {
     let runtime = container_runtime_path()?;
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     #[cfg(unix)]
     let uid: u32 = u32::from(getuid());

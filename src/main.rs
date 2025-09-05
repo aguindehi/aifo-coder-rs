@@ -720,7 +720,10 @@ fn run_doctor(verbose: bool) {
                 .unwrap()
                 .as_secs()
         );
-        let pwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let pwd = match std::env::current_dir() {
+            Ok(p) => std::fs::canonicalize(&p).unwrap_or(p),
+            Err(_) => PathBuf::from("."),
+        };
         let uid = Command::new("id")
             .arg("-u")
             .output()
