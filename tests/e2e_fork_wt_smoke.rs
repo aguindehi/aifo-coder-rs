@@ -1,3 +1,4 @@
+#[cfg(windows)]
 use std::process::Command;
 
 #[cfg(windows)]
