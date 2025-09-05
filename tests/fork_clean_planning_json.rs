@@ -114,6 +114,24 @@ fn test_fork_clean_planning_json_and_execution_summary() {
         s
     );
 
+    // Dry-run planning JSON with --keep-dirty should indicate will_delete_session=false
+    let out_kd = Command::new(bin)
+        .args(["fork", "clean", "--session", sid, "--keep-dirty", "--dry-run", "--json"])
+        .current_dir(&root)
+        .output()
+        .expect("run aifo-coder fork clean planning json keep-dirty");
+    assert!(
+        out_kd.status.success(),
+        "planning json with --keep-dirty should succeed; stderr={}",
+        String::from_utf8_lossy(&out_kd.stderr)
+    );
+    let s_kd = String::from_utf8_lossy(&out_kd.stdout);
+    assert!(
+        s_kd.contains("\"will_delete_session\":false"),
+        "keep-dirty plan should NOT delete whole session: {}",
+        s_kd
+    );
+
     // Executed JSON summary with --force
     let out2 = Command::new(bin)
         .args(["fork", "clean", "--session", sid, "--force", "--yes", "--json"])

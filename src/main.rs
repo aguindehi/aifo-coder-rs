@@ -154,6 +154,12 @@ mod tests_main_cli_child_args {
             "expected '--' to appear before trailing agent args, got: {:?}",
             args
         );
+        let dashdash_count = args.iter().filter(|s| s.as_str() == "--").count();
+        assert_eq!(
+            dashdash_count, 1,
+            "expected exactly one '--' token, got: {:?}",
+            args
+        );
         assert!(
             joined.contains("aider --help"),
             "expected agent arg '--help' to be present: {}",
