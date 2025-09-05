@@ -74,6 +74,7 @@ fn warn_if_tmp_workspace() {
                 "aifo-coder: warning: current workspace is under a temporary path ({}).",
                 s
             );
+            eprintln!();
             eprintln!("  On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
             eprintln!(
                 "  This can result in an empty or non-writable /workspace inside the container."
@@ -81,6 +82,7 @@ fn warn_if_tmp_workspace() {
             eprintln!(
                 "  Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
             );
+            eprintln!();
         }
     } else {
         if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
@@ -88,12 +90,14 @@ fn warn_if_tmp_workspace() {
                 "aifo-coder: warning: current workspace is under a temporary path ({}).",
                 s
             );
+            eprintln!();
             eprintln!(
                 "  Some Docker setups do not share temporary folders reliably with containers."
             );
             eprintln!(
                 "  You may see an empty or read-only /workspace. Move the project under your home directory and retry."
             );
+            eprintln!();
         }
     }
 }
