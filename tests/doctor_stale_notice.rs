@@ -80,8 +80,8 @@ fn test_doctor_prints_stale_notice_and_status() {
         err
     );
     assert!(
-        err.contains("implemented: base + 1-7 (v4)"),
-        "doctor stderr should report phase status 1-7 implemented, got:\n{}",
+        err.contains("Found 1 old fork sessions (oldest 10d). Consider: aifo-coder fork clean --older-than 1"),
+        "doctor stderr should contain stale notice with threshold and suggestion, got:\n{}",
         err
     );
 }
