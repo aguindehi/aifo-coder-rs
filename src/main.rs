@@ -51,7 +51,6 @@ fn print_startup_banner() {
 
 #[cfg(test)]
 mod tests_main_cli_child_args {
-    use super::*;
 
     fn make_cli_for_test() -> super::Cli {
         super::Cli {
@@ -83,10 +82,10 @@ mod tests_main_cli_child_args {
     fn test_fork_build_child_args_strips_fork_flags_and_preserves_agent_args() {
         let cli = make_cli_for_test();
         let args = super::fork_build_child_args(&cli);
-        // Must start with agent subcommand
+        // Must contain agent subcommand (root flags precede it)
         assert!(
-            args.first().map(|s| s == "aider").unwrap_or(false),
-            "child args must begin with agent subcommand, got: {:?}",
+            args.iter().any(|s| s == "aider"),
+            "child args must contain agent subcommand, got: {:?}",
             args
         );
         // Must include some global flags we set
