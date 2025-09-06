@@ -3,12 +3,14 @@
 .crush*
 .codex*
 .env
-.DS_Store
+.aifo-coder.lock
+.aifo-coder/**
 .buildx-cache
+.DS_Store
 aifo-coder.cdx.*
 build.*
-build
+build/**
 dist
 ISSUES
-/target
+target/**
 Cargo.lock

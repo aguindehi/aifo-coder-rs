@@ -1444,8 +1444,38 @@ pub fn build_docker_cmd(
     Ok((cmd, preview))
 }
 
+/// Repository/user-scoped lock guard that removes the lock file on drop.
+#[derive(Debug)]
+pub struct RepoLock {
+    file: File,
+    path: PathBuf,
+}
+
+impl Drop for RepoLock {
+    fn drop(&mut self) {
+        // Best-effort unlock; ignore errors
+        let _ = self.file.unlock();
+
+        // Try immediate removal; if it fails (e.g., Windows timing), retry briefly
+        let path = self.path.clone();
+        if fs::remove_file(&path).is_err() {
+            std::thread::spawn(move || {
+                for _ in 0..10 {
+                    if !path.exists() {
+                        break;
+                    }
+                    if fs::remove_file(&path).is_ok() {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            });
+        }
+    }
+}
+
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
-pub fn acquire_lock() -> io::Result<File> {
+pub fn acquire_lock() -> io::Result<RepoLock> {
     let paths = candidate_lock_paths();
     let mut last_err: Option<io::Error> = None;
 
@@ -1462,7 +1492,7 @@ pub fn acquire_lock() -> io::Result<File> {
         {
             Ok(f) => match f.try_lock_exclusive() {
                 Ok(_) => {
-                    return Ok(f);
+                    return Ok(RepoLock { file: f, path: p.clone() });
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     return Err(io::Error::new(
@@ -1497,7 +1527,7 @@ pub fn acquire_lock() -> io::Result<File> {
 }
 
 /// Acquire a lock at a specific path (helper for tests).
-pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
+pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1508,7 +1538,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
         .open(p)
     {
         Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(f),
+            Ok(_) => Ok(RepoLock { file: f, path: p.to_path_buf() }),
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Another coding agent is already running (lock held). Please try again later.",
