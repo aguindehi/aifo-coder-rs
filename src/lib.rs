@@ -4344,6 +4344,8 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                 // count all panes removed and the session
                 deleted_panes_count += panes.len();
                 deleted_sessions_count += 1;
+                // Stop toolchain sidecars and remove session network (best-effort)
+                toolchain_cleanup_session(&sid, false);
                 let _ = fs::remove_dir_all(sd);
             }
             continue;
@@ -4367,6 +4369,8 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     println!("DRY-RUN: rmdir {}", sd.display());
                 } else {
                     deleted_sessions_count += 1;
+                    // Stop toolchain sidecars and remove session network (best-effort)
+                    toolchain_cleanup_session(&sid, false);
                     let _ = fs::remove_dir_all(sd);
                 }
             } else {
@@ -4460,6 +4464,8 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             } else {
                 deleted_panes_count += panes.len();
                 deleted_sessions_count += 1;
+                // Stop toolchain sidecars and remove session network (best-effort)
+                toolchain_cleanup_session(&sid, false);
                 let _ = fs::remove_dir_all(sd);
             }
         }
