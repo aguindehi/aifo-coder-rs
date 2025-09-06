@@ -4895,17 +4895,32 @@ pub fn fork_merge_branches(
         return Ok(());
     }
 
-    // 2) Octopus merge: preflight clean working tree
-    let dirty = Command::new("git")
+    // 2) Octopus merge: preflight clean working tree (ignore .aifo-coder/ artifacts)
+    let dirty = match Command::new("git")
         .arg("-C")
         .arg(repo_root)
         .arg("status")
         .arg("--porcelain=v1")
         .arg("-uall")
         .output()
-        .ok()
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(true);
+    {
+        Ok(o) => {
+            if !o.status.success() {
+                true
+            } else {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.lines().any(|line| {
+                    // Lines are "XY <path>" or "?? <path>"
+                    let path = if line.len() > 3 { &line[3..] } else { "" };
+                    let ignore = path == ".aifo-coder"
+                        || path.starts_with(".aifo-coder/")
+                        || path.starts_with(".aifo-coder\\");
+                    !ignore && !path.is_empty()
+                })
+            }
+        }
+        Err(_) => true,
+    };
     if dirty {
         return Err(io::Error::new(
             io::ErrorKind::Other,

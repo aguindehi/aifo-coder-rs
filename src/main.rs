@@ -2568,6 +2568,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                     }
+                    if split_failed {
+                        eprintln!("aifo-coder: warning: one or more Windows Terminal panes failed to open.");
+                    }
 
                     println!();
                     println!(
