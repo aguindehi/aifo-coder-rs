@@ -1119,7 +1119,7 @@ struct Cli {
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
-    /// Post-fork merging strategy to apply after all panes exit
+    /// Post-fork merging strategy to apply after all panes exit [none|fetch|octopus]
     #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
@@ -3315,7 +3315,7 @@ enum ForkCmd {
         /// Session id to merge
         #[arg(long = "session")]
         session: String,
-        /// Strategy: fetch or octopus
+        /// Strategy: none|fetch|octopus
         #[arg(long = "strategy", value_enum)]
         strategy: aifo_coder::MergingStrategy,
         /// Print what would be done without modifying
