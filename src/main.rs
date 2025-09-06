@@ -246,7 +246,7 @@ mod tests_main_cli_child_args {
             fork_keep_on_failure: true,
             fork_merging_strategy: aifo_coder::MergingStrategy::None,
             fork_merging_autoclean: false,
-            color: aifo_coder::ColorMode::Auto,
+            color: Some(aifo_coder::ColorMode::Auto),
             command: super::Agent::Aider {
                 args: vec!["--help".to_string(), "--".to_string(), "extra".to_string()],
             },
@@ -1099,8 +1099,8 @@ struct Cli {
     dry_run: bool,
 
     /// Colorize output: auto|always|never
-    #[arg(long = "color", value_enum, default_value = "auto")]
-    color: aifo_coder::ColorMode,
+    #[arg(long = "color", value_enum)]
+    color: Option<aifo_coder::ColorMode>,
 
     /// Fork mode: create N panes (N>=2) in tmux/Windows Terminal with cloned workspaces
     #[arg(long)]
@@ -3590,7 +3590,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     aifo_coder::MergingStrategy::Fetch => "fetch",
                     aifo_coder::MergingStrategy::Octopus => "octopus",
                 };
-                eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    eprintln!(
+                        "{}",
+                        aifo_coder::paint(
+                            use_err,
+                            "\x1b[36;1m",
+                            &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                        )
+                    );
+                }
                 match aifo_coder::fork_merge_branches_by_session(
                     &repo_root,
                     &sid,
@@ -3785,8 +3795,10 @@ fn main() -> ExitCode {
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
-    // Configure color mode as early as possible
-    aifo_coder::set_color_mode(cli.color);
+    // Configure color mode as early as possible (only when explicitly provided on CLI)
+    if let Some(mode) = cli.color {
+        aifo_coder::set_color_mode(mode);
+    }
 
     // Optional: invalidate on-disk registry cache before any probes
     if cli.invalidate_registry_cache {
