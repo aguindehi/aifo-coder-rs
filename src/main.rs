@@ -1143,7 +1143,7 @@ struct Cli {
     fork_keep_on_failure: bool,
 
     /// Post-fork merge strategy to apply after all panes exit (default: octopus)
-    #[arg(long = "fork-merge-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::Octopus)]
+    #[arg(long = "fork-merge-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::Octopus, hide_default_value = true)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
     /// Disable automatic disposal of the fork session after a successful octopus merge (default: enabled)
