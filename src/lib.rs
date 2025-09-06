@@ -5122,12 +5122,74 @@ pub fn fork_merge_branches(
         }
     }
 
-    // Compose a detailed octopus merge message with summaries of each branch
+    // Compose a detailed octopus merge message with a one-line summary and per-branch sections
     let mut merge_message = String::new();
+
+    // Build one-line summary from commit subjects across branches
+    let mut summary_parts: Vec<String> = Vec::new();
+    for (_p, br) in &pane_branches {
+        let subj_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        if let Some(o) = subj_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                for s in body.lines() {
+                    let mut t = s.trim().to_string();
+                    if t.is_empty() {
+                        continue;
+                    }
+                    // Strip common conventional commit prefixes (feat:, fix:, test:, etc.)
+                    if let Some(pos) = t.find(':') {
+                        let (prefix, rest) = t.split_at(pos);
+                        let pref = prefix.to_ascii_lowercase();
+                        if [
+                            "feat", "fix", "docs", "style", "refactor", "perf", "test", "chore",
+                            "build", "ci", "revert",
+                        ]
+                        .contains(&pref.as_str())
+                        {
+                            t = rest.trim_start_matches(':').trim().to_string();
+                        }
+                    }
+                    // Normalize whitespace
+                    t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if t.is_empty() {
+                        continue;
+                    }
+                    // De-duplicate case-insensitively
+                    if !summary_parts.iter().any(|e| e.eq_ignore_ascii_case(&t)) {
+                        summary_parts.push(t);
+                    }
+                }
+            }
+        }
+    }
+    // Truncate overly long summary for the first line
+    let mut summary_line = if summary_parts.is_empty() {
+        format!("Octopus merge of {} branch(es)", pane_branches.len())
+    } else {
+        let joined = summary_parts.join(" / ");
+        if joined.len() > 160 {
+            format!("{} …", &joined[..160].trim_end())
+        } else {
+            joined
+        }
+    };
+    if !summary_line.to_ascii_lowercase().starts_with("octopus merge") {
+        summary_line = format!("Octopus merge: {}", summary_line);
+    }
     merge_message.push_str(&format!(
-        "Octopus merge for session {}\n\nBranch summaries relative to {}:\n",
-        sid, base_ref_or_sha
+        "{}\n\nBranch summaries relative to {}:\n",
+        summary_line, base_ref_or_sha
     ));
+
     for (_p, br) in &pane_branches {
         // Collect commit subjects relative to the base (skip merge commits)
         let log_out = Command::new("git")
