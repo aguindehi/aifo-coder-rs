@@ -321,7 +321,7 @@ mod tests_main_cli_child_args {
             "--fork-layout",
             "--fork-keep-on-failure",
             "--fork-merging-strategy",
-            "--fork-merge-autoclean",
+            "--fork-merge-no-autoclean",
         ] {
             assert!(
                 !joined.contains(bad),
@@ -1146,8 +1146,8 @@ struct Cli {
     #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
-    /// Automatically dispose the fork session after a successful octopus merge
-    #[arg(long = "fork-merge-autoclean", default_value_t = false)]
+    /// Disable automatic disposal of the fork session after a successful octopus merge (default: enabled)
+    #[arg(long = "fork-merge-no-autoclean", default_value_t = true, action = clap::ArgAction::SetFalse)]
     fork_merging_autoclean: bool,
 
     #[command(subcommand)]
