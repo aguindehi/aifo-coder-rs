@@ -2351,6 +2351,32 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     ) {
                         Ok(()) => {
                             eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
+                                && cli.fork_merging_autoclean
+                                && !cli.dry_run
+                            {
+                                eprintln!(
+                                    "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                    sid
+                                );
+                                let opts = aifo_coder::ForkCleanOpts {
+                                    session: Some(sid.clone()),
+                                    older_than_days: None,
+                                    all: false,
+                                    dry_run: false,
+                                    yes: true,
+                                    force: true,
+                                    keep_dirty: false,
+                                    json: false,
+                                };
+                                match aifo_coder::fork_clean(&repo_root, &opts) {
+                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
+                                    Err(e) => eprintln!(
+                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                        sid, e
+                                    ),
+                                }
+                            }
                         }
                         Err(e) => {
                             eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
@@ -2490,6 +2516,32 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     ) {
                         Ok(()) => {
                             eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
+                                && cli.fork_merging_autoclean
+                                && !cli.dry_run
+                            {
+                                eprintln!(
+                                    "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                    sid
+                                );
+                                let opts = aifo_coder::ForkCleanOpts {
+                                    session: Some(sid.clone()),
+                                    older_than_days: None,
+                                    all: false,
+                                    dry_run: false,
+                                    yes: true,
+                                    force: true,
+                                    keep_dirty: false,
+                                    json: false,
+                                };
+                                match aifo_coder::fork_clean(&repo_root, &opts) {
+                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
+                                    Err(e) => eprintln!(
+                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                        sid, e
+                                    ),
+                                }
+                            }
                         }
                         Err(e) => {
                             eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
