@@ -1203,7 +1203,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .output()
         {
             if !out.stdout.is_empty() {
-                eprintln!("aifo-coder: note: working tree has uncommitted changes; they will NOT be included. Re-run with --fork-include-dirty to include them.");
+                let use_color = atty::is(atty::Stream::Stderr);
+                if use_color {
+                    eprintln!("\x1b[33;1maifo-coder:\x1b[0m \x1b[33mnote:\x1b[0m working tree has uncommitted changes; they will NOT be included. Re-run with \x1b[1m--fork-include-dirty\x1b[0m to include them.");
+                } else {
+                    eprintln!("aifo-coder: note: working tree has uncommitted changes; they will NOT be included. Re-run with --fork-include-dirty to include them.");
+                }
             }
         }
     }
@@ -1245,19 +1250,47 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     let session_dir = aifo_coder::fork_session_dir(&repo_root, &sid);
 
     // Summary header
-    println!(
-        "aifo-coder: fork session {} on base {} ({})",
-        sid, base_label, base_ref_or_sha
-    );
+    let use_color_out = atty::is(atty::Stream::Stdout);
+    if use_color_out {
+        println!(
+            "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m on base \x1b[34;1m{}\x1b[0m (\x1b[34m{}\x1b[0m)",
+            sid, base_label, base_ref_or_sha
+        );
+    } else {
+        println!(
+            "aifo-coder: fork session {} on base {} ({})",
+            sid, base_label, base_ref_or_sha
+        );
+    }
     println!();
-    println!("created {} clones under {}", panes, session_dir.display());
+    if use_color_out {
+        println!(
+            "created \x1b[36;1m{}\x1b[0m clones under \x1b[34;1m{}\x1b[0m",
+            panes,
+            session_dir.display()
+        );
+    } else {
+        println!("created {} clones under {}", panes, session_dir.display());
+    }
     if let Some(ref snap) = snapshot_sha {
-        println!("included dirty working tree via snapshot {}", snap);
+        if use_color_out {
+            println!("\x1b[32mincluded dirty working tree via snapshot {}\x1b[0m", snap);
+        } else {
+            println!("included dirty working tree via snapshot {}", snap);
+        }
     } else if cli.fork_include_dirty {
-        println!("warning: requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
+        if use_color_out {
+            println!("\x1b[33mwarning:\x1b[0m requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
+        } else {
+            println!("warning: requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
+        }
     }
     if !dissoc {
-        println!("note: clones reference the base repo’s object store; avoid pruning base objects until done.");
+        if use_color_out {
+            println!("\x1b[90mnote: clones reference the base repo’s object store; avoid pruning base objects until done.\x1b[0m");
+        } else {
+            println!("note: clones reference the base repo’s object store; avoid pruning base objects until done.");
+        }
     }
     println!();
 
@@ -1343,14 +1376,25 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let _ = fs::create_dir_all(state_dir.join(".aider"));
         let _ = fs::create_dir_all(state_dir.join(".codex"));
         let _ = fs::create_dir_all(state_dir.join(".crush"));
-        println!(
-            "[{}] {} branch={} container={} state={}",
-            i,
-            pane_dir.display(),
-            branch,
-            cname,
-            state_dir.display()
-        );
+        if use_color_out {
+            println!(
+                "[\x1b[36;1m{}\x1b[0m] \x1b[34m{}\x1b[0m branch=\x1b[32m{}\x1b[0m container=\x1b[35m{}\x1b[0m state=\x1b[90m{}\x1b[0m",
+                i,
+                pane_dir.display(),
+                branch,
+                cname,
+                state_dir.display()
+            );
+        } else {
+            println!(
+                "[{}] {} branch={} container={} state={}",
+                i,
+                pane_dir.display(),
+                branch,
+                cname,
+                state_dir.display()
+            );
+        }
     }
 
     // Orchestrate panes (Windows uses Windows Terminal or PowerShell; Unix-like uses tmux)
@@ -2752,9 +2796,20 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let _ = att.status();
 
         // After tmux session ends or switch completes, print merging guidance
-        println!("aifo-coder: fork session {} completed.", sid);
+        if use_color_out {
+            println!(
+                "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m completed.",
+                sid
+            );
+        } else {
+            println!("aifo-coder: fork session {} completed.", sid);
+        }
         println!();
-        println!("To inspect and merge changes, you can run:");
+        if use_color_out {
+            println!("\x1b[1mTo inspect and merge changes, you can run:\x1b[0m");
+        } else {
+            println!("To inspect and merge changes, you can run:");
+        }
         if let Some((first_dir, first_branch)) = clones.first() {
             println!("  git -C \"{}\" status", first_dir.display());
             println!(
