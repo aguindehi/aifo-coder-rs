@@ -1721,6 +1721,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
+                                eprintln!();
                                 {
                                     let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
@@ -1952,6 +1953,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
+                                eprintln!();
                                 {
                                     let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
@@ -2523,6 +2525,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
+                                eprintln!();
                                 eprintln!(
                                     "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
                                     sid
@@ -3135,6 +3138,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         && cli.fork_merging_autoclean
                         && !cli.dry_run
                     {
+                        eprintln!();
                         {
                             let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
@@ -3740,6 +3744,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             && cli.fork_merging_autoclean
                             && !cli.dry_run
                         {
+                            eprintln!();
                             {
                                 let use_err = aifo_coder::color_enabled_stderr();
                                 eprintln!(
