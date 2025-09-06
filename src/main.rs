@@ -1272,6 +1272,62 @@ fn fork_build_child_args(cli: &Cli) -> Vec<String> {
     args
 }
 
+fn print_inspect_merge_guidance(
+    repo_root: &std::path::Path,
+    sid: &str,
+    base_label: &str,
+    base_ref_or_sha: &str,
+    clones: &[(std::path::PathBuf, String)],
+    use_color_header: bool,
+    include_remote_examples: bool,
+    extra_spacing_before_wrapper: bool,
+) {
+    if use_color_header {
+        println!("\x1b[1mTo inspect and merge changes, you can run:\x1b[0m");
+    } else {
+        println!("To inspect and merge changes, you can run:");
+    }
+    if let Some((first_dir, first_branch)) = clones.first() {
+        println!("  git -C \"{}\" status", first_dir.display());
+        println!(
+            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+            first_dir.display()
+        );
+        if include_remote_examples {
+            println!(
+                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                repo_root.display(),
+                sid,
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" fetch fork-{}-1 {}",
+                repo_root.display(),
+                sid,
+                first_branch
+            );
+            if base_label != "detached" {
+                println!(
+                    "  git -C \"{}\" checkout {}",
+                    repo_root.display(),
+                    base_ref_or_sha
+                );
+                println!(
+                    "  git -C \"{}\" merge --no-ff {}",
+                    repo_root.display(),
+                    first_branch
+                );
+            }
+        }
+    }
+    if extra_spacing_before_wrapper {
+        println!();
+    }
+    let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
+    println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
+    println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+}
+
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Preflight
@@ -1857,41 +1913,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
-                println!("To inspect and merge changes, you can run:");
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    true,
+                    false,
+                );
                 return ExitCode::from(0);
             } else if let Ok(mt) = which("mintty.exe") {
                 // Use mintty as a Git Bash UI launcher
@@ -2098,41 +2129,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
-                println!("To inspect and merge changes, you can run:");
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    true,
+                    false,
+                );
                 return ExitCode::from(0);
             } else {
                 eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash/mintty were not found in PATH.");
@@ -2440,18 +2446,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "aifo-coder: fork session {} launched in Windows Terminal.",
                     sid
                 );
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, _)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                }
-                println!();
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             }
         }
@@ -2652,18 +2656,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                }
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!();
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             } else if let Ok(mt) = which("mintty.exe") {
                 // Use mintty as a Git Bash UI launcher
@@ -2835,18 +2837,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                }
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!();
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             } else {
                 // Fallback: launch Windows Terminal even though we cannot wait; print manual-merge advice
@@ -2956,7 +2956,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "aifo-coder: fork session {} launched in Windows Terminal.",
                         sid
                     );
-                    println!("To inspect and merge changes, you can run:");
                     if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
                         let strat = match cli.fork_merging_strategy {
                             aifo_coder::MergingStrategy::Fetch => "fetch",
@@ -2986,17 +2985,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             );
                         }
                     }
-                    if let Some((first_dir, first_branch)) = clones.first() {
-                        println!("  git -C \"{}\" status", first_dir.display());
-                        println!(
-                            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                            first_dir.display()
-                        );
-                    }
-                    let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                    println!();
-                    println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                    println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+                    print_inspect_merge_guidance(
+                        &repo_root,
+                        &sid,
+                        &base_label,
+                        &base_ref_or_sha,
+                        &clones,
+                        false,
+                        false,
+                        true,
+                    );
                     return ExitCode::from(0);
                 } else {
                     eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
@@ -3231,18 +3229,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             "aifo-coder: fork session {} launched (PowerShell windows).",
             sid
         );
-        println!("To inspect and merge changes, you can run:");
-        if let Some((first_dir, first_branch)) = clones.first() {
-            println!("  git -C \"{}\" status", first_dir.display());
-            println!(
-                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                first_dir.display()
-            );
-        }
-        let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-        println!();
-        println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-        println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+        print_inspect_merge_guidance(
+            &repo_root,
+            &sid,
+            &base_label,
+            &base_ref_or_sha,
+            &clones,
+            false,
+            false,
+            true,
+        );
         return ExitCode::from(0);
     } else {
         // Build and run tmux session
@@ -3700,22 +3696,16 @@ fi
             println!("aifo-coder: fork session {} completed.", sid);
         }
         println!();
-        if use_color_out {
-            println!("\x1b[1mTo inspect and merge changes, you can run:\x1b[0m");
-        } else {
-            println!("To inspect and merge changes, you can run:");
-        }
-        if let Some((first_dir, first_branch)) = clones.first() {
-            println!("  git -C \"{}\" status", first_dir.display());
-            println!(
-                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                first_dir.display()
-            );
-        }
-        let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-        println!();
-        println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-        println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+        print_inspect_merge_guidance(
+            &repo_root,
+            &sid,
+            &base_label,
+            &base_ref_or_sha,
+            &clones,
+            use_color_out,
+            false,
+            true,
+        );
 
         {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
