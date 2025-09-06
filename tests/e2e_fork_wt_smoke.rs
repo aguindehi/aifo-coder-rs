@@ -68,7 +68,15 @@ fn test_e2e_fork_windows_terminal_smoke_opt_in() {
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)
-        .args(["--fork", "2", "--fork-session-name", "ut-smoke", "aider", "--", "--help"])
+        .args([
+            "--fork",
+            "2",
+            "--fork-session-name",
+            "ut-smoke",
+            "aider",
+            "--",
+            "--help",
+        ])
         .current_dir(&root)
         .output()
         .expect("run aifo-coder fork smoke (Windows Terminal)");

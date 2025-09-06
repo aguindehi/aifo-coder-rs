@@ -1,4 +1,5 @@
 use atty;
+use clap::ValueEnum;
 use fs2::FileExt;
 use once_cell::sync::{Lazy, OnceCell};
 use std::env;
@@ -13,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 use which::which;
-use clap::ValueEnum;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -258,6 +258,126 @@ pub fn paint(enabled: bool, code: &str, s: &str) -> String {
     }
 }
 
+/// Print a standardized warning line to stderr (color-aware).
+pub fn warn_print(msg: &str) {
+    let use_err = color_enabled_stderr();
+    eprintln!(
+        "{}",
+        paint(use_err, "\x1b[33;1m", &format!("warning: {}", msg))
+    );
+}
+
+/// Print warning lines and, when interactive, prompt the user to continue or abort.
+/// Returns true to continue, false to abort.
+pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
+    let use_err = color_enabled_stderr();
+    for l in lines {
+        eprintln!(
+            "{}",
+            paint(use_err, "\x1b[33;1m", &format!("warning: {}", l))
+        );
+    }
+
+    // Only prompt when interactive and not disabled by env/CI
+    let interactive = atty::is(atty::Stream::Stdin) && atty::is(atty::Stream::Stderr);
+    let disabled = std::env::var("AIFO_CODER_NO_WARN_PAUSE").ok().as_deref() == Some("1")
+        || std::env::var("CI").ok().as_deref() == Some("1");
+    if !(interactive && !disabled) {
+        return true;
+    }
+
+    eprint!(
+        "{}",
+        paint(
+            use_err,
+            "\x1b[90m",
+            "Press Enter to continue, or 'q' to abort: "
+        )
+    );
+    let _ = std::io::stderr().flush();
+
+    // Windows: read a single key without waiting for Enter using _getch
+    #[cfg(windows)]
+    {
+        unsafe {
+            #[link(name = "msvcrt")]
+            extern "C" {
+                fn _getch() -> i32;
+            }
+            let ch = _getch();
+            let ch = (ch as u8) as char;
+            if ch == 'q' || ch == 'Q' {
+                // End the prompt line and add an extra blank line for visual separation
+                eprintln!();
+                eprintln!();
+                return false;
+            } else {
+                // End the prompt line and add an extra blank line for visual separation
+                eprintln!();
+                eprintln!();
+                return true;
+            }
+        }
+    }
+
+    // Unix: temporarily switch terminal to non-canonical, no-echo mode to read a single byte
+    #[cfg(unix)]
+    {
+        // Save current stty state
+        let saved = std::process::Command::new("stty")
+            .arg("-g")
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            });
+
+        // Best-effort: set non-canonical mode, no echo, 1-byte min
+        let _ = std::process::Command::new("stty")
+            .args(["-icanon", "min", "1", "-echo"])
+            .status();
+
+        let mut buf = [0u8; 1];
+        let _ = std::io::stdin().read(&mut buf);
+
+        // Restore previous stty state (or sane fallback)
+        if let Some(state) = saved {
+            let _ = std::process::Command::new("stty").arg(&state).status();
+        } else {
+            let _ = std::process::Command::new("stty").arg("sane").status();
+        }
+
+        let ch = buf[0] as char;
+        if ch == 'q' || ch == 'Q' {
+            // End the prompt line and add an extra blank line for visual separation
+            eprintln!();
+            eprintln!();
+            return false;
+        } else {
+            // End the prompt line and add an extra blank line for visual separation
+            eprintln!();
+            eprintln!();
+            return true;
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        // Fallback: line-based input (non-tty or platforms without single-key support)
+        let mut s = String::new();
+        let _ = std::io::stdin().read_line(&mut s);
+        // After confirmation, print a blank line for visual separation
+        eprintln!();
+        eprintln!();
+        let c = s.trim().chars().next().unwrap_or('\n');
+        return c != 'q' && c != 'Q';
+    }
+}
+
 /**
  Merging strategy for post-fork actions.
  - None: do nothing (default).
@@ -437,11 +557,14 @@ pub fn desired_apparmor_profile() -> Option<String> {
             return None;
         }
         if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
-            eprintln!("aifo-coder: AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.", trimmed);
+            warn_print(&format!(
+                "AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.",
+                trimmed
+            ));
             if apparmor_profile_available("docker-default") {
                 return Some("docker-default".to_string());
             } else {
-                eprintln!("aifo-coder: 'docker-default' profile not found; continuing without explicit AppArmor profile.");
+                warn_print("'docker-default' profile not found; continuing without explicit AppArmor profile.");
                 return None;
             }
         }
@@ -453,12 +576,10 @@ pub fn desired_apparmor_profile() -> Option<String> {
         if apparmor_profile_available("aifo-coder") {
             Some("aifo-coder".to_string())
         } else if apparmor_profile_available("docker-default") {
-            eprintln!(
-                "aifo-coder: AppArmor profile 'aifo-coder' not loaded; using 'docker-default'."
-            );
+            warn_print("AppArmor profile 'aifo-coder' not loaded; using 'docker-default'.");
             Some("docker-default".to_string())
         } else {
-            eprintln!("aifo-coder: No known AppArmor profile loaded; continuing without explicit profile.");
+            warn_print("No known AppArmor profile loaded; continuing without explicit profile.");
             None
         }
     }
@@ -1363,7 +1484,9 @@ pub fn build_docker_cmd(
             security_flags.push(OsString::from("--security-opt"));
             security_flags.push(OsString::from(format!("apparmor={profile}")));
         } else {
-            eprintln!("Warning: Docker daemon does not report AppArmor support. Continuing without AppArmor.");
+            warn_print(
+                "Docker daemon does not report AppArmor support. Continuing without AppArmor.",
+            );
         }
     }
     // Image prefix used for container naming
@@ -1372,9 +1495,8 @@ pub fn build_docker_cmd(
     // Container name/hostname
     // Default to a unique per-run container name to avoid conflicts across concurrent runs,
     // while still honoring explicit overrides via environment variables.
-    let container_name = env::var("AIFO_CODER_CONTAINER_NAME").unwrap_or_else(|_| {
-        format!("{}-{}-{}", prefix, agent, create_session_id())
-    });
+    let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
+        .unwrap_or_else(|_| format!("{}-{}-{}", prefix, agent, create_session_id()));
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
     let name_flags = vec![
         OsString::from("--name"),
@@ -1588,7 +1710,10 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
         {
             Ok(f) => match f.try_lock_exclusive() {
                 Ok(_) => {
-                    return Ok(RepoLock { file: f, path: p.clone() });
+                    return Ok(RepoLock {
+                        file: f,
+                        path: p.clone(),
+                    });
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     return Err(io::Error::new(
@@ -1634,7 +1759,10 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
         .open(p)
     {
         Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(RepoLock { file: f, path: p.to_path_buf() }),
+            Ok(_) => Ok(RepoLock {
+                file: f,
+                path: p.to_path_buf(),
+            }),
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Another coding agent is already running (lock held). Please try again later.",
@@ -3936,8 +4064,8 @@ fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
         None
     }
 }
- 
- // Append or upsert merge metadata fields into the session .meta.json
+
+// Append or upsert merge metadata fields into the session .meta.json
 fn fork_meta_append_fields(repo_root: &Path, sid: &str, fields_kv: &str) -> io::Result<()> {
     let session_dir = fork_session_dir(repo_root, sid);
     let meta_path = session_dir.join(".meta.json");
@@ -3971,7 +4099,7 @@ fn fork_meta_append_fields(repo_root: &Path, sid: &str, fields_kv: &str) -> io::
         Err(e) => Err(e),
     }
 }
- 
+
 fn session_dirs(base: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let rd = match fs::read_dir(base) {
@@ -5033,7 +5161,11 @@ pub fn fork_merge_branches(
             if !st.success() {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("git fetch failed for pane {} (branch {})", pdir.display(), br),
+                    format!(
+                        "git fetch failed for pane {} (branch {})",
+                        pdir.display(),
+                        br
+                    ),
                 ));
             }
         }
@@ -5182,7 +5314,10 @@ pub fn fork_merge_branches(
             joined
         }
     };
-    if !summary_line.to_ascii_lowercase().starts_with("octopus merge") {
+    if !summary_line
+        .to_ascii_lowercase()
+        .starts_with("octopus merge")
+    {
         summary_line = format!("Octopus merge: {}", summary_line);
     }
     merge_message.push_str(&format!(
@@ -5229,11 +5364,8 @@ pub fn fork_merge_branches(
 
     // Prepare merge message file path; write it unless dry_run
     let mut merge_msg_path: Option<std::path::PathBuf> = None;
-    let msg_path = std::env::temp_dir().join(format!(
-        "aifo-merge-{}-{}.txt",
-        sid,
-        std::process::id()
-    ));
+    let msg_path =
+        std::env::temp_dir().join(format!("aifo-merge-{}-{}.txt", sid, std::process::id()));
     if verbose {
         eprintln!(
             "aifo-coder: preparing octopus merge message at {}",
@@ -5287,7 +5419,8 @@ pub fn fork_merge_branches(
         }
         if !st.success() {
             // Record failed octopus merge in metadata
-            let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
+            let fetched_names: Vec<String> =
+                pane_branches.iter().map(|(_p, b)| b.clone()).collect();
             let _ = fork_meta_append_fields(
                 repo_root,
                 sid,
@@ -5393,7 +5526,10 @@ pub fn fork_merge_branches_by_session(
     if !session_dir.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("fork session directory not found: {}", session_dir.display()),
+            format!(
+                "fork session directory not found: {}",
+                session_dir.display()
+            ),
         ));
     }
 
@@ -5991,9 +6127,12 @@ mod tests {
         let paths = candidate_lock_paths();
         let expected = td.path().join(".aifo-coder.lock");
         // On macOS, /var is often a symlink to /private/var. Canonicalize parent dirs for comparison.
-        let expected_dir_canon = std::fs::canonicalize(td.path()).unwrap_or_else(|_| td.path().to_path_buf());
+        let expected_dir_canon =
+            std::fs::canonicalize(td.path()).unwrap_or_else(|_| td.path().to_path_buf());
         let found = paths.iter().any(|p| {
-            p.file_name().map(|n| n == ".aifo-coder.lock").unwrap_or(false)
+            p.file_name()
+                .map(|n| n == ".aifo-coder.lock")
+                .unwrap_or(false)
                 && p.parent()
                     .and_then(|d| std::fs::canonicalize(d).ok())
                     .map(|d| d == expected_dir_canon)
@@ -6002,8 +6141,7 @@ mod tests {
         assert!(
             found,
             "candidate_lock_paths missing expected CWD lock path: {:?} in {:?}",
-            expected,
-            paths
+            expected, paths
         );
         std::env::set_current_dir(old_cwd).ok();
     }
@@ -6179,7 +6317,8 @@ mod tests {
         let hashed_b = paths_b[1].clone();
 
         assert_ne!(
-            hashed_a, hashed_b,
+            hashed_a,
+            hashed_b,
             "hashed runtime lock path should differ across repos: A={} B={}",
             hashed_a.display(),
             hashed_b.display()
@@ -6664,9 +6803,8 @@ mod tests {
 
         // Create a fork session with two panes
         let sid = "sid-merge-fetch";
-        let clones =
-            fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
-                .expect("clone panes");
+        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
+            .expect("clone panes");
         assert_eq!(clones.len(), 2, "expected two panes");
 
         // Make independent commits in each pane
@@ -6696,14 +6834,12 @@ mod tests {
         }
 
         // Perform fetch merge strategy
-        let res = fork_merge_branches_by_session(
-            repo,
-            sid,
-            MergingStrategy::Fetch,
-            true,
-            false,
+        let res = fork_merge_branches_by_session(repo, sid, MergingStrategy::Fetch, true, false);
+        assert!(
+            res.is_ok(),
+            "fetch merge strategy should succeed: {:?}",
+            res.err()
         );
-        assert!(res.is_ok(), "fetch merge strategy should succeed: {:?}", res.err());
 
         // Verify branches exist in the original repo
         for (_pane_dir, branch) in &clones {
@@ -6740,29 +6876,71 @@ mod tests {
         let repo = td.path();
 
         // init repo with one commit on default branch
-        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
-        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
-        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
         std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
-        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
-        assert!(std::process::Command::new("git").args(["commit","-m","init"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
 
         // Determine current branch name and base label
-        let out = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
         let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let base_label = fork_sanitize_base_label(&cur_branch);
 
         // Create a fork session with two panes and make non-conflicting commits
         let sid = "sid-merge-oct-success";
-        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false).expect("clone panes");
+        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
+            .expect("clone panes");
         assert_eq!(clones.len(), 2, "expected two panes");
         for (idx, (pane_dir, _)) in clones.iter().enumerate() {
             let fname = format!("pane-success-{}.txt", idx + 1);
             std::fs::write(pane_dir.join(&fname), format!("ok {}\n", idx + 1)).unwrap();
-            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
-            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
-            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
-            assert!(std::process::Command::new("git").args(["commit","-m",&format!("pane ok {}", idx + 1)]).current_dir(pane_dir).status().unwrap().success());
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.name", "AIFO Test"])
+                .current_dir(pane_dir)
+                .status();
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.email", "aifo@example.com"])
+                .current_dir(pane_dir)
+                .status();
+            assert!(std::process::Command::new("git")
+                .args(["add", "-A"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
+            assert!(std::process::Command::new("git")
+                .args(["commit", "-m", &format!("pane ok {}", idx + 1)])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
         }
 
         // Perform octopus merge
@@ -6770,21 +6948,50 @@ mod tests {
         assert!(res.is_ok(), "octopus merge should succeed: {:?}", res.err());
 
         // Verify we are on merge/<sid>
-        let out2 = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let out2 = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
         let head_branch = String::from_utf8_lossy(&out2.stdout).trim().to_string();
-        assert_eq!(head_branch, format!("merge/{}", sid), "expected HEAD to be merge/<sid>");
+        assert_eq!(
+            head_branch,
+            format!("merge/{}", sid),
+            "expected HEAD to be merge/<sid>"
+        );
 
         // Verify pane branches are deleted from original repo
         for (_pane_dir, branch) in &clones {
-            let ok = std::process::Command::new("git").args(["show-ref","--verify",&format!("refs/heads/{}", branch)]).current_dir(repo).status().unwrap().success();
-            assert!(!ok, "pane branch '{}' should be deleted after octopus merge", branch);
+            let ok = std::process::Command::new("git")
+                .args(["show-ref", "--verify", &format!("refs/heads/{}", branch)])
+                .current_dir(repo)
+                .status()
+                .unwrap()
+                .success();
+            assert!(
+                !ok,
+                "pane branch '{}' should be deleted after octopus merge",
+                branch
+            );
         }
 
         // Verify metadata contains merge_target and merge_commit_sha
-        let meta_path = repo.join(".aifo-coder").join("forks").join(sid).join(".meta.json");
+        let meta_path = repo
+            .join(".aifo-coder")
+            .join("forks")
+            .join(sid)
+            .join(".meta.json");
         let meta2 = std::fs::read_to_string(&meta_path).expect("read meta2");
-        assert!(meta2.contains("\"merge_target\"") && meta2.contains(&format!("merge/{}", sid)), "meta should include merge_target=merge/<sid>: {}", meta2);
-        assert!(meta2.contains("\"merge_commit_sha\""), "meta should include merge_commit_sha: {}", meta2);
+        assert!(
+            meta2.contains("\"merge_target\"") && meta2.contains(&format!("merge/{}", sid)),
+            "meta should include merge_target=merge/<sid>: {}",
+            meta2
+        );
+        assert!(
+            meta2.contains("\"merge_commit_sha\""),
+            "meta should include merge_commit_sha: {}",
+            meta2
+        );
     }
 
     #[test]
@@ -6797,40 +7004,98 @@ mod tests {
         let repo = td.path();
 
         // init repo with one commit on default branch
-        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
-        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
-        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
         std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
-        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
-        assert!(std::process::Command::new("git").args(["commit","-m","init"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
 
         // Determine current branch
-        let out = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
         let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let base_label = fork_sanitize_base_label(&cur_branch);
 
         // Create two panes with conflicting changes to the same file
         let sid = "sid-merge-oct-conflict";
-        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false).expect("clone panes");
+        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
+            .expect("clone panes");
         assert_eq!(clones.len(), 2, "expected two panes");
 
         // Pane 1 writes conflict.txt
         {
             let (pane_dir, _) = &clones[0];
             std::fs::write(pane_dir.join("conflict.txt"), "A\n").unwrap();
-            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
-            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
-            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
-            assert!(std::process::Command::new("git").args(["commit","-m","pane1"]).current_dir(pane_dir).status().unwrap().success());
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.name", "AIFO Test"])
+                .current_dir(pane_dir)
+                .status();
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.email", "aifo@example.com"])
+                .current_dir(pane_dir)
+                .status();
+            assert!(std::process::Command::new("git")
+                .args(["add", "-A"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
+            assert!(std::process::Command::new("git")
+                .args(["commit", "-m", "pane1"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
         }
         // Pane 2 writes conflicting content
         {
             let (pane_dir, _) = &clones[1];
             std::fs::write(pane_dir.join("conflict.txt"), "B\n").unwrap();
-            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
-            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
-            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
-            assert!(std::process::Command::new("git").args(["commit","-m","pane2"]).current_dir(pane_dir).status().unwrap().success());
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.name", "AIFO Test"])
+                .current_dir(pane_dir)
+                .status();
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.email", "aifo@example.com"])
+                .current_dir(pane_dir)
+                .status();
+            assert!(std::process::Command::new("git")
+                .args(["add", "-A"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
+            assert!(std::process::Command::new("git")
+                .args(["commit", "-m", "pane2"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
         }
 
         // Attempt octopus merge (should fail due to conflict)
@@ -6838,19 +7103,43 @@ mod tests {
         assert!(res.is_err(), "octopus merge should fail due to conflicts");
 
         // Metadata should record merge_failed: true
-        let meta_path = repo.join(".aifo-coder").join("forks").join(sid).join(".meta.json");
+        let meta_path = repo
+            .join(".aifo-coder")
+            .join("forks")
+            .join(sid)
+            .join(".meta.json");
         let meta = std::fs::read_to_string(&meta_path).expect("read meta");
-        assert!(meta.contains("\"merge_failed\":true"), "meta should include merge_failed:true, got: {}", meta);
+        assert!(
+            meta.contains("\"merge_failed\":true"),
+            "meta should include merge_failed:true, got: {}",
+            meta
+        );
 
         // Fetched pane branches should exist in original repo (not deleted)
         for (_pane_dir, branch) in &clones {
-            let ok = std::process::Command::new("git").args(["show-ref","--verify",&format!("refs/heads/{}", branch)]).current_dir(repo).status().unwrap().success();
-            assert!(ok, "pane branch '{}' should exist after failed merge", branch);
+            let ok = std::process::Command::new("git")
+                .args(["show-ref", "--verify", &format!("refs/heads/{}", branch)])
+                .current_dir(repo)
+                .status()
+                .unwrap()
+                .success();
+            assert!(
+                ok,
+                "pane branch '{}' should exist after failed merge",
+                branch
+            );
         }
 
         // Repo should be in conflict state (has unmerged paths)
-        let out2 = std::process::Command::new("git").args(["ls-files","-u"]).current_dir(repo).output().unwrap();
-        assert!(!out2.stdout.is_empty(), "expected unmerged paths after failed octopus merge");
+        let out2 = std::process::Command::new("git")
+            .args(["ls-files", "-u"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert!(
+            !out2.stdout.is_empty(),
+            "expected unmerged paths after failed octopus merge"
+        );
     }
 
     #[test]
@@ -7626,7 +7915,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn test_windows_helpers_orient_and_builders() {
-        use crate::{fork_bash_inner_string, fork_ps_inner_string, wt_build_new_tab_args, wt_build_split_args, wt_orient_for_layout};
+        use crate::{
+            fork_bash_inner_string, fork_ps_inner_string, wt_build_new_tab_args,
+            wt_build_split_args, wt_orient_for_layout,
+        };
         let agent = "aider";
         let sid = "sidw";
         let tmp = tempfile::tempdir().expect("tmpdir");
@@ -7636,11 +7928,21 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         let child = vec!["aider".to_string(), "--help".to_string()];
         let ps = fork_ps_inner_string(agent, sid, 1, &pane_dir, &state_dir, &child);
-        assert!(ps.contains("Set-Location '"), "ps inner should set location: {}", ps);
-        assert!(ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"), "ps inner should set env");
+        assert!(
+            ps.contains("Set-Location '"),
+            "ps inner should set location: {}",
+            ps
+        );
+        assert!(
+            ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"),
+            "ps inner should set env"
+        );
         let bash = fork_bash_inner_string(agent, sid, 2, &pane_dir, &state_dir, &child);
         assert!(bash.contains("cd "), "bash inner should cd");
-        assert!(bash.contains("export AIFO_CODER_SKIP_LOCK='1'"), "bash inner export env");
+        assert!(
+            bash.contains("export AIFO_CODER_SKIP_LOCK='1'"),
+            "bash inner export env"
+        );
         // wt orientation
         assert_eq!(wt_orient_for_layout("even-h", 3), "-H");
         assert_eq!(wt_orient_for_layout("even-v", 4), "-V");

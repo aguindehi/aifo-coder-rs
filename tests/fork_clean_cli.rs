@@ -88,14 +88,7 @@ fn test_fork_clean_cli_safety_and_flags() {
 
     // 2) keep-dirty should succeed and keep pane; meta should contain panes_remaining
     let out2 = Command::new(bin)
-        .args([
-            "fork",
-            "clean",
-            "--session",
-            sid,
-            "--keep-dirty",
-            "--yes",
-        ])
+        .args(["fork", "clean", "--session", sid, "--keep-dirty", "--yes"])
         .current_dir(&root)
         .output()
         .expect("run fork clean --keep-dirty");
