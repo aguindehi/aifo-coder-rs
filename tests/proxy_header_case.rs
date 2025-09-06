@@ -13,7 +13,11 @@ fn connect_and_roundtrip(url: &str, req: &str) -> String {
     let port: u16 = port_str.parse().expect("port parse");
     let path = format!("/{}", path_rest);
 
-    let connect_host = if host == "host.docker.internal" { "127.0.0.1" } else { host };
+    let connect_host = if host == "host.docker.internal" {
+        "127.0.0.1"
+    } else {
+        host
+    };
     let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
 
     let rendered = req.replace("{PATH}", &path).replace("{HOST}", host);
@@ -36,11 +40,17 @@ fn test_proxy_missing_auth_is_401() {
         // proxy can run without docker, but we test with or without; no skip
     }
     let sid = "unit-test-session";
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
-    let req = "POST {PATH} HTTP/1.1\r\nhost: {HOST}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+    let req =
+        "POST {PATH} HTTP/1.1\r\nhost: {HOST}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
     let resp = connect_and_roundtrip(&url, req);
-    assert!(resp.starts_with("HTTP/1.1 401"), "expected 401, got:\n{}", resp);
+    assert!(
+        resp.starts_with("HTTP/1.1 401"),
+        "expected 401, got:\n{}",
+        resp
+    );
 
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
@@ -50,7 +60,8 @@ fn test_proxy_missing_auth_is_401() {
 #[test]
 fn test_proxy_header_case_and_bad_proto_yields_426() {
     let sid = "unit-test-session";
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
     // Lower-case header names; correct auth, wrong proto
     let req = format!(
@@ -58,7 +69,11 @@ fn test_proxy_header_case_and_bad_proto_yields_426() {
         token
     );
     let resp = connect_and_roundtrip(&url, &req);
-    assert!(resp.starts_with("HTTP/1.1 426"), "expected 426 Upgrade Required, got:\n{}", resp);
+    assert!(
+        resp.starts_with("HTTP/1.1 426"),
+        "expected 426 Upgrade Required, got:\n{}",
+        resp
+    );
     assert!(
         resp.contains("X-Exit-Code: 86"),
         "expected X-Exit-Code: 86 header, got:\n{}",

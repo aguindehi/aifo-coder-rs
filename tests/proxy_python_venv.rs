@@ -50,13 +50,18 @@ fn test_proxy_python_venv_precedence() {
     let overrides: Vec<(String, String)> = vec![("python".to_string(), image.clone())];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, true, true)
         .expect("failed to start sidecar session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after_scheme = u.split("://").nth(1).unwrap_or(u);
         let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse::<u16>()
+            .unwrap_or(0)
     }
     let port = extract_port(&url);
 

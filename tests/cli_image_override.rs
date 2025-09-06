@@ -10,7 +10,15 @@ fn test_cli_image_override_dry_run_uses_override() {
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)
-        .args(["--verbose", "--dry-run", "--image", "alpine:3.20", "aider", "--", "--version"])
+        .args([
+            "--verbose",
+            "--dry-run",
+            "--image",
+            "alpine:3.20",
+            "aider",
+            "--",
+            "--version",
+        ])
         .output()
         .expect("failed to run aifo-coder --image alpine:3.20 aider -- --version");
     assert!(

@@ -20,14 +20,15 @@ fn test_proxy_unix_socket_rust_and_node() {
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
         .expect("failed to start toolchain session");
 
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, verbose)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, verbose).expect("failed to start proxy");
 
     // Ensure we received a unix URL for the agent
     assert!(url.starts_with("unix://"), "expected unix URL, got: {url}");
 
     // Host-side unix socket directory should be exported via env by the proxy starter
-    let sock_dir = std::env::var("AIFO_TOOLEEXEC_UNIX_DIR").expect("AIFO_TOOLEEXEC_UNIX_DIR not set");
+    let sock_dir =
+        std::env::var("AIFO_TOOLEEXEC_UNIX_DIR").expect("AIFO_TOOLEEXEC_UNIX_DIR not set");
     let sock_path = format!("{}/toolexec.sock", sock_dir);
 
     fn post_exec_unix(sock: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String) {

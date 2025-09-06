@@ -8,8 +8,8 @@ fn test_build_docker_cmd_includes_user_flag_on_unix() {
     }
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd");
 
     let uid = nix::unistd::getuid().as_raw();
     let gid = nix::unistd::getgid().as_raw();

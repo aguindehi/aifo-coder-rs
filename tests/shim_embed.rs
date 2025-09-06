@@ -36,7 +36,13 @@ fn test_embedded_shim_presence_in_agent_image() {
     match out {
         Ok(o) => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            assert!(o.status.success(), "docker run failed: status={:?}, stdout={}, stderr={}", o.status.code(), s, String::from_utf8_lossy(&o.stderr));
+            assert!(
+                o.status.success(),
+                "docker run failed: status={:?}, stdout={}, stderr={}",
+                o.status.code(),
+                s,
+                String::from_utf8_lossy(&o.stderr)
+            );
             assert_eq!(s, "ok", "unexpected output from container check: {}", s);
         }
         Err(e) => panic!("failed to run docker: {}", e),

@@ -18,7 +18,8 @@ fn image_present(img: &str) -> bool {
 }
 
 fn default_images() -> Vec<String> {
-    let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+    let prefix =
+        std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
     vec![
         format!("{}-crush:{}", prefix, tag),

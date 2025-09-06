@@ -21,7 +21,9 @@ fn image_present(img: &str) -> bool {
 
 fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String) {
     // Very small HTTP client for http://host:port/path
-    let u = url.strip_prefix("http://").expect("only http:// supported in tests");
+    let u = url
+        .strip_prefix("http://")
+        .expect("only http:// supported in tests");
     let mut parts = u.splitn(2, '/');
     let hostport = parts.next().unwrap_or_default();
     let path_rest = parts.next().unwrap_or_default();
@@ -32,10 +34,18 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
     let path = format!("/{}", path_rest);
 
     // Some hosts (e.g., macOS test runners) may not resolve host.docker.internal; connect to loopback in that case.
-    let connect_host = if host == "host.docker.internal" { "127.0.0.1" } else { host };
+    let connect_host = if host == "host.docker.internal" {
+        "127.0.0.1"
+    } else {
+        host
+    };
     let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
 
-    let mut body = format!("tool={}&cwd={}", urlencoding::Encoded::new(tool), urlencoding::Encoded::new("."));
+    let mut body = format!(
+        "tool={}&cwd={}",
+        urlencoding::Encoded::new(tool),
+        urlencoding::Encoded::new(".")
+    );
     for a in args {
         body.push('&');
         body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
@@ -63,7 +73,9 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
         }
         let body_bytes = &buf[hend..];
         let mut s = String::new();
-        s.push_str(&String::from_utf8_lossy(&body_bytes[..std::cmp::min(content_len, body_bytes.len())]));
+        s.push_str(&String::from_utf8_lossy(
+            &body_bytes[..std::cmp::min(content_len, body_bytes.len())],
+        ));
         (exit_code, s)
     } else {
         (exit_code, String::new())
@@ -89,12 +101,18 @@ fn test_proxy_smoke_python() {
     let kinds = vec!["python".to_string()];
     let overrides: Vec<(String, String)> = Vec::new();
 
-    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true).expect("start session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("start session");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
     let (code, out) = post_exec(&url, &token, "python", &["--version"]);
     assert_eq!(code, 0, "python --version failed: {}", out);
-    assert!(out.to_lowercase().contains("python"), "unexpected python version output: {}", out);
+    assert!(
+        out.to_lowercase().contains("python"),
+        "unexpected python version output: {}",
+        out
+    );
 
     // Cleanup
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -120,12 +138,18 @@ fn test_proxy_smoke_c_cpp() {
     let kinds = vec!["c-cpp".to_string()];
     let overrides: Vec<(String, String)> = Vec::new();
 
-    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true).expect("start session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("start session");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
     let (code, out) = post_exec(&url, &token, "cmake", &["--version"]);
     assert_eq!(code, 0, "cmake --version failed: {}", out);
-    assert!(out.to_lowercase().contains("cmake version"), "unexpected cmake version output: {}", out);
+    assert!(
+        out.to_lowercase().contains("cmake version"),
+        "unexpected cmake version output: {}",
+        out
+    );
 
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
@@ -150,12 +174,18 @@ fn test_proxy_smoke_go() {
     let kinds = vec!["go".to_string()];
     let overrides: Vec<(String, String)> = Vec::new();
 
-    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true).expect("start session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("start session");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
     let (code, out) = post_exec(&url, &token, "go", &["version"]);
     assert_eq!(code, 0, "go version failed: {}", out);
-    assert!(out.to_lowercase().contains("go version"), "unexpected go version output: {}", out);
+    assert!(
+        out.to_lowercase().contains("go version"),
+        "unexpected go version output: {}",
+        out
+    );
 
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();

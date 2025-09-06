@@ -11,8 +11,8 @@ fn test_build_docker_cmd_passes_editor_env_flag() {
     std::env::set_var("EDITOR", "vim");
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd failed");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd failed");
 
     assert!(
         preview.contains("-e EDITOR"),
@@ -40,8 +40,8 @@ fn test_build_docker_cmd_no_git_sign_injection_by_default() {
     std::env::remove_var("AIFO_CODER_GIT_SIGN");
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd failed");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd failed");
 
     assert!(
         !preview.contains("GIT_CONFIG_KEY_0=commit.gpgsign"),

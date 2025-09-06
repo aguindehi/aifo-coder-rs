@@ -25,5 +25,9 @@ fn test_build_docker_cmd_includes_unix_socket_mount_when_set() {
     );
 
     // Restore env
-    if let Some(v) = old { std::env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_UNIX_DIR"); }
+    if let Some(v) = old {
+        std::env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", v);
+    } else {
+        std::env::remove_var("AIFO_TOOLEEXEC_UNIX_DIR");
+    }
 }

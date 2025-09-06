@@ -1,6 +1,6 @@
-use std::process::Command;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::process::Command;
 
 fn docker_present() -> bool {
     aifo_coder::container_runtime_path().is_ok()
@@ -29,10 +29,18 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
     let host = hp.next().unwrap_or(hostport);
     let port: u16 = port_str.parse().expect("port parse");
     let path = format!("/{}", path_rest);
-    let connect_host = if host == "host.docker.internal" { "127.0.0.1" } else { host };
+    let connect_host = if host == "host.docker.internal" {
+        "127.0.0.1"
+    } else {
+        host
+    };
     let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
 
-    let mut body = format!("tool={}&cwd={}", urlencoding::Encoded::new(tool), urlencoding::Encoded::new("."));
+    let mut body = format!(
+        "tool={}&cwd={}",
+        urlencoding::Encoded::new(tool),
+        urlencoding::Encoded::new(".")
+    );
     for a in args {
         body.push('&');
         body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
@@ -58,7 +66,9 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
             }
         }
         let body_bytes = &buf[hend..];
-        let out = String::from_utf8_lossy(&body_bytes[..std::cmp::min(content_len, body_bytes.len())]).to_string();
+        let out =
+            String::from_utf8_lossy(&body_bytes[..std::cmp::min(content_len, body_bytes.len())])
+                .to_string();
         (exit_code, out)
     } else {
         (exit_code, String::new())
@@ -81,14 +91,33 @@ fn test_go_env_vars_inside_sidecar() {
     let kinds = vec!["go".to_string()];
     let overrides: Vec<(String, String)> = Vec::new();
 
-    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true).expect("start session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("start session");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
-    let (code, out) = post_exec(&url, &token, "go", &["env", "GOPATH", "GOMODCACHE", "GOCACHE"]);
+    let (code, out) = post_exec(
+        &url,
+        &token,
+        "go",
+        &["env", "GOPATH", "GOMODCACHE", "GOCACHE"],
+    );
     assert_eq!(code, 0, "go env failed: {}", out);
-    assert!(out.contains("/go"), "expected GOPATH=/go in output: {}", out);
-    assert!(out.contains("/go/pkg/mod"), "expected GOMODCACHE=/go/pkg/mod in output: {}", out);
-    assert!(out.contains("/go/build-cache"), "expected GOCACHE=/go/build-cache in output: {}", out);
+    assert!(
+        out.contains("/go"),
+        "expected GOPATH=/go in output: {}",
+        out
+    );
+    assert!(
+        out.contains("/go/pkg/mod"),
+        "expected GOMODCACHE=/go/pkg/mod in output: {}",
+        out
+    );
+    assert!(
+        out.contains("/go/build-cache"),
+        "expected GOCACHE=/go/build-cache in output: {}",
+        out
+    );
 
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();

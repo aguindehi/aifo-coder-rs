@@ -1,5 +1,5 @@
-use std::process::Command;
 use once_cell::sync::Lazy;
+use std::process::Command;
 use std::sync::Mutex;
 
 static REG_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -13,7 +13,10 @@ fn test_cli_images_respects_registry_env_value() {
     let old = std::env::var("AIFO_CODER_REGISTRY_PREFIX").ok();
     std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "example.com/");
 
-    let out = Command::new(bin).arg("images").output().expect("run images");
+    let out = Command::new(bin)
+        .arg("images")
+        .output()
+        .expect("run images");
     assert!(
         out.status.success(),
         "images exited non-zero: {:?}\nstdout:\n{}\nstderr:\n{}",
@@ -51,7 +54,10 @@ fn test_cli_images_respects_registry_env_empty() {
     let old = std::env::var("AIFO_CODER_REGISTRY_PREFIX").ok();
     std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "");
 
-    let out = Command::new(bin).arg("images").output().expect("run images");
+    let out = Command::new(bin)
+        .arg("images")
+        .output()
+        .expect("run images");
     assert!(
         out.status.success(),
         "images exited non-zero: {:?}\nstdout:\n{}\nstderr:\n{}",

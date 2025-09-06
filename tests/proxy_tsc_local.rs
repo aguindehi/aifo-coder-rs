@@ -50,13 +50,18 @@ fn test_proxy_tsc_prefers_local_compiler() {
     let overrides: Vec<(String, String)> = vec![("node".to_string(), image.clone())];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, true, true)
         .expect("failed to start sidecar session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after_scheme = u.split("://").nth(1).unwrap_or(u);
         let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse::<u16>()
+            .unwrap_or(0)
     }
     let port = extract_port(&url);
 
@@ -74,7 +79,10 @@ fn test_proxy_tsc_prefers_local_compiler() {
     stream.read_to_end(&mut resp).ok();
     let text = String::from_utf8_lossy(&resp).to_string();
     assert!(text.contains("200 OK"), "expected 200, got:\n{}", text);
-    assert!(text.contains("local-tsc"), "tsc did not come from local node_modules");
+    assert!(
+        text.contains("local-tsc"),
+        "tsc did not come from local node_modules"
+    );
 
     // Cleanup session first
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

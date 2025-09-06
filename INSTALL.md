@@ -1,8 +1,15 @@
 
 Prerequisites:
 - Docker installed and running
+- Git installed and available in PATH
 - GNU Make (recommended)
 - Optional: Rust toolchain (for building the launcher locally)
+
+Fork mode prerequisites:
+- Linux/macOS/WSL: tmux installed and available in PATH
+  - macOS (Docker Desktop/Colima): install via Homebrew:
+    brew install tmux
+- Windows: Windows Terminal (wt.exe) recommended; fallback to PowerShell windows or Git Bash/mintty
 
 Quick install:
 ```bash

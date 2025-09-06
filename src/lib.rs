@@ -1,18 +1,153 @@
+use atty;
+use fs2::FileExt;
+use once_cell::sync::{Lazy, OnceCell};
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
-use fs2::FileExt;
 use std::io;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::net::{TcpStream, ToSocketAddrs, TcpListener, Shutdown};
+use std::net::{Shutdown, TcpListener, TcpStream, ToSocketAddrs};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 use which::which;
-use once_cell::sync::{Lazy, OnceCell};
-use atty;
+
+#[cfg(windows)]
+fn ps_quote_inner(s: &str) -> String {
+    let esc = s.replace('\'', "''");
+    format!("'{}'", esc)
+}
+
+#[cfg(windows)]
+/// Build the PowerShell inner command for fork panes (used by tests).
+pub fn fork_ps_inner_string(
+    agent: &str,
+    sid: &str,
+    i: usize,
+    pane_dir: &std::path::Path,
+    pane_state_dir: &std::path::Path,
+    child_args: &[String],
+) -> String {
+    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+    let kv = [
+        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+        ("AIFO_CODER_HOSTNAME", cname),
+        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
+        ("AIFO_CODER_FORK_INDEX", i.to_string()),
+        (
+            "AIFO_CODER_FORK_STATE_DIR",
+            pane_state_dir.display().to_string(),
+        ),
+    ];
+    let mut assigns: Vec<String> = Vec::new();
+    for (k, v) in kv {
+        assigns.push(format!("$env:{}={}", k, ps_quote_inner(&v)));
+    }
+    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    words.extend(child_args.iter().cloned());
+    let cmd = words
+        .iter()
+        .map(|w| ps_quote_inner(w))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let setloc = format!(
+        "Set-Location {}",
+        ps_quote_inner(&pane_dir.display().to_string())
+    );
+    format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
+}
+
+#[cfg(windows)]
+/// Build the Git Bash inner command for fork panes (used by tests).
+pub fn fork_bash_inner_string(
+    agent: &str,
+    sid: &str,
+    i: usize,
+    pane_dir: &std::path::Path,
+    pane_state_dir: &std::path::Path,
+    child_args: &[String],
+) -> String {
+    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
+    let kv = [
+        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
+        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
+        ("AIFO_CODER_HOSTNAME", cname),
+        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
+        ("AIFO_CODER_FORK_INDEX", i.to_string()),
+        (
+            "AIFO_CODER_FORK_STATE_DIR",
+            pane_state_dir.display().to_string(),
+        ),
+    ];
+    let mut exports: Vec<String> = Vec::new();
+    for (k, v) in kv {
+        exports.push(format!("export {}={}", k, shell_escape(&v)));
+    }
+    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    words.extend(child_args.iter().cloned());
+    let cmd = shell_join(&words);
+    let cddir = shell_escape(&pane_dir.display().to_string());
+    format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
+}
+
+#[cfg(windows)]
+/// Map layout to wt.exe split orientation flag.
+pub fn wt_orient_for_layout(layout: &str, i: usize) -> &'static str {
+    match layout {
+        "even-h" => "-H",
+        "even-v" => "-V",
+        _ => {
+            if i % 2 == 0 {
+                "-H"
+            } else {
+                "-V"
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+/// Build argument vector for `wt new-tab -d <dir> <psbin> -NoExit -Command <inner>`.
+pub fn wt_build_new_tab_args(
+    psbin: &std::path::Path,
+    pane_dir: &std::path::Path,
+    inner: &str,
+) -> Vec<String> {
+    vec![
+        "wt".to_string(),
+        "new-tab".to_string(),
+        "-d".to_string(),
+        pane_dir.display().to_string(),
+        psbin.display().to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        inner.to_string(),
+    ]
+}
+
+#[cfg(windows)]
+/// Build argument vector for `wt split-pane <orient> -d <dir> <psbin> -NoExit -Command <inner>`.
+pub fn wt_build_split_args(
+    orient: &str,
+    psbin: &std::path::Path,
+    pane_dir: &std::path::Path,
+    inner: &str,
+) -> Vec<String> {
+    vec![
+        "wt".to_string(),
+        "split-pane".to_string(),
+        orient.to_string(),
+        "-d".to_string(),
+        pane_dir.display().to_string(),
+        psbin.display().to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        inner.to_string(),
+    ]
+}
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -42,7 +177,7 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "AIFO_TOOLEEXEC_TOKEN",
     ]
 });
- 
+
 // Cache for preferred registry prefix resolution within a single process run.
 static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 // Record how the registry prefix was determined this run.
@@ -90,10 +225,7 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     #[cfg(not(unix))]
     let (uid, gid) = (0u32, 0u32);
 
-    let mut args: Vec<String> = vec![
-        "docker".to_string(),
-        "exec".to_string(),
-    ];
+    let mut args: Vec<String> = vec!["docker".to_string(), "exec".to_string()];
     if cfg!(unix) {
         args.push("-u".to_string());
         args.push(format!("{uid}:{gid}"));
@@ -150,7 +282,13 @@ fn kernel_apparmor_enabled() -> bool {
     // Prefer authoritative kernel knob when present
     if let Ok(content) = fs::read_to_string("/sys/module/apparmor/parameters/enabled") {
         let c = content.trim().to_lowercase();
-        if c.starts_with('y') || c.contains("enforce") || c.contains("complain") || c == "1" || c == "yes" || c == "true" {
+        if c.starts_with('y')
+            || c.contains("enforce")
+            || c.contains("complain")
+            || c == "1"
+            || c == "yes"
+            || c == "true"
+        {
             // Double-check proc LSM interface presence
             return Path::new("/proc/self/attr/apparmor/current").exists()
                 && Path::new("/proc/self/attr/apparmor/exec").exists();
@@ -197,7 +335,9 @@ pub fn desired_apparmor_profile() -> Option<String> {
         let trimmed = p.trim();
         let lower = trimmed.to_lowercase();
         // Allow explicit disabling via env var
-        if trimmed.is_empty() || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str()) {
+        if trimmed.is_empty()
+            || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str())
+        {
             return None;
         }
         if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
@@ -217,7 +357,9 @@ pub fn desired_apparmor_profile() -> Option<String> {
         if apparmor_profile_available("aifo-coder") {
             Some("aifo-coder".to_string())
         } else if apparmor_profile_available("docker-default") {
-            eprintln!("aifo-coder: AppArmor profile 'aifo-coder' not loaded; using 'docker-default'.");
+            eprintln!(
+                "aifo-coder: AppArmor profile 'aifo-coder' not loaded; using 'docker-default'."
+            );
             Some("docker-default".to_string())
         } else {
             eprintln!("aifo-coder: No known AppArmor profile loaded; continuing without explicit profile.");
@@ -235,7 +377,9 @@ pub fn desired_apparmor_profile_quiet() -> Option<String> {
         let trimmed = p.trim();
         let lower = trimmed.to_lowercase();
         // Allow explicit disabling via env var
-        if trimmed.is_empty() || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str()) {
+        if trimmed.is_empty()
+            || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str())
+        {
             return None;
         }
         if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
@@ -274,12 +418,13 @@ fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
 }
 
 fn registry_cache_path() -> Option<PathBuf> {
-    let base = env::var("XDG_RUNTIME_DIR").ok().filter(|s| !s.is_empty())
+    let base = env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
     Some(base.join("aifo-coder.regprefix"))
 }
-
 
 fn write_registry_cache_disk(s: &str) {
     if let Some(path) = registry_cache_path() {
@@ -316,7 +461,10 @@ pub fn preferred_registry_prefix() -> String {
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
-        eprintln!("aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'", s);
+        eprintln!(
+            "aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'",
+            s
+        );
         let v = s;
         let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
         let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
@@ -324,7 +472,11 @@ pub fn preferred_registry_prefix() -> String {
         return v;
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -333,7 +485,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -342,7 +498,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -351,7 +511,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -360,7 +524,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -369,7 +537,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -378,7 +550,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -387,7 +563,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -396,7 +576,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -405,7 +589,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -414,7 +602,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -423,7 +615,11 @@ pub fn preferred_registry_prefix() -> String {
         };
     }
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -480,7 +676,9 @@ pub fn preferred_registry_prefix() -> String {
                 return v;
             }
         } else {
-            eprintln!("aifo-coder: curl invocation failed; falling back to TCP reachability check.");
+            eprintln!(
+                "aifo-coder: curl invocation failed; falling back to TCP reachability check."
+            );
         }
     } else {
         eprintln!("aifo-coder: curl not found; falling back to TCP reachability check.");
@@ -503,7 +701,11 @@ pub fn preferred_registry_prefix() -> String {
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 pub fn preferred_registry_prefix_quiet() -> String {
     // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").clone() {
+    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .clone()
+    {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
             RegistryProbeTestMode::CurlFail => String::new(),
@@ -588,7 +790,11 @@ pub fn preferred_registry_prefix_quiet() -> String {
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
     // Test override (without env): when set, do not expose a source; treat as unknown
-    if REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock").is_some() {
+    if REGISTRY_PROBE_OVERRIDE
+        .lock()
+        .expect("probe override lock")
+        .is_some()
+    {
         return "unknown".to_string();
     }
     // Test hook: reflect forced probe source deterministically
@@ -624,14 +830,20 @@ pub fn ensure_file_exists(p: &Path) -> io::Result<()> {
 
 /// Join arguments with conservative shell escaping.
 pub fn shell_join(args: &[String]) -> String {
-    args.iter().map(|a| shell_escape(a)).collect::<Vec<_>>().join(" ")
+    args.iter()
+        .map(|a| shell_escape(a))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Escape a single shell word safely for POSIX sh.
 pub fn shell_escape(s: &str) -> String {
     if s.is_empty() {
         "''".to_string()
-    } else if s.chars().all(|c| c.is_ascii_alphanumeric() || "-_=./:@".contains(c)) {
+    } else if s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "-_=./:@".contains(c))
+    {
         s.to_string()
     } else {
         let escaped = s.replace('\'', "'\"'\"'");
@@ -639,8 +851,116 @@ pub fn shell_escape(s: &str) -> String {
     }
 }
 
-/// Candidate lock file locations, ordered by preference.
+/// Escape a string as a JSON string literal (double-quoted) with required escapes.
+pub fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                // Control characters -> \u00XX
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+//// Repository-scoped locking helpers and candidate paths
+
+/// Try to detect the Git repository root (absolute canonical path).
+/// Returns Some(repo_root) when inside a Git repository; otherwise None.
+pub fn repo_root() -> Option<PathBuf> {
+    // Use `git rev-parse --show-toplevel` to detect the repository top-level
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(s);
+    // Prefer canonical absolute path if possible
+    fs::canonicalize(&p).ok().or(Some(p))
+}
+
+/// Normalize a repository path string for hashing to a stable key.
+/// - Windows: convert separators to backslashes, case-fold the full path to lowercase,
+///   then uppercase drive letter if present (e.g., c:\ -> C:\).
+/// - Other OS: use the canonical absolute path as-is.
+pub fn normalized_repo_key_for_hash(p: &Path) -> String {
+    let abs = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let s = abs.to_string_lossy().to_string();
+    #[cfg(windows)]
+    {
+        // Normalize separators to backslashes and case-fold
+        let mut t = s.replace('/', "\\").to_ascii_lowercase();
+        // Uppercase drive letter if path starts with "c:\" style
+        if t.len() >= 2 && t.as_bytes()[1] == b':' {
+            let mut chs: Vec<u8> = t.into_bytes();
+            chs[0] = (chs[0] as char).to_ascii_uppercase() as u8;
+            return String::from_utf8(chs).unwrap_or_default();
+        }
+        t
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
+/// Simple stable 64-bit FNV-1a hash for strings; returns 16-hex lowercase id.
+fn hash_repo_key_hex(s: &str) -> String {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 1099511628211;
+    let mut h: u64 = FNV_OFFSET;
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(FNV_PRIME);
+    }
+    format!("{:016x}", h)
+}
+
+/// Candidate lock file locations.
+/// - If inside a Git repository:
+///   1) <repo_root>/.aifo-coder.lock
+///   2) <xdg_runtime>/aifo-coder.<hash(repo_root)>.lock
+/// - Otherwise (not in a Git repo), legacy ordered candidates:
+///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
 pub fn candidate_lock_paths() -> Vec<PathBuf> {
+    if let Some(root) = repo_root() {
+        let mut paths = Vec::new();
+        // Preferred: in-repo lock (if writable, acquire will succeed)
+        paths.push(root.join(".aifo-coder.lock"));
+        // Secondary: runtime-scoped hashed lock path
+        let rt_base = env::var("XDG_RUNTIME_DIR")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir());
+        let key = normalized_repo_key_for_hash(&root);
+        let hash = hash_repo_key_hex(&key);
+        paths.push(rt_base.join(format!("aifo-coder.{}.lock", hash)));
+        // Tertiary fallback: always include a tmp-scoped lock path for robustness and tests
+        paths.push(PathBuf::from("/tmp/aifo-coder.lock"));
+        return paths;
+    }
+
+    // Not inside a Git repository: legacy behavior
     let mut paths = Vec::new();
     if let Some(home) = home::home_dir() {
         paths.push(home.join(".aifo-coder.lock"));
@@ -658,7 +978,12 @@ pub fn candidate_lock_paths() -> Vec<PathBuf> {
 }
 
 /// Build the docker run command for the given agent invocation, and return a preview string.
-pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparmor_profile: Option<&str>) -> io::Result<(Command, String)> {
+pub fn build_docker_cmd(
+    agent: &str,
+    passthrough: &[String],
+    image: &str,
+    apparmor_profile: Option<&str>,
+) -> io::Result<(Command, String)> {
     let runtime = container_runtime_path()?;
 
     // TTY flags
@@ -668,13 +993,14 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
         vec!["-i"]
     };
 
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     // UID/GID mapping
     #[cfg(unix)]
-    let (uid, gid) = {
-        (u32::from(getuid()), u32::from(getgid()))
-    };
+    let (uid, gid) = { (u32::from(getuid()), u32::from(getgid())) };
 
     // Forward selected env vars (inherit from host)
     let mut env_flags: Vec<OsString> = Vec::new();
@@ -701,7 +1027,9 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     #[cfg(unix)]
     {
         env_flags.push(OsString::from("-e"));
-        env_flags.push(OsString::from(format!("XDG_RUNTIME_DIR=/tmp/runtime-{uid}")));
+        env_flags.push(OsString::from(format!(
+            "XDG_RUNTIME_DIR=/tmp/runtime-{uid}"
+        )));
     }
     // Ensure pinentry can bind to the terminal when interactive sessions are used
     if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
@@ -784,31 +1112,81 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     let mut volume_flags: Vec<OsString> = Vec::new();
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
 
-    // Crush state
-    let crush_dir = host_home.join(".local").join("share").join("crush");
-    fs::create_dir_all(&crush_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
-    // Additional Crush state directory (~/.crush)
-    let crush_state_dir = host_home.join(".crush");
-    fs::create_dir_all(&crush_state_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+    // Per-pane state mounts (Phase 1): when AIFO_CODER_FORK_STATE_DIR is set, mount per-pane
+    // .aider/.codex/.crush directories instead of HOME-based equivalents to avoid shared-state races.
+    if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
+        let sd = state_dir.trim();
+        if !sd.is_empty() {
+            let base = PathBuf::from(sd);
+            let aider_dir = base.join(".aider");
+            let codex_dir = base.join(".codex");
+            let crush_dir = base.join(".crush");
+            let _ = fs::create_dir_all(&aider_dir);
+            let _ = fs::create_dir_all(&codex_dir);
+            let _ = fs::create_dir_all(&crush_dir);
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
+        } else {
+            // Fallback to legacy HOME-based mounts if the env var is empty
+            // Crush state
+            let crush_dir = host_home.join(".local").join("share").join("crush");
+            fs::create_dir_all(&crush_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+            // Additional Crush state directory (~/.crush)
+            let crush_state_dir = host_home.join(".crush");
+            fs::create_dir_all(&crush_state_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
 
-    // Codex state
-    let codex_dir = host_home.join(".codex");
-    fs::create_dir_all(&codex_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            // Codex state
+            let codex_dir = host_home.join(".codex");
+            fs::create_dir_all(&codex_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
 
-    // Aider state dir
-    let aider_dir = host_home.join(".aider");
-    fs::create_dir_all(&aider_dir).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            // Aider state dir
+            let aider_dir = host_home.join(".aider");
+            fs::create_dir_all(&aider_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+        }
+    } else {
+        // Legacy HOME-based mounts (non-fork mode)
+        // Crush state
+        let crush_dir = host_home.join(".local").join("share").join("crush");
+        fs::create_dir_all(&crush_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+        // Additional Crush state directory (~/.crush)
+        let crush_state_dir = host_home.join(".crush");
+        fs::create_dir_all(&crush_state_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+
+        // Codex state
+        let codex_dir = host_home.join(".codex");
+        fs::create_dir_all(&codex_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+
+        // Aider state dir
+        let aider_dir = host_home.join(".aider");
+        fs::create_dir_all(&aider_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+    }
 
     // Aider root-level config files
-    for fname in [".aider.conf.yml", ".aider.model.metadata.json", ".aider.model.settings.yml"] {
+    for fname in [
+        ".aider.conf.yml",
+        ".aider.model.metadata.json",
+        ".aider.model.settings.yml",
+    ] {
         let src = host_home.join(fname);
         ensure_file_exists(&src).ok();
         volume_flags.push(OsString::from("-v"));
@@ -822,11 +1200,18 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     volume_flags.push(path_pair(&gitconfig, "/home/coder/.gitconfig"));
 
     // Timezone files (optional)
-    for (host_path, container_path) in [("/etc/localtime", "/etc/localtime"), ("/etc/timezone", "/etc/timezone")] {
+    for (host_path, container_path) in [
+        ("/etc/localtime", "/etc/localtime"),
+        ("/etc/timezone", "/etc/timezone"),
+    ] {
         let hp = Path::new(host_path);
         if hp.exists() {
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!("{}:{}:ro", hp.display(), container_path)));
+            volume_flags.push(OsString::from(format!(
+                "{}:{}:ro",
+                hp.display(),
+                container_path
+            )));
         }
     }
 
@@ -846,7 +1231,10 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
         let _ = fs::set_permissions(&gnupg_dir, fs::Permissions::from_mode(0o700));
     }
     volume_flags.push(OsString::from("-v"));
-    volume_flags.push(OsString::from(format!("{}:/home/coder/.gnupg-host:ro", gnupg_dir.display())));
+    volume_flags.push(OsString::from(format!(
+        "{}:/home/coder/.gnupg-host:ro",
+        gnupg_dir.display()
+    )));
     // Optional: mount host-provided shim directory into PATH front inside the agent
     if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
         if !shim_dir.trim().is_empty() {
@@ -886,10 +1274,18 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
 
     // Container name/hostname
-    let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
-        .unwrap_or_else(|_| format!("{}-{}", prefix, agent));
+    // Default to a unique per-run container name to avoid conflicts across concurrent runs,
+    // while still honoring explicit overrides via environment variables.
+    let container_name = env::var("AIFO_CODER_CONTAINER_NAME").unwrap_or_else(|_| {
+        format!("{}-{}-{}", prefix, agent, create_session_id())
+    });
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
-    let name_flags = vec![OsString::from("--name"), OsString::from(&container_name), OsString::from("--hostname"), OsString::from(&hostname)];
+    let name_flags = vec![
+        OsString::from("--name"),
+        OsString::from(&container_name),
+        OsString::from("--hostname"),
+        OsString::from(&hostname),
+    ];
 
     // Agent command vector and join with shell escaping
     let mut agent_cmd = vec![agent.to_string()];
@@ -986,7 +1382,8 @@ pub fn build_docker_cmd(agent: &str, passthrough: &[String], image: &str, apparm
     #[cfg(target_os = "linux")]
     {
         if env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
-            cmd.arg("--add-host").arg("host.docker.internal:host-gateway");
+            cmd.arg("--add-host")
+                .arg("host.docker.internal:host-gateway");
             preview_args.push("--add-host".to_string());
             preview_args.push("host.docker.internal:host-gateway".to_string());
         }
@@ -1057,24 +1454,27 @@ pub fn acquire_lock() -> io::Result<File> {
         if let Some(parent) = p.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        match OpenOptions::new().create(true).read(true).write(true).open(&p) {
-            Ok(f) => {
-                match f.try_lock_exclusive() {
-                    Ok(_) => {
-                        return Ok(f);
-                    }
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                        return Err(io::Error::new(
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&p)
+        {
+            Ok(f) => match f.try_lock_exclusive() {
+                Ok(_) => {
+                    return Ok(f);
+                }
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "Another coding agent is already running (lock held). Please try again later.",
                         ));
-                    }
-                    Err(e) => {
-                        last_err = Some(e);
-                        continue;
-                    }
                 }
-            }
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+            },
             Err(e) => {
                 last_err = Some(e);
                 continue;
@@ -1101,22 +1501,31 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<File> {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    match OpenOptions::new().create(true).read(true).write(true).open(p) {
-        Ok(f) => {
-            match f.try_lock_exclusive() {
-                Ok(_) => Ok(f),
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Another coding agent is already running (lock held). Please try again later.",
-                )),
-                Err(e) => Err(e),
-            }
-        }
+    match OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(p)
+    {
+        Ok(f) => match f.try_lock_exclusive() {
+            Ok(_) => Ok(f),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Another coding agent is already running (lock held). Please try again later.",
+            )),
+            Err(e) => Err(e),
+        },
         Err(e) => Err(e),
     }
 }
 
-fn create_session_id() -> String {
+/// Return true if the launcher should acquire a repository/user lock for this process.
+/// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
+pub fn should_acquire_lock() -> bool {
+    env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
+}
+
+pub fn create_session_id() -> String {
     // Compose a short, mostly-unique ID from time and pid without extra deps
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -1184,12 +1593,22 @@ fn sidecar_network_name(id: &str) -> String {
     format!("aifo-net-{id}")
 }
 
-fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("network").arg("create").arg(name);
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
+    // Fast path: already exists
+    let exists = Command::new(runtime)
+        .arg("network")
+        .arg("inspect")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if exists {
+        return true;
     }
+
+    // Create the network (best-effort)
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
@@ -1201,7 +1620,30 @@ fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
             ])
         );
     }
+    let mut cmd = Command::new(runtime);
+    cmd.arg("network").arg("create").arg(name);
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
     let _ = cmd.status();
+
+    // Verify with brief retries to absorb races between concurrent creators
+    for _ in 0..20 {
+        let ok = Command::new(runtime)
+            .arg("network")
+            .arg("inspect")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
 }
 
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
@@ -1248,7 +1690,12 @@ fn build_sidecar_run_preview(
     pwd: &Path,
     apparmor: Option<&str>,
 ) -> Vec<String> {
-    let mut args: Vec<String> = vec!["docker".to_string(), "run".to_string(), "-d".to_string(), "--rm".to_string()];
+    let mut args: Vec<String> = vec![
+        "docker".to_string(),
+        "run".to_string(),
+        "-d".to_string(),
+        "--rm".to_string(),
+    ];
     args.push("--name".to_string());
     args.push(name.to_string());
     if let Some(net) = network {
@@ -1400,9 +1847,19 @@ fn build_sidecar_exec_preview(
 
 /// Rollout Phase 1: start a toolchain sidecar and run the provided command inside it.
 /// Returns the exit code of the executed command.
-pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str>, no_cache: bool, verbose: bool, dry_run: bool) -> io::Result<i32> {
+pub fn toolchain_run(
+    kind_in: &str,
+    args: &[String],
+    image_override: Option<&str>,
+    no_cache: bool,
+    verbose: bool,
+    dry_run: bool,
+) -> io::Result<i32> {
     let runtime = container_runtime_path()?;
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     #[cfg(unix)]
     let uid: u32 = u32::from(getuid());
@@ -1417,13 +1874,21 @@ pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
-    let session_id = create_session_id();
+    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| create_session_id());
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
-    // Create network (best-effort)
+    // Ensure network exists before starting sidecar
     if !dry_run {
-        create_network_if_possible(&runtime, &net_name, verbose);
+        if !ensure_network_exists(&runtime, &net_name, verbose) {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to create or verify network {}", net_name),
+            ));
+        }
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -1446,21 +1911,53 @@ pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str
     }
 
     if !dry_run {
-        let mut run_cmd = Command::new(&runtime);
-        for a in &run_preview_args[1..] {
-            run_cmd.arg(a);
-        }
-        if !verbose {
-            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        }
-        let status = run_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
-        if !status.success() {
-            // Cleanup network
-            remove_network(&runtime, &net_name, verbose);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("sidecar container failed to start (exit: {:?})", status.code()),
-            ));
+        // If a sidecar with this name already exists, reuse it (another pane may have started it)
+        let exists = Command::new(&runtime)
+            .arg("inspect")
+            .arg(&name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            let mut run_cmd = Command::new(&runtime);
+            for a in &run_preview_args[1..] {
+                run_cmd.arg(a);
+            }
+            if !verbose {
+                run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+            }
+            let status = run_cmd
+                .status()
+                .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+            if !status.success() {
+                // Race-safe fallback: consider success if the container exists now (started by a peer)
+                let mut exists_after = false;
+                for _ in 0..5 {
+                    exists_after = Command::new(&runtime)
+                        .arg("inspect")
+                        .arg(&name)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    if exists_after {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !exists_after {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "sidecar container failed to start (exit: {:?})",
+                            status.code()
+                        ),
+                    ));
+                }
+            }
         }
     }
 
@@ -1485,7 +1982,9 @@ pub fn toolchain_run(kind_in: &str, args: &[String], image_override: Option<&str
         for a in &exec_preview_args[1..] {
             exec_cmd.arg(a);
         }
-        let status = exec_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to exec in sidecar: {e}")))?;
+        let status = exec_cmd
+            .status()
+            .map_err(|e| io::Error::new(e.kind(), format!("failed to exec in sidecar: {e}")))?;
         exit_code = status.code().unwrap_or(1);
     }
 
@@ -1509,7 +2008,16 @@ fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
         "rust" => &["cargo", "rustc"],
         "node" => &["node", "npm", "npx", "tsc", "ts-node"],
         "python" => &["python", "python3", "pip", "pip3"],
-        "c-cpp" => &["gcc", "g++", "clang", "clang++", "make", "cmake", "ninja", "pkg-config"],
+        "c-cpp" => &[
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+        ],
         "go" => &["go", "gofmt"],
         _ => &[],
     }
@@ -1571,6 +2079,16 @@ fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
     }
     let pattern: &[u8; 4] = b"\r\n\r\n";
     buf.windows(4).position(|w| w == pattern)
+}
+
+/// Find end of HTTP headers, accepting either CRLF-CRLF or LF-LF separators.
+/// Returns the index just after the header terminator when found.
+fn find_header_end(buf: &[u8]) -> Option<usize> {
+    if let Some(pos) = find_crlfcrlf(buf) {
+        return Some(pos + 4);
+    }
+    // Also accept LF-only separators for robustness
+    buf.windows(2).position(|w| w == b"\n\n").map(|pos| pos + 2)
 }
 
 fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
@@ -1647,13 +2165,17 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
         if !p.is_empty() {
             PathBuf::from(p)
         } else {
-            home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+            home::home_dir()
+                .ok_or_else(|| "home directory not found".to_string())?
+                .join(".aider.conf.yml")
         }
     } else {
-        home::home_dir().ok_or_else(|| "home directory not found".to_string())?.join(".aider.conf.yml")
+        home::home_dir()
+            .ok_or_else(|| "home directory not found".to_string())?
+            .join(".aider.conf.yml")
     };
-    let content = fs::read_to_string(&path)
-        .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
+    let content =
+        fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
 
     // Pre-split lines to allow simple multi-line parsing
     let lines: Vec<&str> = content.lines().collect();
@@ -1740,7 +2262,9 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
                 // Collect subsequent indented lines; also support YAML list items beginning with '-'
                 let mut j = i + 1;
                 // Skip blank/comment lines until first candidate
-                while j < lines.len() && (lines[j].trim().is_empty() || lines[j].trim_start().starts_with('#')) {
+                while j < lines.len()
+                    && (lines[j].trim().is_empty() || lines[j].trim_start().starts_with('#'))
+                {
                     j += 1;
                 }
                 if j >= lines.len() {
@@ -1807,7 +2331,11 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
 
 //// Validate and, if allowed, execute the host 'say' command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
-fn notifications_handle_request(argv: &[String], _verbose: bool, timeout_secs: u64) -> Result<(i32, Vec<u8>), String> {
+fn notifications_handle_request(
+    argv: &[String],
+    _verbose: bool,
+    timeout_secs: u64,
+) -> Result<(i32, Vec<u8>), String> {
     let cfg_argv = parse_notifications_command_config()?;
     if cfg_argv.is_empty() {
         return Err("notifications-command is empty".to_string());
@@ -1850,8 +2378,27 @@ fn notifications_handle_request(argv: &[String], _verbose: bool, timeout_secs: u
 /// Write aifo-shim and tool wrappers into the given directory.
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     let tools = [
-        "cargo","rustc","node","npm","npx","tsc","ts-node","python","pip","pip3",
-        "gcc","g++","clang","clang++","make","cmake","ninja","pkg-config","go","gofmt","notifications-cmd",
+        "cargo",
+        "rustc",
+        "node",
+        "npm",
+        "npx",
+        "tsc",
+        "ts-node",
+        "python",
+        "pip",
+        "pip3",
+        "gcc",
+        "g++",
+        "clang",
+        "clang++",
+        "make",
+        "cmake",
+        "ninja",
+        "pkg-config",
+        "go",
+        "gofmt",
+        "notifications-cmd",
     ];
     fs::create_dir_all(dir)?;
     let shim_path = dir.join("aifo-shim");
@@ -1889,7 +2436,10 @@ exit "$ec"
     }
     for t in tools {
         let path = dir.join(t);
-        fs::write(&path, format!("#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n"))?;
+        fs::write(
+            &path,
+            format!("#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n"),
+        )?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -1900,9 +2450,17 @@ exit "$ec"
 }
 
 /// Start sidecar session for requested kinds; returns the session id.
-pub fn toolchain_start_session(kinds: &[String], overrides: &[(String, String)], no_cache: bool, verbose: bool) -> io::Result<String> {
+pub fn toolchain_start_session(
+    kinds: &[String],
+    overrides: &[(String, String)],
+    no_cache: bool,
+    verbose: bool,
+) -> io::Result<String> {
     let runtime = container_runtime_path()?;
-    let pwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
 
     #[cfg(unix)]
     let uid: u32 = u32::from(getuid());
@@ -1911,9 +2469,17 @@ pub fn toolchain_start_session(kinds: &[String], overrides: &[(String, String)],
     #[cfg(not(unix))]
     let (_uid, _gid) = (0u32, 0u32);
 
-    let session_id = create_session_id();
+    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| create_session_id());
     let net_name = sidecar_network_name(&session_id);
-    create_network_if_possible(&runtime, &net_name, verbose);
+    if !ensure_network_exists(&runtime, &net_name, verbose) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "failed to create session network",
+        ));
+    }
 
     let apparmor_profile = desired_apparmor_profile();
     for k in kinds {
@@ -1939,17 +2505,50 @@ pub fn toolchain_start_session(kinds: &[String], overrides: &[(String, String)],
         if verbose {
             eprintln!("aifo-coder: docker: {}", shell_join(&args));
         }
-        let mut run_cmd = Command::new(&runtime);
-        for a in &args[1..] {
-            run_cmd.arg(a);
-        }
-        if !verbose {
-            run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        }
-        let st = run_cmd.status().map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
-        if !st.success() {
-            remove_network(&runtime, &net_name, verbose);
-            return Err(io::Error::new(io::ErrorKind::Other, "failed to start one or more sidecars"));
+        // If a sidecar with this name already exists, reuse it (another pane may have started it)
+        let exists = Command::new(&runtime)
+            .arg("inspect")
+            .arg(&name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            let mut run_cmd = Command::new(&runtime);
+            for a in &args[1..] {
+                run_cmd.arg(a);
+            }
+            if !verbose {
+                run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+            }
+            let st = run_cmd
+                .status()
+                .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+            if !st.success() {
+                // Race-safe fallback: if the container exists now, proceed; otherwise fail
+                let mut exists_after = false;
+                for _ in 0..5 {
+                    exists_after = Command::new(&runtime)
+                        .arg("inspect")
+                        .arg(&name)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    if exists_after {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !exists_after {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "failed to start one or more sidecars",
+                    ));
+                }
+            }
         }
     }
     Ok(session_id)
@@ -1978,7 +2577,15 @@ fn random_token() -> String {
 
 /// Start a minimal HTTP proxy to execute tools inside sidecars.
 /// Returns (url, token, running_flag, thread_handle).
-pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(String, String, std::sync::Arc<std::sync::atomic::AtomicBool>, std::thread::JoinHandle<()>)> {
+pub fn toolexec_start_proxy(
+    session_id: &str,
+    verbose: bool,
+) -> io::Result<(
+    String,
+    String,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+    std::thread::JoinHandle<()>,
+)> {
     let runtime = container_runtime_path()?;
 
     #[cfg(unix)]
@@ -2049,8 +2656,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                             Ok(0) => break,
                             Ok(n) => {
                                 buf.extend_from_slice(&tmp[..n]);
-                                if let Some(pos) = find_crlfcrlf(&buf) {
-                                    header_end = Some(pos + 4);
+                                if let Some(end) = find_header_end(&buf) {
+                                    header_end = Some(end);
                                 }
                                 if buf.len() > 64 * 1024 {
                                     break;
@@ -2076,9 +2683,19 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         let lower = l.to_ascii_lowercase();
                         if lower.starts_with("authorization:") {
                             if let Some(v) = l.splitn(2, ':').nth(1) {
-                                let v = v.trim();
-                                if v == format!("Bearer {}", token_for_thread2) {
+                                let value = v.trim();
+                                // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                                if value == token_for_thread2 {
                                     auth_ok = true;
+                                } else {
+                                    let mut it = value.split_whitespace();
+                                    let scheme = it.next().unwrap_or("");
+                                    let cred = it.next().unwrap_or("");
+                                    if scheme.eq_ignore_ascii_case("bearer")
+                                        && cred == token_for_thread2
+                                    {
+                                        auth_ok = true;
+                                    }
                                 }
                             }
                         } else if lower.starts_with("content-length:") {
@@ -2090,25 +2707,6 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                                 proto_ok = v.trim() == "1";
                             }
                         }
-                    }
-                    if !auth_ok {
-                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    if !proto_ok {
-                        let msg = b"Unsupported shim protocol; expected 1\n";
-                        let header = format!(
-                            "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            msg.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(msg);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
                     }
                     // Read body
                     let mut body = buf[hend..].to_vec();
@@ -2132,11 +2730,31 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         }
                     }
                     if tool.is_empty() {
-                        let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
+                        // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
+                        if !auth_ok {
+                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        } else if !proto_ok {
+                            let msg = b"Unsupported shim protocol; expected 1\n";
+                            let header = format!(
+                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                msg.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(msg);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        } else {
+                            let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
                     }
                     if tool == "notifications-cmd" {
                         match notifications_handle_request(&argv, verbose, timeout_secs) {
@@ -2176,10 +2794,35 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
+                    // Now enforce Authorization for allowed tools
+                    if !auth_ok {
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    if !proto_ok {
+                        let msg = b"Unsupported shim protocol; expected 1\n";
+                        let header = format!(
+                            "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            msg.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(msg);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
                     let name = sidecar_container_name(kind, &session);
                     let pwd = PathBuf::from(cwd);
                     if verbose {
-                        eprintln!("aifo-coder: proxy exec: tool={} args={:?} cwd={}", tool, argv, pwd.display());
+                        eprintln!(
+                            "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                            tool,
+                            argv,
+                            pwd.display()
+                        );
                     }
                     let mut full_args: Vec<String>;
                     if tool == "tsc" {
@@ -2203,7 +2846,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         &full_args,
                     );
                     if verbose {
-                        eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+                        eprintln!(
+                            "aifo-coder: proxy docker: {}",
+                            shell_join(&exec_preview_args)
+                        );
                     }
                     let started = std::time::Instant::now();
                     let (status_code, body_out) = {
@@ -2248,7 +2894,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     };
                     let dur_ms = started.elapsed().as_millis();
                     if verbose {
-                        eprintln!("aifo-coder: proxy result tool={} kind={} code={} dur_ms={}", tool, kind, status_code, dur_ms);
+                        eprintln!(
+                            "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                            tool, kind, status_code, dur_ms
+                        );
                     }
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -2266,16 +2915,26 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
         }
     }
     // Bind address by OS: 0.0.0.0 on Linux (containers connect), 127.0.0.1 on macOS/Windows
-    let bind_host: &str = if cfg!(target_os = "linux") { "0.0.0.0" } else { "127.0.0.1" };
-    let listener = TcpListener::bind((bind_host, 0)).map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
-    let addr = listener.local_addr().map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
+    let bind_host: &str = if cfg!(target_os = "linux") {
+        "0.0.0.0"
+    } else {
+        "127.0.0.1"
+    };
+    let listener = TcpListener::bind((bind_host, 0))
+        .map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
+    let addr = listener
+        .local_addr()
+        .map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
     let port = addr.port();
     let _ = listener.set_nonblocking(true);
     let running_cl = running.clone();
 
     let handle = std::thread::spawn(move || {
         if verbose {
-            eprintln!("aifo-coder: toolexec proxy listening on {}:{port}", bind_host);
+            eprintln!(
+                "aifo-coder: toolexec proxy listening on {}:{port}",
+                bind_host
+            );
         }
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2305,8 +2964,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                     Ok(0) => break,
                     Ok(n) => {
                         buf.extend_from_slice(&tmp[..n]);
-                        if let Some(pos) = find_crlfcrlf(&buf) {
-                            header_end = Some(pos + 4);
+                        if let Some(end) = find_header_end(&buf) {
+                            header_end = Some(end);
                         }
                         // avoid overly large header
                         if buf.len() > 64 * 1024 {
@@ -2317,7 +2976,8 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 }
             }
             let Some(hend) = header_end else {
-                let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let header =
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
@@ -2333,9 +2993,17 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 let lower = l.to_ascii_lowercase();
                 if lower.starts_with("authorization:") {
                     if let Some(v) = l.splitn(2, ':').nth(1) {
-                        let v = v.trim();
-                        if v == format!("Bearer {}", token_for_thread) {
+                        let value = v.trim();
+                        // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                        if value == token_for_thread {
                             auth_ok = true;
+                        } else {
+                            let mut it = value.split_whitespace();
+                            let scheme = it.next().unwrap_or("");
+                            let cred = it.next().unwrap_or("");
+                            if scheme.eq_ignore_ascii_case("bearer") && cred == token_for_thread {
+                                auth_ok = true;
+                            }
                         }
                     }
                 } else if lower.starts_with("content-length:") {
@@ -2347,25 +3015,6 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                         proto_ok = v.trim() == "1";
                     }
                 }
-            }
-            if !auth_ok {
-                let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            if !proto_ok {
-                let msg = b"Unsupported shim protocol; expected 1\n";
-                let header = format!(
-                    "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    msg.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(msg);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
             }
             // Read body
             let mut body = buf[hend..].to_vec();
@@ -2389,11 +3038,31 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 }
             }
             if tool.is_empty() {
-                let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
+                // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
+                if !auth_ok {
+                    let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                } else if !proto_ok {
+                    let msg = b"Unsupported shim protocol; expected 1\n";
+                    let header = format!(
+                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        msg.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(msg);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                } else {
+                    let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
             }
             if tool == "notifications-cmd" {
                 match notifications_handle_request(&argv, verbose, timeout_secs) {
@@ -2427,8 +3096,30 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             let kind = route_tool_to_sidecar(&tool);
             let allow = sidecar_allowlist(kind);
             if !allow.iter().any(|&t| t == tool.as_str()) {
-                let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let header =
+                    "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
+            // Now enforce Authorization for allowed tools, then protocol
+            if !auth_ok {
+                let header =
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
+            if !proto_ok {
+                let msg = b"Unsupported shim protocol; expected 1\n";
+                let header = format!(
+                    "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    msg.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(msg);
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
@@ -2436,7 +3127,12 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
             if verbose {
-                eprintln!("aifo-coder: proxy exec: tool={} args={:?} cwd={}", tool, argv, pwd.display());
+                eprintln!(
+                    "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                    tool,
+                    argv,
+                    pwd.display()
+                );
             }
             let mut full_args: Vec<String>;
             if tool == "tsc" {
@@ -2461,7 +3157,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
                 &full_args,
             );
             if verbose {
-                eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+                eprintln!(
+                    "aifo-coder: proxy docker: {}",
+                    shell_join(&exec_preview_args)
+                );
             }
             let started = std::time::Instant::now();
             let (status_code, body_out) = {
@@ -2506,7 +3205,10 @@ pub fn toolexec_start_proxy(session_id: &str, verbose: bool) -> io::Result<(Stri
             };
             let dur_ms = started.elapsed().as_millis();
             if verbose {
-                eprintln!("aifo-coder: proxy result tool={} kind={} code={} dur_ms={}", tool, kind, status_code, dur_ms);
+                eprintln!(
+                    "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                    tool, kind, status_code, dur_ms
+                );
             }
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -2599,9 +3301,1410 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     Ok(())
 }
 
+//// Phase 2: Snapshot and cloning primitives (per spec v4)
+
+// Sanitize a ref path component: lowercase, replace invalid chars with '-',
+// collapse repeated '-', and strip leading/trailing '/', '-' and '.'.
+// Additionally trim to a safe length to keep branch names manageable.
+pub fn fork_sanitize_base_label(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_dash = false;
+    for ch in s.chars().map(|c| c.to_ascii_lowercase()) {
+        let valid = ch.is_ascii_alphanumeric();
+        let replace = match ch {
+            '-' | '.' | '/' | ' ' | '_' => true, // treat these as separators
+            _ => !valid,
+        };
+        if replace {
+            if !last_dash && !out.is_empty() {
+                out.push('-');
+                last_dash = true;
+            }
+        } else {
+            out.push(ch);
+            last_dash = false;
+        }
+    }
+    // Trim leading/trailing separators
+    while matches!(out.chars().next(), Some('-') | Some('/') | Some('.')) {
+        out.remove(0);
+    }
+    while matches!(out.chars().last(), Some('-') | Some('/') | Some('.')) {
+        out.pop();
+    }
+    let mut res = if out.is_empty() {
+        "base".to_string()
+    } else {
+        out
+    };
+    // Collapse any accidental double dashes that may remain
+    while res.contains("--") {
+        res = res.replace("--", "-");
+    }
+    // Enforce a conservative max length for the component
+    const MAX_LEN: usize = 48;
+    if res.len() > MAX_LEN {
+        res.truncate(MAX_LEN);
+        // Avoid trailing dash after truncation
+        while matches!(res.chars().last(), Some('-') | Some('/') | Some('.')) && !res.is_empty() {
+            res.pop();
+        }
+        if res.is_empty() {
+            res = "base".to_string();
+        }
+    }
+    res
+}
+
+/// Compute base ref/SHA and label for the current repository state.
+/// Returns (base_label, base_ref_or_sha, base_commit_sha).
+pub fn fork_base_info(repo_root: &Path) -> io::Result<(String, String, String)> {
+    let root = repo_root;
+    // Determine current branch or detached state
+    let branch_out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("rev-parse")
+        .arg("--abbrev-ref")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()?;
+    let head_out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("rev-parse")
+        .arg("--verify")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok();
+
+    let head_sha = head_out
+        .as_ref()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+
+    let (base_label, base_ref_or_sha) = if branch_out.status.success() {
+        let name = String::from_utf8_lossy(&branch_out.stdout)
+            .trim()
+            .to_string();
+        if name == "HEAD" {
+            ("detached".to_string(), head_sha.clone())
+        } else {
+            (fork_sanitize_base_label(&name), name)
+        }
+    } else {
+        ("detached".to_string(), head_sha.clone())
+    };
+    Ok((base_label, base_ref_or_sha, head_sha))
+}
+
+/// Create a temporary snapshot commit that includes staged + unstaged changes without
+/// altering user index or working tree. Uses a temporary index (GIT_INDEX_FILE) and
+/// git commit-tree. Returns the new snapshot commit SHA on success.
+pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> io::Result<String> {
+    // Create a unique temporary index path (under .git when possible)
+    let tmp_idx = {
+        let git_dir_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("rev-parse")
+            .arg("--git-dir")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .ok();
+        let git_dir = git_dir_out
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo_root.join(".git"));
+        let pid = std::process::id();
+        let idx_name = format!("index.aifo-{}-{}", sid, pid);
+        git_dir.join(idx_name)
+    };
+    // Helper to run git with the temporary index
+    let with_tmp_index = |args: &[&str]| -> io::Result<std::process::Output> {
+        let mut cmd = Command::new("git");
+        cmd.arg("-C").arg(repo_root);
+        for a in args {
+            cmd.arg(a);
+        }
+        cmd.env("GIT_INDEX_FILE", &tmp_idx);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.output()
+    };
+
+    // 1) Index current working tree: git add -A
+    let add_out = with_tmp_index(&["add", "-A"])?;
+    if !add_out.status.success() {
+        let _ = fs::remove_file(&tmp_idx);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "git add -A failed for snapshot",
+        ));
+    }
+
+    // 2) write-tree
+    let wt = with_tmp_index(&["write-tree"])?;
+    if !wt.status.success() {
+        let _ = fs::remove_file(&tmp_idx);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "git write-tree failed for snapshot",
+        ));
+    }
+    let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
+
+    // 3) Determine parent if any (HEAD may not exist)
+    let parent = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .arg("rev-parse")
+        .arg("--verify")
+        .arg("HEAD")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    // 4) commit-tree
+    let mut ct = Command::new("git");
+    ct.arg("-C").arg(repo_root);
+    ct.arg("commit-tree").arg(&tree);
+    if let Some(p) = parent.as_deref() {
+        ct.arg("-p").arg(p);
+    }
+    ct.arg("-m").arg(format!("aifo-fork snapshot {}", sid));
+    ct.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let ct_out = ct.output()?;
+    // Clean up temporary index (best-effort)
+    let _ = fs::remove_file(&tmp_idx);
+    if !ct_out.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "git commit-tree failed for snapshot: {}",
+                String::from_utf8_lossy(&ct_out.stderr)
+            ),
+        ));
+    }
+    let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
+    if sha.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "empty snapshot SHA from commit-tree",
+        ));
+    }
+    Ok(sha)
+}
+
+/// Construct the fork branch name for pane i (1-based): fork/<base-label>/<sid>-<i>
+pub fn fork_branch_name(base_label: &str, sid: &str, i: usize) -> String {
+    format!(
+        "fork/{}/{}-{}",
+        fork_sanitize_base_label(base_label),
+        sid,
+        i
+    )
+}
+
+/// Base directory for fork panes: <repo-root>/.aifo-coder/forks/<sid>
+pub fn fork_session_dir(repo_root: &Path, sid: &str) -> PathBuf {
+    repo_root.join(".aifo-coder").join("forks").join(sid)
+}
+
+/// Quick heuristic to detect if a repository uses Git LFS without requiring git-lfs to be installed.
+/// Returns true if:
+/// - .lfsconfig exists at repo root, or
+/// - any .gitattributes file (top-level or nested) contains "filter=lfs".
+pub fn repo_uses_lfs_quick(repo_root: &Path) -> bool {
+    // .lfsconfig presence is a strong hint
+    if repo_root.join(".lfsconfig").exists() {
+        return true;
+    }
+    // Top-level .gitattributes
+    if let Ok(s) = fs::read_to_string(repo_root.join(".gitattributes")) {
+        if s.contains("filter=lfs") {
+            return true;
+        }
+    }
+    // Scan nested .gitattributes files (skip .git directory)
+    fn scan(dir: &Path) -> bool {
+        let rd = match fs::read_dir(dir) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+        for ent in rd {
+            let Ok(ent) = ent else { continue };
+            let path = ent.path();
+            let Ok(ft) = ent.file_type() else { continue };
+            if ft.is_dir() {
+                // Skip VCS directory
+                if ent.file_name().to_string_lossy() == ".git" {
+                    continue;
+                }
+                if scan(&path) {
+                    return true;
+                }
+            } else if ft.is_file() && ent.file_name().to_string_lossy() == ".gitattributes" {
+                if let Ok(s) = fs::read_to_string(&path) {
+                    if s.contains("filter=lfs") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+    scan(repo_root)
+}
+
+/// Clone and checkout N fork panes based on a base ref/SHA.
+/// Each pane is created under <repo-root>/.aifo-coder/forks/<sid>/pane-<i> and
+/// on success returns a vector of (pane_dir, branch_name).
+pub fn fork_clone_and_checkout_panes(
+    repo_root: &Path,
+    sid: &str,
+    panes: usize,
+    base_ref_or_sha: &str,
+    base_label: &str,
+    dissociate: bool,
+) -> io::Result<Vec<(PathBuf, String)>> {
+    if panes < 1 {
+        return Ok(Vec::new());
+    }
+    let repo_abs = fs::canonicalize(repo_root).unwrap_or_else(|_| repo_root.to_path_buf());
+    let root_str = repo_abs.to_string_lossy().to_string();
+    let src_url = if cfg!(windows) {
+        format!("file:///{}", root_str.replace('\\', "/"))
+    } else {
+        format!("file://{}", root_str)
+    };
+    let session_dir = fork_session_dir(&repo_abs, sid);
+    fs::create_dir_all(&session_dir)?;
+
+    // Try to capture push URL from base repo (non-fatal if unavailable)
+    let base_push_url = Command::new("git")
+        .arg("-C")
+        .arg(&repo_abs)
+        .arg("remote")
+        .arg("get-url")
+        .arg("--push")
+        .arg("origin")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let mut results: Vec<(PathBuf, String)> = Vec::with_capacity(panes);
+
+    for i in 1..=panes {
+        let pane_dir = session_dir.join(format!("pane-{}", i));
+        // Try cloning using a plain local path first (most compatible), then fall back to file:// with protocol allow.
+        let mut cloned_ok = false;
+        for (source, allow_file_proto) in [(&root_str, false), (&src_url, true)] {
+            let mut clone = Command::new("git");
+            if allow_file_proto {
+                // Newer Git may restrict file:// by default; allow it explicitly for local cloning.
+                clone.arg("-c").arg("protocol.file.allow=always");
+            }
+            clone
+                .arg("clone")
+                .arg("--no-checkout")
+                .arg("--reference-if-able")
+                .arg(&root_str);
+            if dissociate {
+                clone.arg("--dissociate");
+            }
+            // repository URL/path and destination directory
+            clone.arg(source).arg(&pane_dir);
+            clone.stdout(Stdio::null()).stderr(Stdio::null());
+            let st = clone.status()?;
+            if st.success() {
+                cloned_ok = true;
+                break;
+            } else {
+                // Clean up any partial directory before next attempt
+                let _ = fs::remove_dir_all(&pane_dir);
+            }
+        }
+        if !cloned_ok {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("git clone failed for pane {}", i),
+            ));
+        }
+
+        // Optional: set origin push URL to match base repo
+        if let Some(ref url) = base_push_url {
+            let _ = Command::new("git")
+                .arg("-C")
+                .arg(&pane_dir)
+                .arg("remote")
+                .arg("set-url")
+                .arg("origin")
+                .arg(url)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+
+        // git checkout -b fork/<base>/<sid>-<i> <base_ref_or_sha>
+        let branch = fork_branch_name(base_label, sid, i);
+        let st = Command::new("git")
+            .arg("-C")
+            .arg(&pane_dir)
+            .arg("checkout")
+            .arg("-b")
+            .arg(&branch)
+            .arg(base_ref_or_sha)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+        if !st.success() {
+            let _ = fs::remove_dir_all(&pane_dir);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("git checkout failed for pane {} (branch {})", i, branch),
+            ));
+        }
+
+        // Phase 5: Best-effort submodules and Git LFS
+        // Initialize and update submodules if .gitmodules exists
+        if pane_dir.join(".gitmodules").exists() {
+            let _ = Command::new("git")
+                .arg("-c")
+                .arg("protocol.file.allow=always")
+                .arg("-C")
+                .arg(&pane_dir)
+                .arg("submodule")
+                .arg("update")
+                .arg("--init")
+                .arg("--recursive")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        // Git LFS: if git lfs is available and repository appears to use LFS, perform install/fetch/checkout
+        let lfs_available = Command::new("git")
+            .arg("lfs")
+            .arg("version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if lfs_available {
+            // Heuristic: detect LFS usage via quick scan of .lfsconfig and any *.gitattributes containing filter=lfs
+            let uses_lfs = repo_uses_lfs_quick(&pane_dir);
+            if uses_lfs {
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("install")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("fetch")
+                    .arg("--all")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = Command::new("git")
+                    .arg("-C")
+                    .arg(&pane_dir)
+                    .arg("lfs")
+                    .arg("checkout")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
+
+        results.push((pane_dir, branch));
+    }
+
+    Ok(results)
+}
+
+// Phase 6: fork maintenance and stale-session notice
+
+/// Options for fork clean command.
+pub struct ForkCleanOpts {
+    pub session: Option<String>,
+    pub older_than_days: Option<u64>,
+    pub all: bool,
+    pub dry_run: bool,
+    pub yes: bool,
+    pub force: bool,
+    pub keep_dirty: bool,
+    pub json: bool,
+}
+
+fn read_file_to_string(p: &Path) -> Option<String> {
+    fs::read_to_string(p).ok()
+}
+
+fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
+    // naive key finder supporting single or double quoted or numeric values
+    let needle = format!("\"{}\":", key);
+    if let Some(pos) = meta.find(&needle) {
+        let rest = &meta[pos + needle.len()..];
+        let rest = rest.trim_start();
+        if rest.is_empty() {
+            return None;
+        }
+        let first = rest.as_bytes()[0] as char;
+        if first == '"' || first == '\'' {
+            let quote = first;
+            let mut out = String::new();
+            for ch in rest[1..].chars() {
+                if ch == quote {
+                    return Some(out);
+                } else {
+                    out.push(ch);
+                }
+            }
+            None
+        } else {
+            // numeric token
+            let mut num = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_digit() {
+                    num.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if num.is_empty() {
+                None
+            } else {
+                Some(num)
+            }
+        }
+    } else {
+        None
+    }
+}
+
+fn session_dirs(base: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let rd = match fs::read_dir(base) {
+        Ok(d) => d,
+        Err(_) => return out,
+    };
+    for ent in rd {
+        if let Ok(e) = ent {
+            let p = e.path();
+            if p.is_dir() {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+fn pane_dirs_for_session(session_dir: &Path) -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Ok(rd) = fs::read_dir(session_dir) {
+        for ent in rd {
+            if let Ok(e) = ent {
+                let p = e.path();
+                if p.is_dir() {
+                    if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                        if name.starts_with("pane-") {
+                            v.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    v
+}
+
+fn secs_since_epoch(t: SystemTime) -> u64 {
+    t.duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .as_secs()
+}
+
+/// List fork sessions under the current repository.
+/// Returns exit code (0 on success).
+pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i32> {
+    // Threshold for stale highlighting in list output (default 14d)
+    let list_stale_days: u64 = env::var("AIFO_CODER_FORK_LIST_STALE_DAYS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(14);
+
+    // Helper to collect rows for a single repo
+    fn collect_rows(
+        repo_root: &Path,
+        list_stale_days: u64,
+    ) -> Vec<(String, usize, u64, u64, String, bool)> {
+        let mut rows = Vec::new();
+        let base = repo_root.join(".aifo-coder").join("forks");
+        if !base.exists() {
+            return rows;
+        }
+        for sd in session_dirs(&base) {
+            let sid = sd
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            if sid.is_empty() {
+                continue;
+            }
+            let meta_path = sd.join(".meta.json");
+            let meta = read_file_to_string(&meta_path);
+            let created_at = meta
+                .as_deref()
+                .and_then(|s| meta_extract_value(s, "created_at"))
+                .and_then(|s| s.parse::<u64>().ok())
+                .or_else(|| {
+                    fs::metadata(&sd)
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .map(secs_since_epoch)
+                })
+                .unwrap_or(0);
+            let base_label = meta
+                .as_deref()
+                .and_then(|s| meta_extract_value(s, "base_label"))
+                .unwrap_or_else(|| "(unknown)".to_string());
+            let panes = pane_dirs_for_session(&sd).len();
+            let now = secs_since_epoch(SystemTime::now());
+            let age_days = if created_at > 0 {
+                now.saturating_sub(created_at) / 86400
+            } else {
+                0
+            };
+            let stale = (age_days as u64) >= list_stale_days;
+            rows.push((sid, panes, created_at, age_days, base_label, stale));
+        }
+        rows.sort_by_key(|r| r.2);
+        rows
+    }
+
+    if all_repos {
+        // Optional workspace scan when AIFO_CODER_WORKSPACE_ROOT is set
+        if let Ok(ws) = env::var("AIFO_CODER_WORKSPACE_ROOT") {
+            let ws_path = Path::new(&ws);
+            if ws_path.is_dir() {
+                let mut any = false;
+                if json {
+                    let mut out = String::from("[");
+                    let mut first = true;
+                    if let Ok(rd) = fs::read_dir(ws_path) {
+                        for ent in rd.flatten() {
+                            let repo = ent.path();
+                            if !repo.is_dir() {
+                                continue;
+                            }
+                            let forks_dir = repo.join(".aifo-coder").join("forks");
+                            if !forks_dir.exists() {
+                                continue;
+                            }
+                            let rows = collect_rows(&repo, list_stale_days);
+                            for (sid, panes, created_at, age_days, base_label, stale) in rows {
+                                if !first {
+                                    out.push(',');
+                                }
+                                first = false;
+                                out.push_str(&format!(
+                                    "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                                    json_escape(&repo.display().to_string()),
+                                    sid,
+                                    panes,
+                                    created_at,
+                                    age_days,
+                                    json_escape(&base_label),
+                                    if stale { "true" } else { "false" }
+                                ));
+                            }
+                        }
+                    }
+                    out.push(']');
+                    println!("{}", out);
+                } else {
+                    if let Ok(rd) = fs::read_dir(ws_path) {
+                        for ent in rd.flatten() {
+                            let repo = ent.path();
+                            if !repo.is_dir() {
+                                continue;
+                            }
+                            let forks_dir = repo.join(".aifo-coder").join("forks");
+                            if !forks_dir.exists() {
+                                continue;
+                            }
+                            let rows = collect_rows(&repo, list_stale_days);
+                            if rows.is_empty() {
+                                continue;
+                            }
+                            any = true;
+                            println!(
+                                "aifo-coder: fork sessions under {}/.aifo-coder/forks",
+                                repo.display()
+                            );
+                            for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+                                if stale {
+                                    println!(
+                                        "  {}  panes={}  age={}d  base={}  (stale)",
+                                        sid, panes, age_days, base_label
+                                    );
+                                } else {
+                                    println!(
+                                        "  {}  panes={}  age={}d  base={}",
+                                        sid, panes, age_days, base_label
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if !any {
+                        println!(
+                            "aifo-coder: no fork sessions found under workspace {}",
+                            ws_path.display()
+                        );
+                    }
+                }
+                return Ok(0);
+            }
+            // If workspace root is invalid, report error when --all-repos was requested
+            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            return Ok(1);
+        } else {
+            // Missing env var: explicitly error when --all-repos is requested without workspace root
+            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            return Ok(1);
+        }
+    }
+
+    // Single repository case (default)
+    let rows = collect_rows(repo_root, list_stale_days);
+    if rows.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            let base = repo_root.join(".aifo-coder").join("forks");
+            println!(
+                "aifo-coder: no fork sessions found under {}",
+                base.display()
+            );
+        }
+        return Ok(0);
+    }
+
+    if json {
+        let mut out = String::from("[");
+        for (idx, (sid, panes, created_at, age_days, base_label, stale)) in rows.iter().enumerate()
+        {
+            if idx > 0 {
+                out.push(',');
+            }
+            out.push_str(&format!(
+                "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+                json_escape(&repo_root.display().to_string()),
+                sid, panes, created_at, age_days, json_escape(base_label), if *stale { "true" } else { "false" }
+            ));
+        }
+        out.push(']');
+        println!("{}", out);
+    } else {
+        println!(
+            "aifo-coder: fork sessions under {}/.aifo-coder/forks",
+            repo_root.display()
+        );
+        for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+            if stale {
+                println!(
+                    "  {}  panes={}  age={}d  base={}  (stale)",
+                    sid, panes, age_days, base_label
+                );
+            } else {
+                println!(
+                    "  {}  panes={}  age={}d  base={}",
+                    sid, panes, age_days, base_label
+                );
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// Clean fork sessions and panes with safety protections.
+/// Returns exit code (0 on success; 1 on refusal or error).
+pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
+    let base = repo_root.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        eprintln!(
+            "aifo-coder: no fork sessions directory at {}",
+            base.display()
+        );
+        return Ok(0);
+    }
+    let targets: Vec<PathBuf> = if let Some(ref sid) = opts.session {
+        let p = base.join(sid);
+        if p.exists() {
+            vec![p]
+        } else {
+            Vec::new()
+        }
+    } else if let Some(days) = opts.older_than_days {
+        let now = secs_since_epoch(SystemTime::now());
+        session_dirs(&base)
+            .into_iter()
+            .filter(|sd| {
+                let meta = read_file_to_string(&sd.join(".meta.json"));
+                let created_at = meta
+                    .as_deref()
+                    .and_then(|s| meta_extract_value(s, "created_at"))
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .or_else(|| {
+                        fs::metadata(sd)
+                            .ok()
+                            .and_then(|m| m.modified().ok())
+                            .map(secs_since_epoch)
+                    })
+                    .unwrap_or(0);
+                if created_at == 0 {
+                    return false;
+                }
+                let age = (now.saturating_sub(created_at) / 86400) as u64;
+                age >= days
+            })
+            .collect()
+    } else if opts.all {
+        session_dirs(&base)
+    } else {
+        eprintln!(
+            "aifo-coder: please specify one of --session <sid>, --older-than <days>, or --all."
+        );
+        return Ok(1);
+    };
+
+    if targets.is_empty() {
+        eprintln!("aifo-coder: no matching fork sessions to clean.");
+        return Ok(0);
+    }
+
+    struct PaneStatus {
+        dir: PathBuf,
+        clean: bool,
+        reasons: Vec<String>,
+    }
+
+    let mut plan: Vec<(PathBuf, Vec<PaneStatus>)> = Vec::new();
+    for sd in &targets {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let base_commit = meta
+            .as_deref()
+            .and_then(|s| meta_extract_value(s, "base_commit_sha"));
+        let mut panes_status = Vec::new();
+        for p in pane_dirs_for_session(sd) {
+            let mut reasons = Vec::new();
+            // dirty detection
+            let dirty = Command::new("git")
+                .arg("-C")
+                .arg(&p)
+                .arg("status")
+                .arg("--porcelain=v1")
+                .arg("-uall")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+                .ok()
+                .map(|o| !o.stdout.is_empty())
+                .unwrap_or(false);
+            if dirty {
+                reasons.push("dirty".to_string());
+            } else {
+                // submodule changes detect
+                if let Ok(o) = Command::new("git")
+                    .arg("-C")
+                    .arg(&p)
+                    .arg("submodule")
+                    .arg("status")
+                    .arg("--recursive")
+                    .output()
+                {
+                    let s = String::from_utf8_lossy(&o.stdout);
+                    if s.lines()
+                        .any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U'))
+                    {
+                        reasons.push("submodules-dirty".to_string());
+                    }
+                }
+            }
+            // ahead detection
+            let mut ahead = false;
+            let mut base_unknown = false;
+            if let Some(ref base_sha) = base_commit {
+                let out = Command::new("git")
+                    .arg("-C")
+                    .arg(&p)
+                    .arg("rev-list")
+                    .arg("--count")
+                    .arg(format!("{}..HEAD", base_sha))
+                    .output()
+                    .ok();
+                if let Some(o) = out {
+                    if o.status.success() {
+                        let c = String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<u64>()
+                            .unwrap_or(0);
+                        if c > 0 {
+                            ahead = true;
+                        }
+                    } else {
+                        base_unknown = true;
+                    }
+                } else {
+                    base_unknown = true;
+                }
+            } else {
+                base_unknown = true;
+            }
+            if ahead {
+                reasons.push("ahead".to_string());
+            }
+            if base_unknown {
+                reasons.push("base-unknown".to_string());
+            }
+
+            let clean = reasons.is_empty();
+            panes_status.push(PaneStatus {
+                dir: p,
+                clean,
+                reasons,
+            });
+        }
+        plan.push((sd.clone(), panes_status));
+    }
+
+    // If JSON + dry-run requested, print plan and exit before confirmation/execution (placed before refusal to allow planning even when protected)
+    if opts.json && opts.dry_run {
+        let mut out = String::from("{\"plan\":true,\"sessions\":[");
+        for (idx, (sd, panes)) in plan.iter().enumerate() {
+            let sid = sd
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("(unknown)");
+            let total = panes.len();
+            let clean_count = panes.iter().filter(|ps| ps.clean).count();
+            let protected = total.saturating_sub(clean_count);
+            // Determine deletion scope per session
+            let will_delete_session = if opts.force {
+                true
+            } else if opts.keep_dirty {
+                clean_count == total
+            } else {
+                // When not keeping dirty and not forcing, a full session delete would be attempted,
+                // but may be refused later if protected panes exist.
+                true
+            };
+            if idx > 0 {
+                out.push(',');
+            }
+            out.push_str(&format!(
+                "{{\"sid\":{},\"panes_total\":{},\"panes_clean\":{},\"panes_protected\":{},\"will_delete_session\":{}}}",
+                json_escape(sid),
+                total,
+                clean_count,
+                protected,
+                if will_delete_session { "true" } else { "false" }
+            ));
+        }
+        out.push_str("]}");
+        println!("{}", out);
+        return Ok(0);
+    }
+
+    // Default protection: if any protected pane and neither --force nor --keep-dirty, refuse
+    if !opts.force && !opts.keep_dirty {
+        let mut protected = 0usize;
+        for (_sd, panes) in &plan {
+            for ps in panes {
+                if !ps.clean {
+                    protected += 1;
+                }
+            }
+        }
+        if protected > 0 {
+            eprintln!("aifo-coder: refusing to delete: {} pane(s) are protected (dirty/ahead/base-unknown).", protected);
+            eprintln!(
+                "Use --keep-dirty to remove only clean panes, or --force to delete everything."
+            );
+            // Print summary
+            for (sd, panes) in &plan {
+                let sid = sd
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("(unknown)");
+                for ps in panes {
+                    if !ps.clean {
+                        eprintln!(
+                            "  {} :: {} [{}]",
+                            sid,
+                            ps.dir.display(),
+                            ps.reasons.join(",")
+                        );
+                    }
+                }
+            }
+            return Ok(1);
+        }
+    }
+
+    // Interactive confirmation before deletion (Phase 6 safety prompt)
+    if !opts.dry_run && !opts.yes && !opts.json {
+        if !atty::is(atty::Stream::Stdin) {
+            eprintln!("aifo-coder: refusing to delete without confirmation on non-interactive stdin. Re-run with --yes or --dry-run.");
+            return Ok(1);
+        }
+        let mut del_sessions = 0usize;
+        let mut del_panes = 0usize;
+        if opts.force {
+            del_sessions = plan.len();
+            for (_sd, panes) in &plan {
+                del_panes += panes.len();
+            }
+        } else if opts.keep_dirty {
+            for (_sd, panes) in &plan {
+                let clean_count = panes.iter().filter(|ps| ps.clean).count();
+                del_panes += clean_count;
+                let remaining = panes.len().saturating_sub(clean_count);
+                if remaining == 0 {
+                    del_sessions += 1;
+                }
+            }
+        } else {
+            del_sessions = plan.len();
+            for (_sd, panes) in &plan {
+                del_panes += panes.len();
+            }
+        }
+        if del_sessions > 0 || del_panes > 0 {
+            eprint!(
+                "aifo-coder: about to delete {} session(s) and {} pane(s). Proceed? [y/N] ",
+                del_sessions, del_panes
+            );
+            let _ = std::io::stderr().flush();
+            let mut line = String::new();
+            let _ = std::io::stdin().read_line(&mut line);
+            let ans = line.trim().to_ascii_lowercase();
+            if ans != "y" && ans != "yes" {
+                eprintln!("aborted.");
+                return Ok(1);
+            }
+        }
+    }
+
+    // Execute deletions (or print in dry-run)
+    let mut deleted_sessions_count: usize = 0;
+    let mut deleted_panes_count: usize = 0;
+
+    for (sd, panes) in &plan {
+        let sid = sd
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("(unknown)")
+            .to_string();
+        if opts.force {
+            if opts.dry_run {
+                println!("DRY-RUN: rm -rf {}", sd.display());
+            } else {
+                // count all panes removed and the session
+                deleted_panes_count += panes.len();
+                deleted_sessions_count += 1;
+                // Stop toolchain sidecars and remove session network (best-effort)
+                toolchain_cleanup_session(&sid, false);
+                let _ = fs::remove_dir_all(sd);
+            }
+            continue;
+        }
+        if opts.keep_dirty {
+            let mut remaining: Vec<PathBuf> = Vec::new();
+            for ps in panes {
+                if ps.clean {
+                    if opts.dry_run {
+                        println!("DRY-RUN: rm -rf {}", ps.dir.display());
+                    } else {
+                        deleted_panes_count += 1;
+                        let _ = fs::remove_dir_all(&ps.dir);
+                    }
+                } else {
+                    remaining.push(ps.dir.clone());
+                }
+            }
+            if remaining.is_empty() {
+                if opts.dry_run {
+                    println!("DRY-RUN: rmdir {}", sd.display());
+                } else {
+                    deleted_sessions_count += 1;
+                    // Stop toolchain sidecars and remove session network (best-effort)
+                    toolchain_cleanup_session(&sid, false);
+                    let _ = fs::remove_dir_all(sd);
+                }
+            } else {
+                // Update .meta.json with remaining panes (also refresh branches best-effort)
+                if !opts.dry_run {
+                    // Collect current branches for remaining panes
+                    let mut branches: Vec<String> = Vec::new();
+                    for p in &remaining {
+                        if let Ok(out) = Command::new("git")
+                            .arg("-C")
+                            .arg(p)
+                            .arg("rev-parse")
+                            .arg("--abbrev-ref")
+                            .arg("HEAD")
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::null())
+                            .output()
+                        {
+                            if out.status.success() {
+                                let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                                if !b.is_empty() {
+                                    branches.push(b);
+                                }
+                            }
+                        }
+                    }
+
+                    // Enrich metadata with prior fields and use valid JSON escaping
+                    let prev = read_file_to_string(&sd.join(".meta.json"));
+                    let created_at_num = prev
+                        .as_deref()
+                        .and_then(|s| meta_extract_value(s, "created_at"))
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(0);
+                    let base_label_prev = prev
+                        .as_deref()
+                        .and_then(|s| meta_extract_value(s, "base_label"))
+                        .unwrap_or_else(|| "(unknown)".to_string());
+                    let base_ref_prev = prev
+                        .as_deref()
+                        .and_then(|s| meta_extract_value(s, "base_ref_or_sha"))
+                        .unwrap_or_default();
+                    let base_commit_prev = prev
+                        .as_deref()
+                        .and_then(|s| meta_extract_value(s, "base_commit_sha"))
+                        .unwrap_or_default();
+                    let layout_prev = prev
+                        .as_deref()
+                        .and_then(|s| meta_extract_value(s, "layout"))
+                        .unwrap_or_else(|| "tiled".to_string());
+
+                    let mut meta_out = String::from("{");
+                    meta_out.push_str(&format!("\"sid\":{},", json_escape(&sid)));
+                    meta_out.push_str(&format!("\"created_at\":{},", created_at_num));
+                    meta_out.push_str(&format!(
+                        "\"base_label\":{},",
+                        json_escape(&base_label_prev)
+                    ));
+                    meta_out.push_str(&format!(
+                        "\"base_ref_or_sha\":{},",
+                        json_escape(&base_ref_prev)
+                    ));
+                    meta_out.push_str(&format!(
+                        "\"base_commit_sha\":{},",
+                        json_escape(&base_commit_prev)
+                    ));
+                    meta_out.push_str(&format!("\"layout\":{},", json_escape(&layout_prev)));
+                    meta_out.push_str(&format!("\"panes_remaining\":{},", remaining.len()));
+                    meta_out.push_str("\"pane_dirs\":[");
+                    for (idx, p) in remaining.iter().enumerate() {
+                        if idx > 0 {
+                            meta_out.push(',');
+                        }
+                        meta_out.push_str(&json_escape(&p.display().to_string()));
+                    }
+                    meta_out.push_str("],\"branches\":[");
+                    for (i, b) in branches.iter().enumerate() {
+                        if i > 0 {
+                            meta_out.push(',');
+                        }
+                        meta_out.push_str(&json_escape(b));
+                    }
+                    meta_out.push_str("]}");
+                    let _ = fs::write(sd.join(".meta.json"), meta_out);
+                }
+            }
+        } else {
+            // all panes are clean here (or we would have bailed above)
+            if opts.dry_run {
+                println!("DRY-RUN: rm -rf {}", sd.display());
+            } else {
+                deleted_panes_count += panes.len();
+                deleted_sessions_count += 1;
+                // Stop toolchain sidecars and remove session network (best-effort)
+                toolchain_cleanup_session(&sid, false);
+                let _ = fs::remove_dir_all(sd);
+            }
+        }
+    }
+
+    if !opts.yes && !opts.dry_run {
+        // nothing interactive implemented; --yes is accepted to match CLI but not required
+    }
+
+    if opts.json && !opts.dry_run {
+        println!(
+            "{{\"executed\":true,\"deleted_sessions\":{},\"deleted_panes\":{}}}",
+            deleted_sessions_count, deleted_panes_count
+        );
+    }
+
+    Ok(0)
+}
+
+/// Print a notice about stale fork sessions for the current repository (quiet; best-effort).
+pub fn fork_print_stale_notice() {
+    let repo = match repo_root() {
+        Some(p) => p,
+        None => {
+            // Fallback to current working directory (best-effort), e.g., for doctor runs
+            match env::current_dir() {
+                Ok(p) => p,
+                Err(_) => return,
+            }
+        }
+    };
+    let base = repo.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        return;
+    }
+    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+    let now = secs_since_epoch(SystemTime::now());
+    let mut count = 0usize;
+    let mut oldest = 0u64;
+    for sd in session_dirs(&base) {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let created_at = meta
+            .as_deref()
+            .and_then(|s| meta_extract_value(s, "created_at"))
+            .and_then(|s| s.parse::<u64>().ok())
+            .or_else(|| {
+                fs::metadata(&sd)
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map(secs_since_epoch)
+            })
+            .unwrap_or(0);
+        if created_at == 0 {
+            continue;
+        }
+        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        if age_days >= threshold_days {
+            count += 1;
+            if age_days > oldest {
+                oldest = age_days;
+            }
+        }
+    }
+    if count > 0 {
+        eprintln!("Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}", count, oldest, threshold_days);
+    }
+}
+
+/// Auto-clean clean fork sessions older than the stale threshold when AIFO_CODER_FORK_AUTOCLEAN=1 is set.
+/// - Only removes sessions where all panes are clean (no dirty, ahead, or base-unknown panes).
+/// - Threshold in days is taken from AIFO_CODER_FORK_STALE_DAYS (default 30).
+/// - Prints a concise summary of deletions and survivors.
+pub fn fork_autoclean_if_enabled() {
+    if env::var("AIFO_CODER_FORK_AUTOCLEAN").ok().as_deref() != Some("1") {
+        return;
+    }
+    let repo = match repo_root() {
+        Some(p) => p,
+        None => return,
+    };
+    let base = repo.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        return;
+    }
+    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+    let now = secs_since_epoch(SystemTime::now());
+
+    let mut deleted = 0usize;
+    let mut kept = 0usize;
+    let autoclean_verbose = env::var("AIFO_CODER_FORK_AUTOCLEAN_VERBOSE")
+        .ok()
+        .as_deref()
+        == Some("1");
+    let mut deleted_sids: Vec<String> = Vec::new();
+    let mut kept_sids: Vec<String> = Vec::new();
+
+    for sd in session_dirs(&base) {
+        let meta = read_file_to_string(&sd.join(".meta.json"));
+        let created_at = meta
+            .as_deref()
+            .and_then(|s| meta_extract_value(s, "created_at"))
+            .and_then(|s| s.parse::<u64>().ok())
+            .or_else(|| {
+                fs::metadata(&sd)
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map(secs_since_epoch)
+            })
+            .unwrap_or(0);
+        if created_at == 0 {
+            continue;
+        }
+        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        if age_days < threshold_days {
+            continue;
+        }
+        // Determine if all panes are clean (safe to delete entire session)
+        let mut all_clean = true;
+        let base_commit = meta
+            .as_deref()
+            .and_then(|s| meta_extract_value(s, "base_commit_sha"));
+        let panes = pane_dirs_for_session(&sd);
+        for p in panes {
+            // dirty detection
+            let dirty = Command::new("git")
+                .arg("-C")
+                .arg(&p)
+                .arg("status")
+                .arg("--porcelain=v1")
+                .arg("-uall")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+                .ok()
+                .map(|o| !o.stdout.is_empty())
+                .unwrap_or(false);
+            if dirty {
+                all_clean = false;
+                break;
+            }
+            // submodules dirty
+            if let Ok(o) = Command::new("git")
+                .arg("-C")
+                .arg(&p)
+                .arg("submodule")
+                .arg("status")
+                .arg("--recursive")
+                .output()
+            {
+                let s = String::from_utf8_lossy(&o.stdout);
+                if s.lines()
+                    .any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U'))
+                {
+                    all_clean = false;
+                    break;
+                }
+            }
+            // ahead detection requires known base_commit
+            let mut base_unknown = base_commit.is_none();
+            if let Some(ref base_sha) = base_commit {
+                if let Ok(o) = Command::new("git")
+                    .arg("-C")
+                    .arg(&p)
+                    .arg("rev-list")
+                    .arg("--count")
+                    .arg(format!("{}..HEAD", base_sha))
+                    .output()
+                {
+                    if o.status.success() {
+                        let c = String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<u64>()
+                            .unwrap_or(0);
+                        if c > 0 {
+                            all_clean = false;
+                            break;
+                        }
+                    } else {
+                        base_unknown = true;
+                    }
+                } else {
+                    base_unknown = true;
+                }
+            }
+            if base_unknown {
+                all_clean = false;
+                break;
+            }
+        }
+        if all_clean {
+            let _ = fs::remove_dir_all(&sd);
+            let sid = sd
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            if !sid.is_empty() {
+                deleted_sids.push(sid);
+            }
+            deleted += 1;
+        } else {
+            let sid = sd
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            if !sid.is_empty() {
+                kept_sids.push(sid);
+            }
+            kept += 1;
+        }
+    }
+
+    if deleted > 0 {
+        eprintln!(
+            "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
+            deleted, threshold_days, kept
+        );
+        if autoclean_verbose {
+            if !deleted_sids.is_empty() {
+                eprintln!("  deleted sessions: {}", deleted_sids.join(" "));
+            }
+            if !kept_sids.is_empty() {
+                eprintln!("  protected sessions kept: {}", kept_sids.join(" "));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as aifo_coder;
     use once_cell::sync::Lazy;
     use std::sync::Mutex;
 
@@ -2648,10 +4751,16 @@ mod tests {
     #[test]
     fn test_shell_like_split_args_quotes_and_spaces() {
         let args = shell_like_split_args("'a b' c \"d e\"");
-        assert_eq!(args, vec!["a b".to_string(), "c".to_string(), "d e".to_string()]);
+        assert_eq!(
+            args,
+            vec!["a b".to_string(), "c".to_string(), "d e".to_string()]
+        );
 
         let args2 = shell_like_split_args("  a   'b c'   d  ");
-        assert_eq!(args2, vec!["a".to_string(), "b c".to_string(), "d".to_string()]);
+        assert_eq!(
+            args2,
+            vec!["a".to_string(), "b c".to_string(), "d".to_string()]
+        );
     }
 
     #[test]
@@ -2670,9 +4779,16 @@ mod tests {
         let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications array");
-        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        assert_eq!(
+            argv,
+            vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]
+        );
         // Restore AIFO_NOTIFICATIONS_CONFIG
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
 
         // Restore HOME
         if let Some(v) = old_home {
@@ -2701,10 +4817,21 @@ mod tests {
         let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications nested array");
-        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        assert_eq!(
+            argv,
+            vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]
+        );
         // Restore env
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
-        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
@@ -2724,10 +4851,21 @@ mod tests {
         let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications block");
-        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        assert_eq!(
+            argv,
+            vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]
+        );
         // Restore env
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
-        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
@@ -2746,9 +4884,16 @@ mod tests {
         let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         let argv = parse_notifications_command_config().expect("parse notifications string");
-        assert_eq!(argv, vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]);
+        assert_eq!(
+            argv,
+            vec!["say".to_string(), "--title".to_string(), "AIFO".to_string()]
+        );
         // Restore AIFO_NOTIFICATIONS_CONFIG
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
 
         // Restore HOME
         if let Some(v) = old_home {
@@ -2768,9 +4913,19 @@ mod tests {
         let args = build_sidecar_exec_preview("tc-python", None, pwd, "python", &user_args);
 
         let has_virtual_env = args.iter().any(|s| s == "VIRTUAL_ENV=/workspace/.venv");
-        let has_path_prefix = args.iter().any(|s| s.contains("PATH=/workspace/.venv/bin:"));
-        assert!(has_virtual_env, "exec preview missing VIRTUAL_ENV: {:?}", args);
-        assert!(has_path_prefix, "exec preview missing PATH venv prefix: {:?}", args);
+        let has_path_prefix = args
+            .iter()
+            .any(|s| s.contains("PATH=/workspace/.venv/bin:"));
+        assert!(
+            has_virtual_env,
+            "exec preview missing VIRTUAL_ENV: {:?}",
+            args
+        );
+        assert!(
+            has_path_prefix,
+            "exec preview missing PATH venv prefix: {:?}",
+            args
+        );
     }
 
     #[test]
@@ -2791,10 +4946,18 @@ mod tests {
         let res = notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
         assert!(res.is_err(), "expected error when executable is not 'say'");
         let msg = res.err().unwrap();
-        assert!(msg.contains("only 'say' is allowed"), "unexpected error: {}", msg);
+        assert!(
+            msg.contains("only 'say' is allowed"),
+            "unexpected error: {}",
+            msg
+        );
 
         // Restore AIFO_NOTIFICATIONS_CONFIG
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
 
         // Restore HOME
         if let Some(v) = old_home {
@@ -2976,7 +5139,9 @@ mod tests {
         let pwd = td.path();
         let user_args = vec!["cmake".to_string(), "--version".to_string()];
         let args = build_sidecar_exec_preview("tc-cpp", None, pwd, "c-cpp", &user_args);
-        let has_ccache = args.iter().any(|s| s == "CCACHE_DIR=/home/coder/.cache/ccache");
+        let has_ccache = args
+            .iter()
+            .any(|s| s == "CCACHE_DIR=/home/coder/.cache/ccache");
         assert!(has_ccache, "exec preview missing CCACHE_DIR: {:?}", args);
     }
 
@@ -2990,7 +5155,11 @@ mod tests {
         let has_gopath = args.iter().any(|s| s == "GOPATH=/go");
         let has_mod = args.iter().any(|s| s == "GOMODCACHE=/go/pkg/mod");
         let has_cache = args.iter().any(|s| s == "GOCACHE=/go/build-cache");
-        assert!(has_gopath && has_mod && has_cache, "exec preview missing go envs: {:?}", args);
+        assert!(
+            has_gopath && has_mod && has_cache,
+            "exec preview missing go envs: {:?}",
+            args
+        );
     }
 
     #[test]
@@ -3012,18 +5181,34 @@ mod tests {
         let res = notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
         assert!(res.is_err(), "expected mismatch error, got: {:?}", res);
         let msg = res.err().unwrap();
-        assert!(msg.contains("arguments mismatch"), "unexpected error message: {}", msg);
+        assert!(
+            msg.contains("arguments mismatch"),
+            "unexpected error message: {}",
+            msg
+        );
 
         // Restore env
-        if let Some(v) = old_cfg { std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v); } else { std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG"); }
-        if let Some(v) = old_home { std::env::set_var("HOME", v); } else { std::env::remove_var("HOME"); }
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
     fn test_candidate_lock_paths_includes_xdg_runtime_dir() {
+        // Use a non-repo temp directory to exercise legacy fallback candidates
         let td = tempfile::tempdir().expect("tmpdir");
         let old = std::env::var("XDG_RUNTIME_DIR").ok();
+        let old_cwd = std::env::current_dir().expect("cwd");
         std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        std::env::set_current_dir(td.path()).expect("chdir");
+
         let paths = candidate_lock_paths();
         let expected = td.path().join("aifo-coder.lock");
         assert!(
@@ -3031,16 +5216,61 @@ mod tests {
             "candidate_lock_paths missing expected XDG_RUNTIME_DIR path: {:?}",
             expected
         );
-        // Restore env
-        if let Some(v) = old { std::env::set_var("XDG_RUNTIME_DIR", v); } else { std::env::remove_var("XDG_RUNTIME_DIR"); }
+
+        // Restore env and cwd
+        if let Some(v) = old {
+            std::env::set_var("XDG_RUNTIME_DIR", v);
+        } else {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[test]
+    fn test_candidate_lock_paths_includes_cwd_lock_outside_repo() {
+        // In a non-repo directory, ensure CWD/.aifo-coder.lock appears among legacy candidates
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old_cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(td.path()).expect("chdir");
+        // Unset repo-related envs to avoid confusing repo detection
+        let paths = candidate_lock_paths();
+        let expected = td.path().join(".aifo-coder.lock");
+        // On macOS, /var is often a symlink to /private/var. Canonicalize parent dirs for comparison.
+        let expected_dir_canon = std::fs::canonicalize(td.path()).unwrap_or_else(|_| td.path().to_path_buf());
+        let found = paths.iter().any(|p| {
+            p.file_name().map(|n| n == ".aifo-coder.lock").unwrap_or(false)
+                && p.parent()
+                    .and_then(|d| std::fs::canonicalize(d).ok())
+                    .map(|d| d == expected_dir_canon)
+                    .unwrap_or(false)
+        });
+        assert!(
+            found,
+            "candidate_lock_paths missing expected CWD lock path: {:?} in {:?}",
+            expected,
+            paths
+        );
+        std::env::set_current_dir(old_cwd).ok();
     }
 
     #[test]
     fn test_parse_form_urlencoded_empty_and_missing_values() {
         let pairs = parse_form_urlencoded("a=1&b=&c");
-        assert!(pairs.contains(&(String::from("a"), String::from("1"))), "missing a=1 in {:?}", pairs);
-        assert!(pairs.contains(&(String::from("b"), String::from(""))), "missing b= in {:?}", pairs);
-        assert!(pairs.contains(&(String::from("c"), String::from(""))), "missing c (no '=') in {:?}", pairs);
+        assert!(
+            pairs.contains(&(String::from("a"), String::from("1"))),
+            "missing a=1 in {:?}",
+            pairs
+        );
+        assert!(
+            pairs.contains(&(String::from("b"), String::from(""))),
+            "missing b= in {:?}",
+            pairs
+        );
+        assert!(
+            pairs.contains(&(String::from("c"), String::from(""))),
+            "missing c (no '=') in {:?}",
+            pairs
+        );
     }
 
     #[test]
@@ -3060,8 +5290,16 @@ mod tests {
             Some("docker-default"),
         );
         let r = shell_join(&rust);
-        assert!(!r.contains("aifo-cargo-registry:/usr/local/cargo/registry"), "unexpected cargo registry mount: {}", r);
-        assert!(!r.contains("aifo-cargo-git:/usr/local/cargo/git"), "unexpected cargo git mount: {}", r);
+        assert!(
+            !r.contains("aifo-cargo-registry:/usr/local/cargo/registry"),
+            "unexpected cargo registry mount: {}",
+            r
+        );
+        assert!(
+            !r.contains("aifo-cargo-git:/usr/local/cargo/git"),
+            "unexpected cargo git mount: {}",
+            r
+        );
 
         // node: no npm cache mount
         let node = build_sidecar_run_preview(
@@ -3075,7 +5313,11 @@ mod tests {
             Some("docker-default"),
         );
         let n = shell_join(&node);
-        assert!(!n.contains("aifo-npm-cache:/home/coder/.npm"), "unexpected npm cache mount: {}", n);
+        assert!(
+            !n.contains("aifo-npm-cache:/home/coder/.npm"),
+            "unexpected npm cache mount: {}",
+            n
+        );
 
         // python: no pip cache mount
         let py = build_sidecar_run_preview(
@@ -3089,7 +5331,11 @@ mod tests {
             Some("docker-default"),
         );
         let p = shell_join(&py);
-        assert!(!p.contains("aifo-pip-cache:/home/coder/.cache/pip"), "unexpected pip cache mount: {}", p);
+        assert!(
+            !p.contains("aifo-pip-cache:/home/coder/.cache/pip"),
+            "unexpected pip cache mount: {}",
+            p
+        );
 
         // c-cpp: no ccache volume
         let cpp = build_sidecar_run_preview(
@@ -3103,7 +5349,11 @@ mod tests {
             Some("docker-default"),
         );
         let c = shell_join(&cpp);
-        assert!(!c.contains("aifo-ccache:/home/coder/.cache/ccache"), "unexpected ccache volume: {}", c);
+        assert!(
+            !c.contains("aifo-ccache:/home/coder/.cache/ccache"),
+            "unexpected ccache volume: {}",
+            c
+        );
 
         // go: no /go volume
         let go = build_sidecar_run_preview(
@@ -3118,5 +5368,1302 @@ mod tests {
         );
         let g = shell_join(&go);
         assert!(!g.contains("aifo-go:/go"), "unexpected go volume: {}", g);
+    }
+
+    #[test]
+    fn test_should_acquire_lock_env() {
+        // Default: acquire
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+        assert!(should_acquire_lock(), "should acquire lock by default");
+        // Skip when set to "1"
+        std::env::set_var("AIFO_CODER_SKIP_LOCK", "1");
+        assert!(
+            !should_acquire_lock(),
+            "should not acquire lock when AIFO_CODER_SKIP_LOCK=1"
+        );
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_hashed_lock_path_diff_for_two_repos() {
+        // Create two separate repos and ensure their hashed XDG lock paths differ
+        let td = tempfile::tempdir().expect("tmpdir");
+        let ws = td.path().to_path_buf();
+        let old_xdg = std::env::var("XDG_RUNTIME_DIR").ok();
+        std::env::set_var("XDG_RUNTIME_DIR", &ws);
+
+        // repo A
+        let repo_a = ws.join("repo-a");
+        std::fs::create_dir_all(&repo_a).unwrap();
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&repo_a)
+            .status();
+        std::env::set_current_dir(&repo_a).unwrap();
+        let paths_a = candidate_lock_paths();
+        assert!(
+            paths_a.len() >= 2,
+            "expected at least two candidates for repo A"
+        );
+        let hashed_a = paths_a[1].clone();
+
+        // repo B
+        let repo_b = ws.join("repo-b");
+        std::fs::create_dir_all(&repo_b).unwrap();
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&repo_b)
+            .status();
+        std::env::set_current_dir(&repo_b).unwrap();
+        let paths_b = candidate_lock_paths();
+        assert!(
+            paths_b.len() >= 2,
+            "expected at least two candidates for repo B"
+        );
+        let hashed_b = paths_b[1].clone();
+
+        assert_ne!(
+            hashed_a, hashed_b,
+            "hashed runtime lock path should differ across repos: A={} B={}",
+            hashed_a.display(),
+            hashed_b.display()
+        );
+
+        // restore env/cwd
+        if let Some(v) = old_xdg {
+            std::env::set_var("XDG_RUNTIME_DIR", v);
+        } else {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
+    }
+
+    #[test]
+    fn test_candidate_lock_paths_repo_scoped() {
+        // Create a temporary git repository and ensure repo-scoped lock paths are preferred
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old_cwd = std::env::current_dir().expect("cwd");
+        let old_xdg = std::env::var("XDG_RUNTIME_DIR").ok();
+
+        // Use a temp runtime dir to make the hashed path predictable and writable
+        std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        std::env::set_current_dir(td.path()).expect("chdir");
+
+        // Initialize a git repo
+        let _ = std::fs::create_dir_all(td.path().join(".git"));
+        // Prefer actual git init if available (more realistic)
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+
+        // Resolve repo root (should be Some for initialized repo)
+        let root = repo_root().unwrap_or_else(|| td.path().to_path_buf());
+
+        // Compute expected candidates
+        let first = root.join(".aifo-coder.lock");
+        let key = normalized_repo_key_for_hash(&root);
+        let mut second_base = std::env::var("XDG_RUNTIME_DIR")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir());
+        second_base.push(format!(
+            "aifo-coder.{}.lock",
+            super::hash_repo_key_hex(&key)
+        ));
+
+        let paths = candidate_lock_paths();
+        assert_eq!(
+            paths.get(0),
+            Some(&first),
+            "first candidate must be in-repo lock path"
+        );
+        assert_eq!(
+            paths.get(1),
+            Some(&second_base),
+            "second candidate must be hashed runtime-scoped lock path"
+        );
+
+        // Restore env and cwd
+        if let Some(v) = old_xdg {
+            std::env::set_var("XDG_RUNTIME_DIR", v);
+        } else {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_normalized_repo_key_windows_drive_uppercase_and_backslashes() {
+        // Create a temp dir and verify normalization rules:
+        // - case-fold whole path
+        // - separators are backslashes
+        // - drive letter uppercased
+        let td = tempfile::tempdir().expect("tmpdir");
+        let canon = std::fs::canonicalize(td.path())
+            .expect("canon")
+            .to_string_lossy()
+            .to_string();
+
+        let norm = normalized_repo_key_for_hash(td.path());
+        // Build expected normalization from canonical path
+        let lower = canon.replace('/', "\\").to_ascii_lowercase();
+        let mut expected = lower.into_bytes();
+        if expected.len() >= 2 && expected[1] == b':' {
+            expected[0] = (expected[0] as char).to_ascii_uppercase() as u8;
+        }
+        let expected = String::from_utf8(expected).unwrap();
+        assert_eq!(norm, expected, "normalized repo key mismatch on Windows");
+    }
+
+    #[test]
+    fn test_build_docker_cmd_uses_per_pane_state_mounts() {
+        // Skip if docker isn't available on this host
+        if crate::container_runtime_path().is_err() {
+            eprintln!("skipping: docker not found in PATH");
+            return;
+        }
+
+        let td = tempfile::tempdir().expect("tmpdir");
+        let state_dir = td.path().to_path_buf();
+
+        // Save and set env
+        let old = std::env::var("AIFO_CODER_FORK_STATE_DIR").ok();
+        std::env::set_var("AIFO_CODER_FORK_STATE_DIR", &state_dir);
+
+        let args = vec!["--help".to_string()];
+        let (_cmd, preview) =
+            crate::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd");
+
+        let sd_aider = format!("{}:/home/coder/.aider", state_dir.join(".aider").display());
+        let sd_codex = format!("{}:/home/coder/.codex", state_dir.join(".codex").display());
+        let sd_crush = format!("{}:/home/coder/.crush", state_dir.join(".crush").display());
+
+        assert!(
+            preview.contains(&sd_aider),
+            "preview missing per-pane .aider mount: {}",
+            preview
+        );
+        assert!(
+            preview.contains(&sd_codex),
+            "preview missing per-pane .codex mount: {}",
+            preview
+        );
+        assert!(
+            preview.contains(&sd_crush),
+            "preview missing per-pane .crush mount: {}",
+            preview
+        );
+
+        // Ensure home-based mounts for these dirs are not present when per-pane state is set
+        if let Some(home) = home::home_dir() {
+            let home_aider = format!("{}:/home/coder/.aider", home.join(".aider").display());
+            let home_codex = format!("{}:/home/coder/.codex", home.join(".codex").display());
+            let home_crush1 = format!(
+                "{}:/home/coder/.local/share/crush",
+                home.join(".local").join("share").join("crush").display()
+            );
+            let home_crush2 = format!("{}:/home/coder/.crush", home.join(".crush").display());
+            assert!(
+                !preview.contains(&home_aider),
+                "preview should not include HOME .aider when per-pane state is set: {}",
+                preview
+            );
+            assert!(
+                !preview.contains(&home_codex),
+                "preview should not include HOME .codex when per-pane state is set: {}",
+                preview
+            );
+            assert!(
+                !preview.contains(&home_crush1),
+                "preview should not include HOME .local/share/crush when per-pane state is set: {}",
+                preview
+            );
+            assert!(
+                !preview.contains(&home_crush2),
+                "preview should not include HOME .crush when per-pane state is set: {}",
+                preview
+            );
+        }
+
+        // Restore env
+        if let Some(v) = old {
+            std::env::set_var("AIFO_CODER_FORK_STATE_DIR", v);
+        } else {
+            std::env::remove_var("AIFO_CODER_FORK_STATE_DIR");
+        }
+    }
+
+    // -------------------------
+    // Phase 2 unit tests
+    // -------------------------
+
+    #[test]
+    fn test_fork_sanitize_base_label_rules() {
+        assert_eq!(fork_sanitize_base_label("Main Feature"), "main-feature");
+        assert_eq!(
+            fork_sanitize_base_label("Release/2025.09"),
+            "release-2025-09"
+        );
+        assert_eq!(fork_sanitize_base_label("...Weird__Name///"), "weird-name");
+        // Length trimming and trailing cleanup
+        let long = "A".repeat(200);
+        let s = fork_sanitize_base_label(&long);
+        assert!(
+            !s.is_empty() && s.len() <= 48,
+            "sanitized too long: {}",
+            s.len()
+        );
+    }
+
+    fn have_git() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    // Minimal helper to initialize a git repository with one commit
+    fn init_repo(dir: &std::path::Path) {
+        let _ = std::process::Command::new("git")
+            .arg("init")
+            .current_dir(dir)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "UT"])
+            .current_dir(dir)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "ut@example.com"])
+            .current_dir(dir)
+            .status();
+        let _ = std::fs::write(dir.join("init.txt"), "x\n");
+        let _ = std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(dir)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(dir)
+            .status();
+    }
+
+    #[test]
+    fn test_fork_base_info_branch_and_detached() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .expect("git init")
+            .success());
+
+        // configure identity (commit-tree does not need it, but normal commit may)
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+
+        // make initial commit
+        std::fs::write(repo.join("README.md"), "hello\n").expect("write");
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        // verify base info on branch
+        let (label, base, head) = fork_base_info(repo).expect("base info");
+        assert!(!head.is_empty(), "HEAD sha must be non-empty");
+        // Default branch could be 'master' or 'main' depending on git config; accept either
+        assert!(
+            base == "master" || base == "main",
+            "expected base to be current branch name, got {}",
+            base
+        );
+        assert!(
+            label == "master" || label == "main",
+            "expected label to match sanitized branch name, got {}",
+            label
+        );
+
+        // detached
+        assert!(std::process::Command::new("git")
+            .args(["checkout", "--detach", "HEAD"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let (label2, base2, head2) = fork_base_info(repo).expect("base info detached");
+        assert_eq!(label2, "detached");
+        assert_eq!(base2, head2);
+    }
+
+    #[test]
+    fn test_fork_create_snapshot_commit_exists() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+        std::fs::write(repo.join("a.txt"), "a\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "c1"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        // dirty change (unstaged or staged)
+        std::fs::write(repo.join("b.txt"), "b\n").unwrap();
+
+        // create snapshot
+        let sid = "ut";
+        let snap = fork_create_snapshot(repo, sid).expect("snapshot");
+        assert_eq!(snap.len(), 40, "snapshot should be a 40-hex sha: {}", snap);
+
+        // verify it's a commit object
+        let out = std::process::Command::new("git")
+            .arg("cat-file")
+            .arg("-t")
+            .arg(&snap)
+            .current_dir(repo)
+            .output()
+            .expect("git cat-file");
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert_eq!(
+            t, "commit",
+            "snapshot object type must be commit, got {}",
+            t
+        );
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_creates_branches() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit on default branch
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+        std::fs::write(repo.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        // Determine current branch name
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        let sid = "forksid";
+        let res = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
+            .expect("clone panes");
+        assert_eq!(res.len(), 2, "expected two panes");
+
+        // Verify branches are checked out in panes
+        for (idx, (pane_dir, branch)) in res.iter().enumerate() {
+            assert!(
+                pane_dir.exists(),
+                "pane dir must exist: {}",
+                pane_dir.display()
+            );
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .current_dir(pane_dir)
+                .output()
+                .unwrap();
+            let head_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            assert_eq!(
+                &head_branch,
+                branch,
+                "pane {} HEAD should be {}",
+                idx + 1,
+                branch
+            );
+        }
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_inits_submodules() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+
+        // Create submodule repository
+        let sub = td.path().join("sm");
+        std::fs::create_dir_all(&sub).expect("mkdir sm");
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&sub)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&sub)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&sub)
+            .status();
+        std::fs::write(sub.join("sub.txt"), "sub\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&sub)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "sub init"])
+            .current_dir(&sub)
+            .status()
+            .unwrap()
+            .success());
+
+        // Create base repository and add submodule
+        let base = td.path().join("base");
+        std::fs::create_dir_all(&base).expect("mkdir base");
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&base)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&base)
+            .status();
+        std::fs::write(base.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "base init"])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+
+        // Add submodule pointing to local path; allow file transport explicitly for modern Git
+        let sub_path = sub.display().to_string();
+        assert!(std::process::Command::new("git")
+            .args([
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                &sub_path,
+                "submod"
+            ])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "add submodule"])
+            .current_dir(&base)
+            .status()
+            .unwrap()
+            .success());
+
+        // Determine current branch name
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&base)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Clone panes and ensure submodule is initialized in clone
+        let res =
+            fork_clone_and_checkout_panes(&base, "sid-sub", 1, &cur_branch, &base_label, false)
+                .expect("clone panes with submodule");
+        assert_eq!(res.len(), 1);
+        let pane_dir = &res[0].0;
+        let sub_file = pane_dir.join("submod").join("sub.txt");
+        assert!(
+            sub_file.exists(),
+            "expected submodule file to exist in clone: {}",
+            sub_file.display()
+        );
+    }
+
+    #[test]
+    fn test_fork_clone_and_checkout_panes_lfs_marker_does_not_fail_without_lfs() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with a .gitattributes marking LFS filters (may or may not have git-lfs installed)
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+
+        std::fs::write(
+            repo.join(".gitattributes"),
+            "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+        )
+        .unwrap();
+        std::fs::write(repo.join("a.bin"), b"\x00\x01\x02").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        // Commit even if lfs not installed; the filter may be ignored, but commit should succeed
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "add lfs marker"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Should not fail regardless of git-lfs availability
+        let res =
+            fork_clone_and_checkout_panes(repo, "sid-lfs", 1, &cur_branch, &base_label, false)
+                .expect("clone panes with lfs marker");
+        assert_eq!(res.len(), 1);
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_top_level_gitattributes() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        // Create top-level .gitattributes with lfs filter
+        std::fs::write(
+            repo.join(".gitattributes"),
+            "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+        )
+        .unwrap();
+        assert!(
+            repo_uses_lfs_quick(repo),
+            "expected repo_uses_lfs_quick to detect top-level filter=lfs"
+        );
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_nested_gitattributes() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        let nested = repo.join("assets").join("media");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(
+            nested.join(".gitattributes"),
+            "*.png filter=lfs diff=lfs merge=lfs -text\n",
+        )
+        .unwrap();
+        assert!(
+            repo_uses_lfs_quick(repo),
+            "expected repo_uses_lfs_quick to detect nested filter=lfs"
+        );
+    }
+
+    #[test]
+    fn test_repo_uses_lfs_quick_lfsconfig_present() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        std::fs::write(
+            repo.join(".lfsconfig"),
+            "[lfs]\nurl = https://example.com/lfs\n",
+        )
+        .unwrap();
+        assert!(
+            repo_uses_lfs_quick(repo),
+            "expected repo_uses_lfs_quick to detect .lfsconfig presence"
+        );
+    }
+
+    #[test]
+    fn test_fork_clean_protects_ahead_and_force_deletes() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+
+        // Session/pane setup
+        let sid = "sid-ahead";
+        let base = root.join(".aifo-coder").join("forks").join(sid);
+        let pane = base.join("pane-1");
+        std::fs::create_dir_all(&pane).unwrap();
+        init_repo(&pane);
+
+        // Record base_commit_sha as current HEAD
+        let head = std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap();
+        let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
+
+        // Write minimal meta.json
+        std::fs::create_dir_all(&base).unwrap();
+        let meta = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            head_sha,
+            pane.display()
+        );
+        std::fs::write(base.join(".meta.json"), meta).unwrap();
+
+        // Create an extra commit in the pane to make it "ahead" of base_commit_sha
+        std::fs::write(pane.join("new.txt"), "y\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "advance pane"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+
+        // Default clean should REFUSE because pane is ahead
+        let opts_refuse = aifo_coder::ForkCleanOpts {
+            session: Some(sid.to_string()),
+            older_than_days: None,
+            all: false,
+            dry_run: false,
+            yes: false,
+            force: false,
+            keep_dirty: false,
+            json: false,
+        };
+        let code = aifo_coder::fork_clean(&root, &opts_refuse).expect("fork_clean refuse");
+        assert_eq!(code, 1, "expected refusal when pane is ahead");
+        assert!(base.exists(), "session dir must remain after refusal");
+
+        // keep-dirty should succeed, keep the ahead pane and update meta
+        let opts_keep = aifo_coder::ForkCleanOpts {
+            session: Some(sid.to_string()),
+            older_than_days: None,
+            all: false,
+            dry_run: false,
+            yes: true, // skip prompt
+            force: false,
+            keep_dirty: true,
+            json: false,
+        };
+        let code2 = aifo_coder::fork_clean(&root, &opts_keep).expect("fork_clean keep-dirty");
+        assert_eq!(
+            code2, 0,
+            "keep-dirty should succeed (no deletions if all panes protected)"
+        );
+        assert!(pane.exists(), "ahead pane should remain");
+        let meta2 = std::fs::read_to_string(base.join(".meta.json")).expect("read meta2");
+        assert!(
+            meta2.contains("\"panes_remaining\""),
+            "meta should be updated to include panes_remaining"
+        );
+
+        // force should delete the session
+        let opts_force = aifo_coder::ForkCleanOpts {
+            session: Some(sid.to_string()),
+            older_than_days: None,
+            all: false,
+            dry_run: false,
+            yes: true,
+            force: true,
+            keep_dirty: false,
+            json: false,
+        };
+        let code3 = aifo_coder::fork_clean(&root, &opts_force).expect("fork_clean force");
+        assert_eq!(code3, 0, "force should succeed");
+        assert!(!base.exists(), "session dir should be removed by force");
+    }
+
+    #[test]
+    fn test_fork_clean_protects_submodule_dirty() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+
+        // Prepare submodule upstream repo
+        let upstream = td.path().join("upstream-sm");
+        std::fs::create_dir_all(&upstream).unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&upstream)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "UT"])
+            .current_dir(&upstream)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "ut@example.com"])
+            .current_dir(&upstream)
+            .status();
+        std::fs::write(upstream.join("a.txt"), "a\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&upstream)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "sm init"])
+            .current_dir(&upstream)
+            .status()
+            .unwrap()
+            .success());
+
+        // Create pane repo and add submodule
+        let sid = "sid-subdirty";
+        let base = root.join(".aifo-coder").join("forks").join(sid);
+        let pane = base.join("pane-1");
+        std::fs::create_dir_all(&pane).unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "UT"])
+            .current_dir(&pane)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "ut@example.com"])
+            .current_dir(&pane)
+            .status();
+        // Commit initial file
+        std::fs::write(&pane.join("root.txt"), "r\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "root"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        // Add submodule (allow file protocol)
+        let up_path = upstream.display().to_string();
+        assert!(std::process::Command::new("git")
+            .args([
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                &up_path,
+                "sub"
+            ])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "add submodule"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+
+        // Record base_commit_sha as current HEAD in pane
+        let head = std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap();
+        let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
+        std::fs::create_dir_all(&base).unwrap();
+        let meta = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            head_sha,
+            pane.display()
+        );
+        std::fs::write(base.join(".meta.json"), meta).unwrap();
+
+        // Make submodule dirty relative to recorded commit: commit new change inside pane/sub (the submodule checkout)
+        let subdir = pane.join("sub");
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "UT"])
+            .current_dir(&subdir)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "ut@example.com"])
+            .current_dir(&subdir)
+            .status();
+        std::fs::write(subdir.join("b.txt"), "b\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&subdir)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "advance sub"])
+            .current_dir(&subdir)
+            .status()
+            .unwrap()
+            .success());
+
+        // Default clean should refuse due to submodules-dirty
+        let opts_refuse = aifo_coder::ForkCleanOpts {
+            session: Some(sid.to_string()),
+            older_than_days: None,
+            all: false,
+            dry_run: false,
+            yes: false,
+            force: false,
+            keep_dirty: false,
+            json: false,
+        };
+        let code =
+            aifo_coder::fork_clean(&root, &opts_refuse).expect("fork_clean refuse submodule-dirty");
+        assert_eq!(code, 1, "expected refusal when submodule is dirty");
+        assert!(
+            base.exists(),
+            "session dir must remain after refusal on submodule-dirty"
+        );
+
+        // keep-dirty should keep the pane and succeed
+        let opts_keep = aifo_coder::ForkCleanOpts {
+            session: Some(sid.to_string()),
+            older_than_days: None,
+            all: false,
+            dry_run: false,
+            yes: true,
+            force: false,
+            keep_dirty: true,
+            json: false,
+        };
+        let code2 =
+            aifo_coder::fork_clean(&root, &opts_keep).expect("fork_clean keep-dirty submodule");
+        assert_eq!(
+            code2, 0,
+            "keep-dirty should succeed (no deletions if pane protected)"
+        );
+        assert!(pane.exists(), "pane with dirty submodule should remain");
+    }
+
+    #[test]
+    fn test_fork_clean_older_than_deletes_only_old_sessions() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        init_repo(&root);
+
+        // Old clean session (older than threshold)
+        let sid_old = "sid-old2";
+        let base_old = root.join(".aifo-coder").join("forks").join(sid_old);
+        let pane_old = base_old.join("pane-1");
+        std::fs::create_dir_all(&pane_old).unwrap();
+        init_repo(&pane_old);
+        let head_old = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_old)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        let old_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 20 * 86400;
+        let meta_old = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            old_secs, head_old, pane_old.display(), sid = sid_old
+        );
+        std::fs::create_dir_all(&base_old).unwrap();
+        std::fs::write(base_old.join(".meta.json"), meta_old).unwrap();
+
+        // Recent clean session (younger than threshold)
+        let sid_new = "sid-new2";
+        let base_new = root.join(".aifo-coder").join("forks").join(sid_new);
+        let pane_new = base_new.join("pane-1");
+        std::fs::create_dir_all(&pane_new).unwrap();
+        init_repo(&pane_new);
+        let head_new = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_new)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let meta_new = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            now_secs, head_new, pane_new.display(), sid = sid_new
+        );
+        std::fs::create_dir_all(&base_new).unwrap();
+        std::fs::write(base_new.join(".meta.json"), meta_new).unwrap();
+
+        // Clean with older-than=10 days should delete only sid-old2
+        let opts = aifo_coder::ForkCleanOpts {
+            session: None,
+            older_than_days: Some(10),
+            all: false,
+            dry_run: false,
+            yes: true,
+            force: false,
+            keep_dirty: false,
+            json: false,
+        };
+        let code = aifo_coder::fork_clean(&root, &opts).expect("fork_clean older-than");
+        assert_eq!(code, 0, "older-than clean should succeed");
+        assert!(!base_old.exists(), "old session should be deleted");
+        assert!(base_new.exists(), "recent session should remain");
+    }
+
+    #[test]
+    fn test_fork_create_snapshot_on_empty_repo() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        // Create an untracked file; snapshot should still succeed by indexing working tree
+        std::fs::write(repo.join("a.txt"), "a\n").unwrap();
+        let sid = "empty";
+        let snap = fork_create_snapshot(repo, sid).expect("snapshot on empty repo");
+        assert_eq!(snap.len(), 40, "snapshot sha length");
+        let out = std::process::Command::new("git")
+            .args(["cat-file", "-t", &snap])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert_eq!(t, "commit", "snapshot object must be a commit");
+    }
+
+    #[test]
+    fn test_fork_clone_with_dissociate() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+        // init repo with one commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+        std::fs::write(repo.join("f.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        // Determine branch
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+        // Clone with dissociate should succeed
+        let res =
+            fork_clone_and_checkout_panes(repo, "sid-dissoc", 1, &cur_branch, &base_label, true)
+                .expect("clone with --dissociate");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].0.exists());
+    }
+
+    #[test]
+    fn test_fork_autoclean_removes_only_clean_sessions() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        // Initialize base repo to ensure repo_root() detects it
+        init_repo(&root);
+
+        // Old clean session
+        let sid_clean = "sid-clean-old";
+        let base_clean = root.join(".aifo-coder").join("forks").join(sid_clean);
+        let pane_clean = base_clean.join("pane-1");
+        std::fs::create_dir_all(&pane_clean).unwrap();
+        init_repo(&pane_clean);
+        // Record base_commit_sha as current HEAD
+        let head_clean = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_clean)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        let old_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 40 * 86400;
+        std::fs::create_dir_all(&base_clean).unwrap();
+        let meta_clean = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            old_secs, head_clean, pane_clean.display(), sid = sid_clean
+        );
+        std::fs::write(base_clean.join(".meta.json"), meta_clean).unwrap();
+
+        // Old protected (ahead) session
+        let sid_prot = "sid-protected-old";
+        let base_prot = root.join(".aifo-coder").join("forks").join(sid_prot);
+        let pane_prot = base_prot.join("pane-1");
+        std::fs::create_dir_all(&pane_prot).unwrap();
+        init_repo(&pane_prot);
+        let head_prot = String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["rev-parse", "--verify", "HEAD"])
+                .current_dir(&pane_prot)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        std::fs::create_dir_all(&base_prot).unwrap();
+        let meta_prot = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{sid}-1\"], \"layout\": \"tiled\" }}",
+            old_secs, head_prot, pane_prot.display(), sid = sid_prot
+        );
+        std::fs::write(base_prot.join(".meta.json"), meta_prot).unwrap();
+        // Make pane ahead of base_commit_sha
+        std::fs::write(pane_prot.join("new.txt"), "y\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane_prot)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "advance pane"])
+            .current_dir(&pane_prot)
+            .status()
+            .unwrap()
+            .success());
+
+        // Run autoclean with threshold 1 day
+        let old_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&root).unwrap();
+        let old_env1 = std::env::var("AIFO_CODER_FORK_AUTOCLEAN").ok();
+        let old_env2 = std::env::var("AIFO_CODER_FORK_STALE_DAYS").ok();
+        std::env::set_var("AIFO_CODER_FORK_AUTOCLEAN", "1");
+        std::env::set_var("AIFO_CODER_FORK_STALE_DAYS", "1");
+        fork_autoclean_if_enabled();
+        // Restore cwd and env
+        std::env::set_current_dir(old_cwd).ok();
+        if let Some(v) = old_env1 {
+            std::env::set_var("AIFO_CODER_FORK_AUTOCLEAN", v);
+        } else {
+            std::env::remove_var("AIFO_CODER_FORK_AUTOCLEAN");
+        }
+        if let Some(v) = old_env2 {
+            std::env::set_var("AIFO_CODER_FORK_STALE_DAYS", v);
+        } else {
+            std::env::remove_var("AIFO_CODER_FORK_STALE_DAYS");
+        }
+
+        assert!(
+            !base_clean.exists(),
+            "clean old session should have been deleted by autoclean"
+        );
+        assert!(
+            base_prot.exists(),
+            "protected old session should have been kept by autoclean"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_helpers_orient_and_builders() {
+        use crate::{fork_bash_inner_string, fork_ps_inner_string, wt_build_new_tab_args, wt_build_split_args, wt_orient_for_layout};
+        let agent = "aider";
+        let sid = "sidw";
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let pane_dir = tmp.path().join("p");
+        std::fs::create_dir_all(&pane_dir).unwrap();
+        let state_dir = tmp.path().join("s");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let child = vec!["aider".to_string(), "--help".to_string()];
+        let ps = fork_ps_inner_string(agent, sid, 1, &pane_dir, &state_dir, &child);
+        assert!(ps.contains("Set-Location '"), "ps inner should set location: {}", ps);
+        assert!(ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"), "ps inner should set env");
+        let bash = fork_bash_inner_string(agent, sid, 2, &pane_dir, &state_dir, &child);
+        assert!(bash.contains("cd "), "bash inner should cd");
+        assert!(bash.contains("export AIFO_CODER_SKIP_LOCK='1'"), "bash inner export env");
+        // wt orientation
+        assert_eq!(wt_orient_for_layout("even-h", 3), "-H");
+        assert_eq!(wt_orient_for_layout("even-v", 4), "-V");
+        // tiled alternates
+        let o2 = wt_orient_for_layout("tiled", 2);
+        let o3 = wt_orient_for_layout("tiled", 3);
+        assert!(o2 == "-H" || o2 == "-V");
+        assert!(o3 == "-H" || o3 == "-V");
+        // arg builders
+        let psbin = std::path::PathBuf::from("powershell.exe");
+        let inner = "cmds";
+        let newtab = wt_build_new_tab_args(&psbin, &pane_dir, inner);
+        assert_eq!(newtab[0], "wt");
+        assert_eq!(newtab[1], "new-tab");
+        let split = wt_build_split_args("-H", &psbin, &pane_dir, inner);
+        assert_eq!(split[1], "split-pane");
+        assert_eq!(split[2], "-H");
     }
 }

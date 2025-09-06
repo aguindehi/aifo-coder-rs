@@ -14,13 +14,7 @@ fn encode_www_form(s: &str) -> String {
         let c = *b as char;
         match c {
             ' ' => out.push('+'),
-            'A'..='Z'
-            | 'a'..='z'
-            | '0'..='9'
-            | '-'
-            | '_'
-            | '.'
-            | '~' => out.push(c),
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(c),
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }
@@ -90,7 +84,10 @@ fn main() {
             let mut stream = match UnixStream::connect(&sock_path) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("aifo-shim: failed to connect to unix socket {}: {}", sock_path, e);
+                    eprintln!(
+                        "aifo-shim: failed to connect to unix socket {}: {}",
+                        sock_path, e
+                    );
                     process::exit(86);
                 }
             };

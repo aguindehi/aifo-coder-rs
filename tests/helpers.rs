@@ -1,6 +1,6 @@
+use aifo_coder as aifo;
 use std::fs;
 use std::path::PathBuf;
-use aifo_coder as aifo;
 
 #[test]
 fn test_shell_escape_simple() {
@@ -42,7 +42,9 @@ fn test_ensure_file_exists_creates() {
 #[test]
 fn test_candidate_lock_paths_contains_tmp() {
     let paths = aifo::candidate_lock_paths();
-    assert!(paths.iter().any(|pp| pp == &PathBuf::from("/tmp/aifo-coder.lock")));
+    assert!(paths
+        .iter()
+        .any(|pp| pp == &PathBuf::from("/tmp/aifo-coder.lock")));
 }
 
 #[test]

@@ -15,13 +15,18 @@ fn test_proxy_timeout_python_sleep() {
     let overrides: Vec<(String, String)> = Vec::new();
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("failed to start sidecar session");
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("failed to start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after_scheme = u.split("://").nth(1).unwrap_or(u);
         let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port.rsplit(':').next().unwrap_or("0").parse::<u16>().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse::<u16>()
+            .unwrap_or(0)
     }
     let port = extract_port(&url);
 
@@ -38,8 +43,16 @@ fn test_proxy_timeout_python_sleep() {
     let mut resp = Vec::new();
     stream.read_to_end(&mut resp).ok();
     let text = String::from_utf8_lossy(&resp).to_string();
-    assert!(text.contains("504 Gateway Timeout"), "expected 504, got:\n{}", text);
-    assert!(text.contains("X-Exit-Code: 124"), "expected exit 124, got:\n{}", text);
+    assert!(
+        text.contains("504 Gateway Timeout"),
+        "expected 504, got:\n{}",
+        text
+    );
+    assert!(
+        text.contains("X-Exit-Code: 124"),
+        "expected exit 124, got:\n{}",
+        text
+    );
 
     // Cleanup
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

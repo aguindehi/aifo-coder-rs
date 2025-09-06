@@ -1,4 +1,4 @@
-.TH AIFO-CODER 1 "2025-08-23" "aifo-coder" "User Commands"
+.TH AIFO-CODER 1 "2025-09-04" "aifo-coder" "User Commands"
 .SH NAME
 aifo-coder \- secure Docker-based launcher for coding assistant agents
 .SH SYNOPSIS
@@ -12,6 +12,10 @@ aifo-coder \- secure Docker-based launcher for coding assistant agents
 .P
 .B aifo-coder
 .RB [ \-V | \-\-version ]
+.P
+.B aifo-coder
+.B fork
+.RI "[list [--json] [--all-repos] | clean [--session " "<sid>" " | --older-than " "<days>" " | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]]"
 .SH DESCRIPTION
 .B aifo-coder
 is a small Rust CLI that launches developer "agent" tools inside Docker
@@ -132,8 +136,9 @@ When unset, the launcher chooses a sensible default (a custom profile on
 native Linux; docker\-default on macOS/Windows Docker\-in\-VM).
 .TP
 .B XDG_RUNTIME_DIR
-Considered as a higher\-priority location for the lock file. If set to a
-non\-empty directory, the lock may be created at
+When inside a Git repository, used for the repository\-scoped fallback lock path:
+.BR $XDG_RUNTIME_DIR/aifo\-coder.\fIhash(repo_root)\fR.lock .
+When not inside a Git repository, the legacy candidate path is:
 .BR $XDG_RUNTIME_DIR/aifo\-coder.lock .
 .TP
 .B HOME
@@ -195,16 +200,17 @@ is unavailable (e.g., macOS Docker\-in\-VM) the launcher falls back to the
 Docker default profile.
 .SH FILES
 .TP
-.B ~/.aifo\-coder.lock
-Per\-user lock file candidate.
+.B <repo-root>/.aifo\-coder.lock
+Preferred in-repo lock file when inside a Git repository.
 .TP
-.B $XDG_RUNTIME_DIR/aifo\-coder.lock
-Per\-session lock file candidate when
-.B XDG_RUNTIME_DIR
-is set.
+.B $XDG_RUNTIME_DIR/aifo\-coder.\fIhash(repo_root)\fR.lock
+Repository-scoped fallback lock file (uses a stable hash of the canonical repo root).
+.TP
+.B ~/.aifo\-coder.lock
+Legacy per-user lock file candidate (used when not inside a Git repository).
 .TP
 .B /tmp/aifo\-coder.lock
-Fallback lock file candidate.
+Legacy fallback lock file candidate (used when other candidates are unavailable).
 .TP
 .B /etc/apparmor.d/aifo\-coder
 System AppArmor profile (if installed) used to constrain containerized agents.
@@ -317,6 +323,72 @@ resolves to the host proxy. If connectivity issues arise on Linux, ensure the la
 adds
 .BR \-\-add\-host=host.docker.internal:host\-gateway
 (which it does automatically when toolchains are enabled).
+.SH FORK MODE
+Fork mode creates N\~cloned panes of the current Git repository and launches agent instances in each clone using platform\-appropriate orchestrators.
+
+.P
+Flags:
+.IP \[bu] 2
+\fB\-\-fork\fR \fIN\fR (N\>=2): enable fork mode (tmux on Linux/macOS/WSL; Windows Terminal preferred on Windows).
+.IP \[bu]
+\fB\-\-fork\-include\-dirty\fR: include uncommitted changes via a snapshot commit using a temporary index and \fBgit commit\-tree\fR (no hooks/signing).
+.IP \[bu]
+\fB\-\-fork\-dissociate\fR: clone with \fB\-\-dissociate\fR for independence (more disk, avoids shared object GC).
+.IP \[bu]
+\fB\-\-fork\-session\-name\fR: set session/window name (default \fIaifo\-<sid>\fR).
+.IP \[bu]
+\fB\-\-fork\-layout\fR \fItiled|even\-h|even\-v\fR: tmux layout.
+.IP \[bu]
+\fB\-\-fork\-keep\-on\-failure\fR: keep created clones on orchestration failure (default: keep).
+
+.P
+Maintenance commands:
+.P
+.B aifo\-coder fork list
+.RB [ \-\-json ]
+.RB [ \-\-all\-repos ]
+.br
+.B aifo\-coder fork clean
+.RB [ \-\-session " " \fIsid\fR
+|
+\-\-older\-than " " \fIdays\fR
+|
+\-\-all ]
+.RB [ \-\-dry\-run ]
+.RB [ \-\-yes ]
+.RB [ \-\-keep\-dirty " | " \-\-force ]
+.RB [ \-\-json ]
+.P
+Safety:
+- Panes are protected from deletion by default when dirty, ahead of base, or base unknown. \fB\-\-keep\-dirty\fR deletes only clean panes; \fB\-\-force\fR overrides protection.
+
+.P
+Paths and naming:
+- Session dir: \fI<repo\-root>/.aifo\-coder/forks/<sid>\fR
+- Pane dirs: \fIpane\-1..N\fR under the session dir
+- Branches: \fIfork/<base|detached>/<sid>\-<i>\fR
+
+.P
+Per\-pane state mounts:
+- Each pane mounts its own state dir on the host to avoid races:
+  \fI~/.aifo\-coder/state/<sid>/pane\-<i>/{.aider,.codex,.crush}\fR
+- Override base via \fBAIFO_CODER_FORK_STATE_BASE\fR.
+
+.P
+Environment:
+- \fBAIFO_CODER_SKIP_LOCK\fR=1 (children skip acquiring locks)
+- \fBAIFO_CODER_FORK_SESSION\fR, \fBAIFO_CODER_FORK_INDEX\fR, \fBAIFO_CODER_FORK_STATE_DIR\fR
+- \fBAIFO_CODER_FORK_STATE_BASE\fR, \fBAIFO_CODER_FORK_STALE_DAYS\fR, \fBAIFO_CODER_FORK_AUTOCLEAN\fR
+
+.P
+Post\-session merging:
+- Fetch/merge, cherry\-pick, rebase, or format\-patch/am from a pane as needed. See the README for concrete command examples.
+
+.P
+Notes:
+- Linux/macOS/WSL require \fBtmux\fR in PATH. On macOS (Docker Desktop or Colima), install via Homebrew: \fBbrew install tmux\fR.
+- Windows prefers \fBwt.exe\fR (Windows Terminal); falls back to PowerShell windows or Git Bash/mintty.
+
 .SH SEE ALSO
 .BR docker (1),
 .BR apparmor (7),

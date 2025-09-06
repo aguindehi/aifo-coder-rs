@@ -7,8 +7,8 @@ fn test_preview_includes_gnupg_host_mount_and_aider_configs() {
     }
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd failed");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd failed");
 
     // GnuPG host mount (read-only) path is stable on container side
     assert!(
@@ -17,7 +17,11 @@ fn test_preview_includes_gnupg_host_mount_and_aider_configs() {
     );
 
     // Aider root-level config files mounts (container side destinations are stable)
-    for fname in [".aider.conf.yml", ".aider.model.metadata.json", ".aider.model.settings.yml"] {
+    for fname in [
+        ".aider.conf.yml",
+        ".aider.model.metadata.json",
+        ".aider.model.settings.yml",
+    ] {
         let needle = format!("/home/coder/{}", fname);
         assert!(
             preview.contains(&needle),

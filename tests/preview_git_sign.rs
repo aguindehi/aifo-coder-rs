@@ -29,5 +29,9 @@ fn test_build_docker_cmd_disables_git_sign_for_aider() {
     );
 
     // Restore env
-    if let Some(v) = old { std::env::set_var("AIFO_CODER_GIT_SIGN", v); } else { std::env::remove_var("AIFO_CODER_GIT_SIGN"); }
+    if let Some(v) = old {
+        std::env::set_var("AIFO_CODER_GIT_SIGN", v);
+    } else {
+        std::env::remove_var("AIFO_CODER_GIT_SIGN");
+    }
 }

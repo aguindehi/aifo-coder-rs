@@ -7,8 +7,8 @@ fn test_build_docker_cmd_exports_path_with_shim_dir() {
     }
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd");
 
     assert!(
         preview.contains("/opt/aifo/bin:/opt/venv/bin:$PATH"),

@@ -29,9 +29,17 @@ fn test_build_docker_cmd_includes_network_and_add_host() {
     );
 
     // Restore env
-    if let Some(v) = old_net { std::env::set_var("AIFO_SESSION_NETWORK", v); } else { std::env::remove_var("AIFO_SESSION_NETWORK"); }
+    if let Some(v) = old_net {
+        std::env::set_var("AIFO_SESSION_NETWORK", v);
+    } else {
+        std::env::remove_var("AIFO_SESSION_NETWORK");
+    }
     #[cfg(target_os = "linux")]
     {
-        if let Some(v) = _old_add { std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v); } else { std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST"); }
+        if let Some(v) = _old_add {
+            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", v);
+        } else {
+            std::env::remove_var("AIFO_TOOLEEXEC_ADD_HOST");
+        }
     }
 }

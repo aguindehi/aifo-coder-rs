@@ -9,7 +9,8 @@ fn test_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
     }
 
     let sid = format!("lightneg-{}", std::process::id());
-    let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 
     fn extract_port(u: &str) -> u16 {
         let after = u.split("://").nth(1).unwrap_or(u);
@@ -28,9 +29,14 @@ fn test_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
             body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new(); s.read_to_end(&mut resp).ok();
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp).ok();
         let txt = String::from_utf8_lossy(&resp);
-        assert!(txt.contains("401 Unauthorized"), "expected 401, got:\n{}", txt);
+        assert!(
+            txt.contains("401 Unauthorized"),
+            "expected 401, got:\n{}",
+            txt
+        );
     }
 
     // 400 Bad Request (missing tool param in body)
@@ -43,9 +49,14 @@ fn test_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
             token, body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write2");
-        let mut resp = Vec::new(); s.read_to_end(&mut resp).ok();
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp).ok();
         let txt = String::from_utf8_lossy(&resp);
-        assert!(txt.contains("400 Bad Request"), "expected 400, got:\n{}", txt);
+        assert!(
+            txt.contains("400 Bad Request"),
+            "expected 400, got:\n{}",
+            txt
+        );
     }
 
     // Cleanup
