@@ -1051,7 +1051,8 @@ fn run_doctor(verbose: bool) {
     version,
     about = "Run Codex, Crush or Aider inside Docker with current directory mounted.",
     override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]",
-    after_long_help = "Examples:\n  aifo-coder --fork 2 aider -- --help\n  aifo-coder --fork 3 --fork-include-dirty --fork-session-name aifo-work aider --\n  aifo-coder fork list --json\n  aifo-coder fork clean --older-than 14 --yes\n"
+    after_long_help = "Examples:\n  aifo-coder --fork 2 aider -- --help\n  aifo-coder --fork 3 --fork-include-dirty --fork-session-name aifo-work aider --\n  aifo-coder fork list --json\n  aifo-coder fork clean --older-than 14 --yes\n\n",
+    after_help = "\n"
 )]
 struct Cli {
     /// Override Docker image (full ref). If unset, use per-agent default: {prefix}-{agent}:{tag}
