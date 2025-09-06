@@ -320,8 +320,8 @@ mod tests_main_cli_child_args {
             "--fork-session-name",
             "--fork-layout",
             "--fork-keep-on-failure",
-            "--fork-merging-strategy",
-            "--fork-merge-autoclean",
+            "--fork-merge-strategy",
+            "--fork-merge-no-autoclean",
         ] {
             assert!(
                 !joined.contains(bad),
@@ -366,7 +366,7 @@ mod tests_main_cli_child_args {
         use clap::Parser;
         let cli = super::Cli::parse_from([
             "aifo-coder",
-            "--fork-merging-strategy",
+            "--fork-merge-strategy",
             "octopus",
             "aider",
             "--",
@@ -377,7 +377,7 @@ mod tests_main_cli_child_args {
                 cli.fork_merging_strategy,
                 aifo_coder::MergingStrategy::Octopus
             ),
-            "expected parsing of --fork-merging-strategy octopus"
+            "expected parsing of --fork-merge-strategy octopus"
         );
     }
 }
@@ -1142,12 +1142,12 @@ struct Cli {
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
-    /// Post-fork merging strategy to apply after all panes exit
-    #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
+    /// Post-fork merge strategy to apply after all panes exit (default: octopus)
+    #[arg(long = "fork-merge-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::Octopus, hide_default_value = true)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
-    /// Automatically dispose the fork session after a successful octopus merge
-    #[arg(long = "fork-merge-autoclean", default_value_t = false)]
+    /// Disable automatic disposal of the fork session after a successful octopus merge (default: enabled)
+    #[arg(long = "fork-merge-no-autoclean", default_value_t = true, action = clap::ArgAction::SetFalse)]
     fork_merging_autoclean: bool,
 
     #[command(subcommand)]
@@ -2146,7 +2146,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::paint(
                             use_err,
                             "\x1b[33m",
-                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy)."
+                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merge-strategy)."
                         )
                     );
                 }
@@ -4057,7 +4057,7 @@ enum Agent {
 
     /// Fork maintenance commands
     #[command(
-        after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n"
+        after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n  aifo-coder fork merge --session abc123 --strategy octopus --autoclean\n"
     )]
     Fork {
         #[command(subcommand)]
