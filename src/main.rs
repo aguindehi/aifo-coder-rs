@@ -233,6 +233,119 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
     true
 }
 
+// Warn at startup (agent-run path) when no toolchains are requested and no proxy is configured.
+fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
+    // Respect explicit suppression
+    if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return;
+    }
+    // Only warn for interactive agent runs
+    if agent != "aider" && agent != "crush" && agent != "codex" {
+        return;
+    }
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        return;
+    }
+    let has_url = std::env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    let has_tok = std::env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if has_url && has_tok {
+        return;
+    }
+    // Emit concise guidance to stderr (color-aware)
+    let use_err = aifo_coder::color_enabled_stderr();
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "warning: no language toolchain sidecars enabled (--toolchain)."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "Enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "Pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "Options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
+        )
+    );
+}
+
+// Fork orchestrator preflight warning with single continue/abort prompt.
+fn maybe_warn_missing_toolchain_for_fork(cli: &Cli, agent: &str) -> bool {
+    // Respect explicit suppression
+    if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return true;
+    }
+    // Only warn for coding agents
+    if agent != "aider" && agent != "crush" && agent != "codex" {
+        return true;
+    }
+    // No toolchain flags?
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        return true;
+    }
+    // If proxy already configured, don't warn
+    let has_url = std::env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    let has_tok = std::env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if has_url && has_tok {
+        return true;
+    }
+    // Build lines and prompt once
+    let mut msgs: Vec<String> = Vec::new();
+    msgs.push("no language toolchain sidecars enabled (--toolchain).".to_string());
+    msgs.push("Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string());
+    msgs.push("Enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string());
+    msgs.push("Pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string());
+    msgs.push("Options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string());
+    let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+    aifo_coder::warn_prompt_continue_or_quit(&lines)
+}
+
 #[cfg(test)]
 mod tests_main_cli_child_args {
 
