@@ -1445,6 +1445,7 @@ pub fn build_docker_cmd(
 }
 
 /// Repository/user-scoped lock guard that removes the lock file on drop.
+#[derive(Debug)]
 pub struct RepoLock {
     file: File,
     path: PathBuf,

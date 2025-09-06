@@ -13,9 +13,9 @@ fn print_startup_banner() {
     let version = env!("CARGO_PKG_VERSION");
     println!();
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🚀  Welcome to the Migros AI Foundation Coder v{}  🚀 ", version);
+    println!(" 🚀  Welcome to the Migros AI Foundation Coder - AIFO Coder v{}  🚀 ", version);
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Rust | 🧠 by AIFO");
+    println!(" 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO");
     println!();
 
     // Host/platform info
