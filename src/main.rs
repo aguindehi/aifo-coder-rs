@@ -1815,9 +1815,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let wt = which("wt").or_else(|_| which("wt.exe"));
         if let Ok(wtbin) = wt {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
-                if cli.verbose {
-                    eprintln!("aifo-coder: bypassing Windows Terminal because --fork-merging-strategy requires waiting; using PowerShell windows.");
-                }
+                eprintln!("aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy).");
             } else {
             if clones.is_empty() {
                 eprintln!("aifo-coder: no panes to create.");
@@ -2371,8 +2369,152 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 return ExitCode::from(0);
             } else {
-                eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
-                return ExitCode::from(1);
+                // Fallback: launch Windows Terminal even though we cannot wait; print manual-merge advice
+                let wt2 = which("wt").or_else(|_| which("wt.exe"));
+                if let Ok(wtbin2) = wt2 {
+                    if clones.is_empty() {
+                        eprintln!("aifo-coder: no panes to create.");
+                        return ExitCode::from(1);
+                    }
+                    let psbin = which("pwsh")
+                        .or_else(|_| which("powershell"))
+                        .or_else(|_| which("powershell.exe"))
+                        .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
+                    let orient_for_layout = |i: usize| -> &'static str {
+                        match layout.as_str() {
+                            "even-h" => "-H",
+                            "even-v" => "-V",
+                            _ => {
+                                if i % 2 == 0 { "-H" } else { "-V" }
+                            }
+                        }
+                    };
+
+                    // Pane 1
+                    {
+                        let (pane1_dir, _b) = &clones[0];
+                        let pane_state_dir = state_base.join(&sid).join("pane-1");
+                        let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
+                        let mut cmd = Command::new(&wtbin2);
+                        cmd.arg("new-tab")
+                            .arg("-d")
+                            .arg(pane1_dir)
+                            .arg(&psbin)
+                            .arg("-NoExit")
+                            .arg("-Command")
+                            .arg(&inner);
+                        if cli.verbose {
+                            let preview = vec![
+                                "wt".to_string(),
+                                "new-tab".to_string(),
+                                "-d".to_string(),
+                                pane1_dir.display().to_string(),
+                                psbin.display().to_string(),
+                                "-NoExit".to_string(),
+                                "-Command".to_string(),
+                                inner.clone(),
+                            ];
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
+                        let _ = cmd.status();
+                    }
+
+                    // Additional panes
+                    let mut split_failed = false;
+                    for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+                        let i = idx + 1;
+                        let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                        let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+                        let orient = orient_for_layout(i);
+                        let mut cmd = Command::new(&wtbin2);
+                        cmd.arg("split-pane")
+                            .arg(orient)
+                            .arg("-d")
+                            .arg(pane_dir)
+                            .arg(&psbin)
+                            .arg("-NoExit")
+                            .arg("-Command")
+                            .arg(&inner);
+                        if cli.verbose {
+                            let preview = vec![
+                                "wt".to_string(),
+                                "split-pane".to_string(),
+                                orient.to_string(),
+                                "-d".to_string(),
+                                pane_dir.display().to_string(),
+                                psbin.display().to_string(),
+                                "-NoExit".to_string(),
+                                "-Command".to_string(),
+                                inner.clone(),
+                            ];
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
+                        match cmd.status() {
+                            Ok(s) if s.success() => {}
+                            _ => {
+                                split_failed = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    println!();
+                    println!(
+                        "aifo-coder: fork session {} launched in Windows Terminal.",
+                        sid
+                    );
+                    if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                        let strat = match cli.fork_merging_strategy {
+                            aifo_coder::MergingStrategy::Fetch => "fetch",
+                            aifo_coder::MergingStrategy::Octopus => "octopus",
+                            _ => "none",
+                        };
+                        eprintln!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat);
+                        eprintln!("aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}", sid, strat);
+                    }
+                    println!("To inspect and merge changes, you can run:");
+                    if let Some((first_dir, first_branch)) = clones.first() {
+                        println!("  git -C \"{}\" status", first_dir.display());
+                        println!(
+                            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                            repo_root.display(),
+                            sid,
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" fetch fork-{}-1 {}",
+                            repo_root.display(),
+                            sid,
+                            first_branch
+                        );
+                        if base_label != "detached" {
+                            println!(
+                                "  git -C \"{}\" checkout {}",
+                                repo_root.display(),
+                                base_ref_or_sha
+                            );
+                            println!(
+                                "  git -C \"{}\" merge --no-ff {}",
+                                repo_root.display(),
+                                first_branch
+                            );
+                        }
+                    }
+                    return ExitCode::from(0);
+                } else {
+                    eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
+                    return ExitCode::from(1);
+                }
             }
         }
         let ps_name = powershell.unwrap(); // used only for reference in logs
