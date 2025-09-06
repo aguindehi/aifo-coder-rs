@@ -1516,22 +1516,20 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let _ = fs::create_dir_all(state_dir.join(".crush"));
         if use_color_out {
             println!(
-                "[\x1b[36;1m{}\x1b[0m] \x1b[34m{}\x1b[0m branch=\x1b[32m{}\x1b[0m container=\x1b[35m{}\x1b[0m state=\x1b[90m{}\x1b[0m",
+                "[\x1b[36;1m{}\x1b[0m] folder=\x1b[34m{}\x1b[0m",
                 i,
-                pane_dir.display(),
-                branch,
-                cname,
-                state_dir.display()
+                pane_dir.display()
             );
+            println!("    branch=\x1b[32m{}\x1b[0m", branch);
+            println!("    state=\x1b[90m{}\x1b[0m", state_dir.display());
+            println!("    container=\x1b[35m{}\x1b[0m", cname);
+            println!();
         } else {
-            println!(
-                "[{}] {} branch={} container={} state={}",
-                i,
-                pane_dir.display(),
-                branch,
-                cname,
-                state_dir.display()
-            );
+            println!("[{}] folder={}", i, pane_dir.display());
+            println!("    branch={}", branch);
+            println!("    state={}", state_dir.display());
+            println!("    container={}", cname);
+            println!();
         }
     }
 
