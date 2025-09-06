@@ -3819,6 +3819,9 @@ enum ForkCmd {
         /// Scan across repositories under AIFO_CODER_WORKSPACE_ROOT (non-recursive; requires env)
         #[arg(long = "all-repos")]
         all_repos: bool,
+        /// Colorize output: auto|always|never
+        #[arg(long = "color", value_enum)]
+        color: Option<aifo_coder::ColorMode>,
     },
     /// Clean fork sessions and panes with safety protections
     Clean {
@@ -3962,7 +3965,10 @@ fn main() -> ExitCode {
     // Fork maintenance subcommands (Phase 6): operate without starting agents or acquiring locks
     if let Agent::Fork { cmd } = &cli.command {
         match cmd {
-            ForkCmd::List { json, all_repos } => {
+            ForkCmd::List { json, all_repos, color } => {
+                if let Some(mode) = color {
+                    aifo_coder::set_color_mode(*mode);
+                }
                 if *all_repos {
                     // In all-repos mode, do not require being inside a Git repo; workspace root is taken from env
                     let dummy = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
