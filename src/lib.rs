@@ -185,6 +185,79 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     ]
 });
 
+// -------- Color mode and helpers --------
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+pub enum ColorMode {
+    Auto,
+    Always,
+    Never,
+}
+
+static COLOR_MODE: OnceCell<ColorMode> = OnceCell::new();
+
+pub fn set_color_mode(mode: ColorMode) {
+    let _ = COLOR_MODE.set(mode);
+}
+
+fn parse_color_mode(s: &str) -> Option<ColorMode> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "auto" => Some(ColorMode::Auto),
+        "always" | "on" | "true" | "yes" => Some(ColorMode::Always),
+        "never" | "off" | "false" | "no" => Some(ColorMode::Never),
+        _ => None,
+    }
+}
+
+fn env_color_mode_pref() -> Option<ColorMode> {
+    std::env::var("AIFO_CODER_COLOR")
+        .ok()
+        .and_then(|v| parse_color_mode(&v))
+}
+
+fn no_color_env() -> bool {
+    // Per https://no-color.org/
+    std::env::var("NO_COLOR").is_ok()
+}
+
+fn color_enabled_for(is_tty: bool) -> bool {
+    if no_color_env() {
+        return false;
+    }
+    if let Some(mode) = COLOR_MODE.get().copied() {
+        return match mode {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => is_tty,
+        };
+    }
+    if let Some(env_mode) = env_color_mode_pref() {
+        return match env_mode {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => is_tty,
+        };
+    }
+    is_tty
+}
+
+pub fn color_enabled_stdout() -> bool {
+    color_enabled_for(atty::is(atty::Stream::Stdout))
+}
+
+pub fn color_enabled_stderr() -> bool {
+    color_enabled_for(atty::is(atty::Stream::Stderr))
+}
+
+/// Wrap string with ANSI color code when enabled; otherwise return unchanged.
+pub fn paint(enabled: bool, code: &str, s: &str) -> String {
+    if enabled {
+        format!("{code}{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
 /**
  Merging strategy for post-fork actions.
  - None: do nothing (default).
@@ -4056,20 +4129,25 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
                                 continue;
                             }
                             any = true;
+                            let use_color = color_enabled_stdout();
+                            let header_path = format!("{}/.aifo-coder/forks", repo.display());
                             println!(
-                                "aifo-coder: fork sessions under {}/.aifo-coder/forks",
-                                repo.display()
+                                "{} {}",
+                                paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
+                                paint(use_color, "\x1b[34;1m", &header_path)
                             );
                             for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+                                let base_col = paint(use_color, "\x1b[34;1m", &base_label);
                                 if stale {
+                                    let stale_col = paint(use_color, "\x1b[33m", "(stale)");
                                     println!(
-                                        "  {}  panes={}  age={}d  base={}  (stale)",
-                                        sid, panes, age_days, base_label
+                                        "  {}  panes={}  age={}d  base={}  {}",
+                                        sid, panes, age_days, base_col, stale_col
                                     );
                                 } else {
                                     println!(
                                         "  {}  panes={}  age={}d  base={}",
-                                        sid, panes, age_days, base_label
+                                        sid, panes, age_days, base_col
                                     );
                                 }
                             }
@@ -4125,20 +4203,25 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
         out.push(']');
         println!("{}", out);
     } else {
+        let use_color = color_enabled_stdout();
+        let header_path = format!("{}/.aifo-coder/forks", repo_root.display());
         println!(
-            "aifo-coder: fork sessions under {}/.aifo-coder/forks",
-            repo_root.display()
+            "{} {}",
+            paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
+            paint(use_color, "\x1b[34;1m", &header_path)
         );
         for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+            let base_col = paint(use_color, "\x1b[34;1m", &base_label);
             if stale {
+                let stale_col = paint(use_color, "\x1b[33m", "(stale)");
                 println!(
-                    "  {}  panes={}  age={}d  base={}  (stale)",
-                    sid, panes, age_days, base_label
+                    "  {}  panes={}  age={}d  base={}  {}",
+                    sid, panes, age_days, base_col, stale_col
                 );
             } else {
                 println!(
                     "  {}  panes={}  age={}d  base={}",
-                    sid, panes, age_days, base_label
+                    sid, panes, age_days, base_col
                 );
             }
         }
@@ -4346,9 +4429,19 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
         }
         if protected > 0 {
-            eprintln!("aifo-coder: refusing to delete: {} pane(s) are protected (dirty/ahead/base-unknown).", protected);
+            let use_err = color_enabled_stderr();
             eprintln!(
-                "Use --keep-dirty to remove only clean panes, or --force to delete everything."
+                "{}: {} pane(s) are protected (dirty/ahead/base-unknown).",
+                paint(use_err, "\x1b[31;1m", "aifo-coder: refusing to delete"),
+                protected
+            );
+            eprintln!(
+                "{}",
+                paint(
+                    use_err,
+                    "\x1b[33m",
+                    "Use --keep-dirty to remove only clean panes, or --force to delete everything."
+                )
             );
             // Print summary
             for (sd, panes) in &plan {
@@ -4360,9 +4453,9 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     if !ps.clean {
                         eprintln!(
                             "  {} :: {} [{}]",
-                            sid,
+                            paint(use_err, "\x1b[34;1m", sid),
                             ps.dir.display(),
-                            ps.reasons.join(",")
+                            paint(use_err, "\x1b[33m", &ps.reasons.join(","))
                         );
                     }
                 }
@@ -4400,10 +4493,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
         }
         if del_sessions > 0 || del_panes > 0 {
-            eprint!(
+            let prompt = format!(
                 "aifo-coder: about to delete {} session(s) and {} pane(s). Proceed? [y/N] ",
                 del_sessions, del_panes
             );
+            let use_err = color_enabled_stderr();
+            eprint!("{}", paint(use_err, "\x1b[33m", &prompt));
             let _ = std::io::stderr().flush();
             let mut line = String::new();
             let _ = std::io::stdin().read_line(&mut line);
@@ -4427,7 +4522,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             .to_string();
         if opts.force {
             if opts.dry_run {
-                println!("DRY-RUN: rm -rf {}", sd.display());
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{} {}",
+                    paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                    paint(use_out, "\x1b[34;1m", &format!("rm -rf {}", sd.display()))
+                );
             } else {
                 // count all panes removed and the session
                 deleted_panes_count += panes.len();
@@ -4435,6 +4535,16 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                 // Stop toolchain sidecars and remove session network (best-effort)
                 toolchain_cleanup_session(&sid, false);
                 let _ = fs::remove_dir_all(sd);
+                // Success message
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{}",
+                    paint(
+                        use_out,
+                        "\x1b[32;1m",
+                        &format!("aifo-coder: deleted fork session {}", sid)
+                    )
+                );
             }
             continue;
         }
@@ -4443,7 +4553,16 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             for ps in panes {
                 if ps.clean {
                     if opts.dry_run {
-                        println!("DRY-RUN: rm -rf {}", ps.dir.display());
+                        let use_out = color_enabled_stdout();
+                        println!(
+                            "{} {}",
+                            paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                            paint(
+                                use_out,
+                                "\x1b[34;1m",
+                                &format!("rm -rf {}", ps.dir.display())
+                            )
+                        );
                     } else {
                         deleted_panes_count += 1;
                         let _ = fs::remove_dir_all(&ps.dir);
@@ -4454,12 +4573,27 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
             if remaining.is_empty() {
                 if opts.dry_run {
-                    println!("DRY-RUN: rmdir {}", sd.display());
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{} {}",
+                        paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                        paint(use_out, "\x1b[34;1m", &format!("rmdir {}", sd.display()))
+                    );
                 } else {
                     deleted_sessions_count += 1;
                     // Stop toolchain sidecars and remove session network (best-effort)
                     toolchain_cleanup_session(&sid, false);
                     let _ = fs::remove_dir_all(sd);
+                    // Success message
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{}",
+                        paint(
+                            use_out,
+                            "\x1b[32;1m",
+                            &format!("aifo-coder: deleted fork session {}", sid)
+                        )
+                    );
                 }
             } else {
                 // Update .meta.json with remaining panes (also refresh branches best-effort)
@@ -4543,18 +4677,47 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     }
                     meta_out.push_str("]}");
                     let _ = fs::write(sd.join(".meta.json"), meta_out);
+                    // Kept session summary
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{}",
+                        paint(
+                            use_out,
+                            "\x1b[33m",
+                            &format!(
+                                "aifo-coder: kept fork session {} ({} protected pane(s) remain)",
+                                sid,
+                                remaining.len()
+                            )
+                        )
+                    );
                 }
             }
         } else {
             // all panes are clean here (or we would have bailed above)
             if opts.dry_run {
-                println!("DRY-RUN: rm -rf {}", sd.display());
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{} {}",
+                    paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                    paint(use_out, "\x1b[34;1m", &format!("rm -rf {}", sd.display()))
+                );
             } else {
                 deleted_panes_count += panes.len();
                 deleted_sessions_count += 1;
                 // Stop toolchain sidecars and remove session network (best-effort)
                 toolchain_cleanup_session(&sid, false);
                 let _ = fs::remove_dir_all(sd);
+                // Success message
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{}",
+                    paint(
+                        use_out,
+                        "\x1b[32;1m",
+                        &format!("aifo-coder: deleted fork session {}", sid)
+                    )
+                );
             }
         }
     }
@@ -4959,7 +5122,133 @@ pub fn fork_merge_branches(
         }
     }
 
-    // Perform octopus merge
+    // Compose a detailed octopus merge message with a one-line summary and per-branch sections
+    let mut merge_message = String::new();
+
+    // Build one-line summary from commit subjects across branches
+    let mut summary_parts: Vec<String> = Vec::new();
+    for (_p, br) in &pane_branches {
+        let subj_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        if let Some(o) = subj_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                for s in body.lines() {
+                    let mut t = s.trim().to_string();
+                    if t.is_empty() {
+                        continue;
+                    }
+                    // Strip common conventional commit prefixes (feat:, fix:, test:, etc.)
+                    if let Some(pos) = t.find(':') {
+                        let (prefix, rest) = t.split_at(pos);
+                        let pref = prefix.to_ascii_lowercase();
+                        if [
+                            "feat", "fix", "docs", "style", "refactor", "perf", "test", "chore",
+                            "build", "ci", "revert",
+                        ]
+                        .contains(&pref.as_str())
+                        {
+                            t = rest.trim_start_matches(':').trim().to_string();
+                        }
+                    }
+                    // Normalize whitespace
+                    t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if t.is_empty() {
+                        continue;
+                    }
+                    // De-duplicate case-insensitively
+                    if !summary_parts.iter().any(|e| e.eq_ignore_ascii_case(&t)) {
+                        summary_parts.push(t);
+                    }
+                }
+            }
+        }
+    }
+    // Truncate overly long summary for the first line
+    let mut summary_line = if summary_parts.is_empty() {
+        format!("Octopus merge of {} branch(es)", pane_branches.len())
+    } else {
+        let joined = summary_parts.join(" / ");
+        if joined.len() > 160 {
+            format!("{} …", &joined[..160].trim_end())
+        } else {
+            joined
+        }
+    };
+    if !summary_line.to_ascii_lowercase().starts_with("octopus merge") {
+        summary_line = format!("Octopus merge: {}", summary_line);
+    }
+    merge_message.push_str(&format!(
+        "{}\n\nBranch summaries relative to {}:\n",
+        summary_line, base_ref_or_sha
+    ));
+
+    for (_p, br) in &pane_branches {
+        // Collect commit subjects relative to the base (skip merge commits)
+        let log_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%h %s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        merge_message.push_str(&format!("- branch '{}':\n", br));
+        if let Some(o) = log_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                let mut has_any = false;
+                for line in body.lines() {
+                    let t = line.trim();
+                    if !t.is_empty() {
+                        has_any = true;
+                        merge_message.push_str("  * ");
+                        merge_message.push_str(t);
+                        merge_message.push('\n');
+                    }
+                }
+                if !has_any {
+                    merge_message.push_str("  (no changes)\n");
+                }
+            } else {
+                merge_message.push_str("  (unable to summarize changes)\n");
+            }
+        } else {
+            merge_message.push_str("  (unable to summarize changes)\n");
+        }
+        merge_message.push('\n');
+    }
+
+    // Prepare merge message file path; write it unless dry_run
+    let mut merge_msg_path: Option<std::path::PathBuf> = None;
+    let msg_path = std::env::temp_dir().join(format!(
+        "aifo-merge-{}-{}.txt",
+        sid,
+        std::process::id()
+    ));
+    if verbose {
+        eprintln!(
+            "aifo-coder: preparing octopus merge message at {}",
+            msg_path.display()
+        );
+    }
+    if !dry_run {
+        if fs::write(&msg_path, &merge_message).is_ok() {
+            merge_msg_path = Some(msg_path.clone());
+        } else if verbose {
+            eprintln!("aifo-coder: warning: failed to write merge message file; falling back to default message");
+        }
+    }
+
+    // Perform octopus merge (use -F <file> when available)
     let mut merge_args = vec![
         "git".to_string(),
         "-C".to_string(),
@@ -4968,6 +5257,10 @@ pub fn fork_merge_branches(
         "--no-ff".to_string(),
         "--no-edit".to_string(),
     ];
+    if merge_msg_path.is_some() || dry_run {
+        merge_args.push("-F".to_string());
+        merge_args.push(msg_path.display().to_string());
+    }
     for (_p, br) in &pane_branches {
         merge_args.push(br.clone());
     }
@@ -4981,10 +5274,17 @@ pub fn fork_merge_branches(
             .arg("merge")
             .arg("--no-ff")
             .arg("--no-edit");
+        if let Some(ref p) = merge_msg_path {
+            cmd.arg("-F").arg(p);
+        }
         for (_p, br) in &pane_branches {
             cmd.arg(br);
         }
         let st = cmd.status()?;
+        // cleanup temp file best-effort
+        if let Some(p) = merge_msg_path {
+            let _ = fs::remove_file(p);
+        }
         if !st.success() {
             // Record failed octopus merge in metadata
             let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
