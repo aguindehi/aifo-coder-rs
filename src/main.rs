@@ -320,7 +320,7 @@ mod tests_main_cli_child_args {
             "--fork-session-name",
             "--fork-layout",
             "--fork-keep-on-failure",
-            "--fork-merging-strategy",
+            "--fork-merge-strategy",
             "--fork-merge-no-autoclean",
         ] {
             assert!(
@@ -366,7 +366,7 @@ mod tests_main_cli_child_args {
         use clap::Parser;
         let cli = super::Cli::parse_from([
             "aifo-coder",
-            "--fork-merging-strategy",
+            "--fork-merge-strategy",
             "octopus",
             "aider",
             "--",
@@ -377,7 +377,7 @@ mod tests_main_cli_child_args {
                 cli.fork_merging_strategy,
                 aifo_coder::MergingStrategy::Octopus
             ),
-            "expected parsing of --fork-merging-strategy octopus"
+            "expected parsing of --fork-merge-strategy octopus"
         );
     }
 }
@@ -1142,8 +1142,8 @@ struct Cli {
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
-    /// Post-fork merging strategy to apply after all panes exit
-    #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
+    /// Post-fork merge strategy to apply after all panes exit (default: octopus)
+    #[arg(long = "fork-merge-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::Octopus)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
     /// Disable automatic disposal of the fork session after a successful octopus merge (default: enabled)
@@ -2146,7 +2146,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::paint(
                             use_err,
                             "\x1b[33m",
-                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy)."
+                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merge-strategy)."
                         )
                     );
                 }
