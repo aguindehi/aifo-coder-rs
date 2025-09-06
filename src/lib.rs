@@ -1593,12 +1593,22 @@ fn sidecar_network_name(id: &str) -> String {
     format!("aifo-net-{id}")
 }
 
-fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("network").arg("create").arg(name);
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
+    // Fast path: already exists
+    let exists = Command::new(runtime)
+        .arg("network")
+        .arg("inspect")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if exists {
+        return true;
     }
+
+    // Create the network (best-effort)
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
@@ -1610,7 +1620,30 @@ fn create_network_if_possible(runtime: &Path, name: &str, verbose: bool) {
             ])
         );
     }
+    let mut cmd = Command::new(runtime);
+    cmd.arg("network").arg("create").arg(name);
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
     let _ = cmd.status();
+
+    // Verify with brief retries to absorb races between concurrent creators
+    for _ in 0..20 {
+        let ok = Command::new(runtime)
+            .arg("network")
+            .arg("inspect")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
 }
 
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
@@ -1848,9 +1881,14 @@ pub fn toolchain_run(
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
-    // Create network (best-effort)
+    // Ensure network exists before starting sidecar
     if !dry_run {
-        create_network_if_possible(&runtime, &net_name, verbose);
+        if !ensure_network_exists(&runtime, &net_name, verbose) {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to create or verify network {}", net_name),
+            ));
+        }
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -1911,8 +1949,6 @@ pub fn toolchain_run(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    // Cleanup network if container didn't start
-                    remove_network(&runtime, &net_name, verbose);
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!(
@@ -2438,7 +2474,12 @@ pub fn toolchain_start_session(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| create_session_id());
     let net_name = sidecar_network_name(&session_id);
-    create_network_if_possible(&runtime, &net_name, verbose);
+    if !ensure_network_exists(&runtime, &net_name, verbose) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "failed to create session network",
+        ));
+    }
 
     let apparmor_profile = desired_apparmor_profile();
     for k in kinds {
@@ -2502,7 +2543,6 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    remove_network(&runtime, &net_name, verbose);
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "failed to start one or more sidecars",
