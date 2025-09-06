@@ -4429,9 +4429,19 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
         }
         if protected > 0 {
-            eprintln!("aifo-coder: refusing to delete: {} pane(s) are protected (dirty/ahead/base-unknown).", protected);
+            let use_err = color_enabled_stderr();
             eprintln!(
-                "Use --keep-dirty to remove only clean panes, or --force to delete everything."
+                "{}: {} pane(s) are protected (dirty/ahead/base-unknown).",
+                paint(use_err, "\x1b[31;1m", "aifo-coder: refusing to delete"),
+                protected
+            );
+            eprintln!(
+                "{}",
+                paint(
+                    use_err,
+                    "\x1b[33m",
+                    "Use --keep-dirty to remove only clean panes, or --force to delete everything."
+                )
             );
             // Print summary
             for (sd, panes) in &plan {
@@ -4443,9 +4453,9 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     if !ps.clean {
                         eprintln!(
                             "  {} :: {} [{}]",
-                            sid,
+                            paint(use_err, "\x1b[34;1m", sid),
                             ps.dir.display(),
-                            ps.reasons.join(",")
+                            paint(use_err, "\x1b[33m", &ps.reasons.join(","))
                         );
                     }
                 }
