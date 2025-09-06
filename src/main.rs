@@ -3704,8 +3704,19 @@ pane_id}}")"; secs="${{AIFO_CODER_FORK_SHELL_PROMPT_SECS:-2}}"; printf "aifo-cod
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
             let inner = build_inner(i, &pane_state_dir);
+            let script_path = pane_state_dir.join("launch.sh");
+            let _ = fs::create_dir_all(&pane_state_dir);
+            let _ = fs::write(&script_path, inner.as_bytes());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&script_path, fs::Permissions::from_mode(0o700));
+            }
             let target = format!("{}:0.{}", &session_name, idx);
-            let shwrap = format!("sh -lc {}", aifo_coder::shell_escape(&inner));
+            let shwrap = format!(
+                "sh -lc {}",
+                aifo_coder::shell_escape(&script_path.display().to_string())
+            );
             let mut sk = Command::new(&tmux);
             sk.arg("send-keys")
                 .arg("-t")
