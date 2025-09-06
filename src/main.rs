@@ -1686,7 +1686,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::MergingStrategy::Fetch => "fetch",
                         aifo_coder::MergingStrategy::Octopus => "octopus",
                     };
-                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[36;1m",
+                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                            )
+                        );
+                    }
                     match aifo_coder::fork_merge_branches_by_session(
                         &repo_root,
                         &sid,
@@ -1695,15 +1705,35 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         cli.dry_run,
                     ) {
                         Ok(()) => {
-                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[32;1m",
+                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                    )
+                                );
+                            }
                             if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
-                                eprintln!(
-                                    "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
-                                    sid
-                                );
+                                {
+                                    let use_err = aifo_coder::color_enabled_stderr();
+                                    eprintln!(
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[36;1m",
+                                            &format!(
+                                                "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                                sid
+                                            )
+                                        )
+                                    );
+                                }
                                 let opts = aifo_coder::ForkCleanOpts {
                                     session: Some(sid.clone()),
                                     older_than_days: None,
@@ -1724,7 +1754,20 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[31;1m",
+                                        &format!(
+                                            "aifo-coder: merge strategy '{}' failed: {}",
+                                            strat, e
+                                        )
+                                    )
+                                );
+                            }
                         }
                     }
                 }
@@ -1851,7 +1894,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::MergingStrategy::Fetch => "fetch",
                         aifo_coder::MergingStrategy::Octopus => "octopus",
                     };
-                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[36;1m",
+                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                            )
+                        );
+                    }
                     match aifo_coder::fork_merge_branches_by_session(
                         &repo_root,
                         &sid,
@@ -1860,15 +1913,35 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         cli.dry_run,
                     ) {
                         Ok(()) => {
-                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[32;1m",
+                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                    )
+                                );
+                            }
                             if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
-                                eprintln!(
-                                    "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
-                                    sid
-                                );
+                                {
+                                    let use_err = aifo_coder::color_enabled_stderr();
+                                    eprintln!(
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[36;1m",
+                                            &format!(
+                                                "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                                sid
+                                            )
+                                        )
+                                    );
+                                }
                                 let opts = aifo_coder::ForkCleanOpts {
                                     session: Some(sid.clone()),
                                     older_than_days: None,
@@ -1889,7 +1962,20 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[31;1m",
+                                        &format!(
+                                            "aifo-coder: merge strategy '{}' failed: {}",
+                                            strat, e
+                                        )
+                                    )
+                                );
+                            }
                         }
                     }
                 }
@@ -1939,7 +2025,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let wt = which("wt").or_else(|_| which("wt.exe"));
         if let Ok(wtbin) = wt {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
-                eprintln!("aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy).");
+                {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    eprintln!(
+                        "{}",
+                        aifo_coder::paint(
+                            use_err,
+                            "\x1b[33m",
+                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy)."
+                        )
+                    );
+                }
             } else {
             if clones.is_empty() {
                 eprintln!("aifo-coder: no panes to create.");
@@ -2346,7 +2442,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::MergingStrategy::Fetch => "fetch",
                         aifo_coder::MergingStrategy::Octopus => "octopus",
                     };
-                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[36;1m",
+                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                            )
+                        );
+                    }
                     match aifo_coder::fork_merge_branches_by_session(
                         &repo_root,
                         &sid,
@@ -2355,7 +2461,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         cli.dry_run,
                     ) {
                         Ok(()) => {
-                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[32;1m",
+                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                    )
+                                );
+                            }
                             if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
                                 && cli.fork_merging_autoclean
                                 && !cli.dry_run
@@ -2384,7 +2500,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[31;1m",
+                                        &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                                    )
+                                );
+                            }
                         }
                     }
                 }
@@ -2511,7 +2637,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::MergingStrategy::Fetch => "fetch",
                         aifo_coder::MergingStrategy::Octopus => "octopus",
                     };
-                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[36;1m",
+                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                            )
+                        );
+                    }
                     match aifo_coder::fork_merge_branches_by_session(
                         &repo_root,
                         &sid,
@@ -2698,8 +2834,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::MergingStrategy::Octopus => "octopus",
                             _ => "none",
                         };
-                        eprintln!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat);
-                        eprintln!("aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}", sid, strat);
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[33m",
+                                    &format!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat)
+                                )
+                            );
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[33m",
+                                    &format!(
+                                        "aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}",
+                                        sid, strat
+                                    )
+                                )
+                            );
+                        }
                     }
                     println!("To inspect and merge changes, you can run:");
                     if let Some((first_dir, first_branch)) = clones.first() {
@@ -2852,7 +3008,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 aifo_coder::MergingStrategy::Fetch => "fetch",
                 aifo_coder::MergingStrategy::Octopus => "octopus",
             };
-            eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+            {
+                let use_err = aifo_coder::color_enabled_stderr();
+                eprintln!(
+                    "{}",
+                    aifo_coder::paint(
+                        use_err,
+                        "\x1b[36;1m",
+                        &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                    )
+                );
+            }
             match aifo_coder::fork_merge_branches_by_session(
                 &repo_root,
                 &sid,
@@ -2861,15 +3027,35 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 cli.dry_run,
             ) {
                 Ok(()) => {
-                    eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[32;1m",
+                                &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                            )
+                        );
+                    }
                     if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
                         && cli.fork_merging_autoclean
                         && !cli.dry_run
                     {
-                        eprintln!(
-                            "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
-                            sid
-                        );
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[36;1m",
+                                    &format!(
+                                        "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                        sid
+                                    )
+                                )
+                            );
+                        }
                         let opts = aifo_coder::ForkCleanOpts {
                             session: Some(sid.clone()),
                             older_than_days: None,
@@ -2890,7 +3076,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     }
                 }
                 Err(e) => {
-                    eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                    {
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[31;1m",
+                                &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                            )
+                        );
+                    }
                 }
             }
         }
@@ -3403,15 +3599,35 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                 ) {
                     Ok(()) => {
-                        eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[32;1m",
+                                    &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                )
+                            );
+                        }
                         if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
                             && cli.fork_merging_autoclean
                             && !cli.dry_run
                         {
-                            eprintln!(
-                                "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
-                                sid
-                            );
+                            {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[36;1m",
+                                        &format!(
+                                            "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                            sid
+                                        )
+                                    )
+                                );
+                            }
                             let opts = aifo_coder::ForkCleanOpts {
                                 session: Some(sid.clone()),
                                 older_than_days: None,
@@ -3432,7 +3648,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         }
                     }
                     Err(e) => {
-                        eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[31;1m",
+                                    &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                                )
+                            );
+                        }
                     }
                 }
             }
@@ -3665,9 +3891,17 @@ fn main() -> ExitCode {
                             && *autoclean
                             && !*dry_run
                         {
+                            let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
-                                "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
-                                session
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[36;1m",
+                                    &format!(
+                                        "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
+                                        session
+                                    )
+                                )
                             );
                             let opts = aifo_coder::ForkCleanOpts {
                                 session: Some(session.clone()),
@@ -3694,7 +3928,17 @@ fn main() -> ExitCode {
                         return ExitCode::from(0);
                     }
                     Err(e) => {
-                        eprintln!("aifo-coder: fork merge failed: {}", e);
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[31;1m",
+                                    &format!("aifo-coder: fork merge failed: {}", e)
+                                )
+                            );
+                        }
                         return ExitCode::from(1);
                     }
                 }
