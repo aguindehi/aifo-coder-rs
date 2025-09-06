@@ -105,6 +105,32 @@ fn print_startup_banner() {
                     rootless = true;
                 }
             }
+            ForkCmd::Merge {
+                session,
+                strategy,
+                dry_run,
+            } => {
+                let repo_root = match aifo_coder::repo_root() {
+                    Some(p) => p,
+                    None => {
+                        eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
+                        return ExitCode::from(1);
+                    }
+                };
+                match aifo_coder::fork_merge_branches_by_session(
+                    &repo_root,
+                    session,
+                    *strategy,
+                    cli.verbose,
+                    *dry_run,
+                ) {
+                    Ok(()) => return ExitCode::from(0),
+                    Err(e) => {
+                        eprintln!("aifo-coder: fork merge failed: {}", e);
+                        return ExitCode::from(1);
+                    }
+                }
+            }
         }
     }
 
@@ -244,6 +270,7 @@ mod tests_main_cli_child_args {
             fork_session_name: Some("ut-session".to_string()),
             fork_layout: Some("even-h".to_string()),
             fork_keep_on_failure: true,
+            fork_merging_strategy: aifo_coder::MergingStrategy::None,
             command: super::Agent::Aider {
                 args: vec!["--help".to_string(), "--".to_string(), "extra".to_string()],
             },
@@ -305,6 +332,7 @@ mod tests_main_cli_child_args {
             "--fork-session-name",
             "--fork-layout",
             "--fork-keep-on-failure",
+            "--fork-merging-strategy",
         ] {
             assert!(
                 !joined.contains(bad),
@@ -1099,6 +1127,10 @@ struct Cli {
     /// Keep created clones on orchestration failure (default: keep)
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
+
+    /// Post-fork merging strategy to apply after all panes exit
+    #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
+    fork_merging_strategy: aifo_coder::MergingStrategy,
 
     #[command(subcommand)]
     command: Agent,
@@ -2945,7 +2977,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             }
         }
 
-        ExitCode::from(0)
+        {
+            if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                let strat = match cli.fork_merging_strategy {
+                    aifo_coder::MergingStrategy::None => "none",
+                    aifo_coder::MergingStrategy::Fetch => "fetch",
+                    aifo_coder::MergingStrategy::Octopus => "octopus",
+                };
+                eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                match aifo_coder::fork_merge_branches_by_session(
+                    &repo_root,
+                    &sid,
+                    cli.fork_merging_strategy,
+                    cli.verbose,
+                    cli.dry_run,
+                ) {
+                    Ok(()) => {
+                        eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                    }
+                    Err(e) => {
+                        eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                    }
+                }
+            }
+            ExitCode::from(0)
+        }
     }
 }
 
@@ -2986,6 +3042,19 @@ enum ForkCmd {
         /// Emit machine-readable JSON summary (plan in --dry-run; result when executed)
         #[arg(long)]
         json: bool,
+    },
+
+    /// Merge fork panes back into the original repository
+    Merge {
+        /// Session id to merge
+        #[arg(long = "session")]
+        session: String,
+        /// Strategy: fetch or octopus
+        #[arg(long = "strategy", value_enum)]
+        strategy: aifo_coder::MergingStrategy,
+        /// Print what would be done without modifying
+        #[arg(long = "dry-run")]
+        dry_run: bool,
     },
 }
 
