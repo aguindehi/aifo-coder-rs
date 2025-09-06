@@ -78,7 +78,10 @@ fn test_fork_list_cli_json_stale_highlight() {
     )
     .trim()
     .to_string();
-    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let meta_new = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{}-1\"], \"layout\": \"tiled\" }}",
         now_secs, head_new, pane_new.display(), sid_new

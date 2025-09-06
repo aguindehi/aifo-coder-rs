@@ -41,7 +41,10 @@ fn write_fake_session(repo_root: &std::path::Path, sid: &str, age_days: u64) {
     )
     .trim()
     .to_string();
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let created_at = now.saturating_sub(age_days * 86400);
     let meta = format!(
         "{{ \"created_at\": {}, \"base_label\": \"main\", \"base_ref_or_sha\": \"main\", \"base_commit_sha\": \"{}\", \"panes\": 1, \"pane_dirs\": [\"{}\"], \"branches\": [\"fork/main/{}-1\"], \"layout\": \"tiled\" }}",

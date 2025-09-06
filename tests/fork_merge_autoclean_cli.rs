@@ -125,10 +125,7 @@ fn test_cli_fork_merge_octopus_autoclean_disposes_session() {
     );
 
     // Verify session directory is removed
-    let session_dir = repo
-        .join(".aifo-coder")
-        .join("forks")
-        .join(sid);
+    let session_dir = repo.join(".aifo-coder").join("forks").join(sid);
     assert!(
         !session_dir.exists(),
         "session dir should be removed by autoclean: {}",

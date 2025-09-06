@@ -66,7 +66,15 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
     // Run fork with 2 panes; set TMUX to force switch-client (non-attaching)
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)
-        .args(["--fork", "2", "--fork-session-name", "ut-smoke", "aider", "--", "--help"])
+        .args([
+            "--fork",
+            "2",
+            "--fork-session-name",
+            "ut-smoke",
+            "aider",
+            "--",
+            "--help",
+        ])
         .env("TMUX", "1")
         .current_dir(&root)
         .output()

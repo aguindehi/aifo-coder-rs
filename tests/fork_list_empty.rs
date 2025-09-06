@@ -42,7 +42,12 @@ fn test_fork_list_json_empty_returns_empty_array() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(stdout.trim(), "[]", "expected empty JSON array, got:\n{}", stdout);
+    assert_eq!(
+        stdout.trim(),
+        "[]",
+        "expected empty JSON array, got:\n{}",
+        stdout
+    );
 }
 
 #[test]

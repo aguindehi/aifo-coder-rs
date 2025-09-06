@@ -13,9 +13,14 @@ fn print_startup_banner() {
     let version = env!("CARGO_PKG_VERSION");
     println!();
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🚀  Welcome to the Migros AI Foundation Coder - AIFO Coder v{}  🚀 ", version);
+    println!(
+        " 🚀  Welcome to the Migros AI Foundation Coder - AIFO Coder v{}  🚀 ",
+        version
+    );
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO");
+    println!(
+        " 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO"
+    );
     println!();
 
     // Host/platform info
@@ -111,13 +116,18 @@ fn print_startup_banner() {
     // Feature overview (Linux, macOS, Windows)
     println!(" ✨ Features:");
     println!("    - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces.");
-    println!("    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM.");
+    println!(
+        "    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM."
+    );
     println!("    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration.");
     println!();
 
     // Dynamic startup summary (terse)
     println!(" ⚙️  Starting up coding agents...");
-    println!("    - Environment: Docker={} | Virt={}", docker_disp, virtualization);
+    println!(
+        "    - Environment: Docker={} | Virt={}",
+        docker_disp, virtualization
+    );
     println!("    - Platform: {}/{}", os, arch);
     let aa = if apparmor_supported {
         match apparmor_profile.as_deref() {
@@ -143,7 +153,9 @@ fn print_startup_banner() {
     println!("    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.");
     println!("    - Seccomp and cgroup namespaces as reported by Docker.");
     println!("    - Per-pane isolated state for forks (.aider/.codex/.crush).");
-    println!("    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy.");
+    println!(
+        "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy."
+    );
     println!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     println!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
@@ -179,8 +191,14 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
                 s
             ));
             msgs.push("On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
-            msgs.push("This can result in an empty or non-writable /workspace inside the container.".to_string());
-            msgs.push("Move your project under your home directory (e.g., ~/projects/<repo>) and retry.".to_string());
+            msgs.push(
+                "This can result in an empty or non-writable /workspace inside the container."
+                    .to_string(),
+            );
+            msgs.push(
+                "Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+                    .to_string(),
+            );
             if interactive_block {
                 let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
                 return aifo_coder::warn_prompt_continue_or_quit(&lines);
@@ -197,7 +215,10 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
                 "Current workspace is under a temporary path ({}).",
                 s
             ));
-            msgs.push("Some Docker setups do not share temporary folders reliably with containers.".to_string());
+            msgs.push(
+                "Some Docker setups do not share temporary folders reliably with containers."
+                    .to_string(),
+            );
             msgs.push("You may see an empty or read-only /workspace. Move the project under your home directory and retry.".to_string());
             if interactive_block {
                 let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
@@ -352,7 +373,10 @@ mod tests_main_cli_child_args {
             "--help",
         ]);
         assert!(
-            matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus),
+            matches!(
+                cli.fork_merging_strategy,
+                aifo_coder::MergingStrategy::Octopus
+            ),
             "expected parsing of --fork-merging-strategy octopus"
         );
     }
@@ -1284,7 +1308,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         }
     };
     if panes > 8 {
-        let msg = format!("Launching {} panes may impact disk/memory and I/O performance.", panes);
+        let msg = format!(
+            "Launching {} panes may impact disk/memory and I/O performance.",
+            panes
+        );
         if !aifo_coder::warn_prompt_continue_or_quit(&[&msg]) {
             return ExitCode::from(1);
         }
@@ -1349,7 +1376,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     }
 
     // Preflight: if octopus merging requested, ensure original repo is clean to avoid hidden merge failures
-    if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus) {
+    if matches!(
+        cli.fork_merging_strategy,
+        aifo_coder::MergingStrategy::Octopus
+    ) {
         if let Ok(o) = Command::new("git")
             .arg("-C")
             .arg(&repo_root)
@@ -1429,7 +1459,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     }
     if let Some(ref snap) = snapshot_sha {
         if use_color_out {
-            println!("\x1b[32mincluded dirty working tree via snapshot {}\x1b[0m", snap);
+            println!(
+                "\x1b[32mincluded dirty working tree via snapshot {}\x1b[0m",
+                snap
+            );
         } else {
             println!("included dirty working tree via snapshot {}", snap);
         }
@@ -1609,7 +1642,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 words.extend(child_args.clone());
                 let cmd = aifo_coder::shell_join(&words);
                 let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
-                let tail = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) { " && exec bash" } else { "" };
+                let tail = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None)
+                {
+                    " && exec bash"
+                } else {
+                    ""
+                };
                 format!("cd {} && {}; {}{}", cddir, exports.join("; "), cmd, tail)
             };
 
@@ -1709,7 +1747,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::paint(
                                 use_err,
                                 "\x1b[36;1m",
-                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                                &format!(
+                                    "aifo-coder: applying post-fork merge strategy: {}",
+                                    strat
+                                )
                             )
                         );
                     }
@@ -1728,12 +1769,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     aifo_coder::paint(
                                         use_err,
                                         "\x1b[32;1m",
-                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                        &format!(
+                                            "aifo-coder: merge strategy '{}' completed.",
+                                            strat
+                                        )
                                     )
                                 );
                             }
-                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                                && cli.fork_merging_autoclean
+                            if matches!(
+                                cli.fork_merging_strategy,
+                                aifo_coder::MergingStrategy::Octopus
+                            ) && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
                                 eprintln!();
@@ -1794,20 +1840,18 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            {
-                                let use_err = aifo_coder::color_enabled_stderr();
-                                eprintln!(
-                                    "{}",
-                                    aifo_coder::paint(
-                                        use_err,
-                                        "\x1b[31;1m",
-                                        &format!(
-                                            "aifo-coder: merge strategy '{}' failed: {}",
-                                            strat, e
-                                        )
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[31;1m",
+                                    &format!(
+                                        "aifo-coder: merge strategy '{}' failed: {}",
+                                        strat, e
                                     )
-                                );
-                            }
+                                )
+                            );
                         }
                     }
                 }
@@ -1941,7 +1985,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::paint(
                                 use_err,
                                 "\x1b[36;1m",
-                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                                &format!(
+                                    "aifo-coder: applying post-fork merge strategy: {}",
+                                    strat
+                                )
                             )
                         );
                     }
@@ -1960,12 +2007,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     aifo_coder::paint(
                                         use_err,
                                         "\x1b[32;1m",
-                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                        &format!(
+                                            "aifo-coder: merge strategy '{}' completed.",
+                                            strat
+                                        )
                                     )
                                 );
                             }
-                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                                && cli.fork_merging_autoclean
+                            if matches!(
+                                cli.fork_merging_strategy,
+                                aifo_coder::MergingStrategy::Octopus
+                            ) && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
                                 eprintln!();
@@ -2026,20 +2078,18 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            {
-                                let use_err = aifo_coder::color_enabled_stderr();
-                                eprintln!(
-                                    "{}",
-                                    aifo_coder::paint(
-                                        use_err,
-                                        "\x1b[31;1m",
-                                        &format!(
-                                            "aifo-coder: merge strategy '{}' failed: {}",
-                                            strat, e
-                                        )
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[31;1m",
+                                    &format!(
+                                        "aifo-coder: merge strategy '{}' failed: {}",
+                                        strat, e
                                     )
-                                );
-                            }
+                                )
+                            );
                         }
                     }
                 }
@@ -2101,144 +2151,90 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     );
                 }
             } else {
-            if clones.is_empty() {
-                eprintln!("aifo-coder: no panes to create.");
-                return ExitCode::from(1);
-            }
-            let psbin = which("pwsh")
-                .or_else(|_| which("powershell"))
-                .or_else(|_| which("powershell.exe"))
-                .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
-            let orient_for_layout = |i: usize| -> &'static str {
-                match layout.as_str() {
-                    "even-h" => "-H",
-                    "even-v" => "-V",
-                    _ => {
-                        // tiled: alternate for some balance
-                        if i % 2 == 0 {
-                            "-H"
-                        } else {
-                            "-V"
-                        }
-                    }
+                if clones.is_empty() {
+                    eprintln!("aifo-coder: no panes to create.");
+                    return ExitCode::from(1);
                 }
-            };
-
-            // Pane 1: new tab
-            {
-                let (pane1_dir, _b) = &clones[0];
-                let pane_state_dir = state_base.join(&sid).join("pane-1");
-                let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
-                let mut cmd = Command::new(&wtbin);
-                cmd.arg("new-tab")
-                    .arg("-d")
-                    .arg(pane1_dir)
-                    .arg(&psbin)
-                    .arg("-NoExit")
-                    .arg("-Command")
-                    .arg(&inner);
-                if cli.verbose {
-                    let preview = vec![
-                        "wt".to_string(),
-                        "new-tab".to_string(),
-                        "-d".to_string(),
-                        pane1_dir.display().to_string(),
-                        psbin.display().to_string(),
-                        "-NoExit".to_string(),
-                        "-Command".to_string(),
-                        inner.clone(),
-                    ];
-                    eprintln!(
-                        "aifo-coder: windows-terminal: {}",
-                        aifo_coder::shell_join(&preview)
-                    );
-                }
-                match cmd.status() {
-                    Ok(s) if s.success() => {}
-                    Ok(_) => {
-                        eprintln!("aifo-coder: Windows Terminal failed to start first pane (non-zero exit).");
-                        if !cli.fork_keep_on_failure {
-                            for (dir, _) in &clones {
-                                let _ = fs::remove_dir_all(dir);
+                let psbin = which("pwsh")
+                    .or_else(|_| which("powershell"))
+                    .or_else(|_| which("powershell.exe"))
+                    .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
+                let orient_for_layout = |i: usize| -> &'static str {
+                    match layout.as_str() {
+                        "even-h" => "-H",
+                        "even-v" => "-V",
+                        _ => {
+                            // tiled: alternate for some balance
+                            if i % 2 == 0 {
+                                "-H"
+                            } else {
+                                "-V"
                             }
-                            println!(
-                                "Removed all created pane directories under {}.",
-                                session_dir.display()
-                            );
-                        } else {
-                            println!(
-                                "Clones remain under {} for recovery.",
-                                session_dir.display()
-                            );
                         }
-                        // Update metadata with panes_created
-                        let existing: Vec<(PathBuf, String)> = clones
-                            .iter()
-                            .filter(|(p, _)| p.exists())
-                            .map(|(p, b)| (p.clone(), b.clone()))
-                            .collect();
-                        let panes_created = existing.len();
-                        let pane_dirs_vec: Vec<String> = existing
-                            .iter()
-                            .map(|(p, _)| p.display().to_string())
-                            .collect();
-                        let branches_vec: Vec<String> =
-                            existing.iter().map(|(_, b)| b.clone()).collect();
-                        let mut meta2 = format!(
-                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                            created_at,
-                            aifo_coder::json_escape(&base_label),
-                            aifo_coder::json_escape(&base_ref_or_sha),
-                            aifo_coder::json_escape(&base_commit_sha),
-                            panes,
-                            panes_created,
-                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                            aifo_coder::json_escape(&layout)
-                        );
-                        if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(
-                                ", \"snapshot_sha\": {}",
-                                aifo_coder::json_escape(snap)
-                            ));
-                        }
-                        meta2.push_str(" }");
-                        let _ = fs::write(session_dir.join(".meta.json"), meta2);
-                        return ExitCode::from(1);
                     }
-                    Err(e) => {
+                };
+
+                // Pane 1: new tab
+                {
+                    let (pane1_dir, _b) = &clones[0];
+                    let pane_state_dir = state_base.join(&sid).join("pane-1");
+                    let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
+                    let mut cmd = Command::new(&wtbin);
+                    cmd.arg("new-tab")
+                        .arg("-d")
+                        .arg(pane1_dir)
+                        .arg(&psbin)
+                        .arg("-NoExit")
+                        .arg("-Command")
+                        .arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            "wt".to_string(),
+                            "new-tab".to_string(),
+                            "-d".to_string(),
+                            pane1_dir.display().to_string(),
+                            psbin.display().to_string(),
+                            "-NoExit".to_string(),
+                            "-Command".to_string(),
+                            inner.clone(),
+                        ];
                         eprintln!(
-                            "aifo-coder: Windows Terminal failed to start first pane: {}",
-                            e
+                            "aifo-coder: windows-terminal: {}",
+                            aifo_coder::shell_join(&preview)
                         );
-                        if !cli.fork_keep_on_failure {
-                            for (dir, _) in &clones {
-                                let _ = fs::remove_dir_all(dir);
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        Ok(_) => {
+                            eprintln!("aifo-coder: Windows Terminal failed to start first pane (non-zero exit).");
+                            if !cli.fork_keep_on_failure {
+                                for (dir, _) in &clones {
+                                    let _ = fs::remove_dir_all(dir);
+                                }
+                                println!(
+                                    "Removed all created pane directories under {}.",
+                                    session_dir.display()
+                                );
+                            } else {
+                                println!(
+                                    "Clones remain under {} for recovery.",
+                                    session_dir.display()
+                                );
                             }
-                            println!(
-                                "Removed all created pane directories under {}.",
-                                session_dir.display()
-                            );
-                        } else {
-                            println!(
-                                "Clones remain under {} for recovery.",
-                                session_dir.display()
-                            );
-                        }
-                        // Update metadata with panes_created
-                        let existing: Vec<(PathBuf, String)> = clones
-                            .iter()
-                            .filter(|(p, _)| p.exists())
-                            .map(|(p, b)| (p.clone(), b.clone()))
-                            .collect();
-                        let panes_created = existing.len();
-                        let pane_dirs_vec: Vec<String> = existing
-                            .iter()
-                            .map(|(p, _)| p.display().to_string())
-                            .collect();
-                        let branches_vec: Vec<String> =
-                            existing.iter().map(|(_, b)| b.clone()).collect();
-                        let mut meta2 = format!(
+                            // Update metadata with panes_created
+                            let existing: Vec<(PathBuf, String)> = clones
+                                .iter()
+                                .filter(|(p, _)| p.exists())
+                                .map(|(p, b)| (p.clone(), b.clone()))
+                                .collect();
+                            let panes_created = existing.len();
+                            let pane_dirs_vec: Vec<String> = existing
+                                .iter()
+                                .map(|(p, _)| p.display().to_string())
+                                .collect();
+                            let branches_vec: Vec<String> =
+                                existing.iter().map(|(_, b)| b.clone()).collect();
+                            let mut meta2 = format!(
                             "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                             created_at,
                             aifo_coder::json_escape(&base_label),
@@ -2250,109 +2246,166 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
                             aifo_coder::json_escape(&layout)
                         );
-                        if let Some(ref snap) = snapshot_sha {
-                            meta2.push_str(&format!(
-                                ", \"snapshot_sha\": {}",
-                                aifo_coder::json_escape(snap)
-                            ));
+                            if let Some(ref snap) = snapshot_sha {
+                                meta2.push_str(&format!(
+                                    ", \"snapshot_sha\": {}",
+                                    aifo_coder::json_escape(snap)
+                                ));
+                            }
+                            meta2.push_str(" }");
+                            let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                            return ExitCode::from(1);
                         }
-                        meta2.push_str(" }");
-                        let _ = fs::write(session_dir.join(".meta.json"), meta2);
-                        return ExitCode::from(1);
+                        Err(e) => {
+                            eprintln!(
+                                "aifo-coder: Windows Terminal failed to start first pane: {}",
+                                e
+                            );
+                            if !cli.fork_keep_on_failure {
+                                for (dir, _) in &clones {
+                                    let _ = fs::remove_dir_all(dir);
+                                }
+                                println!(
+                                    "Removed all created pane directories under {}.",
+                                    session_dir.display()
+                                );
+                            } else {
+                                println!(
+                                    "Clones remain under {} for recovery.",
+                                    session_dir.display()
+                                );
+                            }
+                            // Update metadata with panes_created
+                            let existing: Vec<(PathBuf, String)> = clones
+                                .iter()
+                                .filter(|(p, _)| p.exists())
+                                .map(|(p, b)| (p.clone(), b.clone()))
+                                .collect();
+                            let panes_created = existing.len();
+                            let pane_dirs_vec: Vec<String> = existing
+                                .iter()
+                                .map(|(p, _)| p.display().to_string())
+                                .collect();
+                            let branches_vec: Vec<String> =
+                                existing.iter().map(|(_, b)| b.clone()).collect();
+                            let mut meta2 = format!(
+                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+                            created_at,
+                            aifo_coder::json_escape(&base_label),
+                            aifo_coder::json_escape(&base_ref_or_sha),
+                            aifo_coder::json_escape(&base_commit_sha),
+                            panes,
+                            panes_created,
+                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            aifo_coder::json_escape(&layout)
+                        );
+                            if let Some(ref snap) = snapshot_sha {
+                                meta2.push_str(&format!(
+                                    ", \"snapshot_sha\": {}",
+                                    aifo_coder::json_escape(snap)
+                                ));
+                            }
+                            meta2.push_str(" }");
+                            let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                            return ExitCode::from(1);
+                        }
                     }
                 }
-            }
 
-            // Additional panes: split-pane
-            let mut split_failed = false;
-            for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
-                let i = idx + 1;
-                let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
-                let orient = orient_for_layout(i);
-                let mut cmd = Command::new(&wtbin);
-                cmd.arg("split-pane")
-                    .arg(orient)
-                    .arg("-d")
-                    .arg(pane_dir)
-                    .arg(&psbin)
-                    .arg("-NoExit")
-                    .arg("-Command")
-                    .arg(&inner);
-                if cli.verbose {
-                    let preview = vec![
-                        "wt".to_string(),
-                        "split-pane".to_string(),
-                        orient.to_string(),
-                        "-d".to_string(),
-                        pane_dir.display().to_string(),
-                        psbin.display().to_string(),
-                        "-NoExit".to_string(),
-                        "-Command".to_string(),
-                        inner.clone(),
-                    ];
+                // Additional panes: split-pane
+                let mut split_failed = false;
+                for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+                    let i = idx + 1;
+                    let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let orient = orient_for_layout(i);
+                    let mut cmd = Command::new(&wtbin);
+                    cmd.arg("split-pane")
+                        .arg(orient)
+                        .arg("-d")
+                        .arg(pane_dir)
+                        .arg(&psbin)
+                        .arg("-NoExit")
+                        .arg("-Command")
+                        .arg(&inner);
+                    if cli.verbose {
+                        let preview = vec![
+                            "wt".to_string(),
+                            "split-pane".to_string(),
+                            orient.to_string(),
+                            "-d".to_string(),
+                            pane_dir.display().to_string(),
+                            psbin.display().to_string(),
+                            "-NoExit".to_string(),
+                            "-Command".to_string(),
+                            inner.clone(),
+                        ];
+                        eprintln!(
+                            "aifo-coder: windows-terminal: {}",
+                            aifo_coder::shell_join(&preview)
+                        );
+                    }
+                    match cmd.status() {
+                        Ok(s) if s.success() => {}
+                        _ => {
+                            split_failed = true;
+                            break;
+                        }
+                    }
+                }
+                if split_failed {
                     eprintln!(
-                        "aifo-coder: windows-terminal: {}",
-                        aifo_coder::shell_join(&preview)
+                        "aifo-coder: Windows Terminal split-pane failed for one or more panes."
                     );
-                }
-                match cmd.status() {
-                    Ok(s) if s.success() => {}
-                    _ => {
-                        split_failed = true;
-                        break;
-                    }
-                }
-            }
-            if split_failed {
-                eprintln!("aifo-coder: Windows Terminal split-pane failed for one or more panes.");
-                if !cli.fork_keep_on_failure {
-                    for (dir, _) in &clones {
-                        let _ = fs::remove_dir_all(dir);
-                    }
-                    println!(
-                        "Removed all created pane directories under {}.",
-                        session_dir.display()
-                    );
-                } else {
-                    println!(
-                        "Clones remain under {} for recovery.",
-                        session_dir.display()
-                    );
-                    if let Some((first_dir, first_branch)) = clones.first() {
-                        println!("Example recovery:");
-                        println!("  git -C \"{}\" status", first_dir.display());
+                    if !cli.fork_keep_on_failure {
+                        for (dir, _) in &clones {
+                            let _ = fs::remove_dir_all(dir);
+                        }
                         println!(
-                            "  git -C \"{}\" log --oneline --decorate -n 20",
-                            first_dir.display()
+                            "Removed all created pane directories under {}.",
+                            session_dir.display()
                         );
+                    } else {
                         println!(
-                            "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
-                            repo_root.display(),
-                            sid,
-                            first_dir.display()
+                            "Clones remain under {} for recovery.",
+                            session_dir.display()
                         );
-                        println!(
-                            "  git -C \"{}\" fetch fork-{}-1 {}",
-                            repo_root.display(),
-                            sid,
-                            first_branch
-                        );
+                        if let Some((first_dir, first_branch)) = clones.first() {
+                            println!("Example recovery:");
+                            println!("  git -C \"{}\" status", first_dir.display());
+                            println!(
+                                "  git -C \"{}\" log --oneline --decorate -n 20",
+                                first_dir.display()
+                            );
+                            println!(
+                                "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
+                                repo_root.display(),
+                                sid,
+                                first_dir.display()
+                            );
+                            println!(
+                                "  git -C \"{}\" fetch fork-{}-1 {}",
+                                repo_root.display(),
+                                sid,
+                                first_branch
+                            );
+                        }
                     }
-                }
-                // Update metadata
-                let existing: Vec<(PathBuf, String)> = clones
-                    .iter()
-                    .filter(|(p, _)| p.exists())
-                    .map(|(p, b)| (p.clone(), b.clone()))
-                    .collect();
-                let panes_created = existing.len();
-                let pane_dirs_vec: Vec<String> = existing
-                    .iter()
-                    .map(|(p, _)| p.display().to_string())
-                    .collect();
-                let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-                let mut meta2 = format!(
+                    // Update metadata
+                    let existing: Vec<(PathBuf, String)> = clones
+                        .iter()
+                        .filter(|(p, _)| p.exists())
+                        .map(|(p, b)| (p.clone(), b.clone()))
+                        .collect();
+                    let panes_created = existing.len();
+                    let pane_dirs_vec: Vec<String> = existing
+                        .iter()
+                        .map(|(p, _)| p.display().to_string())
+                        .collect();
+                    let branches_vec: Vec<String> =
+                        existing.iter().map(|(_, b)| b.clone()).collect();
+                    let mut meta2 = format!(
                     "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
                     created_at,
                     aifo_coder::json_escape(&base_label),
@@ -2364,56 +2417,56 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
                     aifo_coder::json_escape(&layout)
                 );
-                if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(
-                        ", \"snapshot_sha\": {}",
-                        aifo_coder::json_escape(snap)
-                    ));
+                    if let Some(ref snap) = snapshot_sha {
+                        meta2.push_str(&format!(
+                            ", \"snapshot_sha\": {}",
+                            aifo_coder::json_escape(snap)
+                        ));
+                    }
+                    meta2.push_str(" }");
+                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    return ExitCode::from(1);
                 }
-                meta2.push_str(" }");
-                let _ = fs::write(session_dir.join(".meta.json"), meta2);
-                return ExitCode::from(1);
-            }
 
-            // Print guidance and return (wt.exe is detached)
-            println!();
-            println!(
-                "aifo-coder: fork session {} launched in Windows Terminal.",
-                sid
-            );
-            println!("To inspect and merge changes, you can run:");
-            if let Some((first_dir, first_branch)) = clones.first() {
-                println!("  git -C \"{}\" status", first_dir.display());
+                // Print guidance and return (wt.exe is detached)
+                println!();
                 println!(
-                    "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                    first_dir.display()
+                    "aifo-coder: fork session {} launched in Windows Terminal.",
+                    sid
                 );
-                println!(
-                    "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                    repo_root.display(),
-                    sid,
-                    first_dir.display()
-                );
-                println!(
-                    "  git -C \"{}\" fetch fork-{}-1 {}",
-                    repo_root.display(),
-                    sid,
-                    first_branch
-                );
-                if base_label != "detached" {
+                println!("To inspect and merge changes, you can run:");
+                if let Some((first_dir, first_branch)) = clones.first() {
+                    println!("  git -C \"{}\" status", first_dir.display());
                     println!(
-                        "  git -C \"{}\" checkout {}",
-                        repo_root.display(),
-                        base_ref_or_sha
+                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                        first_dir.display()
                     );
                     println!(
-                        "  git -C \"{}\" merge --no-ff {}",
+                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
                         repo_root.display(),
+                        sid,
+                        first_dir.display()
+                    );
+                    println!(
+                        "  git -C \"{}\" fetch fork-{}-1 {}",
+                        repo_root.display(),
+                        sid,
                         first_branch
                     );
+                    if base_label != "detached" {
+                        println!(
+                            "  git -C \"{}\" checkout {}",
+                            repo_root.display(),
+                            base_ref_or_sha
+                        );
+                        println!(
+                            "  git -C \"{}\" merge --no-ff {}",
+                            repo_root.display(),
+                            first_branch
+                        );
+                    }
                 }
-            }
-            return ExitCode::from(0);
+                return ExitCode::from(0);
             }
         }
 
@@ -2513,7 +2566,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::paint(
                                 use_err,
                                 "\x1b[36;1m",
-                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                                &format!(
+                                    "aifo-coder: applying post-fork merge strategy: {}",
+                                    strat
+                                )
                             )
                         );
                     }
@@ -2532,12 +2588,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     aifo_coder::paint(
                                         use_err,
                                         "\x1b[32;1m",
-                                        &format!("aifo-coder: merge strategy '{}' completed.", strat)
+                                        &format!(
+                                            "aifo-coder: merge strategy '{}' completed.",
+                                            strat
+                                        )
                                     )
                                 );
                             }
-                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                                && cli.fork_merging_autoclean
+                            if matches!(
+                                cli.fork_merging_strategy,
+                                aifo_coder::MergingStrategy::Octopus
+                            ) && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
                                 eprintln!();
@@ -2588,17 +2649,18 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            {
-                                let use_err = aifo_coder::color_enabled_stderr();
-                                eprintln!(
-                                    "{}",
-                                    aifo_coder::paint(
-                                        use_err,
-                                        "\x1b[31;1m",
-                                        &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            eprintln!(
+                                "{}",
+                                aifo_coder::paint(
+                                    use_err,
+                                    "\x1b[31;1m",
+                                    &format!(
+                                        "aifo-coder: merge strategy '{}' failed: {}",
+                                        strat, e
                                     )
-                                );
-                            }
+                                )
+                            );
                         }
                     }
                 }
@@ -2732,7 +2794,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::paint(
                                 use_err,
                                 "\x1b[36;1m",
-                                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
+                                &format!(
+                                    "aifo-coder: applying post-fork merge strategy: {}",
+                                    strat
+                                )
                             )
                         );
                     }
@@ -2745,8 +2810,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     ) {
                         Ok(()) => {
                             eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
-                            if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                                && cli.fork_merging_autoclean
+                            if matches!(
+                                cli.fork_merging_strategy,
+                                aifo_coder::MergingStrategy::Octopus
+                            ) && cli.fork_merging_autoclean
                                 && !cli.dry_run
                             {
                                 eprintln!(
@@ -2852,7 +2919,11 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             "even-h" => "-H",
                             "even-v" => "-V",
                             _ => {
-                                if i % 2 == 0 { "-H" } else { "-V" }
+                                if i % 2 == 0 {
+                                    "-H"
+                                } else {
+                                    "-V"
+                                }
                             }
                         }
                     };
@@ -3021,7 +3092,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let wd = ps_quote(&pane_dir.display().to_string());
                 let child = ps_quote(&ps_name.display().to_string());
                 let inner_q = ps_quote(&inner);
-                let arglist = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) { "'-NoExit','-Command'".to_string() } else { "'-Command'".to_string() };
+                let arglist =
+                    if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                        "'-NoExit','-Command'".to_string()
+                    } else {
+                        "'-Command'".to_string()
+                    };
                 format!("(Start-Process -WindowStyle Normal -WorkingDirectory {wd} {child} -ArgumentList {arglist},{inner_q} -PassThru).Id")
             };
             if cli.verbose {
@@ -3149,8 +3225,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             )
                         );
                     }
-                    if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                        && cli.fork_merging_autoclean
+                    if matches!(
+                        cli.fork_merging_strategy,
+                        aifo_coder::MergingStrategy::Octopus
+                    ) && cli.fork_merging_autoclean
                         && !cli.dry_run
                     {
                         eprintln!();
@@ -3208,17 +3286,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     }
                 }
                 Err(e) => {
-                    {
-                        let use_err = aifo_coder::color_enabled_stderr();
-                        eprintln!(
-                            "{}",
-                            aifo_coder::paint(
-                                use_err,
-                                "\x1b[31;1m",
-                                &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
-                            )
-                        );
-                    }
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    eprintln!(
+                        "{}",
+                        aifo_coder::paint(
+                            use_err,
+                            "\x1b[31;1m",
+                            &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                        )
+                    );
                 }
             }
         }
@@ -3640,10 +3716,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     shwrap.clone(),
                     "C-m".to_string(),
                 ];
-                eprintln!(
-                    "aifo-coder: tmux: {}",
-                    aifo_coder::shell_join(&preview)
-                );
+                eprintln!("aifo-coder: tmux: {}", aifo_coder::shell_join(&preview));
             }
             let _ = sk.status();
         }
@@ -3755,8 +3828,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 )
                             );
                         }
-                        if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus)
-                            && cli.fork_merging_autoclean
+                        if matches!(
+                            cli.fork_merging_strategy,
+                            aifo_coder::MergingStrategy::Octopus
+                        ) && cli.fork_merging_autoclean
                             && !cli.dry_run
                         {
                             eprintln!();
@@ -3814,17 +3889,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         }
                     }
                     Err(e) => {
-                        {
-                            let use_err = aifo_coder::color_enabled_stderr();
-                            eprintln!(
-                                "{}",
-                                aifo_coder::paint(
-                                    use_err,
-                                    "\x1b[31;1m",
-                                    &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
-                                )
-                            );
-                        }
+                        let use_err = aifo_coder::color_enabled_stderr();
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err,
+                                "\x1b[31;1m",
+                                &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
+                            )
+                        );
                     }
                 }
             }
@@ -4001,7 +4074,11 @@ fn main() -> ExitCode {
     // Fork maintenance subcommands (Phase 6): operate without starting agents or acquiring locks
     if let Agent::Fork { cmd } = &cli.command {
         match cmd {
-            ForkCmd::List { json, all_repos, color } => {
+            ForkCmd::List {
+                json,
+                all_repos,
+                color,
+            } => {
                 if let Some(mode) = color {
                     aifo_coder::set_color_mode(*mode);
                 }
@@ -4243,7 +4320,10 @@ fn main() -> ExitCode {
     } = &cli.command
     {
         print_startup_banner();
-        if !warn_if_tmp_workspace(true) { eprintln!("aborted."); return ExitCode::from(1); }
+        if !warn_if_tmp_workspace(true) {
+            eprintln!("aborted.");
+            return ExitCode::from(1);
+        }
         if cli.verbose {
             eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
             if let Some(img) = image.as_deref() {
@@ -4312,7 +4392,10 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
-    if !warn_if_tmp_workspace(true) { eprintln!("aborted."); return ExitCode::from(1); }
+    if !warn_if_tmp_workspace(true) {
+        eprintln!("aborted.");
+        return ExitCode::from(1);
+    }
 
     // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
     let mut tc_session_id: Option<String> = None;
