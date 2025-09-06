@@ -2383,8 +2383,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         // Pane 1
         {
             let (pane1_dir, _b) = &clones[0];
-            let pane_state_dir = state_base.join(&sid).join("pane-1");
-            let inner = build_inner(1, &pane_state_dir);
+            let _pane_state_dir = state_base.join(&sid).join("pane-1");
+            let _inner = build_inner(1, &_pane_state_dir);
             let mut cmd = Command::new(&tmux);
             cmd.arg("new-session")
                 .arg("-d")
@@ -2546,7 +2546,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let mut split_failed = false;
         for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
             let i = idx + 1;
-            let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+            let _pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
             let mut cmd = Command::new(&tmux);
             cmd.arg("split-window")
                 .arg("-t")
