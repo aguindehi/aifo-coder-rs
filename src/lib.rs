@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 use which::which;
+use clap::ValueEnum;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -149,6 +150,12 @@ pub fn wt_build_split_args(
     ]
 }
 
+#[cfg(windows)]
+/// Build a PowerShell Wait-Process command from a list of PIDs.
+pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
+    format!("Wait-Process -Id {}", ids.join(","))
+}
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
@@ -177,6 +184,22 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "AIFO_TOOLEEXEC_TOKEN",
     ]
 });
+
+/**
+ Merging strategy for post-fork actions.
+ - None: do nothing (default).
+ - Fetch: fetch pane branches back into the original repository as local branches.
+ - Octopus: fetch branches then attempt an octopus merge into a merge/<sid> branch.
+*/
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+pub enum MergingStrategy {
+    #[value(name = "none")]
+    None,
+    #[value(name = "fetch")]
+    Fetch,
+    #[value(name = "octopus")]
+    Octopus,
+}
 
 // Cache for preferred registry prefix resolution within a single process run.
 static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
@@ -3840,7 +3863,42 @@ fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
         None
     }
 }
+ 
+ // Append or upsert merge metadata fields into the session .meta.json
+fn fork_meta_append_fields(repo_root: &Path, sid: &str, fields_kv: &str) -> io::Result<()> {
+    let session_dir = fork_session_dir(repo_root, sid);
+    let meta_path = session_dir.join(".meta.json");
 
+    // Ensure session directory exists (best-effort)
+    let _ = fs::create_dir_all(&session_dir);
+
+    match fs::read_to_string(&meta_path) {
+        Ok(s) => {
+            if let Some(idx) = s.rfind('}') {
+                let mut out = String::from(&s[..idx]);
+                if !out.trim_end().ends_with('{') {
+                    out.push_str(", ");
+                }
+                out.push_str(fields_kv);
+                out.push('}');
+                fs::write(&meta_path, out)?;
+            } else {
+                // Malformed existing content; replace with minimal valid JSON
+                let out = format!("{{{}}}", fields_kv);
+                fs::write(&meta_path, out)?;
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            // Create a minimal metadata file if it doesn't exist yet
+            let out = format!("{{{}}}", fields_kv);
+            fs::write(&meta_path, out)?;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+ 
 fn session_dirs(base: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let rd = match fs::read_dir(base) {
@@ -4729,6 +4787,373 @@ pub fn fork_autoclean_if_enabled() {
             }
         }
     }
+}
+pub fn fork_merge_branches(
+    repo_root: &Path,
+    sid: &str,
+    panes: &[(PathBuf, String)],
+    base_ref_or_sha: &str,
+    strategy: MergingStrategy,
+    verbose: bool,
+    dry_run: bool,
+) -> io::Result<()> {
+    if matches!(strategy, MergingStrategy::None) {
+        return Ok(());
+    }
+
+    // Resolve actual branch names from pane dirs in case they changed
+    let mut pane_branches: Vec<(PathBuf, String)> = Vec::new();
+    for (pdir, branch_hint) in panes {
+        // Determine current branch; fall back to provided hint if needed
+        let actual_branch = Command::new("git")
+            .arg("-C")
+            .arg(pdir)
+            .arg("rev-parse")
+            .arg("--abbrev-ref")
+            .arg("HEAD")
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty() && s.as_str() != "HEAD")
+            .unwrap_or_else(|| branch_hint.clone());
+        if actual_branch.is_empty() || actual_branch == "HEAD" {
+            // Skip detached or unknown branches
+            continue;
+        }
+        pane_branches.push((pdir.clone(), actual_branch));
+    }
+    if pane_branches.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "no pane branches to process (empty pane set or detached HEAD)",
+        ));
+    }
+
+    // 1) Fetch each pane branch back into the original repo as a local branch with the same name
+    for (pdir, br) in &pane_branches {
+        let pdir_str = pdir.display().to_string();
+        let refspec = format!("{b}:refs/heads/{b}", b = br);
+        let args = vec![
+            "git".to_string(),
+            "-C".to_string(),
+            repo_root.display().to_string(),
+            "-c".to_string(),
+            "protocol.file.allow=always".to_string(),
+            "fetch".to_string(),
+            "--no-tags".to_string(),
+            pdir_str.clone(),
+            refspec.clone(),
+        ];
+        if verbose || dry_run {
+            eprintln!("aifo-coder: git: {}", shell_join(&args));
+        }
+        if !dry_run {
+            let mut cmd = Command::new("git");
+            cmd.arg("-C")
+                .arg(repo_root)
+                .arg("-c")
+                .arg("protocol.file.allow=always")
+                .arg("fetch")
+                .arg("--no-tags")
+                .arg(&pdir_str)
+                .arg(&refspec);
+            if !verbose {
+                cmd.stdout(Stdio::null()).stderr(Stdio::null());
+            }
+            let st = cmd.status()?;
+            if !st.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("git fetch failed for pane {} (branch {})", pdir.display(), br),
+                ));
+            }
+        }
+    }
+
+    if matches!(strategy, MergingStrategy::Fetch) {
+        // Update session metadata with fetched branches
+        let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
+        let _ = fork_meta_append_fields(
+            repo_root,
+            sid,
+            &format!(
+                "\"merge_strategy\":{},\"fetched\":[{}]",
+                json_escape("fetch"),
+                fetched_names
+                    .iter()
+                    .map(|b| json_escape(b))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+        return Ok(());
+    }
+
+    // 2) Octopus merge: preflight clean working tree (ignore .aifo-coder/ artifacts)
+    let dirty = match Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .arg("status")
+        .arg("--porcelain=v1")
+        .arg("-uall")
+        .output()
+    {
+        Ok(o) => {
+            if !o.status.success() {
+                true
+            } else {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.lines().any(|line| {
+                    // Lines are "XY <path>" or "?? <path>"
+                    let path = if line.len() > 3 { &line[3..] } else { "" };
+                    let ignore = path == ".aifo-coder"
+                        || path.starts_with(".aifo-coder/")
+                        || path.starts_with(".aifo-coder\\");
+                    !ignore && !path.is_empty()
+                })
+            }
+        }
+        Err(_) => true,
+    };
+    if dirty {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "octopus merge requires a clean working tree in the original repository",
+        ));
+    }
+
+    // Checkout or create merge/<sid> at base_ref_or_sha
+    let target = format!("merge/{}", sid);
+    let checkout_args = vec![
+        "git".to_string(),
+        "-C".to_string(),
+        repo_root.display().to_string(),
+        "checkout".to_string(),
+        "-B".to_string(),
+        target.clone(),
+        base_ref_or_sha.to_string(),
+    ];
+    if verbose || dry_run {
+        eprintln!("aifo-coder: git: {}", shell_join(&checkout_args));
+    }
+    if !dry_run {
+        let st = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("checkout")
+            .arg("-B")
+            .arg(&target)
+            .arg(base_ref_or_sha)
+            .status()?;
+        if !st.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "failed to checkout merge target branch",
+            ));
+        }
+    }
+
+    // Perform octopus merge
+    let mut merge_args = vec![
+        "git".to_string(),
+        "-C".to_string(),
+        repo_root.display().to_string(),
+        "merge".to_string(),
+        "--no-ff".to_string(),
+        "--no-edit".to_string(),
+    ];
+    for (_p, br) in &pane_branches {
+        merge_args.push(br.clone());
+    }
+    if verbose || dry_run {
+        eprintln!("aifo-coder: git: {}", shell_join(&merge_args));
+    }
+    if !dry_run {
+        let mut cmd = Command::new("git");
+        cmd.arg("-C")
+            .arg(repo_root)
+            .arg("merge")
+            .arg("--no-ff")
+            .arg("--no-edit");
+        for (_p, br) in &pane_branches {
+            cmd.arg(br);
+        }
+        let st = cmd.status()?;
+        if !st.success() {
+            // Record failed octopus merge in metadata
+            let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
+            let _ = fork_meta_append_fields(
+                repo_root,
+                sid,
+                &format!(
+                    "\"merge_strategy\":{},\"fetched\":[{}],\"merge_failed\":true",
+                    json_escape("octopus"),
+                    fetched_names
+                        .iter()
+                        .map(|b| json_escape(b))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            );
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "octopus merge failed (conflicts likely). Resolve manually and retry.",
+            ));
+        }
+    }
+
+    // Update session metadata with octopus merge result
+    {
+        let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
+        let merge_commit_sha = if !dry_run {
+            Command::new("git")
+                .arg("-C")
+                .arg(repo_root)
+                .arg("rev-parse")
+                .arg("--verify")
+                .arg("HEAD")
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let merged_at = secs_since_epoch(SystemTime::now());
+        let _ = fork_meta_append_fields(
+            repo_root,
+            sid,
+            &format!(
+                "\"merge_strategy\":{},\"fetched\":[{}],\"merge_target\":{},\"merge_commit_sha\":{},\"merged_at\":{}",
+                json_escape("octopus"),
+                fetched_names
+                    .iter()
+                    .map(|b| json_escape(b))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                json_escape(&target),
+                json_escape(&merge_commit_sha),
+                merged_at
+            ),
+        );
+    }
+
+    // Delete merged pane branches locally (best-effort)
+    if !dry_run {
+        let mut del = Command::new("git");
+        del.arg("-C").arg(repo_root).arg("branch").arg("-D");
+        for (_p, br) in &pane_branches {
+            del.arg(br);
+        }
+        if !verbose {
+            del.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+        let _ = del.status();
+    } else if verbose {
+        let mut preview = vec![
+            "git".to_string(),
+            "-C".to_string(),
+            repo_root.display().to_string(),
+            "branch".to_string(),
+            "-D".to_string(),
+        ];
+        for (_p, br) in &pane_branches {
+            preview.push(br.clone());
+        }
+        eprintln!("aifo-coder: git: {}", shell_join(&preview));
+    }
+
+    Ok(())
+}
+
+/// Convenience wrapper: read pane directories and base from session metadata, then merge.
+pub fn fork_merge_branches_by_session(
+    repo_root: &Path,
+    sid: &str,
+    strategy: MergingStrategy,
+    verbose: bool,
+    dry_run: bool,
+) -> io::Result<()> {
+    if matches!(strategy, MergingStrategy::None) {
+        return Ok(());
+    }
+    let session_dir = fork_session_dir(repo_root, sid);
+    if !session_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("fork session directory not found: {}", session_dir.display()),
+        ));
+    }
+
+    // Gather pane dirs
+    let panes_dirs = pane_dirs_for_session(&session_dir);
+    if panes_dirs.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "no pane directories found under session",
+        ));
+    }
+
+    // Determine base_ref_or_sha from .meta.json if present; otherwise fallback to HEAD
+    let meta_path = session_dir.join(".meta.json");
+    let meta = read_file_to_string(&meta_path);
+    let base_ref_or_sha = meta
+        .as_deref()
+        .and_then(|s| meta_extract_value(s, "base_ref_or_sha"))
+        .unwrap_or_else(|| "HEAD".to_string());
+
+    // Determine each pane's current branch
+    let mut panes: Vec<(PathBuf, String)> = Vec::new();
+    for p in panes_dirs {
+        let branch = Command::new("git")
+            .arg("-C")
+            .arg(&p)
+            .arg("rev-parse")
+            .arg("--abbrev-ref")
+            .arg("HEAD")
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+        if !branch.is_empty() && branch != "HEAD" {
+            panes.push((p, branch));
+        }
+    }
+
+    if panes.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "no pane branches found (detached HEAD?)",
+        ));
+    }
+
+    fork_merge_branches(
+        repo_root,
+        sid,
+        &panes,
+        &base_ref_or_sha,
+        strategy,
+        verbose,
+        dry_run,
+    )
 }
 
 #[cfg(test)]
@@ -5891,6 +6316,244 @@ mod tests {
     }
 
     #[test]
+    fn test_fork_merge_fetch_creates_branches_and_meta() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit on default branch
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(repo)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(repo)
+            .status();
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+
+        // Determine current branch name and label
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Create a fork session with two panes
+        let sid = "sid-merge-fetch";
+        let clones =
+            fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false)
+                .expect("clone panes");
+        assert_eq!(clones.len(), 2, "expected two panes");
+
+        // Make independent commits in each pane
+        for (idx, (pane_dir, _br)) in clones.iter().enumerate() {
+            let fname = format!("pane-{}.txt", idx + 1);
+            std::fs::write(pane_dir.join(&fname), format!("pane {}\n", idx + 1)).unwrap();
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.name", "AIFO Test"])
+                .current_dir(pane_dir)
+                .status();
+            let _ = std::process::Command::new("git")
+                .args(["config", "user.email", "aifo@example.com"])
+                .current_dir(pane_dir)
+                .status();
+            assert!(std::process::Command::new("git")
+                .args(["add", "-A"])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
+            assert!(std::process::Command::new("git")
+                .args(["commit", "-m", &format!("pane {}", idx + 1)])
+                .current_dir(pane_dir)
+                .status()
+                .unwrap()
+                .success());
+        }
+
+        // Perform fetch merge strategy
+        let res = fork_merge_branches_by_session(
+            repo,
+            sid,
+            MergingStrategy::Fetch,
+            true,
+            false,
+        );
+        assert!(res.is_ok(), "fetch merge strategy should succeed: {:?}", res.err());
+
+        // Verify branches exist in the original repo
+        for (_pane_dir, branch) in &clones {
+            let ok = std::process::Command::new("git")
+                .args(["rev-parse", "--verify", branch])
+                .current_dir(repo)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "expected branch '{}' to exist in original repo", branch);
+        }
+
+        // Verify metadata contains merge_strategy=fetch
+        let meta_path = repo
+            .join(".aifo-coder")
+            .join("forks")
+            .join(sid)
+            .join(".meta.json");
+        let meta = std::fs::read_to_string(&meta_path).expect("read meta");
+        assert!(
+            meta.contains("\"merge_strategy\"") && meta.contains("fetch"),
+            "meta should include merge_strategy=fetch, got: {}",
+            meta
+        );
+    }
+
+    #[test]
+    fn test_fork_merge_octopus_success_creates_merge_branch_and_deletes_pane_branches() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit on default branch
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","init"]).current_dir(repo).status().unwrap().success());
+
+        // Determine current branch name and base label
+        let out = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Create a fork session with two panes and make non-conflicting commits
+        let sid = "sid-merge-oct-success";
+        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false).expect("clone panes");
+        assert_eq!(clones.len(), 2, "expected two panes");
+        for (idx, (pane_dir, _)) in clones.iter().enumerate() {
+            let fname = format!("pane-success-{}.txt", idx + 1);
+            std::fs::write(pane_dir.join(&fname), format!("ok {}\n", idx + 1)).unwrap();
+            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
+            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
+            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
+            assert!(std::process::Command::new("git").args(["commit","-m",&format!("pane ok {}", idx + 1)]).current_dir(pane_dir).status().unwrap().success());
+        }
+
+        // Perform octopus merge
+        let res = fork_merge_branches_by_session(repo, sid, MergingStrategy::Octopus, true, false);
+        assert!(res.is_ok(), "octopus merge should succeed: {:?}", res.err());
+
+        // Verify we are on merge/<sid>
+        let out2 = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let head_branch = String::from_utf8_lossy(&out2.stdout).trim().to_string();
+        assert_eq!(head_branch, format!("merge/{}", sid), "expected HEAD to be merge/<sid>");
+
+        // Verify pane branches are deleted from original repo
+        for (_pane_dir, branch) in &clones {
+            let ok = std::process::Command::new("git").args(["show-ref","--verify",&format!("refs/heads/{}", branch)]).current_dir(repo).status().unwrap().success();
+            assert!(!ok, "pane branch '{}' should be deleted after octopus merge", branch);
+        }
+
+        // Verify metadata contains merge_target and merge_commit_sha
+        let meta_path = repo.join(".aifo-coder").join("forks").join(sid).join(".meta.json");
+        let meta2 = std::fs::read_to_string(&meta_path).expect("read meta2");
+        assert!(meta2.contains("\"merge_target\"") && meta2.contains(&format!("merge/{}", sid)), "meta should include merge_target=merge/<sid>: {}", meta2);
+        assert!(meta2.contains("\"merge_commit_sha\""), "meta should include merge_commit_sha: {}", meta2);
+    }
+
+    #[test]
+    fn test_fork_merge_octopus_conflict_sets_meta_and_leaves_branches() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempfile::tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // init repo with one commit on default branch
+        assert!(std::process::Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+        let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(repo).status();
+        let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(repo).status();
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(repo).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["commit","-m","init"]).current_dir(repo).status().unwrap().success());
+
+        // Determine current branch
+        let out = std::process::Command::new("git").args(["rev-parse","--abbrev-ref","HEAD"]).current_dir(repo).output().unwrap();
+        let cur_branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let base_label = fork_sanitize_base_label(&cur_branch);
+
+        // Create two panes with conflicting changes to the same file
+        let sid = "sid-merge-oct-conflict";
+        let clones = fork_clone_and_checkout_panes(repo, sid, 2, &cur_branch, &base_label, false).expect("clone panes");
+        assert_eq!(clones.len(), 2, "expected two panes");
+
+        // Pane 1 writes conflict.txt
+        {
+            let (pane_dir, _) = &clones[0];
+            std::fs::write(pane_dir.join("conflict.txt"), "A\n").unwrap();
+            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
+            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
+            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
+            assert!(std::process::Command::new("git").args(["commit","-m","pane1"]).current_dir(pane_dir).status().unwrap().success());
+        }
+        // Pane 2 writes conflicting content
+        {
+            let (pane_dir, _) = &clones[1];
+            std::fs::write(pane_dir.join("conflict.txt"), "B\n").unwrap();
+            let _ = std::process::Command::new("git").args(["config","user.name","AIFO Test"]).current_dir(pane_dir).status();
+            let _ = std::process::Command::new("git").args(["config","user.email","aifo@example.com"]).current_dir(pane_dir).status();
+            assert!(std::process::Command::new("git").args(["add","-A"]).current_dir(pane_dir).status().unwrap().success());
+            assert!(std::process::Command::new("git").args(["commit","-m","pane2"]).current_dir(pane_dir).status().unwrap().success());
+        }
+
+        // Attempt octopus merge (should fail due to conflict)
+        let res = fork_merge_branches_by_session(repo, sid, MergingStrategy::Octopus, true, false);
+        assert!(res.is_err(), "octopus merge should fail due to conflicts");
+
+        // Metadata should record merge_failed: true
+        let meta_path = repo.join(".aifo-coder").join("forks").join(sid).join(".meta.json");
+        let meta = std::fs::read_to_string(&meta_path).expect("read meta");
+        assert!(meta.contains("\"merge_failed\":true"), "meta should include merge_failed:true, got: {}", meta);
+
+        // Fetched pane branches should exist in original repo (not deleted)
+        for (_pane_dir, branch) in &clones {
+            let ok = std::process::Command::new("git").args(["show-ref","--verify",&format!("refs/heads/{}", branch)]).current_dir(repo).status().unwrap().success();
+            assert!(ok, "pane branch '{}' should exist after failed merge", branch);
+        }
+
+        // Repo should be in conflict state (has unmerged paths)
+        let out2 = std::process::Command::new("git").args(["ls-files","-u"]).current_dir(repo).output().unwrap();
+        assert!(!out2.stdout.is_empty(), "expected unmerged paths after failed octopus merge");
+    }
+
+    #[test]
     fn test_fork_clone_and_checkout_panes_inits_submodules() {
         if !have_git() {
             eprintln!("skipping: git not found in PATH");
@@ -6695,5 +7358,8 @@ mod tests {
         let split = wt_build_split_args("-H", &psbin, &pane_dir, inner);
         assert_eq!(split[1], "split-pane");
         assert_eq!(split[2], "-H");
+        // Wait-Process cmd builder
+        let w = crate::ps_wait_process_cmd(&["101", "202", "303"]);
+        assert_eq!(w, "Wait-Process -Id 101,202,303");
     }
 }

@@ -244,6 +244,7 @@ mod tests_main_cli_child_args {
             fork_session_name: Some("ut-session".to_string()),
             fork_layout: Some("even-h".to_string()),
             fork_keep_on_failure: true,
+            fork_merging_strategy: aifo_coder::MergingStrategy::None,
             command: super::Agent::Aider {
                 args: vec!["--help".to_string(), "--".to_string(), "extra".to_string()],
             },
@@ -305,6 +306,7 @@ mod tests_main_cli_child_args {
             "--fork-session-name",
             "--fork-layout",
             "--fork-keep-on-failure",
+            "--fork-merging-strategy",
         ] {
             assert!(
                 !joined.contains(bad),
@@ -341,6 +343,23 @@ mod tests_main_cli_child_args {
             joined.contains("extra"),
             "expected trailing agent arg to be present: {}",
             joined
+        );
+    }
+
+    #[test]
+    fn test_merging_strategy_value_enum_parsing() {
+        use clap::Parser;
+        let cli = super::Cli::parse_from([
+            "aifo-coder",
+            "--fork-merging-strategy",
+            "octopus",
+            "aider",
+            "--",
+            "--help",
+        ]);
+        assert!(
+            matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus),
+            "expected parsing of --fork-merging-strategy octopus"
         );
     }
 }
@@ -1100,6 +1119,10 @@ struct Cli {
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
+    /// Post-fork merging strategy to apply after all panes exit [none|fetch|octopus]
+    #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
+    fork_merging_strategy: aifo_coder::MergingStrategy,
+
     #[command(subcommand)]
     command: Agent,
 }
@@ -1559,7 +1582,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 words.extend(child_args.clone());
                 let cmd = aifo_coder::shell_join(&words);
                 let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
-                format!("cd {} && {}; {}; exec bash", cddir, exports.join("; "), cmd)
+                let tail = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) { " && exec bash" } else { "" };
+                format!("cd {} && {}; {}{}", cddir, exports.join("; "), cmd, tail)
             };
 
         // Orchestrator preference override (optional): AIFO_CODER_FORK_ORCH={gitbash|powershell}
@@ -1644,7 +1668,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -1761,7 +1807,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -1807,6 +1875,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         // Prefer Windows Terminal (wt.exe)
         let wt = which("wt").or_else(|_| which("wt.exe"));
         if let Ok(wtbin) = wt {
+            if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                eprintln!("aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merging-strategy).");
+            } else {
             if clones.is_empty() {
                 eprintln!("aifo-coder: no panes to create.");
                 return ExitCode::from(1);
@@ -2120,6 +2191,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
             }
             return ExitCode::from(0);
+            }
         }
 
         // Fallback: separate PowerShell windows via cmd.exe start
@@ -2204,7 +2276,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -2321,7 +2415,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -2358,13 +2474,161 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 return ExitCode::from(0);
             } else {
-                eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
-                return ExitCode::from(1);
+                // Fallback: launch Windows Terminal even though we cannot wait; print manual-merge advice
+                let wt2 = which("wt").or_else(|_| which("wt.exe"));
+                if let Ok(wtbin2) = wt2 {
+                    if clones.is_empty() {
+                        eprintln!("aifo-coder: no panes to create.");
+                        return ExitCode::from(1);
+                    }
+                    let psbin = which("pwsh")
+                        .or_else(|_| which("powershell"))
+                        .or_else(|_| which("powershell.exe"))
+                        .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
+                    let orient_for_layout = |i: usize| -> &'static str {
+                        match layout.as_str() {
+                            "even-h" => "-H",
+                            "even-v" => "-V",
+                            _ => {
+                                if i % 2 == 0 { "-H" } else { "-V" }
+                            }
+                        }
+                    };
+
+                    // Pane 1
+                    {
+                        let (pane1_dir, _b) = &clones[0];
+                        let pane_state_dir = state_base.join(&sid).join("pane-1");
+                        let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
+                        let mut cmd = Command::new(&wtbin2);
+                        cmd.arg("new-tab")
+                            .arg("-d")
+                            .arg(pane1_dir)
+                            .arg(&psbin)
+                            .arg("-NoExit")
+                            .arg("-Command")
+                            .arg(&inner);
+                        if cli.verbose {
+                            let preview = vec![
+                                "wt".to_string(),
+                                "new-tab".to_string(),
+                                "-d".to_string(),
+                                pane1_dir.display().to_string(),
+                                psbin.display().to_string(),
+                                "-NoExit".to_string(),
+                                "-Command".to_string(),
+                                inner.clone(),
+                            ];
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
+                        let _ = cmd.status();
+                    }
+
+                    // Additional panes
+                    let mut split_failed = false;
+                    for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
+                        let i = idx + 1;
+                        let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                        let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+                        let orient = orient_for_layout(i);
+                        let mut cmd = Command::new(&wtbin2);
+                        cmd.arg("split-pane")
+                            .arg(orient)
+                            .arg("-d")
+                            .arg(pane_dir)
+                            .arg(&psbin)
+                            .arg("-NoExit")
+                            .arg("-Command")
+                            .arg(&inner);
+                        if cli.verbose {
+                            let preview = vec![
+                                "wt".to_string(),
+                                "split-pane".to_string(),
+                                orient.to_string(),
+                                "-d".to_string(),
+                                pane_dir.display().to_string(),
+                                psbin.display().to_string(),
+                                "-NoExit".to_string(),
+                                "-Command".to_string(),
+                                inner.clone(),
+                            ];
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
+                        match cmd.status() {
+                            Ok(s) if s.success() => {}
+                            _ => {
+                                split_failed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if split_failed {
+                        eprintln!("aifo-coder: warning: one or more Windows Terminal panes failed to open.");
+                    }
+
+                    println!();
+                    println!(
+                        "aifo-coder: fork session {} launched in Windows Terminal.",
+                        sid
+                    );
+                    if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                        let strat = match cli.fork_merging_strategy {
+                            aifo_coder::MergingStrategy::Fetch => "fetch",
+                            aifo_coder::MergingStrategy::Octopus => "octopus",
+                            _ => "none",
+                        };
+                        eprintln!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat);
+                        eprintln!("aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}", sid, strat);
+                    }
+                    println!("To inspect and merge changes, you can run:");
+                    if let Some((first_dir, first_branch)) = clones.first() {
+                        println!("  git -C \"{}\" status", first_dir.display());
+                        println!(
+                            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                            repo_root.display(),
+                            sid,
+                            first_dir.display()
+                        );
+                        println!(
+                            "  git -C \"{}\" fetch fork-{}-1 {}",
+                            repo_root.display(),
+                            sid,
+                            first_branch
+                        );
+                        if base_label != "detached" {
+                            println!(
+                                "  git -C \"{}\" checkout {}",
+                                repo_root.display(),
+                                base_ref_or_sha
+                            );
+                            println!(
+                                "  git -C \"{}\" merge --no-ff {}",
+                                repo_root.display(),
+                                first_branch
+                            );
+                        }
+                    }
+                    return ExitCode::from(0);
+                } else {
+                    eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
+                    return ExitCode::from(1);
+                }
             }
         }
         let ps_name = powershell.unwrap(); // used only for reference in logs
 
         let mut any_failed = false;
+        let mut pids: Vec<String> = Vec::new();
         for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
@@ -2375,7 +2639,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let wd = ps_quote(&pane_dir.display().to_string());
                 let child = ps_quote(&ps_name.display().to_string());
                 let inner_q = ps_quote(&inner);
-                format!("(Start-Process -WindowStyle Normal -WorkingDirectory {wd} {child} -ArgumentList '-NoExit','-Command',{inner_q} -PassThru).Id")
+                let arglist = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) { "'-NoExit','-Command'".to_string() } else { "'-Command'".to_string() };
+                format!("(Start-Process -WindowStyle Normal -WorkingDirectory {wd} {child} -ArgumentList {arglist},{inner_q} -PassThru).Id")
             };
             if cli.verbose {
                 eprintln!("aifo-coder: powershell start-script: {}", script);
@@ -2391,6 +2656,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let pid = String::from_utf8_lossy(&o.stdout).trim().to_string();
                     if !pid.is_empty() {
                         println!("[{}] started PID={} dir={}", i, pid, pane_dir.display());
+                        pids.push(pid.clone());
                     } else {
                         println!("[{}] started dir={} (PID unknown)", i, pane_dir.display());
                     }
@@ -2451,6 +2717,41 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             meta2.push_str(" }");
             let _ = fs::write(session_dir.join(".meta.json"), meta2);
             return ExitCode::from(1);
+        }
+
+        if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+            if !pids.is_empty() {
+                let list = pids.join(",");
+                let wait_cmd = format!("Wait-Process -Id {}", list);
+                if cli.verbose {
+                    eprintln!("aifo-coder: powershell wait-script: {}", wait_cmd);
+                }
+                let _ = Command::new(&ps_name)
+                    .arg("-NoProfile")
+                    .arg("-Command")
+                    .arg(&wait_cmd)
+                    .status();
+            }
+            let strat = match cli.fork_merging_strategy {
+                aifo_coder::MergingStrategy::None => "none",
+                aifo_coder::MergingStrategy::Fetch => "fetch",
+                aifo_coder::MergingStrategy::Octopus => "octopus",
+            };
+            eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+            match aifo_coder::fork_merge_branches_by_session(
+                &repo_root,
+                &sid,
+                cli.fork_merging_strategy,
+                cli.verbose,
+                cli.dry_run,
+            ) {
+                Ok(()) => {
+                    eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                }
+                Err(e) => {
+                    eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                }
+            }
         }
 
         // Print guidance and return
@@ -2945,7 +3246,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             }
         }
 
-        ExitCode::from(0)
+        {
+            if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                let strat = match cli.fork_merging_strategy {
+                    aifo_coder::MergingStrategy::None => "none",
+                    aifo_coder::MergingStrategy::Fetch => "fetch",
+                    aifo_coder::MergingStrategy::Octopus => "octopus",
+                };
+                eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                match aifo_coder::fork_merge_branches_by_session(
+                    &repo_root,
+                    &sid,
+                    cli.fork_merging_strategy,
+                    cli.verbose,
+                    cli.dry_run,
+                ) {
+                    Ok(()) => {
+                        eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                    }
+                    Err(e) => {
+                        eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                    }
+                }
+            }
+            ExitCode::from(0)
+        }
     }
 }
 
@@ -2986,6 +3311,19 @@ enum ForkCmd {
         /// Emit machine-readable JSON summary (plan in --dry-run; result when executed)
         #[arg(long)]
         json: bool,
+    },
+
+    /// Merge fork panes back into the original repository
+    Merge {
+        /// Session id to merge
+        #[arg(long = "session")]
+        session: String,
+        /// Strategy: none|fetch|octopus
+        #[arg(long = "strategy", value_enum)]
+        strategy: aifo_coder::MergingStrategy,
+        /// Print what would be done without modifying
+        #[arg(long = "dry-run")]
+        dry_run: bool,
     },
 }
 
@@ -3129,6 +3467,32 @@ fn main() -> ExitCode {
                 };
                 let code = aifo_coder::fork_clean(&repo_root, &opts).unwrap_or(1);
                 return ExitCode::from(code as u8);
+            }
+            ForkCmd::Merge {
+                session,
+                strategy,
+                dry_run,
+            } => {
+                let repo_root = match aifo_coder::repo_root() {
+                    Some(p) => p,
+                    None => {
+                        eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
+                        return ExitCode::from(1);
+                    }
+                };
+                match aifo_coder::fork_merge_branches_by_session(
+                    &repo_root,
+                    session,
+                    *strategy,
+                    cli.verbose,
+                    *dry_run,
+                ) {
+                    Ok(()) => return ExitCode::from(0),
+                    Err(e) => {
+                        eprintln!("aifo-coder: fork merge failed: {}", e);
+                        return ExitCode::from(1);
+                    }
+                }
             }
         }
     }
