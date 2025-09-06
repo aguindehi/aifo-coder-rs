@@ -2441,7 +2441,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     sid
                 );
                 println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
+                if let Some((first_dir, _)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
                     println!(
                         "  git -C \"{}\" log --oneline --decorate --graph -n 20",
