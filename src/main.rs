@@ -187,16 +187,16 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
         {
             let mut msgs: Vec<String> = Vec::new();
             msgs.push(format!(
-                "Current workspace is under a temporary path ({}).",
+                "current workspace is under a temporary path ({}).",
                 s
             ));
-            msgs.push("On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
+            msgs.push("on macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
             msgs.push(
-                "This can result in an empty or non-writable /workspace inside the container."
+                "this can result in an empty or non-writable /workspace inside the container."
                     .to_string(),
             );
             msgs.push(
-                "Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+                "move your project under your home directory (e.g., ~/projects/<repo>) and retry."
                     .to_string(),
             );
             if interactive_block {
@@ -212,14 +212,14 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
         if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
             let mut msgs: Vec<String> = Vec::new();
             msgs.push(format!(
-                "Current workspace is under a temporary path ({}).",
+                "current workspace is under a temporary path ({}).",
                 s
             ));
             msgs.push(
-                "Some Docker setups do not share temporary folders reliably with containers."
+                "some Docker setups do not share temporary folders reliably with containers."
                     .to_string(),
             );
-            msgs.push("You may see an empty or read-only /workspace. Move the project under your home directory and retry.".to_string());
+            msgs.push("you may see an empty or read-only /workspace. move the project under your home directory and retry.".to_string());
             if interactive_block {
                 let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
                 return aifo_coder::warn_prompt_continue_or_quit(&lines);
@@ -231,6 +231,119 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
         }
     }
     true
+}
+
+// Warn at startup (agent-run path) when no toolchains are requested and no proxy is configured.
+fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
+    // Respect explicit suppression
+    if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return;
+    }
+    // Only warn for interactive agent runs
+    if agent != "aider" && agent != "crush" && agent != "codex" {
+        return;
+    }
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        return;
+    }
+    let has_url = std::env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    let has_tok = std::env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if has_url && has_tok {
+        return;
+    }
+    // Emit concise guidance to stderr (color-aware)
+    let use_err = aifo_coder::color_enabled_stderr();
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "warning: no language toolchain sidecars enabled (--toolchain)."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
+        )
+    );
+}
+
+// Fork orchestrator preflight warning with single continue/abort prompt.
+fn maybe_warn_missing_toolchain_for_fork(cli: &Cli, agent: &str) -> bool {
+    // Respect explicit suppression
+    if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return true;
+    }
+    // Only warn for coding agents
+    if agent != "aider" && agent != "crush" && agent != "codex" {
+        return true;
+    }
+    // No toolchain flags?
+    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+        return true;
+    }
+    // If proxy already configured, don't warn
+    let has_url = std::env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    let has_tok = std::env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if has_url && has_tok {
+        return true;
+    }
+    // Build lines and prompt once
+    let mut msgs: Vec<String> = Vec::new();
+    msgs.push("no language toolchain sidecars enabled (--toolchain).".to_string());
+    msgs.push("without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string());
+    msgs.push("enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string());
+    msgs.push("pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string());
+    msgs.push("options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string());
+    let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+    aifo_coder::warn_prompt_continue_or_quit(&lines)
 }
 
 #[cfg(test)]
@@ -1272,6 +1385,62 @@ fn fork_build_child_args(cli: &Cli) -> Vec<String> {
     args
 }
 
+fn print_inspect_merge_guidance(
+    repo_root: &std::path::Path,
+    sid: &str,
+    base_label: &str,
+    base_ref_or_sha: &str,
+    clones: &[(std::path::PathBuf, String)],
+    use_color_header: bool,
+    include_remote_examples: bool,
+    extra_spacing_before_wrapper: bool,
+) {
+    if use_color_header {
+        println!("\x1b[1mTo inspect and merge changes, you can run:\x1b[0m");
+    } else {
+        println!("To inspect and merge changes, you can run:");
+    }
+    if let Some((first_dir, first_branch)) = clones.first() {
+        println!("  git -C \"{}\" status", first_dir.display());
+        println!(
+            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
+            first_dir.display()
+        );
+        if include_remote_examples {
+            println!(
+                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
+                repo_root.display(),
+                sid,
+                first_dir.display()
+            );
+            println!(
+                "  git -C \"{}\" fetch fork-{}-1 {}",
+                repo_root.display(),
+                sid,
+                first_branch
+            );
+            if base_label != "detached" {
+                println!(
+                    "  git -C \"{}\" checkout {}",
+                    repo_root.display(),
+                    base_ref_or_sha
+                );
+                println!(
+                    "  git -C \"{}\" merge --no-ff {}",
+                    repo_root.display(),
+                    first_branch
+                );
+            }
+        }
+    }
+    if extra_spacing_before_wrapper {
+        println!();
+    }
+    let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
+    println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
+    println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+}
+
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Preflight
@@ -1345,10 +1514,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 base_ref_or_sha = sha;
             }
             Err(e) => {
-                let msg = format!("Failed to create snapshot of dirty working tree: {}", e);
+                let msg = format!("failed to create snapshot of dirty working tree: {}", e);
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
                     &msg,
-                    "The fork panes will NOT include your uncommitted changes.",
+                    "the fork panes will not include your uncommitted changes.",
                 ]) {
                     return ExitCode::from(1);
                 }
@@ -1366,8 +1535,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         {
             if !out.stdout.is_empty() {
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "Working tree has uncommitted changes; they will NOT be included in the fork panes.",
-                    "Re-run with --fork-include-dirty to include them.",
+                    "working tree has uncommitted changes; they will not be included in the fork panes.",
+                    "re-run with --fork-include-dirty to include them.",
                 ]) {
                     return ExitCode::from(1);
                 }
@@ -1390,12 +1559,24 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         {
             if !o.stdout.is_empty() {
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "Octopus merge requires a clean working tree in the original repository.",
-                    "Commit or stash your changes before proceeding, or merging will likely fail.",
+                    "octopus merge requires a clean working tree in the original repository.",
+                    "commit or stash your changes before proceeding, or merging will likely fail.",
                 ]) {
                     return ExitCode::from(1);
                 }
             }
+        }
+    }
+    // Preflight: warn once about missing toolchains and allow abort
+    {
+        let agent_for_warn = match &cli.command {
+            Agent::Codex { .. } => "codex",
+            Agent::Crush { .. } => "crush",
+            Agent::Aider { .. } => "aider",
+            _ => "aider",
+        };
+        if !maybe_warn_missing_toolchain_for_fork(cli, agent_for_warn) {
+            return ExitCode::from(1);
         }
     }
     // Create clones
@@ -1604,6 +1785,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "AIFO_CODER_FORK_STATE_DIR",
                         pane_state_dir.display().to_string(),
                     ),
+                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
                 ];
                 let mut assigns: Vec<String> = Vec::new();
                 for (k, v) in kv {
@@ -1633,6 +1815,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "AIFO_CODER_FORK_STATE_DIR",
                         pane_state_dir.display().to_string(),
                     ),
+                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
                 ];
                 let mut exports: Vec<String> = Vec::new();
                 for (k, v) in kv {
@@ -1857,38 +2040,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    true,
+                    false,
+                );
                 return ExitCode::from(0);
             } else if let Ok(mt) = which("mintty.exe") {
                 // Use mintty as a Git Bash UI launcher
@@ -2095,38 +2256,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    true,
+                    false,
+                );
                 return ExitCode::from(0);
             } else {
                 eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash/mintty were not found in PATH.");
@@ -2434,38 +2573,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "aifo-coder: fork session {} launched in Windows Terminal.",
                     sid
                 );
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             }
         }
@@ -2666,38 +2783,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             } else if let Ok(mt) = which("mintty.exe") {
                 // Use mintty as a Git Bash UI launcher
@@ -2869,38 +2964,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
-                println!("To inspect and merge changes, you can run:");
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                    if base_label != "detached" {
-                        println!(
-                            "  git -C \"{}\" checkout {}",
-                            repo_root.display(),
-                            base_ref_or_sha
-                        );
-                        println!(
-                            "  git -C \"{}\" merge --no-ff {}",
-                            repo_root.display(),
-                            first_branch
-                        );
-                    }
-                }
+                print_inspect_merge_guidance(
+                    &repo_root,
+                    &sid,
+                    &base_label,
+                    &base_ref_or_sha,
+                    &clones,
+                    false,
+                    false,
+                    true,
+                );
                 return ExitCode::from(0);
             } else {
                 // Fallback: launch Windows Terminal even though we cannot wait; print manual-merge advice
@@ -3039,38 +3112,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             );
                         }
                     }
-                    println!("To inspect and merge changes, you can run:");
-                    if let Some((first_dir, first_branch)) = clones.first() {
-                        println!("  git -C \"{}\" status", first_dir.display());
-                        println!(
-                            "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                            first_dir.display()
-                        );
-                        println!(
-                            "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                            repo_root.display(),
-                            sid,
-                            first_dir.display()
-                        );
-                        println!(
-                            "  git -C \"{}\" fetch fork-{}-1 {}",
-                            repo_root.display(),
-                            sid,
-                            first_branch
-                        );
-                        if base_label != "detached" {
-                            println!(
-                                "  git -C \"{}\" checkout {}",
-                                repo_root.display(),
-                                base_ref_or_sha
-                            );
-                            println!(
-                                "  git -C \"{}\" merge --no-ff {}",
-                                repo_root.display(),
-                                first_branch
-                            );
-                        }
-                    }
+                    print_inspect_merge_guidance(
+                        &repo_root,
+                        &sid,
+                        &base_label,
+                        &base_ref_or_sha,
+                        &clones,
+                        false,
+                        false,
+                        true,
+                    );
                     return ExitCode::from(0);
                 } else {
                     eprintln!("aifo-coder: error: neither Windows Terminal (wt.exe), PowerShell, nor Git Bash/mintty found in PATH.");
@@ -3305,38 +3356,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             "aifo-coder: fork session {} launched (PowerShell windows).",
             sid
         );
-        println!("To inspect and merge changes, you can run:");
-        if let Some((first_dir, first_branch)) = clones.first() {
-            println!("  git -C \"{}\" status", first_dir.display());
-            println!(
-                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                first_dir.display()
-            );
-            println!(
-                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                repo_root.display(),
-                sid,
-                first_dir.display()
-            );
-            println!(
-                "  git -C \"{}\" fetch fork-{}-1 {}",
-                repo_root.display(),
-                sid,
-                first_branch
-            );
-            if base_label != "detached" {
-                println!(
-                    "  git -C \"{}\" checkout {}",
-                    repo_root.display(),
-                    base_ref_or_sha
-                );
-                println!(
-                    "  git -C \"{}\" merge --no-ff {}",
-                    repo_root.display(),
-                    first_branch
-                );
-            }
-        }
+        print_inspect_merge_guidance(
+            &repo_root,
+            &sid,
+            &base_label,
+            &base_ref_or_sha,
+            &clones,
+            false,
+            false,
+            true,
+        );
         return ExitCode::from(0);
     } else {
         // Build and run tmux session
@@ -3360,6 +3389,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "AIFO_CODER_FORK_STATE_DIR",
                     pane_state_dir.display().to_string(),
                 ),
+                ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
             ];
             for (k, v) in kv {
                 exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
@@ -3794,42 +3824,16 @@ fi
             println!("aifo-coder: fork session {} completed.", sid);
         }
         println!();
-        if use_color_out {
-            println!("\x1b[1mTo inspect and merge changes, you can run:\x1b[0m");
-        } else {
-            println!("To inspect and merge changes, you can run:");
-        }
-        if let Some((first_dir, first_branch)) = clones.first() {
-            println!("  git -C \"{}\" status", first_dir.display());
-            println!(
-                "  git -C \"{}\" log --oneline --decorate --graph -n 20",
-                first_dir.display()
-            );
-            println!(
-                "  git -C \"{}\" remote add fork-{}-1 \"{}\"  # once",
-                repo_root.display(),
-                sid,
-                first_dir.display()
-            );
-            println!(
-                "  git -C \"{}\" fetch fork-{}-1 {}",
-                repo_root.display(),
-                sid,
-                first_branch
-            );
-            if base_label != "detached" {
-                println!(
-                    "  git -C \"{}\" checkout {}",
-                    repo_root.display(),
-                    base_ref_or_sha
-                );
-                println!(
-                    "  git -C \"{}\" merge --no-ff {}",
-                    repo_root.display(),
-                    first_branch
-                );
-            }
-        }
+        print_inspect_merge_guidance(
+            &repo_root,
+            &sid,
+            &base_label,
+            &base_ref_or_sha,
+            &clones,
+            use_color_out,
+            false,
+            true,
+        );
 
         {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
@@ -4434,6 +4438,7 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
+    maybe_warn_missing_toolchain_agent(&cli, agent);
     if !warn_if_tmp_workspace(true) {
         eprintln!("aborted.");
         return ExitCode::from(1);

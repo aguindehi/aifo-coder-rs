@@ -558,7 +558,7 @@ pub fn desired_apparmor_profile() -> Option<String> {
         }
         if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
             warn_print(&format!(
-                "AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.",
+                "apparmor profile '{}' not loaded on host; falling back to 'docker-default'.",
                 trimmed
             ));
             if apparmor_profile_available("docker-default") {
@@ -576,10 +576,10 @@ pub fn desired_apparmor_profile() -> Option<String> {
         if apparmor_profile_available("aifo-coder") {
             Some("aifo-coder".to_string())
         } else if apparmor_profile_available("docker-default") {
-            warn_print("AppArmor profile 'aifo-coder' not loaded; using 'docker-default'.");
+            warn_print("apparmor profile 'aifo-coder' not loaded; using 'docker-default'.");
             Some("docker-default".to_string())
         } else {
-            warn_print("No known AppArmor profile loaded; continuing without explicit profile.");
+            warn_print("no known apparmor profile loaded; continuing without explicit profile.");
             None
         }
     }
@@ -1485,7 +1485,7 @@ pub fn build_docker_cmd(
             security_flags.push(OsString::from(format!("apparmor={profile}")));
         } else {
             warn_print(
-                "Docker daemon does not report AppArmor support. Continuing without AppArmor.",
+                "docker daemon does not report apparmor support. continuing without apparmor.",
             );
         }
     }
