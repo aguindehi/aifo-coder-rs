@@ -3650,6 +3650,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let _ = att.status();
 
         // After tmux session ends or switch completes, print merging guidance
+        println!();
         if use_color_out {
             println!(
                 "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m completed.",
@@ -3703,6 +3704,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     aifo_coder::MergingStrategy::Fetch => "fetch",
                     aifo_coder::MergingStrategy::Octopus => "octopus",
                 };
+                // visual separation from the guidance block above
+                println!();
                 {
                     let use_err = aifo_coder::color_enabled_stderr();
                     eprintln!(
