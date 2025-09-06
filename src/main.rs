@@ -3381,7 +3381,7 @@ set +e
 st=$?
 if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then
   pid="$(tmux display -p '#{{pane_id}}')"
-  secs="${AIFO_CODER_FORK_SHELL_PROMPT_SECS:-2}"
+  secs="${{AIFO_CODER_FORK_SHELL_PROMPT_SECS:-2}}"
   printf "aifo-coder: agent exited (code %s). Press s then Enter to open a shell; otherwise closing pane in %ss... " "$st" "$secs"
   sh -c "sleep \"$secs\"; tmux kill-pane -t \"$pid\"" >/dev/null 2>&1 &
   closer_pid=$!
@@ -3389,7 +3389,7 @@ if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then
   if [ "$ans" = "s" ] || [ "$ans" = "S" ]; then
     kill "$closer_pid" >/dev/null 2>&1 || true
     echo
-    exec "${SHELL:-sh}"
+    exec "${{SHELL:-sh}}"
   else
     echo
     tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"

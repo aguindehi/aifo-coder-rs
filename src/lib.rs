@@ -357,11 +357,14 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
         }
     }
 
-    // Fallback: line-based input (non-tty or platforms without single-key support)
-    let mut s = String::new();
-    let _ = std::io::stdin().read_line(&mut s);
-    let c = s.trim().chars().next().unwrap_or('\n');
-    c != 'q' && c != 'Q'
+    #[cfg(not(any(unix, windows)))]
+    {
+        // Fallback: line-based input (non-tty or platforms without single-key support)
+        let mut s = String::new();
+        let _ = std::io::stdin().read_line(&mut s);
+        let c = s.trim().chars().next().unwrap_or('\n');
+        return c != 'q' && c != 'Q';
+    }
 }
 
 /**
