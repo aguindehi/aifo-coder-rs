@@ -152,17 +152,17 @@ fn print_startup_banner() {
     println!();
 }
 
-fn warn_if_tmp_workspace() {
+fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
     if std::env::var("AIFO_CODER_SUPPRESS_TMP_WARNING")
         .ok()
         .as_deref()
         == Some("1")
     {
-        return;
+        return true;
     }
     let pwd = match std::env::current_dir() {
         Ok(p) => std::fs::canonicalize(&p).unwrap_or(p),
-        Err(_) => return,
+        Err(_) => return true,
     };
     let s = pwd.display().to_string();
 
@@ -173,52 +173,43 @@ fn warn_if_tmp_workspace() {
             || s.starts_with("/private/tmp/")
             || s.starts_with("/private/var/folders/")
         {
-            let use_color = atty::is(atty::Stream::Stderr);
-            if use_color {
-                eprintln!(
-                    "\x1b[31;1maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
-                    s
-                );
+            let mut msgs: Vec<String> = Vec::new();
+            msgs.push(format!(
+                "Current workspace is under a temporary path ({}).",
+                s
+            ));
+            msgs.push("On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
+            msgs.push("This can result in an empty or non-writable /workspace inside the container.".to_string());
+            msgs.push("Move your project under your home directory (e.g., ~/projects/<repo>) and retry.".to_string());
+            if interactive_block {
+                let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+                return aifo_coder::warn_prompt_continue_or_quit(&lines);
             } else {
-                eprintln!(
-                    "aifo-coder: warning: current workspace is under a temporary path ({}).",
-                    s
-                );
+                for m in msgs {
+                    aifo_coder::warn_print(&m);
+                }
             }
-            eprintln!();
-            eprintln!("⚠️   On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.");
-            eprintln!(
-                "     This can result in an empty or non-writable /workspace inside the container."
-            );
-            eprintln!(
-                "     Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
-            );
-            eprintln!();
         }
     } else {
         if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
-            let use_color = atty::is(atty::Stream::Stderr);
-            if use_color {
-                eprintln!(
-                    "\x1b[31;1maifo-coder: warning: current workspace is under a temporary path ({}).\x1b[0m",
-                    s
-                );
+            let mut msgs: Vec<String> = Vec::new();
+            msgs.push(format!(
+                "Current workspace is under a temporary path ({}).",
+                s
+            ));
+            msgs.push("Some Docker setups do not share temporary folders reliably with containers.".to_string());
+            msgs.push("You may see an empty or read-only /workspace. Move the project under your home directory and retry.".to_string());
+            if interactive_block {
+                let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+                return aifo_coder::warn_prompt_continue_or_quit(&lines);
             } else {
-                eprintln!(
-                    "aifo-coder: warning: current workspace is under a temporary path ({}).",
-                    s
-                );
+                for m in msgs {
+                    aifo_coder::warn_print(&m);
+                }
             }
-            eprintln!();
-            eprintln!(
-                "⚠️   Some Docker setups do not share temporary folders reliably with containers."
-            );
-            eprintln!(
-                "     You may see an empty or read-only /workspace. Move the project under your home directory and retry."
-            );
-            eprintln!();
         }
     }
+    true
 }
 
 #[cfg(test)]
@@ -1293,10 +1284,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         }
     };
     if panes > 8 {
-        eprintln!(
-            "aifo-coder: warning: launching {} panes may impact disk/memory and I/O performance.",
-            panes
-        );
+        let msg = format!("Launching {} panes may impact disk/memory and I/O performance.", panes);
+        if !aifo_coder::warn_prompt_continue_or_quit(&[&msg]) {
+            return ExitCode::from(1);
+        }
     }
 
     // Identify base
@@ -1327,7 +1318,13 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 base_ref_or_sha = sha;
             }
             Err(e) => {
-                eprintln!("aifo-coder: warning: failed to create snapshot of dirty working tree ({}). Proceeding without including uncommitted changes.", e);
+                let msg = format!("Failed to create snapshot of dirty working tree: {}", e);
+                if !aifo_coder::warn_prompt_continue_or_quit(&[
+                    &msg,
+                    "The fork panes will NOT include your uncommitted changes.",
+                ]) {
+                    return ExitCode::from(1);
+                }
             }
         }
     } else {
@@ -1341,16 +1338,36 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .output()
         {
             if !out.stdout.is_empty() {
-                let use_color = atty::is(atty::Stream::Stderr);
-                if use_color {
-                    eprintln!("\x1b[33;1maifo-coder:\x1b[0m \x1b[33mnote:\x1b[0m working tree has uncommitted changes; they will NOT be included. Re-run with \x1b[1m--fork-include-dirty\x1b[0m to include them.");
-                } else {
-                    eprintln!("aifo-coder: note: working tree has uncommitted changes; they will NOT be included. Re-run with --fork-include-dirty to include them.");
+                if !aifo_coder::warn_prompt_continue_or_quit(&[
+                    "Working tree has uncommitted changes; they will NOT be included in the fork panes.",
+                    "Re-run with --fork-include-dirty to include them.",
+                ]) {
+                    return ExitCode::from(1);
                 }
             }
         }
     }
 
+    // Preflight: if octopus merging requested, ensure original repo is clean to avoid hidden merge failures
+    if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus) {
+        if let Ok(o) = Command::new("git")
+            .arg("-C")
+            .arg(&repo_root)
+            .arg("status")
+            .arg("--porcelain=v1")
+            .arg("-uall")
+            .output()
+        {
+            if !o.stdout.is_empty() {
+                if !aifo_coder::warn_prompt_continue_or_quit(&[
+                    "Octopus merge requires a clean working tree in the original repository.",
+                    "Commit or stash your changes before proceeding, or merging will likely fail.",
+                ]) {
+                    return ExitCode::from(1);
+                }
+            }
+        }
+    }
     // Create clones
     let dissoc = cli.fork_dissociate;
     let clones = match aifo_coder::fork_clone_and_checkout_panes(
@@ -4137,12 +4154,12 @@ fn main() -> ExitCode {
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
         print_startup_banner();
-        warn_if_tmp_workspace();
+        let _ = warn_if_tmp_workspace(false);
         run_doctor(cli.verbose);
         return ExitCode::from(0);
     } else if let Agent::Images = &cli.command {
         print_startup_banner();
-        warn_if_tmp_workspace();
+        let _ = warn_if_tmp_workspace(false);
         eprintln!("aifo-coder images");
         eprintln!();
 
@@ -4207,7 +4224,7 @@ fn main() -> ExitCode {
         return ExitCode::from(0);
     } else if let Agent::ToolchainCacheClear = &cli.command {
         print_startup_banner();
-        warn_if_tmp_workspace();
+        let _ = warn_if_tmp_workspace(false);
         match aifo_coder::toolchain_purge_caches(cli.verbose) {
             Ok(()) => {
                 eprintln!("aifo-coder: purged toolchain cache volumes.");
@@ -4226,7 +4243,7 @@ fn main() -> ExitCode {
     } = &cli.command
     {
         print_startup_banner();
-        warn_if_tmp_workspace();
+        if !warn_if_tmp_workspace(true) { eprintln!("aborted."); return ExitCode::from(1); }
         if cli.verbose {
             eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
             if let Some(img) = image.as_deref() {
@@ -4295,7 +4312,7 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
-    warn_if_tmp_workspace();
+    if !warn_if_tmp_workspace(true) { eprintln!("aborted."); return ExitCode::from(1); }
 
     // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
     let mut tc_session_id: Option<String> = None;

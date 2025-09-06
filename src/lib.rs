@@ -258,6 +258,49 @@ pub fn paint(enabled: bool, code: &str, s: &str) -> String {
     }
 }
 
+/// Print a standardized warning line to stderr (color-aware).
+pub fn warn_print(msg: &str) {
+    let use_err = color_enabled_stderr();
+    eprintln!(
+        "{}",
+        paint(use_err, "\x1b[33;1m", &format!("warning: {}", msg))
+    );
+}
+
+/// Print warning lines and, when interactive, prompt the user to continue or abort.
+/// Returns true to continue, false to abort.
+pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
+    let use_err = color_enabled_stderr();
+    for l in lines {
+        eprintln!(
+            "{}",
+            paint(use_err, "\x1b[33;1m", &format!("warning: {}", l))
+        );
+    }
+
+    // Only prompt when interactive and not disabled by env/CI
+    let interactive = atty::is(atty::Stream::Stdin) && atty::is(atty::Stream::Stderr);
+    let disabled = std::env::var("AIFO_CODER_NO_WARN_PAUSE").ok().as_deref() == Some("1")
+        || std::env::var("CI").ok().as_deref() == Some("1");
+    if !(interactive && !disabled) {
+        return true;
+    }
+
+    eprint!(
+        "{}",
+        paint(
+            use_err,
+            "\x1b[90m",
+            "Press Enter to continue, or 'q' then Enter to abort: "
+        )
+    );
+    let _ = std::io::stderr().flush();
+    let mut s = String::new();
+    let _ = std::io::stdin().read_line(&mut s);
+    let c = s.trim().chars().next().unwrap_or('\n');
+    c != 'q' && c != 'Q'
+}
+
 /**
  Merging strategy for post-fork actions.
  - None: do nothing (default).
@@ -437,11 +480,11 @@ pub fn desired_apparmor_profile() -> Option<String> {
             return None;
         }
         if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
-            eprintln!("aifo-coder: AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.", trimmed);
+            warn_print(&format!("AppArmor profile '{}' not loaded on host; falling back to 'docker-default'.", trimmed));
             if apparmor_profile_available("docker-default") {
                 return Some("docker-default".to_string());
             } else {
-                eprintln!("aifo-coder: 'docker-default' profile not found; continuing without explicit AppArmor profile.");
+                warn_print("'docker-default' profile not found; continuing without explicit AppArmor profile.");
                 return None;
             }
         }
@@ -453,12 +496,10 @@ pub fn desired_apparmor_profile() -> Option<String> {
         if apparmor_profile_available("aifo-coder") {
             Some("aifo-coder".to_string())
         } else if apparmor_profile_available("docker-default") {
-            eprintln!(
-                "aifo-coder: AppArmor profile 'aifo-coder' not loaded; using 'docker-default'."
-            );
+            warn_print("AppArmor profile 'aifo-coder' not loaded; using 'docker-default'.");
             Some("docker-default".to_string())
         } else {
-            eprintln!("aifo-coder: No known AppArmor profile loaded; continuing without explicit profile.");
+            warn_print("No known AppArmor profile loaded; continuing without explicit profile.");
             None
         }
     }
@@ -1363,7 +1404,7 @@ pub fn build_docker_cmd(
             security_flags.push(OsString::from("--security-opt"));
             security_flags.push(OsString::from(format!("apparmor={profile}")));
         } else {
-            eprintln!("Warning: Docker daemon does not report AppArmor support. Continuing without AppArmor.");
+            warn_print("Docker daemon does not report AppArmor support. Continuing without AppArmor.");
         }
     }
     // Image prefix used for container naming
