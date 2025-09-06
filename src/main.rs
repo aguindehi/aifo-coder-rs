@@ -3926,7 +3926,19 @@ enum Agent {
     },
 }
 
+struct OutputNewlineGuard;
+
+impl Drop for OutputNewlineGuard {
+    fn drop(&mut self) {
+        // Ensure a trailing blank line on stdout at process end
+        println!();
+    }
+}
+
 fn main() -> ExitCode {
+    // Leading blank line at program start
+    println!();
+    let _aifo_output_newline_guard = OutputNewlineGuard;
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
