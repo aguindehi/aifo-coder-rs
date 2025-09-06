@@ -5122,7 +5122,71 @@ pub fn fork_merge_branches(
         }
     }
 
-    // Perform octopus merge
+    // Compose a detailed octopus merge message with summaries of each branch
+    let mut merge_message = String::new();
+    merge_message.push_str(&format!(
+        "Octopus merge for session {}\n\nBranch summaries relative to {}:\n",
+        sid, base_ref_or_sha
+    ));
+    for (_p, br) in &pane_branches {
+        // Collect commit subjects relative to the base (skip merge commits)
+        let log_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%h %s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        merge_message.push_str(&format!("- branch '{}':\n", br));
+        if let Some(o) = log_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                let mut has_any = false;
+                for line in body.lines() {
+                    let t = line.trim();
+                    if !t.is_empty() {
+                        has_any = true;
+                        merge_message.push_str("  * ");
+                        merge_message.push_str(t);
+                        merge_message.push('\n');
+                    }
+                }
+                if !has_any {
+                    merge_message.push_str("  (no changes)\n");
+                }
+            } else {
+                merge_message.push_str("  (unable to summarize changes)\n");
+            }
+        } else {
+            merge_message.push_str("  (unable to summarize changes)\n");
+        }
+        merge_message.push('\n');
+    }
+
+    // Prepare merge message file path; write it unless dry_run
+    let mut merge_msg_path: Option<std::path::PathBuf> = None;
+    let msg_path = std::env::temp_dir().join(format!(
+        "aifo-merge-{}-{}.txt",
+        sid,
+        std::process::id()
+    ));
+    if verbose {
+        eprintln!(
+            "aifo-coder: preparing octopus merge message at {}",
+            msg_path.display()
+        );
+    }
+    if !dry_run {
+        if fs::write(&msg_path, &merge_message).is_ok() {
+            merge_msg_path = Some(msg_path.clone());
+        } else if verbose {
+            eprintln!("aifo-coder: warning: failed to write merge message file; falling back to default message");
+        }
+    }
+
+    // Perform octopus merge (use -F <file> when available)
     let mut merge_args = vec![
         "git".to_string(),
         "-C".to_string(),
@@ -5131,6 +5195,10 @@ pub fn fork_merge_branches(
         "--no-ff".to_string(),
         "--no-edit".to_string(),
     ];
+    if merge_msg_path.is_some() || dry_run {
+        merge_args.push("-F".to_string());
+        merge_args.push(msg_path.display().to_string());
+    }
     for (_p, br) in &pane_branches {
         merge_args.push(br.clone());
     }
@@ -5144,10 +5212,17 @@ pub fn fork_merge_branches(
             .arg("merge")
             .arg("--no-ff")
             .arg("--no-edit");
+        if let Some(ref p) = merge_msg_path {
+            cmd.arg("-F").arg(p);
+        }
         for (_p, br) in &pane_branches {
             cmd.arg(br);
         }
         let st = cmd.status()?;
+        // cleanup temp file best-effort
+        if let Some(p) = merge_msg_path {
+            let _ = fs::remove_file(p);
+        }
         if !st.success() {
             // Record failed octopus merge in metadata
             let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
