@@ -147,7 +147,7 @@ fn print_startup_banner() {
     println!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     println!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(" 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation");
+    println!(" 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB");
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
     println!();
 }
