@@ -307,9 +307,13 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
             let ch = _getch();
             let ch = (ch as u8) as char;
             if ch == 'q' || ch == 'Q' {
+                // End the prompt line and add an extra blank line for visual separation
+                eprintln!();
                 eprintln!();
                 return false;
             } else {
+                // End the prompt line and add an extra blank line for visual separation
+                eprintln!();
                 eprintln!();
                 return true;
             }
@@ -349,9 +353,13 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
 
         let ch = buf[0] as char;
         if ch == 'q' || ch == 'Q' {
+            // End the prompt line and add an extra blank line for visual separation
+            eprintln!();
             eprintln!();
             return false;
         } else {
+            // End the prompt line and add an extra blank line for visual separation
+            eprintln!();
             eprintln!();
             return true;
         }
@@ -362,6 +370,9 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
         // Fallback: line-based input (non-tty or platforms without single-key support)
         let mut s = String::new();
         let _ = std::io::stdin().read_line(&mut s);
+        // After confirmation, print a blank line for visual separation
+        eprintln!();
+        eprintln!();
         let c = s.trim().chars().next().unwrap_or('\n');
         return c != 'q' && c != 'Q';
     }
