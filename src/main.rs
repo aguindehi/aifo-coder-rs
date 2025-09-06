@@ -1454,6 +1454,18 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             }
         }
     }
+    // Preflight: warn once about missing toolchains and allow abort
+    {
+        let agent_for_warn = match &cli.command {
+            Agent::Codex { .. } => "codex",
+            Agent::Crush { .. } => "crush",
+            Agent::Aider { .. } => "aider",
+            _ => "aider",
+        };
+        if !maybe_warn_missing_toolchain_for_fork(cli, agent_for_warn) {
+            return ExitCode::from(1);
+        }
+    }
     // Create clones
     let dissoc = cli.fork_dissociate;
     let clones = match aifo_coder::fork_clone_and_checkout_panes(
@@ -1660,6 +1672,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "AIFO_CODER_FORK_STATE_DIR",
                         pane_state_dir.display().to_string(),
                     ),
+                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
                 ];
                 let mut assigns: Vec<String> = Vec::new();
                 for (k, v) in kv {
@@ -1689,6 +1702,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "AIFO_CODER_FORK_STATE_DIR",
                         pane_state_dir.display().to_string(),
                     ),
+                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
                 ];
                 let mut exports: Vec<String> = Vec::new();
                 for (k, v) in kv {
@@ -3262,6 +3276,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     "AIFO_CODER_FORK_STATE_DIR",
                     pane_state_dir.display().to_string(),
                 ),
+                ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
             ];
             for (k, v) in kv {
                 exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
@@ -4310,6 +4325,7 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
+    maybe_warn_missing_toolchain_agent(&cli, agent);
     if !warn_if_tmp_workspace(true) {
         eprintln!("aborted.");
         return ExitCode::from(1);
