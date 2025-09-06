@@ -345,6 +345,23 @@ mod tests_main_cli_child_args {
             joined
         );
     }
+
+    #[test]
+    fn test_merging_strategy_value_enum_parsing() {
+        use clap::Parser;
+        let cli = super::Cli::parse_from([
+            "aifo-coder",
+            "--fork-merging-strategy",
+            "octopus",
+            "aider",
+            "--",
+            "--help",
+        ]);
+        assert!(
+            matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::Octopus),
+            "expected parsing of --fork-merging-strategy octopus"
+        );
+    }
 }
 
 fn run_doctor(verbose: bool) {
@@ -1651,7 +1668,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -1768,7 +1807,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -2215,7 +2276,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
                 println!("To inspect and merge changes, you can run:");
@@ -2332,7 +2415,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
 
-                // Print guidance and return
+                // Apply post-fork merging if requested, then print guidance
+                if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+                    let strat = match cli.fork_merging_strategy {
+                        aifo_coder::MergingStrategy::None => "none",
+                        aifo_coder::MergingStrategy::Fetch => "fetch",
+                        aifo_coder::MergingStrategy::Octopus => "octopus",
+                    };
+                    eprintln!("aifo-coder: applying post-fork merge strategy: {}", strat);
+                    match aifo_coder::fork_merge_branches_by_session(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.verbose,
+                        cli.dry_run,
+                    ) {
+                        Ok(()) => {
+                            eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
+                        }
+                        Err(e) => {
+                            eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
+                        }
+                    }
+                }
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
