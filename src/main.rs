@@ -1127,7 +1127,7 @@ struct Cli {
     #[arg(long = "fork-keep-on-failure", default_value_t = true)]
     fork_keep_on_failure: bool,
 
-    /// Post-fork merging strategy to apply after all panes exit [none|fetch|octopus]
+    /// Post-fork merging strategy to apply after all panes exit
     #[arg(long = "fork-merging-strategy", value_enum, default_value_t = aifo_coder::MergingStrategy::None)]
     fork_merging_strategy: aifo_coder::MergingStrategy,
 
