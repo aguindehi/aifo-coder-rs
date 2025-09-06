@@ -185,6 +185,79 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     ]
 });
 
+// -------- Color mode and helpers --------
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+pub enum ColorMode {
+    Auto,
+    Always,
+    Never,
+}
+
+static COLOR_MODE: OnceCell<ColorMode> = OnceCell::new();
+
+pub fn set_color_mode(mode: ColorMode) {
+    let _ = COLOR_MODE.set(mode);
+}
+
+fn parse_color_mode(s: &str) -> Option<ColorMode> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "auto" => Some(ColorMode::Auto),
+        "always" | "on" | "true" | "yes" => Some(ColorMode::Always),
+        "never" | "off" | "false" | "no" => Some(ColorMode::Never),
+        _ => None,
+    }
+}
+
+fn env_color_mode_pref() -> Option<ColorMode> {
+    std::env::var("AIFO_CODER_COLOR")
+        .ok()
+        .and_then(|v| parse_color_mode(&v))
+}
+
+fn no_color_env() -> bool {
+    // Per https://no-color.org/
+    std::env::var("NO_COLOR").is_ok()
+}
+
+fn color_enabled_for(is_tty: bool) -> bool {
+    if no_color_env() {
+        return false;
+    }
+    if let Some(mode) = COLOR_MODE.get().copied() {
+        return match mode {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => is_tty,
+        };
+    }
+    if let Some(env_mode) = env_color_mode_pref() {
+        return match env_mode {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => is_tty,
+        };
+    }
+    is_tty
+}
+
+pub fn color_enabled_stdout() -> bool {
+    color_enabled_for(atty::is(atty::Stream::Stdout))
+}
+
+pub fn color_enabled_stderr() -> bool {
+    color_enabled_for(atty::is(atty::Stream::Stderr))
+}
+
+/// Wrap string with ANSI color code when enabled; otherwise return unchanged.
+pub fn paint(enabled: bool, code: &str, s: &str) -> String {
+    if enabled {
+        format!("{code}{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
 /**
  Merging strategy for post-fork actions.
  - None: do nothing (default).
@@ -4056,20 +4129,25 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
                                 continue;
                             }
                             any = true;
+                            let use_color = color_enabled_stdout();
+                            let header_path = format!("{}/.aifo-coder/forks", repo.display());
                             println!(
-                                "aifo-coder: fork sessions under {}/.aifo-coder/forks",
-                                repo.display()
+                                "{} {}",
+                                paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
+                                paint(use_color, "\x1b[34;1m", &header_path)
                             );
                             for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+                                let base_col = paint(use_color, "\x1b[34;1m", &base_label);
                                 if stale {
+                                    let stale_col = paint(use_color, "\x1b[33m", "(stale)");
                                     println!(
-                                        "  {}  panes={}  age={}d  base={}  (stale)",
-                                        sid, panes, age_days, base_label
+                                        "  {}  panes={}  age={}d  base={}  {}",
+                                        sid, panes, age_days, base_col, stale_col
                                     );
                                 } else {
                                     println!(
                                         "  {}  panes={}  age={}d  base={}",
-                                        sid, panes, age_days, base_label
+                                        sid, panes, age_days, base_col
                                     );
                                 }
                             }
@@ -4125,20 +4203,25 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> io::Result<i3
         out.push(']');
         println!("{}", out);
     } else {
+        let use_color = color_enabled_stdout();
+        let header_path = format!("{}/.aifo-coder/forks", repo_root.display());
         println!(
-            "aifo-coder: fork sessions under {}/.aifo-coder/forks",
-            repo_root.display()
+            "{} {}",
+            paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
+            paint(use_color, "\x1b[34;1m", &header_path)
         );
         for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+            let base_col = paint(use_color, "\x1b[34;1m", &base_label);
             if stale {
+                let stale_col = paint(use_color, "\x1b[33m", "(stale)");
                 println!(
-                    "  {}  panes={}  age={}d  base={}  (stale)",
-                    sid, panes, age_days, base_label
+                    "  {}  panes={}  age={}d  base={}  {}",
+                    sid, panes, age_days, base_col, stale_col
                 );
             } else {
                 println!(
                     "  {}  panes={}  age={}d  base={}",
-                    sid, panes, age_days, base_label
+                    sid, panes, age_days, base_col
                 );
             }
         }
@@ -4400,10 +4483,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
         }
         if del_sessions > 0 || del_panes > 0 {
-            eprint!(
+            let prompt = format!(
                 "aifo-coder: about to delete {} session(s) and {} pane(s). Proceed? [y/N] ",
                 del_sessions, del_panes
             );
+            let use_err = color_enabled_stderr();
+            eprint!("{}", paint(use_err, "\x1b[33m", &prompt));
             let _ = std::io::stderr().flush();
             let mut line = String::new();
             let _ = std::io::stdin().read_line(&mut line);
@@ -4427,7 +4512,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             .to_string();
         if opts.force {
             if opts.dry_run {
-                println!("DRY-RUN: rm -rf {}", sd.display());
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{} {}",
+                    paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                    paint(use_out, "\x1b[34;1m", &format!("rm -rf {}", sd.display()))
+                );
             } else {
                 // count all panes removed and the session
                 deleted_panes_count += panes.len();
@@ -4443,7 +4533,16 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             for ps in panes {
                 if ps.clean {
                     if opts.dry_run {
-                        println!("DRY-RUN: rm -rf {}", ps.dir.display());
+                        let use_out = color_enabled_stdout();
+                        println!(
+                            "{} {}",
+                            paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                            paint(
+                                use_out,
+                                "\x1b[34;1m",
+                                &format!("rm -rf {}", ps.dir.display())
+                            )
+                        );
                     } else {
                         deleted_panes_count += 1;
                         let _ = fs::remove_dir_all(&ps.dir);
@@ -4454,7 +4553,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
             }
             if remaining.is_empty() {
                 if opts.dry_run {
-                    println!("DRY-RUN: rmdir {}", sd.display());
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{} {}",
+                        paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                        paint(use_out, "\x1b[34;1m", &format!("rmdir {}", sd.display()))
+                    );
                 } else {
                     deleted_sessions_count += 1;
                     // Stop toolchain sidecars and remove session network (best-effort)
@@ -4548,7 +4652,12 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
         } else {
             // all panes are clean here (or we would have bailed above)
             if opts.dry_run {
-                println!("DRY-RUN: rm -rf {}", sd.display());
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{} {}",
+                    paint(use_out, "\x1b[33m", "DRY-RUN:"),
+                    paint(use_out, "\x1b[34;1m", &format!("rm -rf {}", sd.display()))
+                );
             } else {
                 deleted_panes_count += panes.len();
                 deleted_sessions_count += 1;

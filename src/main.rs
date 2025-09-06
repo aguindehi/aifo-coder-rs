@@ -246,6 +246,7 @@ mod tests_main_cli_child_args {
             fork_keep_on_failure: true,
             fork_merging_strategy: aifo_coder::MergingStrategy::None,
             fork_merging_autoclean: false,
+            color: aifo_coder::ColorMode::Auto,
             command: super::Agent::Aider {
                 args: vec!["--help".to_string(), "--".to_string(), "extra".to_string()],
             },
@@ -1096,6 +1097,10 @@ struct Cli {
     /// Prepare and print what would run, but do not execute
     #[arg(long)]
     dry_run: bool,
+
+    /// Colorize output: auto|always|never
+    #[arg(long = "color", value_enum, default_value = "auto")]
+    color: aifo_coder::ColorMode,
 
     /// Fork mode: create N panes (N>=2) in tmux/Windows Terminal with cloned workspaces
     #[arg(long)]
@@ -3554,6 +3559,8 @@ fn main() -> ExitCode {
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
+    // Configure color mode as early as possible
+    aifo_coder::set_color_mode(cli.color);
 
     // Optional: invalidate on-disk registry cache before any probes
     if cli.invalidate_registry_cache {
