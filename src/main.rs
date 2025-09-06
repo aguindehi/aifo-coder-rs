@@ -1745,11 +1745,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     json: false,
                                 };
                                 match aifo_coder::fork_clean(&repo_root, &opts) {
-                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                                    Err(e) => eprintln!(
-                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                        sid, e
-                                    ),
+                                    Ok(_) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[32;1m",
+                                                &format!(
+                                                    "aifo-coder: disposed fork session {}.",
+                                                    sid
+                                                )
+                                            )
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[33m",
+                                                &format!(
+                                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                    sid, e
+                                                )
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -1953,11 +1976,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     json: false,
                                 };
                                 match aifo_coder::fork_clean(&repo_root, &opts) {
-                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                                    Err(e) => eprintln!(
-                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                        sid, e
-                                    ),
+                                    Ok(_) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[32;1m",
+                                                &format!(
+                                                    "aifo-coder: disposed fork session {}.",
+                                                    sid
+                                                )
+                                            )
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[33m",
+                                                &format!(
+                                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                    sid, e
+                                                )
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -2491,11 +2537,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     json: false,
                                 };
                                 match aifo_coder::fork_clean(&repo_root, &opts) {
-                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                                    Err(e) => eprintln!(
-                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                        sid, e
-                                    ),
+                                    Ok(_) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[32;1m",
+                                                &format!(
+                                                    "aifo-coder: disposed fork session {}.",
+                                                    sid
+                                                )
+                                            )
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[33m",
+                                                &format!(
+                                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                    sid, e
+                                                )
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -2676,11 +2745,34 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     json: false,
                                 };
                                 match aifo_coder::fork_clean(&repo_root, &opts) {
-                                    Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                                    Err(e) => eprintln!(
-                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                        sid, e
-                                    ),
+                                    Ok(_) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[32;1m",
+                                                &format!(
+                                                    "aifo-coder: disposed fork session {}.",
+                                                    sid
+                                                )
+                                            )
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let use_err = aifo_coder::color_enabled_stderr();
+                                        eprintln!(
+                                            "{}",
+                                            aifo_coder::paint(
+                                                use_err,
+                                                "\x1b[33m",
+                                                &format!(
+                                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                    sid, e
+                                                )
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -3067,11 +3159,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             json: false,
                         };
                         match aifo_coder::fork_clean(&repo_root, &opts) {
-                            Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                            Err(e) => eprintln!(
-                                "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                sid, e
-                            ),
+                            Ok(_) => {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[32;1m",
+                                        &format!("aifo-coder: disposed fork session {}.", sid)
+                                    )
+                                );
+                            }
+                            Err(e) => {
+                                let use_err = aifo_coder::color_enabled_stderr();
+                                eprintln!(
+                                    "{}",
+                                    aifo_coder::paint(
+                                        use_err,
+                                        "\x1b[33m",
+                                        &format!(
+                                            "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                            sid, e
+                                        )
+                                    )
+                                );
+                            }
                         }
                     }
                 }
@@ -3649,11 +3761,31 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 json: false,
                             };
                             match aifo_coder::fork_clean(&repo_root, &opts) {
-                                Ok(_) => eprintln!("aifo-coder: disposed fork session {}.", sid),
-                                Err(e) => eprintln!(
-                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                    sid, e
-                                ),
+                                Ok(_) => {
+                                    let use_err = aifo_coder::color_enabled_stderr();
+                                    eprintln!(
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[32;1m",
+                                            &format!("aifo-coder: disposed fork session {}.", sid)
+                                        )
+                                    );
+                                }
+                                Err(e) => {
+                                    let use_err = aifo_coder::color_enabled_stderr();
+                                    eprintln!(
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[33m",
+                                            &format!(
+                                                "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                sid, e
+                                            )
+                                        )
+                                    );
+                                }
                             }
                         }
                     }
@@ -3927,12 +4059,31 @@ fn main() -> ExitCode {
                             };
                             match aifo_coder::fork_clean(&repo_root, &opts) {
                                 Ok(_) => {
-                                    eprintln!("aifo-coder: disposed fork session {}.", session);
+                                    let use_err = aifo_coder::color_enabled_stderr();
+                                    eprintln!(
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[32;1m",
+                                            &format!(
+                                                "aifo-coder: disposed fork session {}.",
+                                                session
+                                            )
+                                        )
+                                    );
                                 }
                                 Err(e) => {
+                                    let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
-                                        "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                        session, e
+                                        "{}",
+                                        aifo_coder::paint(
+                                            use_err,
+                                            "\x1b[33m",
+                                            &format!(
+                                                "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                                session, e
+                                            )
+                                        )
                                     );
                                 }
                             }

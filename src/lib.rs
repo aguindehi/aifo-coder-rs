@@ -4535,6 +4535,26 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                 // Stop toolchain sidecars and remove session network (best-effort)
                 toolchain_cleanup_session(&sid, false);
                 let _ = fs::remove_dir_all(sd);
+                // Success message
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{}",
+                    paint(
+                        use_out,
+                        "\x1b[32;1m",
+                        &format!("aifo-coder: deleted fork session {}", sid)
+                    )
+                );
+                // Success message
+                let use_out = color_enabled_stdout();
+                println!(
+                    "{}",
+                    paint(
+                        use_out,
+                        "\x1b[32;1m",
+                        &format!("aifo-coder: deleted fork session {}", sid)
+                    )
+                );
             }
             continue;
         }
@@ -4574,6 +4594,16 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     // Stop toolchain sidecars and remove session network (best-effort)
                     toolchain_cleanup_session(&sid, false);
                     let _ = fs::remove_dir_all(sd);
+                    // Success message
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{}",
+                        paint(
+                            use_out,
+                            "\x1b[32;1m",
+                            &format!("aifo-coder: deleted fork session {}", sid)
+                        )
+                    );
                 }
             } else {
                 // Update .meta.json with remaining panes (also refresh branches best-effort)
@@ -4657,6 +4687,20 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> io::Result<i32> {
                     }
                     meta_out.push_str("]}");
                     let _ = fs::write(sd.join(".meta.json"), meta_out);
+                    // Kept session summary
+                    let use_out = color_enabled_stdout();
+                    println!(
+                        "{}",
+                        paint(
+                            use_out,
+                            "\x1b[33m",
+                            &format!(
+                                "aifo-coder: kept fork session {} ({} protected pane(s) remain)",
+                                sid,
+                                remaining.len()
+                            )
+                        )
+                    );
                 }
             }
         } else {
