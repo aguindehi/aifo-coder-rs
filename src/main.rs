@@ -1249,6 +1249,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         "aifo-coder: fork session {} on base {} ({})",
         sid, base_label, base_ref_or_sha
     );
+    println!();
     println!("created {} clones under {}", panes, session_dir.display());
     if let Some(ref snap) = snapshot_sha {
         println!("included dirty working tree via snapshot {}", snap);
@@ -1258,6 +1259,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     if !dissoc {
         println!("note: clones reference the base repo’s object store; avoid pruning base objects until done.");
     }
+    println!();
 
     // Per-pane run
     let child_args = fork_build_child_args(cli);
@@ -2750,8 +2752,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         let _ = att.status();
 
         // After tmux session ends or switch completes, print merging guidance
-        println!();
         println!("aifo-coder: fork session {} completed.", sid);
+        println!();
         println!("To inspect and merge changes, you can run:");
         if let Some((first_dir, first_branch)) = clones.first() {
             println!("  git -C \"{}\" status", first_dir.display());
