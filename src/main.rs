@@ -1861,9 +1861,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
                 println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
                 println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
                     println!(
@@ -2102,9 +2099,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
-                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
                 let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
                 println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
                 println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
@@ -2682,6 +2676,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!();
                 println!("aifo-coder: fork session {} launched (Git Bash).", sid);
                 println!("To inspect and merge changes, you can run:");
+                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
+                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
+                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
                     println!(
@@ -2885,6 +2882,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 println!();
                 println!("aifo-coder: fork session {} launched (mintty).", sid);
                 println!("To inspect and merge changes, you can run:");
+                let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
+                println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
+                println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
                 if let Some((first_dir, first_branch)) = clones.first() {
                     println!("  git -C \"{}\" status", first_dir.display());
                     println!(
@@ -3058,7 +3058,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             );
                         }
                     }
-                    println!("To inspect and merge changes, you can run:");
                     if let Some((first_dir, first_branch)) = clones.first() {
                         println!("  git -C \"{}\" status", first_dir.display());
                         println!(
