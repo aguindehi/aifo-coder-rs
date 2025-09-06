@@ -3387,7 +3387,7 @@ if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then
     printf "%s " "$i"
     if IFS= read -rsn1 -t 1 ch; then
       echo
-      if [[ "$ch" == $'\n' || "$ch" == $'\r' ]]; then
+      if [[ -z "$ch" || "$ch" == $'\n' || "$ch" == $'\r' ]]; then
         tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"
         exit "$st"
       elif [[ "$ch" == 's' || "$ch" == 'S' ]]; then
