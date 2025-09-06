@@ -187,16 +187,16 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
         {
             let mut msgs: Vec<String> = Vec::new();
             msgs.push(format!(
-                "Current workspace is under a temporary path ({}).",
+                "current workspace is under a temporary path ({}).",
                 s
             ));
-            msgs.push("On macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
+            msgs.push("on macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
             msgs.push(
-                "This can result in an empty or non-writable /workspace inside the container."
+                "this can result in an empty or non-writable /workspace inside the container."
                     .to_string(),
             );
             msgs.push(
-                "Move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+                "move your project under your home directory (e.g., ~/projects/<repo>) and retry."
                     .to_string(),
             );
             if interactive_block {
@@ -212,14 +212,14 @@ fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
         if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
             let mut msgs: Vec<String> = Vec::new();
             msgs.push(format!(
-                "Current workspace is under a temporary path ({}).",
+                "current workspace is under a temporary path ({}).",
                 s
             ));
             msgs.push(
-                "Some Docker setups do not share temporary folders reliably with containers."
+                "some Docker setups do not share temporary folders reliably with containers."
                     .to_string(),
             );
-            msgs.push("You may see an empty or read-only /workspace. Move the project under your home directory and retry.".to_string());
+            msgs.push("you may see an empty or read-only /workspace. move the project under your home directory and retry.".to_string());
             if interactive_block {
                 let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
                 return aifo_coder::warn_prompt_continue_or_quit(&lines);
@@ -276,7 +276,7 @@ fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+            "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
         )
     );
     eprintln!(
@@ -284,7 +284,7 @@ fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "Enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
+            "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
         )
     );
     eprintln!(
@@ -292,7 +292,7 @@ fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "Pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+            "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
         )
     );
     eprintln!(
@@ -300,7 +300,7 @@ fn maybe_warn_missing_toolchain_agent(cli: &Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "Options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
+            "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
         )
     );
 }
@@ -338,10 +338,10 @@ fn maybe_warn_missing_toolchain_for_fork(cli: &Cli, agent: &str) -> bool {
     // Build lines and prompt once
     let mut msgs: Vec<String> = Vec::new();
     msgs.push("no language toolchain sidecars enabled (--toolchain).".to_string());
-    msgs.push("Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string());
-    msgs.push("Enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string());
-    msgs.push("Pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string());
-    msgs.push("Options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string());
+    msgs.push("without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string());
+    msgs.push("enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string());
+    msgs.push("pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string());
+    msgs.push("options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string());
     let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
     aifo_coder::warn_prompt_continue_or_quit(&lines)
 }
@@ -1514,10 +1514,10 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 base_ref_or_sha = sha;
             }
             Err(e) => {
-                let msg = format!("Failed to create snapshot of dirty working tree: {}", e);
+                let msg = format!("failed to create snapshot of dirty working tree: {}", e);
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
                     &msg,
-                    "The fork panes will NOT include your uncommitted changes.",
+                    "the fork panes will not include your uncommitted changes.",
                 ]) {
                     return ExitCode::from(1);
                 }
@@ -1535,8 +1535,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         {
             if !out.stdout.is_empty() {
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "Working tree has uncommitted changes; they will NOT be included in the fork panes.",
-                    "Re-run with --fork-include-dirty to include them.",
+                    "working tree has uncommitted changes; they will not be included in the fork panes.",
+                    "re-run with --fork-include-dirty to include them.",
                 ]) {
                     return ExitCode::from(1);
                 }
@@ -1559,8 +1559,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         {
             if !o.stdout.is_empty() {
                 if !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "Octopus merge requires a clean working tree in the original repository.",
-                    "Commit or stash your changes before proceeding, or merging will likely fail.",
+                    "octopus merge requires a clean working tree in the original repository.",
+                    "commit or stash your changes before proceeding, or merging will likely fail.",
                 ]) {
                     return ExitCode::from(1);
                 }
