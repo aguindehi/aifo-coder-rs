@@ -3858,21 +3858,39 @@ fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
     }
 }
  
-// Append or upsert merge metadata fields into the session .meta.json
+ // Append or upsert merge metadata fields into the session .meta.json
 fn fork_meta_append_fields(repo_root: &Path, sid: &str, fields_kv: &str) -> io::Result<()> {
     let session_dir = fork_session_dir(repo_root, sid);
     let meta_path = session_dir.join(".meta.json");
-    let s = fs::read_to_string(&meta_path)?;
-    if let Some(idx) = s.rfind('}') {
-        let mut out = String::from(&s[..idx]);
-        if !out.trim_end().ends_with('{') {
-            out.push_str(", ");
+
+    // Ensure session directory exists (best-effort)
+    let _ = fs::create_dir_all(&session_dir);
+
+    match fs::read_to_string(&meta_path) {
+        Ok(s) => {
+            if let Some(idx) = s.rfind('}') {
+                let mut out = String::from(&s[..idx]);
+                if !out.trim_end().ends_with('{') {
+                    out.push_str(", ");
+                }
+                out.push_str(fields_kv);
+                out.push('}');
+                fs::write(&meta_path, out)?;
+            } else {
+                // Malformed existing content; replace with minimal valid JSON
+                let out = format!("{{{}}}", fields_kv);
+                fs::write(&meta_path, out)?;
+            }
+            Ok(())
         }
-        out.push_str(fields_kv);
-        out.push('}');
-        fs::write(&meta_path, out)?;
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            // Create a minimal metadata file if it doesn't exist yet
+            let out = format!("{{{}}}", fields_kv);
+            fs::write(&meta_path, out)?;
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
-    Ok(())
 }
  
 fn session_dirs(base: &Path) -> Vec<PathBuf> {
