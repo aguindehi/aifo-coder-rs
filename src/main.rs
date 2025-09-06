@@ -4057,7 +4057,7 @@ enum Agent {
 
     /// Fork maintenance commands
     #[command(
-        after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n"
+        after_long_help = "Examples:\n  aifo-coder fork list --json\n  aifo-coder fork clean --session abc123 --dry-run --json\n  aifo-coder fork clean --older-than 30 --yes --keep-dirty\n  aifo-coder fork merge --session abc123 --strategy octopus --autoclean\n"
     )]
     Fork {
         #[command(subcommand)]
