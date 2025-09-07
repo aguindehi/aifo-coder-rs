@@ -3800,7 +3800,7 @@ mod tests {
         let mut second_base = std::env::var("XDG_RUNTIME_DIR")
             .ok()
             .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
+            .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::env::temp_dir());
         second_base.push(format!(
             "aifo-coder.{}.lock",
