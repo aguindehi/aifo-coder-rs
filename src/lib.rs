@@ -11,7 +11,9 @@ use std::io::{Read, Write};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[allow(unused_imports)]
+use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 mod color;
 mod util;
