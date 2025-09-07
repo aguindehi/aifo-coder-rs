@@ -1,11 +1,7 @@
 use atty;
 use clap::ValueEnum;
 use once_cell::sync::Lazy;
-use std::env;
-use std::io;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, SystemTime};
 mod color;
 mod util;
@@ -165,8 +161,6 @@ pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
     format!("Wait-Process -Id {}", ids.join(","))
 }
 
-#[cfg(unix)]
-use nix::unistd::{getgid, getuid};
 
 #[allow(dead_code)]
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
@@ -655,20 +649,18 @@ pub(crate) fn preferred_registry_prefix_legacy() -> String {
 
 
 
-/// Render a docker -v host:container pair.
-#[cfg(any())]
-pub fn path_pair(host: &Path, container: &str) -> OsString {
-    OsString::from(format!("{}:{container}", host.display()))
+ /// Render a docker -v host:container pair.
+pub fn path_pair(host: &std::path::Path, container: &str) -> std::ffi::OsString {
+    std::ffi::OsString::from(format!("{}:{container}", host.display()))
 }
 
 /// Ensure a file exists by creating parent directories as needed.
-#[cfg(any())]
-pub fn ensure_file_exists(p: &Path) -> io::Result<()> {
+pub fn ensure_file_exists(p: &std::path::Path) -> std::io::Result<()> {
     if !p.exists() {
         if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent)?;
         }
-        File::create(p)?;
+        std::fs::File::create(p)?;
     }
     Ok(())
 }
