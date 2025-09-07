@@ -6,7 +6,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{Command, ExitCode};
 use which::which;
 mod warnings;
 mod guidance;
