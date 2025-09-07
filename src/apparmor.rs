@@ -6,10 +6,11 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::{container_runtime_path, warn_print};
+use which::which;
+use crate::warn_print;
 
 pub fn docker_supports_apparmor() -> bool {
-    let runtime = match container_runtime_path() {
+    let runtime = match which("docker") {
         Ok(p) => p,
         Err(_) => return false,
     };
