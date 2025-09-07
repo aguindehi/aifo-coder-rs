@@ -50,7 +50,17 @@ pub fn print_inspect_merge_guidance(
     if extra_spacing_before_wrapper {
         println!();
     }
-    let wrapper = if cfg!(target_os = "windows") { "aifo-coder" } else { "./aifo-coder" };
-    println!("  {} fork merge --session {} --strategy fetch", wrapper, sid);
-    println!("  {} fork merge --session {} --strategy octopus --autoclean", wrapper, sid);
+    let wrapper = if cfg!(target_os = "windows") {
+        "aifo-coder"
+    } else {
+        "./aifo-coder"
+    };
+    println!(
+        "  {} fork merge --session {} --strategy fetch",
+        wrapper, sid
+    );
+    println!(
+        "  {} fork merge --session {} --strategy octopus --autoclean",
+        wrapper, sid
+    );
 }

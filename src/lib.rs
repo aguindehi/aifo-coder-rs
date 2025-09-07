@@ -1,22 +1,22 @@
 use clap::ValueEnum;
 use std::io::{Read, Write};
 use std::time::{Duration, SystemTime};
-mod color;
-mod util;
 mod apparmor;
-mod registry;
+mod color;
 mod docker;
-mod lock;
-mod toolchain;
 mod fork;
-pub use color::*;
-pub use util::*;
+mod lock;
+mod registry;
+mod toolchain;
+mod util;
 pub use apparmor::*;
-pub use registry::*;
+pub use color::*;
 pub use docker::*;
-pub use lock::*;
-pub use toolchain::*;
 pub use fork::*;
+pub use lock::*;
+pub use registry::*;
+pub use toolchain::*;
+pub use util::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -159,10 +159,7 @@ pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
     format!("Wait-Process -Id {}", ids.join(","))
 }
 
-
-
 // -------- Color mode and helpers --------
-
 
 /// Print a standardized warning line to stderr (color-aware).
 pub fn warn_print(msg: &str) {

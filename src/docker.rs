@@ -1,6 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
 //! Docker command construction and runtime detection.
 
+#[cfg(unix)]
+use nix::unistd::{getgid, getuid};
 use once_cell::sync::Lazy;
 use std::env;
 use std::ffi::OsString;
@@ -8,8 +10,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[cfg(unix)]
-use nix::unistd::{getgid, getuid};
 use which::which;
 
 // Pass-through environment variables to the containerized agent

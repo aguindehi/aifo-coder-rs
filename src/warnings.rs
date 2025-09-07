@@ -23,10 +23,19 @@ pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
             || s.starts_with("/private/var/folders/")
         {
             let mut msgs: Vec<String> = Vec::new();
-            msgs.push(format!("current workspace is under a temporary path ({}).", s));
+            msgs.push(format!(
+                "current workspace is under a temporary path ({}).",
+                s
+            ));
             msgs.push("on macOS, /tmp is a symlink to /private/tmp and many /private/var/folders/* paths are not shared with Docker Desktop by default.".to_string());
-            msgs.push("this can result in an empty or non-writable /workspace inside the container.".to_string());
-            msgs.push("move your project under your home directory (e.g., ~/projects/<repo>) and retry.".to_string());
+            msgs.push(
+                "this can result in an empty or non-writable /workspace inside the container."
+                    .to_string(),
+            );
+            msgs.push(
+                "move your project under your home directory (e.g., ~/projects/<repo>) and retry."
+                    .to_string(),
+            );
             if interactive_block {
                 let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
                 return aifo_coder::warn_prompt_continue_or_quit(&lines);
@@ -36,20 +45,27 @@ pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
                 }
             }
         }
-    } else if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
-            let mut msgs: Vec<String> = Vec::new();
-            msgs.push(format!("current workspace is under a temporary path ({}).", s));
-            msgs.push("some Docker setups do not share temporary folders reliably with containers.".to_string());
-            msgs.push("you may see an empty or read-only /workspace. move the project under your home directory and retry.".to_string());
-            if interactive_block {
-                let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
-                return aifo_coder::warn_prompt_continue_or_quit(&lines);
-            } else {
-                for m in msgs {
-                    aifo_coder::warn_print(&m);
-                }
+    } else if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/")
+    {
+        let mut msgs: Vec<String> = Vec::new();
+        msgs.push(format!(
+            "current workspace is under a temporary path ({}).",
+            s
+        ));
+        msgs.push(
+            "some Docker setups do not share temporary folders reliably with containers."
+                .to_string(),
+        );
+        msgs.push("you may see an empty or read-only /workspace. move the project under your home directory and retry.".to_string());
+        if interactive_block {
+            let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+            return aifo_coder::warn_prompt_continue_or_quit(&lines);
+        } else {
+            for m in msgs {
+                aifo_coder::warn_print(&m);
             }
         }
+    }
     true
 }
 
