@@ -7,7 +7,8 @@
 # - Ensures CARGO_HOME=/home/coder/.cargo and PATH prepends $CARGO_HOME/bin, keeps /usr/local/cargo/bin
 
 ARG RUST_TAG=1.80-bookworm
-FROM rust:${RUST_TAG}
+ARG REGISTRY_PREFIX
+FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
