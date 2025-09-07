@@ -14,7 +14,7 @@ fn repo_root() -> PathBuf {
 /// Create an executable stub named "aifo-coder" that:
 // - exits 0 on "--version" (for can_run check)
 // - prints a marker and exits 0 for normal execution
-fn make_sysbin_stub(dir: &PathBuf) -> PathBuf {
+fn make_sysbin_stub(dir: &std::path::Path) -> PathBuf {
     let stub_path = dir.join("aifo-coder");
     let mut f = fs::File::create(&stub_path).expect("create stub");
     #[cfg(unix)]

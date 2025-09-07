@@ -31,7 +31,7 @@ fn test_ensure_file_exists_creates() {
     let mut p = std::env::temp_dir();
     p.push(format!("aifo-coder-test-{}", std::process::id()));
     p.push("nested");
-    let _ = fs::remove_dir_all(&p.parent().unwrap()); // best-effort cleanup
+    let _ = fs::remove_dir_all(p.parent().unwrap()); // best-effort cleanup
     let _ = aifo::ensure_file_exists(&p); // should create parent and file
     assert!(p.exists());
     // cleanup

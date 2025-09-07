@@ -13,7 +13,7 @@ fn test_registry_probe_without_curl_does_not_panic() {
     std::env::set_var("PATH", "");
     let rp = aifo_coder::preferred_registry_prefix_quiet();
     assert!(
-        rp == "" || rp == "repository.migros.net/",
+        rp.is_empty() || rp == "repository.migros.net/",
         "expected either empty or internal registry, got: {}",
         rp
     );
