@@ -23,6 +23,7 @@ help:
 	@echo "  REGISTRY .................... Registry prefix for publish (e.g., repository.migros.net/). If unset, we will NOT push."
 	@echo "  CACHE_DIR ................... Local buildx cache directory for faster rebuilds (.buildx-cache)"
 	@echo "  ARGS ........................ Extra args passed to tests when running 'make test' (e.g., -- --nocapture)"
+	@echo "  CLIPPY ...................... Set to 1 to run 'make lint' before 'make test' (default: off)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
 	@echo "  DIST_DIR .................... Output directory for release archives (dist)"
@@ -141,6 +142,8 @@ help:
 	@echo ""
 	@echo "Test targets:"
 	@echo ""
+	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
+	@echo "  check ....................... Run 'lint' then 'test' (composite validation target)"
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
 	@echo "  test-legacy ................. Alias for test-cargo"
@@ -468,9 +471,53 @@ build-launcher:
 	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
 	fi
 
-.PHONY: test test-cargo test-legacy
+.PHONY: lint check test test-cargo test-legacy
+
+lint:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  echo "Running cargo fmt --check and cargo clippy (rustup stable) ..."; \
+	  rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; \
+	  rustup run stable cargo fmt -- --check; \
+	  rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "Running cargo fmt --check and cargo clippy (local cargo) ..."; \
+	  if cargo fmt --version >/dev/null 2>&1; then \
+	    cargo fmt -- --check; \
+	  else \
+	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
+	  fi; \
+	  cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
+	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
+	      cargo clippy --workspace --all-targets --all-features -- -D warnings'; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
+	  exit 1; \
+	fi
+
+check: lint test
+
 test:
 	@set -e; \
+	if [ "$(CLIPPY)" = "1" ]; then $(MAKE) lint; fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	case "$$OS" in \
