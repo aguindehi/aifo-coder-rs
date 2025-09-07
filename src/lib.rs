@@ -329,59 +329,7 @@ pub enum MergingStrategy {
 }
 
 
-/// Locate the Docker runtime binary.
-#[allow(dead_code)]
-#[cfg(any())]
-pub(crate) fn container_runtime_path_legacy() -> io::Result<PathBuf> {
-    if let Ok(p) = which("docker") {
-        return Ok(p);
-    }
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        "Docker is required but was not found in PATH.",
-    ))
-}
 
-/// Bootstrap: install a global typescript in the node sidecar (best-effort).
-#[cfg(any())]
-pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
-    let runtime = container_runtime_path()?;
-    let name = sidecar_container_name("node", session_id);
-
-    #[cfg(unix)]
-    let uid: u32 = u32::from(getuid());
-    #[cfg(unix)]
-    let gid: u32 = u32::from(getgid());
-    #[cfg(not(unix))]
-    let (uid, gid) = (0u32, 0u32);
-
-    let mut args: Vec<String> = vec!["docker".to_string(), "exec".to_string()];
-    if cfg!(unix) {
-        args.push("-u".to_string());
-        args.push(format!("{uid}:{gid}"));
-    }
-    args.push("-w".to_string());
-    args.push("/workspace".to_string());
-    args.push(name);
-    args.push("npm".to_string());
-    args.push("install".to_string());
-    args.push("-g".to_string());
-    args.push("typescript".to_string());
-
-    if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
-    }
-
-    let mut cmd = Command::new(&runtime);
-    for a in &args[1..] {
-        cmd.arg(a);
-    }
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let _ = cmd.status();
-    Ok(())
-}
 
 
 
@@ -673,49 +621,6 @@ pub fn ensure_file_exists(p: &std::path::Path) -> std::io::Result<()> {
 
 
 
-/// Candidate lock file locations.
-/// - If inside a Git repository:
-///   1) <repo_root>/.aifo-coder.lock
-///   2) <xdg_runtime>/aifo-coder.<hash(repo_root)>.lock
-/// - Otherwise (not in a Git repo), legacy ordered candidates:
-///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
-#[allow(dead_code)]
-#[cfg(any())]
-pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
-    if let Some(root) = repo_root() {
-        let mut paths = Vec::new();
-        // Preferred: in-repo lock (if writable, acquire will succeed)
-        paths.push(root.join(".aifo-coder.lock"));
-        // Secondary: runtime-scoped hashed lock path
-        let rt_base = env::var("XDG_RUNTIME_DIR")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| std::env::temp_dir());
-        let key = normalized_repo_key_for_hash(&root);
-        let hash = hash_repo_key_hex(&key);
-        paths.push(rt_base.join(format!("aifo-coder.{}.lock", hash)));
-        // Tertiary fallback: always include a tmp-scoped lock path for robustness and tests
-        paths.push(PathBuf::from("/tmp/aifo-coder.lock"));
-        return paths;
-    }
-
-    // Not inside a Git repository: legacy behavior
-    let mut paths = Vec::new();
-    if let Some(home) = home::home_dir() {
-        paths.push(home.join(".aifo-coder.lock"));
-    }
-    if let Ok(rt) = env::var("XDG_RUNTIME_DIR") {
-        if !rt.is_empty() {
-            paths.push(PathBuf::from(rt).join("aifo-coder.lock"));
-        }
-    }
-    paths.push(PathBuf::from("/tmp/aifo-coder.lock"));
-    if let Ok(cwd) = env::current_dir() {
-        paths.push(cwd.join(".aifo-coder.lock"));
-    }
-    paths
-}
 
 /// Build the docker run command for the given agent invocation, and return a preview string.
 #[allow(dead_code)]
@@ -1187,126 +1092,10 @@ pub(crate) fn build_docker_cmd_legacy(
     Ok((cmd, preview))
 }
 
-/// Repository/user-scoped lock guard that removes the lock file on drop.
-#[derive(Debug)]
-#[cfg(any())]
-pub struct RepoLockLegacy {
-    file: File,
-    path: PathBuf,
-}
 
-#[cfg(any())]
-impl Drop for RepoLockLegacy {
-    fn drop(&mut self) {
-        // Best-effort unlock; ignore errors
-        let _ = self.file.unlock();
 
-        // Try removal with brief retries (avoid background threads to keep tests leak-free)
-        let path = self.path.clone();
-        for _ in 0..10 {
-            if !path.exists() {
-                break;
-            }
-            if fs::remove_file(&path).is_ok() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-    }
-}
 
-/// Acquire a non-blocking exclusive lock using default candidate lock paths.
-#[allow(dead_code)]
-#[cfg(any())]
-pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
-    let paths = candidate_lock_paths();
-    let mut last_err: Option<io::Error> = None;
 
-    for p in paths {
-        // Best effort to ensure parent exists
-        if let Some(parent) = p.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        match OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(&p)
-        {
-            Ok(f) => match f.try_lock_exclusive() {
-                Ok(_) => {
-                    return Ok(RepoLockLegacy {
-                        file: f,
-                        path: p.clone(),
-                    });
-                }
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Another coding agent is already running (lock held). Please try again later.",
-                        ));
-                }
-                Err(e) => {
-                    last_err = Some(e);
-                    continue;
-                }
-            },
-            Err(e) => {
-                last_err = Some(e);
-                continue;
-            }
-        }
-    }
-
-    let mut msg = String::from("Failed to create lock file in any candidate location: ");
-    msg.push_str(
-        &candidate_lock_paths()
-            .into_iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", "),
-    );
-    if let Some(e) = last_err {
-        msg.push_str(&format!(" (last error: {e})"));
-    }
-    Err(io::Error::new(io::ErrorKind::Other, msg))
-}
-
-/// Acquire a lock at a specific path (helper for tests).
-#[allow(dead_code)]
-#[cfg(any())]
-pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
-    if let Some(parent) = p.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    match OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(p)
-    {
-        Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(RepoLockLegacy {
-                file: f,
-                path: p.to_path_buf(),
-            }),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Another coding agent is already running (lock held). Please try again later.",
-            )),
-            Err(e) => Err(e),
-        },
-        Err(e) => Err(e),
-    }
-}
-
-/// Return true if the launcher should acquire a repository/user lock for this process.
-/// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
-#[allow(dead_code)]
-#[cfg(any())]
-pub(crate) fn should_acquire_lock_legacy() -> bool {
-    env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
-}
 
 pub fn create_session_id() -> String {
     // Compose a short, mostly-unique ID from time and pid without extra deps
