@@ -1,8 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 //! Diagnostics (doctor) output.
 
-use atty;
-use home;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -500,12 +498,10 @@ pub fn run_doctor(verbose: bool) {
                 } else {
                     "✅ found".to_string()
                 }
+            } else if use_color {
+                "\x1b[31m❌ missing\x1b[0m".to_string()
             } else {
-                if use_color {
-                    "\x1b[31m❌ missing\x1b[0m".to_string()
-                } else {
-                    "❌ missing".to_string()
-                }
+                "❌ missing".to_string()
             }
         };
         let present = |name: &str| {

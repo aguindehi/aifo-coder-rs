@@ -1,3 +1,4 @@
+#![allow(clippy::needless_return, clippy::useless_format)]
 use aifo_coder::{
     acquire_lock, build_docker_cmd, desired_apparmor_profile, preferred_registry_prefix,
 };
@@ -560,11 +561,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             eprintln!("aifo-coder: error: none of Windows Terminal (wt.exe), PowerShell, or Git Bash were found in PATH.");
             return ExitCode::from(127);
         }
-    } else {
-        if which("tmux").is_err() {
-            eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
-            return ExitCode::from(127);
-        }
+    } else if which("tmux").is_err() {
+        eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
+        return ExitCode::from(127);
     }
     let repo_root = match aifo_coder::repo_root() {
         Some(p) => p,
@@ -630,13 +629,13 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("-uall")
             .output()
         {
-            if !out.stdout.is_empty() {
-                if !aifo_coder::warn_prompt_continue_or_quit(&[
+            if !out.stdout.is_empty()
+                && !aifo_coder::warn_prompt_continue_or_quit(&[
                     "working tree has uncommitted changes; they will not be included in the fork panes.",
                     "re-run with --fork-include-dirty to include them.",
-                ]) {
-                    return ExitCode::from(1);
-                }
+                ])
+            {
+                return ExitCode::from(1);
             }
         }
     }
@@ -654,13 +653,13 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             .arg("-uall")
             .output()
         {
-            if !o.stdout.is_empty() {
-                if !aifo_coder::warn_prompt_continue_or_quit(&[
+            if !o.stdout.is_empty()
+                && !aifo_coder::warn_prompt_continue_or_quit(&[
                     "octopus merge requires a clean working tree in the original repository.",
                     "commit or stash your changes before proceeding, or merging will likely fail.",
-                ]) {
-                    return ExitCode::from(1);
-                }
+                ])
+            {
+                return ExitCode::from(1);
             }
         }
     }

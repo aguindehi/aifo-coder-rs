@@ -36,8 +36,7 @@ pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
                 }
             }
         }
-    } else {
-        if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
+    } else if s == "/tmp" || s.starts_with("/tmp/") || s == "/var/tmp" || s.starts_with("/var/tmp/") {
             let mut msgs: Vec<String> = Vec::new();
             msgs.push(format!("current workspace is under a temporary path ({}).", s));
             msgs.push("some Docker setups do not share temporary folders reliably with containers.".to_string());
@@ -158,12 +157,13 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::Cli, agent: &str) -> b
         return true;
     }
     // Build lines and prompt once
-    let mut msgs: Vec<String> = Vec::new();
-    msgs.push("no language toolchain sidecars enabled (--toolchain).".to_string());
-    msgs.push("without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string());
-    msgs.push("enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string());
-    msgs.push("pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string());
-    msgs.push("options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string());
+    let msgs: Vec<String> = vec![
+        "no language toolchain sidecars enabled (--toolchain).".to_string(),
+        "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string(),
+        "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string(),
+        "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string(),
+        "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string(),
+    ];
     let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
     aifo_coder::warn_prompt_continue_or_quit(&lines)
 }

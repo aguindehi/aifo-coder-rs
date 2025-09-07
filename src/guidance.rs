@@ -1,3 +1,4 @@
+#[allow(clippy::too_many_arguments)]
 pub fn print_inspect_merge_guidance(
     repo_root: &std::path::Path,
     sid: &str,
