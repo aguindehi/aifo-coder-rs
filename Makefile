@@ -344,12 +344,40 @@ build-debug:
 
 .PHONY: build-toolchain-rust rebuild-toolchain-rust
 build-toolchain-rust:
-	@echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."
-	docker build -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
+	@set -e; \
+	echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	$(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
 
 rebuild-toolchain-rust:
-	@echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."
-	docker build --no-cache -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
+	@set -e; \
+	echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	$(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
@@ -371,19 +399,27 @@ publish-toolchain-rust:
 	  "") ;; \
 	  *) REG="$$REG/";; \
 	esac; \
+	# Determine registry prefix for base images (internal when reachable) \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	fi; \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    $(DOCKER_BUILD) -f toolchains/rust/Dockerfile -t "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" .; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/rust/Dockerfile -t "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar .; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar .; \
 	    echo "Wrote dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  $(DOCKER_BUILD) -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .; \
 	fi
 
 .PHONY: publish-toolchain-cpp
