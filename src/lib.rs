@@ -14,6 +14,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 use which::which;
+mod color;
+mod util;
+mod apparmor;
+mod registry;
+pub use color::*;
+pub use util::*;
+pub use apparmor::*;
+pub use registry::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -187,76 +195,6 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
 
 // -------- Color mode and helpers --------
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
-pub enum ColorMode {
-    Auto,
-    Always,
-    Never,
-}
-
-static COLOR_MODE: OnceCell<ColorMode> = OnceCell::new();
-
-pub fn set_color_mode(mode: ColorMode) {
-    let _ = COLOR_MODE.set(mode);
-}
-
-fn parse_color_mode(s: &str) -> Option<ColorMode> {
-    match s.trim().to_ascii_lowercase().as_str() {
-        "auto" => Some(ColorMode::Auto),
-        "always" | "on" | "true" | "yes" => Some(ColorMode::Always),
-        "never" | "off" | "false" | "no" => Some(ColorMode::Never),
-        _ => None,
-    }
-}
-
-fn env_color_mode_pref() -> Option<ColorMode> {
-    std::env::var("AIFO_CODER_COLOR")
-        .ok()
-        .and_then(|v| parse_color_mode(&v))
-}
-
-fn no_color_env() -> bool {
-    // Per https://no-color.org/
-    std::env::var("NO_COLOR").is_ok()
-}
-
-fn color_enabled_for(is_tty: bool) -> bool {
-    if no_color_env() {
-        return false;
-    }
-    if let Some(mode) = COLOR_MODE.get().copied() {
-        return match mode {
-            ColorMode::Always => true,
-            ColorMode::Never => false,
-            ColorMode::Auto => is_tty,
-        };
-    }
-    if let Some(env_mode) = env_color_mode_pref() {
-        return match env_mode {
-            ColorMode::Always => true,
-            ColorMode::Never => false,
-            ColorMode::Auto => is_tty,
-        };
-    }
-    is_tty
-}
-
-pub fn color_enabled_stdout() -> bool {
-    color_enabled_for(atty::is(atty::Stream::Stdout))
-}
-
-pub fn color_enabled_stderr() -> bool {
-    color_enabled_for(atty::is(atty::Stream::Stderr))
-}
-
-/// Wrap string with ANSI color code when enabled; otherwise return unchanged.
-pub fn paint(enabled: bool, code: &str, s: &str) -> String {
-    if enabled {
-        format!("{code}{s}\x1b[0m")
-    } else {
-        s.to_string()
-    }
-}
 
 /// Print a standardized warning line to stderr (color-aware).
 pub fn warn_print(msg: &str) {
@@ -394,29 +332,6 @@ pub enum MergingStrategy {
     Octopus,
 }
 
-// Cache for preferred registry prefix resolution within a single process run.
-static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
-// Record how the registry prefix was determined this run.
-static REGISTRY_PREFIX_SOURCE: OnceCell<String> = OnceCell::new();
-
-#[derive(Clone, Copy)]
-pub enum RegistryProbeTestMode {
-    CurlOk,
-    CurlFail,
-    TcpOk,
-    TcpFail,
-}
-
-// Test-only override for registry probing without relying on environment variables.
-// When set, preferred_registry_prefix{_quiet} will return deterministically and
-// will not populate OnceCell caches to avoid cross-test interference.
-static REGISTRY_PROBE_OVERRIDE: Lazy<std::sync::Mutex<Option<RegistryProbeTestMode>>> =
-    Lazy::new(|| std::sync::Mutex::new(None));
-
-pub fn registry_probe_set_override_for_tests(mode: Option<RegistryProbeTestMode>) {
-    let mut guard = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock");
-    *guard = mode;
-}
 
 /// Locate the Docker runtime binary.
 pub fn container_runtime_path() -> io::Result<PathBuf> {
@@ -469,193 +384,10 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     Ok(())
 }
 
-/// Probe whether the Docker daemon reports AppArmor support, and (on Linux)
-/// that the kernel AppArmor facility is enabled.
-pub fn docker_supports_apparmor() -> bool {
-    let runtime = match container_runtime_path() {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    let output = Command::new(runtime)
-        .args(["info", "--format", "{{json .SecurityOptions}}"])
-        .output();
-    let Ok(out) = output else { return false };
-    let s = String::from_utf8_lossy(&out.stdout).to_lowercase();
-    let docker_reports_apparmor = s.contains("apparmor");
-    if !docker_reports_apparmor {
-        return false;
-    }
-    // On Linux hosts, also require kernel AppArmor to be enabled.
-    if cfg!(target_os = "linux") && !kernel_apparmor_enabled() {
-        return false;
-    }
-    true
-}
 
-/// Best-effort detection of AppArmor being enabled in the Linux kernel.
-/// Returns true if the kernel facility appears available/enabled.
-fn kernel_apparmor_enabled() -> bool {
-    // Prefer authoritative kernel knob when present
-    if let Ok(content) = fs::read_to_string("/sys/module/apparmor/parameters/enabled") {
-        let c = content.trim().to_lowercase();
-        if c.starts_with('y')
-            || c.contains("enforce")
-            || c.contains("complain")
-            || c == "1"
-            || c == "yes"
-            || c == "true"
-        {
-            // Double-check proc LSM interface presence
-            return Path::new("/proc/self/attr/apparmor/current").exists()
-                && Path::new("/proc/self/attr/apparmor/exec").exists();
-        } else {
-            return false;
-        }
-    }
-    // Fallback: require both current and exec proc attributes to exist
-    Path::new("/proc/self/attr/apparmor/current").exists()
-        && Path::new("/proc/self/attr/apparmor/exec").exists()
-}
 
-#[cfg(target_os = "linux")]
-fn apparmor_profile_available(name: &str) -> bool {
-    if let Ok(list) = fs::read_to_string("/sys/kernel/security/apparmor/profiles") {
-        for line in list.lines() {
-            let l = line.trim();
-            if l.is_empty() {
-                continue;
-            }
-            if l.starts_with(&format!("{name} (")) || l.starts_with(&format!("{name} ")) {
-                return true;
-            }
-        }
-    }
-    false
-}
 
-#[cfg(not(target_os = "linux"))]
-fn apparmor_profile_available(_name: &str) -> bool {
-    true
-}
 
-/// Choose the AppArmor profile to use, if any.
-/// - If Docker supports AppArmor, prefer an explicit override via AIFO_CODER_APPARMOR_PROFILE.
-/// - On macOS/Windows hosts (Docker-in-VM), default to docker-default to avoid requiring a host-installed custom profile.
-/// - On native Linux hosts, prefer the custom "aifo-coder" profile if it is loaded; otherwise fall back to "docker-default"
-///   if available; otherwise omit an explicit profile (Docker will choose its default).
-pub fn desired_apparmor_profile() -> Option<String> {
-    if !docker_supports_apparmor() {
-        return None;
-    }
-    if let Ok(p) = env::var("AIFO_CODER_APPARMOR_PROFILE") {
-        let trimmed = p.trim();
-        let lower = trimmed.to_lowercase();
-        // Allow explicit disabling via env var
-        if trimmed.is_empty()
-            || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str())
-        {
-            return None;
-        }
-        if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
-            warn_print(&format!(
-                "apparmor profile '{}' not loaded on host; falling back to 'docker-default'.",
-                trimmed
-            ));
-            if apparmor_profile_available("docker-default") {
-                return Some("docker-default".to_string());
-            } else {
-                warn_print("'docker-default' profile not found; continuing without explicit AppArmor profile.");
-                return None;
-            }
-        }
-        return Some(trimmed.to_string());
-    }
-    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
-        Some("docker-default".to_string())
-    } else {
-        if apparmor_profile_available("aifo-coder") {
-            Some("aifo-coder".to_string())
-        } else if apparmor_profile_available("docker-default") {
-            warn_print("apparmor profile 'aifo-coder' not loaded; using 'docker-default'.");
-            Some("docker-default".to_string())
-        } else {
-            warn_print("no known apparmor profile loaded; continuing without explicit profile.");
-            None
-        }
-    }
-}
-
-/// Quiet variant of desired_apparmor_profile() for diagnostic contexts (no logging).
-pub fn desired_apparmor_profile_quiet() -> Option<String> {
-    if !docker_supports_apparmor() {
-        return None;
-    }
-    if let Ok(p) = env::var("AIFO_CODER_APPARMOR_PROFILE") {
-        let trimmed = p.trim();
-        let lower = trimmed.to_lowercase();
-        // Allow explicit disabling via env var
-        if trimmed.is_empty()
-            || ["none", "no", "off", "false", "0", "disabled", "disable"].contains(&lower.as_str())
-        {
-            return None;
-        }
-        if cfg!(target_os = "linux") && !apparmor_profile_available(trimmed) {
-            if apparmor_profile_available("docker-default") {
-                return Some("docker-default".to_string());
-            } else {
-                return None;
-            }
-        }
-        return Some(trimmed.to_string());
-    }
-    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
-        Some("docker-default".to_string())
-    } else {
-        if apparmor_profile_available("aifo-coder") {
-            Some("aifo-coder".to_string())
-        } else if apparmor_profile_available("docker-default") {
-            Some("docker-default".to_string())
-        } else {
-            None
-        }
-    }
-}
-
-fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {
-    let addrs = (host, port).to_socket_addrs();
-    if let Ok(addrs) = addrs {
-        let timeout = Duration::from_millis(timeout_ms);
-        for addr in addrs {
-            if TcpStream::connect_timeout(&addr, timeout).is_ok() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn registry_cache_path() -> Option<PathBuf> {
-    let base = env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    Some(base.join("aifo-coder.regprefix"))
-}
-
-fn write_registry_cache_disk(s: &str) {
-    if let Some(path) = registry_cache_path() {
-        let _ = fs::write(path, s);
-    }
-}
-
-/// Public helper to invalidate the on-disk registry cache before probing.
-/// Does not affect the in-process OnceCell cache for this run.
-pub fn invalidate_registry_cache() {
-    if let Some(path) = registry_cache_path() {
-        let _ = fs::remove_file(path);
-    }
-}
 
 /// Determine the preferred registry prefix for image references.
 /// Precedence:
@@ -915,119 +647,7 @@ pub fn preferred_registry_prefix() -> String {
     v
 }
 
-/// Quiet variant for preferred registry prefix resolution without emitting any logs.
-pub fn preferred_registry_prefix_quiet() -> String {
-    // Test override (without env): allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
-        .lock()
-        .expect("probe override lock")
-        .clone()
-    {
-        return match mode {
-            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
-            RegistryProbeTestMode::CurlFail => String::new(),
-            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
-            RegistryProbeTestMode::TcpFail => String::new(),
-        };
-    }
-    // Env override always takes precedence within the current process
-    if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
-        let trimmed = pref.trim();
-        if trimmed.is_empty() {
-            let v = String::new();
-            let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-            let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
-            write_registry_cache_disk(&v);
-            return v;
-        }
-        let mut s = trimmed.trim_end_matches('/').to_string();
-        s.push('/');
-        let v = s;
-        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-        let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
-        write_registry_cache_disk(&v);
-        return v;
-    }
-    // Test hook: allow forcing probe result deterministically (does not touch OnceCell caches)
-    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
-        let ml = mode.to_ascii_lowercase();
-        return match ml.as_str() {
-            "curl-ok" => "repository.migros.net/".to_string(),
-            "curl-fail" => String::new(),
-            "tcp-ok" => "repository.migros.net/".to_string(),
-            "tcp-fail" => String::new(),
-            _ => String::new(),
-        };
-    }
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
-    }
 
-    if which("curl").is_ok() {
-        let status = Command::new("curl")
-            .args([
-                "--connect-timeout",
-                "1",
-                "--max-time",
-                "2",
-                "-sSI",
-                "https://repository.migros.net/v2/",
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if let Ok(st) = status {
-            if st.success() {
-                let v = "repository.migros.net/".to_string();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
-                return v;
-            } else {
-                let v = String::new();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
-                return v;
-            }
-        }
-    }
-
-    let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
-        "repository.migros.net/".to_string()
-    } else {
-        String::new()
-    };
-    let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-    let _ = REGISTRY_PREFIX_SOURCE.set("tcp".to_string());
-    write_registry_cache_disk(&v);
-    v
-}
-
-/// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
-pub fn preferred_registry_source() -> String {
-    // Test override (without env): when set, do not expose a source; treat as unknown
-    if REGISTRY_PROBE_OVERRIDE
-        .lock()
-        .expect("probe override lock")
-        .is_some()
-    {
-        return "unknown".to_string();
-    }
-    // Test hook: reflect forced probe source deterministically
-    if let Ok(mode) = std::env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
-        let ml = mode.to_ascii_lowercase();
-        return match ml.as_str() {
-            "curl-ok" | "curl-fail" => "curl".to_string(),
-            "tcp-ok" | "tcp-fail" => "tcp".to_string(),
-            _ => "unknown".to_string(),
-        };
-    }
-    REGISTRY_PREFIX_SOURCE
-        .get()
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string())
-}
 
 /// Render a docker -v host:container pair.
 pub fn path_pair(host: &Path, container: &str) -> OsString {
@@ -1045,50 +665,8 @@ pub fn ensure_file_exists(p: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Join arguments with conservative shell escaping.
-pub fn shell_join(args: &[String]) -> String {
-    args.iter()
-        .map(|a| shell_escape(a))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
 
-/// Escape a single shell word safely for POSIX sh.
-pub fn shell_escape(s: &str) -> String {
-    if s.is_empty() {
-        "''".to_string()
-    } else if s
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || "-_=./:@".contains(c))
-    {
-        s.to_string()
-    } else {
-        let escaped = s.replace('\'', "'\"'\"'");
-        format!("'{}'", escaped)
-    }
-}
 
-/// Escape a string as a JSON string literal (double-quoted) with required escapes.
-pub fn json_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                // Control characters -> \u00XX
-                out.push_str(&format!("\\u{:04x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
 
 //// Repository-scoped locking helpers and candidate paths
 
@@ -2295,55 +1873,8 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
     }
 }
 
-fn url_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'+' => {
-                out.push(' ');
-                i += 1;
-            }
-            b'%' if i + 2 < bytes.len() => {
-                let h1 = bytes[i + 1];
-                let h2 = bytes[i + 2];
-                let v1 = (h1 as char).to_digit(16);
-                let v2 = (h2 as char).to_digit(16);
-                if let (Some(a), Some(b)) = (v1, v2) {
-                    out.push(((a << 4) + b) as u8 as char);
-                    i += 3;
-                } else {
-                    out.push('%');
-                    i += 1;
-                }
-            }
-            _ => {
-                out.push(bytes[i] as char);
-                i += 1;
-            }
-        }
-    }
-    out
-}
 
-fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
-    if buf.len() < 4 {
-        return None;
-    }
-    let pattern: &[u8; 4] = b"\r\n\r\n";
-    buf.windows(4).position(|w| w == pattern)
-}
 
-/// Find end of HTTP headers, accepting either CRLF-CRLF or LF-LF separators.
-/// Returns the index just after the header terminator when found.
-fn find_header_end(buf: &[u8]) -> Option<usize> {
-    if let Some(pos) = find_crlfcrlf(buf) {
-        return Some(pos + 4);
-    }
-    // Also accept LF-only separators for robustness
-    buf.windows(2).position(|w| w == b"\n\n").map(|pos| pos + 2)
-}
 
 fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     let mut res = Vec::new();
@@ -2359,57 +1890,7 @@ fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     res
 }
 
-/// Extract outer single or double quotes if the whole string is wrapped.
-fn strip_outer_quotes(s: &str) -> String {
-    if s.len() >= 2 {
-        let b = s.as_bytes();
-        let first = b[0] as char;
-        let last = b[s.len() - 1] as char;
-        if (first == '\'' && last == '\'') || (first == '"' && last == '"') {
-            return s[1..s.len() - 1].to_string();
-        }
-    }
-    s.to_string()
-}
 
-/// Minimal shell-like tokenizer supporting single and double quotes.
-/// Does not support escapes; quotes preserve spaces.
-fn shell_like_split_args(s: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut in_single = false;
-    let mut in_double = false;
-
-    for ch in s.chars() {
-        match ch {
-            '\'' if !in_double => {
-                if in_single {
-                    in_single = false;
-                } else {
-                    in_single = true;
-                }
-            }
-            '"' if !in_single => {
-                if in_double {
-                    in_double = false;
-                } else {
-                    in_double = true;
-                }
-            }
-            c if c.is_whitespace() && !in_single && !in_double => {
-                if !current.is_empty() {
-                    out.push(current.clone());
-                    current.clear();
-                }
-            }
-            c => current.push(c),
-        }
-    }
-    if !current.is_empty() {
-        out.push(current);
-    }
-    out
-}
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 fn parse_notifications_command_config() -> Result<Vec<String>, String> {
