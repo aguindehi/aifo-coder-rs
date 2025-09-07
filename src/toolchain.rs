@@ -832,7 +832,7 @@ exit "$ec"
         let path = dir.join(t);
         fs::write(
             &path,
-            "#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n".to_string(),
+            "#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n",
         )?;
         #[cfg(unix)]
         {
