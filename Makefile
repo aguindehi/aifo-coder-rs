@@ -86,6 +86,7 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-toolchain-rust ........ Build the rust toolchain sidecar image (aifo-rust-toolchain:latest)"
 	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
@@ -104,6 +105,7 @@ help:
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
+	@echo "  rebuild-toolchain-rust ...... Rebuild only the rust toolchain image without cache"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the c-cpp toolchain image without cache"
 	@echo ""
 	@echo "Rebuild existing images by prefix:"
@@ -113,6 +115,7 @@ help:
 	@echo ""
 	@echo "Publish images:"
 	@echo ""
+	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "Utilities:"
@@ -211,6 +214,7 @@ CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
 CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+RUST_TOOLCHAIN_TAG ?= latest
 
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
@@ -338,6 +342,15 @@ build-debug:
 	    -t "$$OUT" .; \
 	fi
 
+.PHONY: build-toolchain-rust rebuild-toolchain-rust
+build-toolchain-rust:
+	@echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."
+	docker build -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
+
+rebuild-toolchain-rust:
+	@echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."
+	docker build --no-cache -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .
+
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@echo "Building aifo-cpp-toolchain:latest ..."
@@ -346,6 +359,32 @@ build-toolchain-cpp:
 rebuild-toolchain-cpp:
 	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
 	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+.PHONY: publish-toolchain-rust
+publish-toolchain-rust:
+	@set -e; \
+	echo "Publishing aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	# Normalize REG to have optional trailing slash
+	case "$$REG" in \
+	  */) ;; \
+	  "") ;; \
+	  *) REG="$$REG/";; \
+	esac; \
+	if [ "$(PUSH)" = "1" ]; then \
+	  if [ -n "$$REG" ]; then \
+	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
+	    $(DOCKER_BUILD) -f toolchains/rust/Dockerfile -t "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" .; \
+	  else \
+	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar .; \
+	    echo "Wrote dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
+	  fi; \
+	else \
+	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
+	  $(DOCKER_BUILD) -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) .; \
+	fi
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
