@@ -8,7 +8,7 @@ use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{Shutdown, TcpListener};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -171,6 +171,7 @@ pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
+#[allow(dead_code)]
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
         // AIFO master env (single source of truth)
@@ -338,6 +339,7 @@ pub enum MergingStrategy {
 
 
 /// Locate the Docker runtime binary.
+#[allow(dead_code)]
 pub(crate) fn container_runtime_path_legacy() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
         return Ok(p);
@@ -723,17 +725,6 @@ pub fn normalized_repo_key_for_hash(p: &Path) -> String {
     }
 }
 
-/// Simple stable 64-bit FNV-1a hash for strings; returns 16-hex lowercase id.
-fn hash_repo_key_hex(s: &str) -> String {
-    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-    const FNV_PRIME: u64 = 1099511628211;
-    let mut h: u64 = FNV_OFFSET;
-    for b in s.as_bytes() {
-        h ^= *b as u64;
-        h = h.wrapping_mul(FNV_PRIME);
-    }
-    format!("{:016x}", h)
-}
 
 /// Candidate lock file locations.
 /// - If inside a Git repository:
@@ -741,6 +732,7 @@ fn hash_repo_key_hex(s: &str) -> String {
 ///   2) <xdg_runtime>/aifo-coder.<hash(repo_root)>.lock
 /// - Otherwise (not in a Git repo), legacy ordered candidates:
 ///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
+#[allow(dead_code)]
 pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
     if let Some(root) = repo_root() {
         let mut paths = Vec::new();
@@ -778,6 +770,7 @@ pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
 }
 
 /// Build the docker run command for the given agent invocation, and return a preview string.
+#[allow(dead_code)]
 pub(crate) fn build_docker_cmd_legacy(
     agent: &str,
     passthrough: &[String],
@@ -1276,6 +1269,7 @@ impl Drop for RepoLockLegacy {
 }
 
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
+#[allow(dead_code)]
 pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
     let paths = candidate_lock_paths();
     let mut last_err: Option<io::Error> = None;
@@ -1331,6 +1325,7 @@ pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
 }
 
 /// Acquire a lock at a specific path (helper for tests).
+#[allow(dead_code)]
 pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
@@ -1358,6 +1353,7 @@ pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
 
 /// Return true if the launcher should acquire a repository/user lock for this process.
 /// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
+#[allow(dead_code)]
 pub(crate) fn should_acquire_lock_legacy() -> bool {
     env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
 }

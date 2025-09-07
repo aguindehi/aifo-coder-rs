@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 use which::which;
