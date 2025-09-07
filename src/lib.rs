@@ -20,12 +20,14 @@ mod apparmor;
 mod registry;
 mod docker;
 mod lock;
+mod toolchain;
 pub use color::*;
 pub use util::*;
 pub use apparmor::*;
 pub use registry::*;
 pub use docker::*;
 pub use lock::*;
+pub use toolchain::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
