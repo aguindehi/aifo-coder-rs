@@ -46,14 +46,13 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
         eprintln!("skipping: tmux not found");
         return;
     }
-    if Command::new("git")
+    if !Command::new("git")
         .arg("--version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
-        == false
     {
         eprintln!("skipping: git not found");
         return;
