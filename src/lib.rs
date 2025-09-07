@@ -18,10 +18,14 @@ mod color;
 mod util;
 mod apparmor;
 mod registry;
+mod docker;
+mod lock;
 pub use color::*;
 pub use util::*;
 pub use apparmor::*;
 pub use registry::*;
+pub use docker::*;
+pub use lock::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -334,7 +338,7 @@ pub enum MergingStrategy {
 
 
 /// Locate the Docker runtime binary.
-pub fn container_runtime_path() -> io::Result<PathBuf> {
+pub(crate) fn container_runtime_path_legacy() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
         return Ok(p);
     }
@@ -737,7 +741,7 @@ fn hash_repo_key_hex(s: &str) -> String {
 ///   2) <xdg_runtime>/aifo-coder.<hash(repo_root)>.lock
 /// - Otherwise (not in a Git repo), legacy ordered candidates:
 ///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
-pub fn candidate_lock_paths() -> Vec<PathBuf> {
+pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
     if let Some(root) = repo_root() {
         let mut paths = Vec::new();
         // Preferred: in-repo lock (if writable, acquire will succeed)
@@ -774,7 +778,7 @@ pub fn candidate_lock_paths() -> Vec<PathBuf> {
 }
 
 /// Build the docker run command for the given agent invocation, and return a preview string.
-pub fn build_docker_cmd(
+pub(crate) fn build_docker_cmd_legacy(
     agent: &str,
     passthrough: &[String],
     image: &str,
@@ -1243,12 +1247,12 @@ pub fn build_docker_cmd(
 
 /// Repository/user-scoped lock guard that removes the lock file on drop.
 #[derive(Debug)]
-pub struct RepoLock {
+pub struct RepoLockLegacy {
     file: File,
     path: PathBuf,
 }
 
-impl Drop for RepoLock {
+impl Drop for RepoLockLegacy {
     fn drop(&mut self) {
         // Best-effort unlock; ignore errors
         let _ = self.file.unlock();
@@ -1272,7 +1276,7 @@ impl Drop for RepoLock {
 }
 
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
-pub fn acquire_lock() -> io::Result<RepoLock> {
+pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
     let paths = candidate_lock_paths();
     let mut last_err: Option<io::Error> = None;
 
@@ -1289,7 +1293,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
         {
             Ok(f) => match f.try_lock_exclusive() {
                 Ok(_) => {
-                    return Ok(RepoLock {
+                    return Ok(RepoLockLegacy {
                         file: f,
                         path: p.clone(),
                     });
@@ -1327,7 +1331,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
 }
 
 /// Acquire a lock at a specific path (helper for tests).
-pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
+pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1338,7 +1342,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
         .open(p)
     {
         Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(RepoLock {
+            Ok(_) => Ok(RepoLockLegacy {
                 file: f,
                 path: p.to_path_buf(),
             }),
@@ -1354,7 +1358,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
 
 /// Return true if the launcher should acquire a repository/user lock for this process.
 /// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
-pub fn should_acquire_lock() -> bool {
+pub(crate) fn should_acquire_lock_legacy() -> bool {
     env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
 }
 
@@ -5847,7 +5851,7 @@ mod tests {
             .unwrap_or_else(|| std::env::temp_dir());
         second_base.push(format!(
             "aifo-coder.{}.lock",
-            super::hash_repo_key_hex(&key)
+            crate::hash_repo_key_hex(&key)
         ));
 
         let paths = candidate_lock_paths();
