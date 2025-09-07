@@ -162,32 +162,6 @@ pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
 }
 
 
-#[allow(dead_code)]
-static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        // AIFO master env (single source of truth)
-        "AIFO_API_KEY",
-        "AIFO_API_BASE",
-        "AIFO_API_VERSION",
-        // Git author/committer overrides
-        "GIT_AUTHOR_NAME",
-        "GIT_AUTHOR_EMAIL",
-        "GIT_COMMITTER_NAME",
-        "GIT_COMMITTER_EMAIL",
-        // GPG signing controls
-        "AIFO_CODER_GIT_SIGN",
-        "GIT_SIGNING_KEY",
-        // Timezone
-        "TZ",
-        // Editor preferences
-        "EDITOR",
-        "VISUAL",
-        "TERM",
-        // Tool-exec proxy (Phase 2)
-        "AIFO_TOOLEEXEC_URL",
-        "AIFO_TOOLEEXEC_TOKEN",
-    ]
-});
 
 // -------- Color mode and helpers --------
 
