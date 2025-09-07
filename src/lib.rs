@@ -1,7 +1,7 @@
 use atty;
 use clap::ValueEnum;
 use fs2::FileExt;
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::Lazy;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
