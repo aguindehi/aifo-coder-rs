@@ -185,18 +185,14 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     let add_out = with_tmp_index(&["add", "-A"])?;
     if !add_out.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other(
-            "git add -A failed for snapshot",
-        ));
+        return Err(std::io::Error::other("git add -A failed for snapshot"));
     }
 
     // 2) write-tree
     let wt = with_tmp_index(&["write-tree"])?;
     if !wt.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other(
-            "git write-tree failed for snapshot",
-        ));
+        return Err(std::io::Error::other("git write-tree failed for snapshot"));
     }
     let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
 
@@ -227,18 +223,14 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     // Clean up temporary index (best-effort)
     let _ = fs::remove_file(&tmp_idx);
     if !ct_out.status.success() {
-        return Err(std::io::Error::other(
-            format!(
-                "git commit-tree failed for snapshot: {}",
-                String::from_utf8_lossy(&ct_out.stderr)
-            ),
-        ));
+        return Err(std::io::Error::other(format!(
+            "git commit-tree failed for snapshot: {}",
+            String::from_utf8_lossy(&ct_out.stderr)
+        )));
     }
     let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
     if sha.is_empty() {
-        return Err(std::io::Error::other(
-            "empty snapshot SHA from commit-tree",
-        ));
+        return Err(std::io::Error::other("empty snapshot SHA from commit-tree"));
     }
     Ok(sha)
 }
@@ -377,9 +369,10 @@ pub fn fork_clone_and_checkout_panes(
             }
         }
         if !cloned_ok {
-            return Err(std::io::Error::other(
-                format!("git clone failed for pane {}", i),
-            ));
+            return Err(std::io::Error::other(format!(
+                "git clone failed for pane {}",
+                i
+            )));
         }
 
         // Optional: set origin push URL to match base repo
@@ -410,9 +403,10 @@ pub fn fork_clone_and_checkout_panes(
             .status()?;
         if !st.success() {
             let _ = fs::remove_dir_all(&pane_dir);
-            return Err(std::io::Error::other(
-                format!("git checkout failed for pane {} (branch {})", i, branch),
-            ));
+            return Err(std::io::Error::other(format!(
+                "git checkout failed for pane {} (branch {})",
+                i, branch
+            )));
         }
 
         // Best-effort submodules and Git LFS
@@ -1767,13 +1761,11 @@ pub fn fork_merge_branches(
             }
             let st = cmd.status()?;
             if !st.success() {
-                return Err(std::io::Error::other(
-                    format!(
-                        "git fetch failed for pane {} (branch {})",
-                        pdir.display(),
-                        br
-                    ),
-                ));
+                return Err(std::io::Error::other(format!(
+                    "git fetch failed for pane {} (branch {})",
+                    pdir.display(),
+                    br
+                )));
             }
         }
     }

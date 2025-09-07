@@ -6,8 +6,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use which::which;
 use crate::warn_print;
+use which::which;
 
 pub fn docker_supports_apparmor() -> bool {
     let runtime = match which("docker") {

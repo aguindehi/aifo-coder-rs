@@ -19,10 +19,10 @@ use std::time::{Duration, SystemTime};
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
-use crate::apparmor::{docker_supports_apparmor, desired_apparmor_profile};
+use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
 use crate::{
-    container_runtime_path, create_session_id, find_header_end, shell_join,
-    shell_like_split_args, strip_outer_quotes, url_decode,
+    container_runtime_path, create_session_id, find_header_end, shell_join, shell_like_split_args,
+    strip_outer_quotes, url_decode,
 };
 
 // Normalize toolchain kind names to canonical identifiers
@@ -399,9 +399,10 @@ pub fn toolchain_run(
 
     // Ensure network exists before starting sidecar
     if !dry_run && !ensure_network_exists(&runtime, &net_name, verbose) {
-        return Err(io::Error::other(
-            format!("failed to create or verify network {}", net_name),
-        ));
+        return Err(io::Error::other(format!(
+            "failed to create or verify network {}",
+            net_name
+        )));
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -462,12 +463,10 @@ pub fn toolchain_run(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::other(
-                        format!(
-                            "sidecar container failed to start (exit: {:?})",
-                            status.code()
-                        ),
-                    ));
+                    return Err(io::Error::other(format!(
+                        "sidecar container failed to start (exit: {:?})",
+                        status.code()
+                    )));
                 }
             }
         }
@@ -869,9 +868,7 @@ pub fn toolchain_start_session(
         .unwrap_or_else(create_session_id);
     let net_name = sidecar_network_name(&session_id);
     if !ensure_network_exists(&runtime, &net_name, verbose) {
-        return Err(io::Error::other(
-            "failed to create session network",
-        ));
+        return Err(io::Error::other("failed to create session network"));
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -936,9 +933,7 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::other(
-                        "failed to start one or more sidecars",
-                    ));
+                    return Err(io::Error::other("failed to start one or more sidecars"));
                 }
             }
         }
@@ -1128,7 +1123,11 @@ pub fn toolexec_start_proxy(
                         }
                     }
                     if tool == "notifications-cmd" {
-                        match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
+                        match crate::toolchain::notifications_handle_request(
+                            &argv,
+                            verbose,
+                            timeout_secs,
+                        ) {
                             Ok((status_code, body_out)) => {
                                 let header = format!(
                                     "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",

@@ -9,14 +9,15 @@ use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use which::which;
-mod warnings;
-mod guidance;
 mod doctor;
-use crate::warnings::{
-    warn_if_tmp_workspace, maybe_warn_missing_toolchain_agent, maybe_warn_missing_toolchain_for_fork,
-};
-use crate::guidance::print_inspect_merge_guidance;
+mod guidance;
+mod warnings;
 use crate::doctor::run_doctor;
+use crate::guidance::print_inspect_merge_guidance;
+use crate::warnings::{
+    maybe_warn_missing_toolchain_agent, maybe_warn_missing_toolchain_for_fork,
+    warn_if_tmp_workspace,
+};
 
 fn print_startup_banner() {
     let version = env!("CARGO_PKG_VERSION");
@@ -173,9 +174,6 @@ fn print_startup_banner() {
     println!();
 }
 
-
-
-
 #[cfg(test)]
 mod tests_main_cli_child_args {
 
@@ -324,7 +322,6 @@ mod tests_main_cli_child_args {
         );
     }
 }
-
 
 #[derive(Parser, Debug)]
 #[command(
@@ -537,7 +534,6 @@ fn fork_build_child_args(cli: &Cli) -> Vec<String> {
 
     args
 }
-
 
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
