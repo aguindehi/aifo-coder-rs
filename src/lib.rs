@@ -1252,20 +1252,16 @@ impl Drop for RepoLockLegacy {
         // Best-effort unlock; ignore errors
         let _ = self.file.unlock();
 
-        // Try immediate removal; if it fails (e.g., Windows timing), retry briefly
+        // Try removal with brief retries (avoid background threads to keep tests leak-free)
         let path = self.path.clone();
-        if fs::remove_file(&path).is_err() {
-            std::thread::spawn(move || {
-                for _ in 0..10 {
-                    if !path.exists() {
-                        break;
-                    }
-                    if fs::remove_file(&path).is_ok() {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-            });
+        for _ in 0..10 {
+            if !path.exists() {
+                break;
+            }
+            if fs::remove_file(&path).is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 }
