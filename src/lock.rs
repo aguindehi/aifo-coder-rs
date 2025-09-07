@@ -55,8 +55,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                     });
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         "Another coding agent is already running (lock held). Please try again later.",
                     ));
                 }
