@@ -115,18 +115,10 @@ pub fn shell_like_split_args(s: &str) -> Vec<String> {
     for ch in s.chars() {
         match ch {
             '\'' if !in_double => {
-                if in_single {
-                    in_single = false;
-                } else {
-                    in_single = true;
-                }
+                in_single = !in_single;
             }
             '"' if !in_single => {
-                if in_double {
-                    in_double = false;
-                } else {
-                    in_double = true;
-                }
+                in_double = !in_double;
             }
             c if c.is_whitespace() && !in_single && !in_double => {
                 if !current.is_empty() {

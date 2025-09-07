@@ -5,7 +5,6 @@ This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
-use home;
 use std::env;
 use std::fs;
 use std::io;
@@ -90,7 +89,7 @@ fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
-            shell_join(&vec![
+            shell_join(&[
                 "docker".to_string(),
                 "network".to_string(),
                 "create".to_string(),
@@ -147,7 +146,7 @@ fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     if verbose {
         eprintln!(
             "aifo-coder: docker: {}",
-            shell_join(&vec![
+            shell_join(&[
                 "docker".to_string(),
                 "network".to_string(),
                 "rm".to_string(),
@@ -158,6 +157,7 @@ fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     let _ = cmd.status();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_sidecar_run_preview(
     name: &str,
     network: Option<&str>,
@@ -393,18 +393,15 @@ pub fn toolchain_run(
     let session_id = env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| create_session_id());
+        .unwrap_or_else(create_session_id);
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
     // Ensure network exists before starting sidecar
-    if !dry_run {
-        if !ensure_network_exists(&runtime, &net_name, verbose) {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("failed to create or verify network {}", net_name),
-            ));
-        }
+    if !dry_run && !ensure_network_exists(&runtime, &net_name, verbose) {
+        return Err(io::Error::other(
+            format!("failed to create or verify network {}", net_name),
+        ));
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -465,8 +462,7 @@ pub fn toolchain_run(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         format!(
                             "sidecar container failed to start (exit: {:?})",
                             status.code()
@@ -836,7 +832,7 @@ exit "$ec"
         let path = dir.join(t);
         fs::write(
             &path,
-            format!("#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n"),
+            "#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n".to_string(),
         )?;
         #[cfg(unix)]
         {
@@ -870,11 +866,10 @@ pub fn toolchain_start_session(
     let session_id = env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| create_session_id());
+        .unwrap_or_else(create_session_id);
     let net_name = sidecar_network_name(&session_id);
     if !ensure_network_exists(&runtime, &net_name, verbose) {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "failed to create session network",
         ));
     }
@@ -941,8 +936,7 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         "failed to start one or more sidecars",
                     ));
                 }
@@ -1059,7 +1053,7 @@ pub fn toolexec_start_proxy(
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
                         if lower.starts_with("authorization:") {
-                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                            if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
                                 // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
                                 if value == token_for_thread2 {
@@ -1076,11 +1070,11 @@ pub fn toolexec_start_proxy(
                                 }
                             }
                         } else if lower.starts_with("content-length:") {
-                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                            if let Some((_, v)) = l.split_once(':') {
                                 content_len = v.trim().parse().unwrap_or(0);
                             }
                         } else if lower.starts_with("x-aifo-proto:") {
-                            if let Some(v) = l.splitn(2, ':').nth(1) {
+                            if let Some((_, v)) = l.split_once(':') {
                                 proto_ok = v.trim() == "1";
                             }
                         }
@@ -1164,7 +1158,7 @@ pub fn toolexec_start_proxy(
                     }
                     let kind = crate::toolchain::route_tool_to_sidecar(&tool);
                     let allow = sidecar_allowlist(kind);
-                    if !allow.iter().any(|&t| t == tool.as_str()) {
+                    if !allow.contains(&tool.as_str()) {
                         let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.flush();
@@ -1369,7 +1363,7 @@ pub fn toolexec_start_proxy(
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
                 if lower.starts_with("authorization:") {
-                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                    if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
                         // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
                         if value == token_for_thread {
@@ -1384,11 +1378,11 @@ pub fn toolexec_start_proxy(
                         }
                     }
                 } else if lower.starts_with("content-length:") {
-                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                    if let Some((_, v)) = l.split_once(':') {
                         content_len = v.trim().parse().unwrap_or(0);
                     }
                 } else if lower.starts_with("x-aifo-proto:") {
-                    if let Some(v) = l.splitn(2, ':').nth(1) {
+                    if let Some((_, v)) = l.split_once(':') {
                         proto_ok = v.trim() == "1";
                     }
                 }
@@ -1474,7 +1468,7 @@ pub fn toolexec_start_proxy(
             }
             let kind = crate::toolchain::route_tool_to_sidecar(&tool);
             let allow = sidecar_allowlist(kind);
-            if !allow.iter().any(|&t| t == tool.as_str()) {
+            if !allow.contains(&tool.as_str()) {
                 let header =
                     "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());

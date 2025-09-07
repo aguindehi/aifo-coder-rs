@@ -98,16 +98,14 @@ pub fn desired_apparmor_profile() -> Option<String> {
     }
     if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
         Some("docker-default".to_string())
+    } else if apparmor_profile_available("aifo-coder") {
+        Some("aifo-coder".to_string())
+    } else if apparmor_profile_available("docker-default") {
+        warn_print("apparmor profile 'aifo-coder' not loaded; using 'docker-default'.");
+        Some("docker-default".to_string())
     } else {
-        if apparmor_profile_available("aifo-coder") {
-            Some("aifo-coder".to_string())
-        } else if apparmor_profile_available("docker-default") {
-            warn_print("apparmor profile 'aifo-coder' not loaded; using 'docker-default'.");
-            Some("docker-default".to_string())
-        } else {
-            warn_print("no known apparmor profile loaded; continuing without explicit profile.");
-            None
-        }
+        warn_print("no known apparmor profile loaded; continuing without explicit profile.");
+        None
     }
 }
 
@@ -134,13 +132,11 @@ pub fn desired_apparmor_profile_quiet() -> Option<String> {
     }
     if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
         Some("docker-default".to_string())
+    } else if apparmor_profile_available("aifo-coder") {
+        Some("aifo-coder".to_string())
+    } else if apparmor_profile_available("docker-default") {
+        Some("docker-default".to_string())
     } else {
-        if apparmor_profile_available("aifo-coder") {
-            Some("aifo-coder".to_string())
-        } else if apparmor_profile_available("docker-default") {
-            Some("docker-default".to_string())
-        } else {
-            None
-        }
+        None
     }
 }

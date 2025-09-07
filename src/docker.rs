@@ -1,8 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 //! Docker command construction and runtime detection.
 
-use atty;
-use home;
 use once_cell::sync::Lazy;
 use std::env;
 use std::ffi::OsString;

@@ -185,8 +185,7 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     let add_out = with_tmp_index(&["add", "-A"])?;
     if !add_out.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "git add -A failed for snapshot",
         ));
     }
@@ -195,8 +194,7 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     let wt = with_tmp_index(&["write-tree"])?;
     if !wt.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "git write-tree failed for snapshot",
         ));
     }
@@ -229,8 +227,7 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     // Clean up temporary index (best-effort)
     let _ = fs::remove_file(&tmp_idx);
     if !ct_out.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             format!(
                 "git commit-tree failed for snapshot: {}",
                 String::from_utf8_lossy(&ct_out.stderr)
@@ -239,8 +236,7 @@ pub fn fork_create_snapshot(repo_root: &Path, sid: &str) -> std::io::Result<Stri
     }
     let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
     if sha.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "empty snapshot SHA from commit-tree",
         ));
     }
@@ -381,8 +377,7 @@ pub fn fork_clone_and_checkout_panes(
             }
         }
         if !cloned_ok {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 format!("git clone failed for pane {}", i),
             ));
         }
@@ -415,8 +410,7 @@ pub fn fork_clone_and_checkout_panes(
             .status()?;
         if !st.success() {
             let _ = fs::remove_dir_all(&pane_dir);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 format!("git checkout failed for pane {} (branch {})", i, branch),
             ));
         }
@@ -581,12 +575,10 @@ fn session_dirs(base: &Path) -> Vec<PathBuf> {
         Ok(d) => d,
         Err(_) => return out,
     };
-    for ent in rd {
-        if let Ok(e) = ent {
-            let p = e.path();
-            if p.is_dir() {
-                out.push(p);
-            }
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.push(p);
         }
     }
     out
@@ -595,14 +587,12 @@ fn session_dirs(base: &Path) -> Vec<PathBuf> {
 fn pane_dirs_for_session(session_dir: &Path) -> Vec<PathBuf> {
     let mut v = Vec::new();
     if let Ok(rd) = fs::read_dir(session_dir) {
-        for ent in rd {
-            if let Ok(e) = ent {
-                let p = e.path();
-                if p.is_dir() {
-                    if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                        if name.starts_with("pane-") {
-                            v.push(p);
-                        }
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                    if name.starts_with("pane-") {
+                        v.push(p);
                     }
                 }
             }
@@ -1579,8 +1569,7 @@ fn collect_pane_branches(panes: &[(PathBuf, String)]) -> std::io::Result<Vec<(Pa
         pane_branches.push((pdir.clone(), actual_branch));
     }
     if pane_branches.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "no pane branches to process (empty pane set or detached HEAD)",
         ));
     }
@@ -1613,8 +1602,7 @@ fn preflight_clean_working_tree(repo_root: &Path) -> std::io::Result<()> {
         Err(_) => true,
     };
     if dirty {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "octopus merge requires a clean working tree in the original repository",
         ));
     }
@@ -1779,8 +1767,7 @@ pub fn fork_merge_branches(
             }
             let st = cmd.status()?;
             if !st.success() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(std::io::Error::other(
                     format!(
                         "git fetch failed for pane {} (branch {})",
                         pdir.display(),
@@ -1836,8 +1823,7 @@ pub fn fork_merge_branches(
             .arg(base_ref_or_sha)
             .status()?;
         if !st.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "failed to checkout merge target branch",
             ));
         }
@@ -1917,8 +1903,7 @@ pub fn fork_merge_branches(
                         .join(", ")
                 ),
             );
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "octopus merge failed (conflicts likely). Resolve manually and retry.",
             ));
         }
@@ -2019,8 +2004,7 @@ pub fn fork_merge_branches_by_session(
     // Gather pane dirs
     let panes_dirs = pane_dirs_for_session(&session_dir);
     if panes_dirs.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "no pane directories found under session",
         ));
     }
@@ -2058,8 +2042,7 @@ pub fn fork_merge_branches_by_session(
     }
 
     if panes.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "no pane branches found (detached HEAD?)",
         ));
     }

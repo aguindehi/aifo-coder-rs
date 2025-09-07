@@ -1,6 +1,4 @@
-use atty;
 use clap::ValueEnum;
-use once_cell::sync::Lazy;
 use std::io::{Read, Write};
 use std::time::{Duration, SystemTime};
 mod color;
@@ -190,7 +188,7 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
     let interactive = atty::is(atty::Stream::Stdin) && atty::is(atty::Stream::Stderr);
     let disabled = std::env::var("AIFO_CODER_NO_WARN_PAUSE").ok().as_deref() == Some("1")
         || std::env::var("CI").ok().as_deref() == Some("1");
-    if !(interactive && !disabled) {
+    if !interactive || disabled {
         return true;
     }
 
@@ -218,12 +216,12 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
                 // End the prompt line and add an extra blank line for visual separation
                 eprintln!();
                 eprintln!();
-                return false;
+                false
             } else {
                 // End the prompt line and add an extra blank line for visual separation
                 eprintln!();
                 eprintln!();
-                return true;
+                true
             }
         }
     }
@@ -264,12 +262,12 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
             // End the prompt line and add an extra blank line for visual separation
             eprintln!();
             eprintln!();
-            return false;
+            false
         } else {
             // End the prompt line and add an extra blank line for visual separation
             eprintln!();
             eprintln!();
-            return true;
+            true
         }
     }
 
@@ -282,7 +280,7 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
         eprintln!();
         eprintln!();
         let c = s.trim().chars().next().unwrap_or('\n');
-        return c != 'q' && c != 'Q';
+        c != 'q' && c != 'Q'
     }
 }
 
@@ -318,7 +316,7 @@ pub fn ensure_file_exists(p: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-//// Repository-scoped locking helpers and candidate paths
+/// Repository-scoped locking helpers and candidate paths
 pub fn create_session_id() -> String {
     // Compose a short, mostly-unique ID from time and pid without extra deps
     let now = SystemTime::now()
@@ -1115,7 +1113,7 @@ mod tests {
             .ok()
             .filter(|s| !s.is_empty())
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::env::temp_dir());
+            .unwrap_or_else(std::env::temp_dir);
         second_base.push(format!(
             "aifo-coder.{}.lock",
             crate::hash_repo_key_hex(&key)
@@ -1123,7 +1121,7 @@ mod tests {
 
         let paths = candidate_lock_paths();
         assert_eq!(
-            paths.get(0),
+            paths.first(),
             Some(&first),
             "first candidate must be in-repo lock path"
         );
@@ -2281,7 +2279,7 @@ mod tests {
             .current_dir(&pane)
             .status();
         // Commit initial file
-        std::fs::write(&pane.join("root.txt"), "r\n").unwrap();
+        std::fs::write(pane.join("root.txt"), "r\n").unwrap();
         assert!(std::process::Command::new("git")
             .args(["add", "-A"])
             .current_dir(&pane)

@@ -99,10 +99,9 @@ pub fn preferred_registry_prefix() -> String {
         write_registry_cache_disk(&v);
         return v;
     }
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+    if let Some(mode) = *REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
-        .clone()
     {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
@@ -180,10 +179,9 @@ pub fn preferred_registry_prefix() -> String {
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
 pub fn preferred_registry_prefix_quiet() -> String {
-    if let Some(mode) = REGISTRY_PROBE_OVERRIDE
+    if let Some(mode) = *REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
-        .clone()
     {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),

@@ -44,6 +44,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
             .create(true)
             .read(true)
             .write(true)
+            .truncate(true)
             .open(&p)
         {
             Ok(f) => match f.try_lock_exclusive() {
@@ -82,7 +83,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
     if let Some(e) = last_err {
         msg.push_str(&format!(" (last error: {e})"));
     }
-    Err(io::Error::new(io::ErrorKind::Other, msg))
+    Err(io::Error::other(msg))
 }
 
 /// Acquire a lock at a specific path (helper for tests).
@@ -94,6 +95,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
         .create(true)
         .read(true)
         .write(true)
+        .truncate(true)
         .open(p)
     {
         Ok(f) => match f.try_lock_exclusive() {
@@ -101,8 +103,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                 file: f,
                 path: p.to_path_buf(),
             }),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
-                io::ErrorKind::Other,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::other(
                 "Another coding agent is already running (lock held). Please try again later.",
             )),
             Err(e) => Err(e),
@@ -133,7 +134,7 @@ pub fn candidate_lock_paths() -> Vec<PathBuf> {
             .ok()
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
-            .unwrap_or_else(|| std::env::temp_dir());
+            .unwrap_or_else(std::env::temp_dir);
         let key = normalized_repo_key_for_hash(&root);
         let hash = hash_repo_key_hex(&key);
         paths.push(rt_base.join(format!("aifo-coder.{}.lock", hash)));
