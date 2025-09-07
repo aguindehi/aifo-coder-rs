@@ -396,7 +396,7 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
 ///    - non-empty is normalized to end with a single '/' and used as-is
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
-pub fn preferred_registry_prefix() -> String {
+pub(crate) fn preferred_registry_prefix_legacy() -> String {
     // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
