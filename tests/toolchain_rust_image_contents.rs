@@ -29,7 +29,9 @@ fn run_in_container(image: &str, shell_cmd: &str) -> Option<std::process::Output
 #[ignore]
 #[test]
 fn toolchain_rust_components_and_tools_present() {
-    let Some(_) = docker_path() else { return; };
+    let Some(_) = docker_path() else {
+        return;
+    };
     let image = test_image();
 
     // Sanity: rustc must be present
@@ -69,7 +71,9 @@ fn toolchain_rust_components_and_tools_present() {
 #[ignore]
 #[test]
 fn toolchain_rust_env_and_deps_present() {
-    let Some(_) = docker_path() else { return; };
+    let Some(_) = docker_path() else {
+        return;
+    };
     let image = test_image();
 
     // CARGO_HOME
