@@ -262,7 +262,7 @@ pub fn fork_session_dir(repo_root: &Path, sid: &str) -> PathBuf {
 /// Returns true if:
 /// - .lfsconfig exists at repo root, or
 /// - any .gitattributes file (top-level or nested) contains "filter=lfs".
-pub fn repo_uses_lfs_quick(repo_root: &Path) => bool {
+pub fn repo_uses_lfs_quick(repo_root: &Path) -> bool {
     // .lfsconfig presence is a strong hint
     if repo_root.join(".lfsconfig").exists() {
         return true;
