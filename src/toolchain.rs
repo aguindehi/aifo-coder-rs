@@ -5,6 +5,7 @@ This module re-exports the public toolchain APIs from the crate root to establis
 a clear boundary for sidecars, proxy, and notifications logic as part of Phase 4.
 */
 
+#![allow(unused_imports)]
 pub use crate::{
     normalize_toolchain_kind,
     default_toolchain_image_for_version,

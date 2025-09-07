@@ -27,7 +27,6 @@ pub use apparmor::*;
 pub use registry::*;
 pub use docker::*;
 pub use lock::*;
-pub use toolchain::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
