@@ -353,6 +353,7 @@ pub(crate) fn container_runtime_path_legacy() -> io::Result<PathBuf> {
 }
 
 /// Bootstrap: install a global typescript in the node sidecar (best-effort).
+#[cfg(any())]
 pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
     let name = sidecar_container_name("node", session_id);
@@ -1384,6 +1385,7 @@ pub fn create_session_id() -> String {
     s.chars().rev().collect()
 }
 
+#[cfg(any())]
 pub fn normalize_toolchain_kind(kind: &str) -> String {
     let lower = kind.to_ascii_lowercase();
     match lower.as_str() {
@@ -1397,6 +1399,7 @@ pub fn normalize_toolchain_kind(kind: &str) -> String {
     }
 }
 
+#[cfg(any())]
 fn default_toolchain_image(kind: &str) -> String {
     match kind {
         "rust" => "rust:1.80-slim".to_string(),
@@ -1409,6 +1412,7 @@ fn default_toolchain_image(kind: &str) -> String {
 }
 
 /// Compute default image from kind@version (best-effort).
+#[cfg(any())]
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
         "rust" => format!("rust:{}-slim", version),
@@ -1420,14 +1424,17 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
     }
 }
 
+#[cfg(any())]
 fn sidecar_container_name(kind: &str, id: &str) -> String {
     format!("aifo-tc-{kind}-{id}")
 }
 
+#[cfg(any())]
 fn sidecar_network_name(id: &str) -> String {
     format!("aifo-net-{id}")
 }
 
+#[cfg(any())]
 fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
     // Fast path: already exists
     let exists = Command::new(runtime)
@@ -1481,6 +1488,7 @@ fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
     false
 }
 
+#[cfg(any())]
 fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     // Only attempt removal if network exists to avoid noisy errors
     let exists = Command::new(runtime)
@@ -1515,6 +1523,7 @@ fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     let _ = cmd.status();
 }
 
+#[cfg(any())]
 fn build_sidecar_run_preview(
     name: &str,
     network: Option<&str>,
@@ -1621,6 +1630,7 @@ fn build_sidecar_run_preview(
     args
 }
 
+#[cfg(any())]
 fn build_sidecar_exec_preview(
     name: &str,
     uidgid: Option<(u32, u32)>,
@@ -1682,6 +1692,7 @@ fn build_sidecar_exec_preview(
 
 /// Rollout Phase 1: start a toolchain sidecar and run the provided command inside it.
 /// Returns the exit code of the executed command.
+#[cfg(any())]
 pub fn toolchain_run(
     kind_in: &str,
     args: &[String],
@@ -1838,6 +1849,7 @@ pub fn toolchain_run(
     Ok(exit_code)
 }
 
+#[cfg(any())]
 fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     match kind {
         "rust" => &["cargo", "rustc"],
@@ -1859,6 +1871,7 @@ fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
 }
 
 /// Map a tool name to the sidecar kind.
+#[cfg(any())]
 pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
     let t = tool.to_ascii_lowercase();
     match t.as_str() {
@@ -1879,6 +1892,7 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
 
 
 
+#[cfg(any())]
 fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
     let mut res = Vec::new();
     for pair in body.split('&') {
@@ -1896,6 +1910,7 @@ fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
 
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
+#[cfg(any())]
 fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     // Allow tests (and power users) to override config path explicitly
     let path = if let Ok(p) = env::var("AIFO_NOTIFICATIONS_CONFIG") {
@@ -2069,6 +2084,7 @@ fn parse_notifications_command_config() -> Result<Vec<String>, String> {
 
 //// Validate and, if allowed, execute the host 'say' command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
+#[cfg(any())]
 fn notifications_handle_request(
     argv: &[String],
     _verbose: bool,
@@ -2114,6 +2130,7 @@ fn notifications_handle_request(
 }
 
 /// Write aifo-shim and tool wrappers into the given directory.
+#[cfg(any())]
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     let tools = [
         "cargo",
@@ -2188,6 +2205,7 @@ exit "$ec"
 }
 
 /// Start sidecar session for requested kinds; returns the session id.
+#[cfg(any())]
 pub fn toolchain_start_session(
     kinds: &[String],
     overrides: &[(String, String)],
@@ -2292,6 +2310,7 @@ pub fn toolchain_start_session(
     Ok(session_id)
 }
 
+#[cfg(any())]
 fn random_token() -> String {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -2315,6 +2334,7 @@ fn random_token() -> String {
 
 /// Start a minimal HTTP proxy to execute tools inside sidecars.
 /// Returns (url, token, running_flag, thread_handle).
+#[cfg(any())]
 pub fn toolexec_start_proxy(
     session_id: &str,
     verbose: bool,
@@ -2968,6 +2988,7 @@ pub fn toolexec_start_proxy(
 }
 
 /// Cleanup sidecars and network for a session id (best-effort).
+#[cfg(any())]
 pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     let runtime = match container_runtime_path() {
         Ok(p) => p,
@@ -3013,6 +3034,7 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
 }
 
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
+#[cfg(any())]
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
     let volumes = [
