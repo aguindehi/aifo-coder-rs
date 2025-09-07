@@ -8,7 +8,6 @@ use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener};
 #[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};

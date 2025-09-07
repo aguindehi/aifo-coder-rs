@@ -22,7 +22,7 @@ use nix::unistd::{getgid, getuid};
 
 use crate::apparmor::{docker_supports_apparmor, desired_apparmor_profile};
 use crate::{
-    container_runtime_path, create_session_id, find_header_end, json_escape, shell_join,
+    container_runtime_path, create_session_id, find_header_end, shell_join,
     shell_like_split_args, strip_outer_quotes, url_decode,
 };
 
