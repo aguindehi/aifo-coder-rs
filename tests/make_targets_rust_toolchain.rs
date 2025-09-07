@@ -1,4 +1,3 @@
-
 use std::process::Command;
 
 fn make_available() -> bool {
