@@ -1,3 +1,6 @@
+#![allow(clippy::module_name_repetitions)]
+//! AppArmor detection and profile selection helpers.
+
 use std::env;
 use std::fs;
 use std::path::Path;

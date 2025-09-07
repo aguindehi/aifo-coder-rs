@@ -1,3 +1,6 @@
+#![allow(clippy::module_name_repetitions)]
+//! Color mode configuration and ANSI painting helpers.
+
 use atty;
 use clap::ValueEnum;
 use once_cell::sync::OnceCell;

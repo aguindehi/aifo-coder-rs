@@ -1,3 +1,6 @@
+#![allow(clippy::module_name_repetitions)]
+//! Fork lifecycle: repo detection, snapshotting, cloning panes, merging, cleaning and notices.
+
 use std::env;
 use std::fs;
 use std::io::Write;

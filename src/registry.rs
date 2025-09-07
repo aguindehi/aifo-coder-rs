@@ -1,3 +1,6 @@
+#![allow(clippy::module_name_repetitions)]
+//! Registry prefix resolution with optional disk cache and test overrides.
+
 use once_cell::sync::{Lazy, OnceCell};
 use std::env;
 use std::fs;

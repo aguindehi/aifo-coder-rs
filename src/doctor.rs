@@ -1,3 +1,6 @@
+#![allow(clippy::module_name_repetitions)]
+//! Diagnostics (doctor) output.
+
 use atty;
 use home;
 use std::env;

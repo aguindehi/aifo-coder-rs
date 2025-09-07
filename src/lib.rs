@@ -1,19 +1,11 @@
 use atty;
 use clap::ValueEnum;
-use fs2::FileExt;
 use once_cell::sync::Lazy;
-use which::which;
 use std::env;
-use std::ffi::OsString;
-use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::io::{Read, Write};
-#[cfg(target_os = "linux")]
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[allow(unused_imports)]
-use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 mod color;
 mod util;
@@ -345,6 +337,7 @@ pub enum MergingStrategy {
 
 /// Locate the Docker runtime binary.
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn container_runtime_path_legacy() -> io::Result<PathBuf> {
     if let Ok(p) = which("docker") {
         return Ok(p);
@@ -663,11 +656,13 @@ pub(crate) fn preferred_registry_prefix_legacy() -> String {
 
 
 /// Render a docker -v host:container pair.
+#[cfg(any())]
 pub fn path_pair(host: &Path, container: &str) -> OsString {
     OsString::from(format!("{}:{container}", host.display()))
 }
 
 /// Ensure a file exists by creating parent directories as needed.
+#[cfg(any())]
 pub fn ensure_file_exists(p: &Path) -> io::Result<()> {
     if !p.exists() {
         if let Some(parent) = p.parent() {
@@ -693,6 +688,7 @@ pub fn ensure_file_exists(p: &Path) -> io::Result<()> {
 /// - Otherwise (not in a Git repo), legacy ordered candidates:
 ///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
     if let Some(root) = repo_root() {
         let mut paths = Vec::new();
@@ -731,6 +727,7 @@ pub(crate) fn candidate_lock_paths_legacy() -> Vec<PathBuf> {
 
 /// Build the docker run command for the given agent invocation, and return a preview string.
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn build_docker_cmd_legacy(
     agent: &str,
     passthrough: &[String],
@@ -1200,11 +1197,13 @@ pub(crate) fn build_docker_cmd_legacy(
 
 /// Repository/user-scoped lock guard that removes the lock file on drop.
 #[derive(Debug)]
+#[cfg(any())]
 pub struct RepoLockLegacy {
     file: File,
     path: PathBuf,
 }
 
+#[cfg(any())]
 impl Drop for RepoLockLegacy {
     fn drop(&mut self) {
         // Best-effort unlock; ignore errors
@@ -1226,6 +1225,7 @@ impl Drop for RepoLockLegacy {
 
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
     let paths = candidate_lock_paths();
     let mut last_err: Option<io::Error> = None;
@@ -1282,6 +1282,7 @@ pub(crate) fn acquire_lock_legacy() -> io::Result<RepoLockLegacy> {
 
 /// Acquire a lock at a specific path (helper for tests).
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
@@ -1310,6 +1311,7 @@ pub(crate) fn acquire_lock_at_legacy(p: &Path) -> io::Result<RepoLockLegacy> {
 /// Return true if the launcher should acquire a repository/user lock for this process.
 /// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
 #[allow(dead_code)]
+#[cfg(any())]
 pub(crate) fn should_acquire_lock_legacy() -> bool {
     env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() != Some("1")
 }
