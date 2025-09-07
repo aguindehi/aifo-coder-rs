@@ -25,6 +25,15 @@ fn init_repo(dir: &PathBuf) {
         .args(["config", "user.email", "ut@example.com"])
         .current_dir(dir)
         .status();
+    // Disable GPG signing to avoid interactive pinentry during test commits
+    let _ = std::process::Command::new("git")
+        .args(["config", "commit.gpgsign", "false"])
+        .current_dir(dir)
+        .status();
+    let _ = std::process::Command::new("git")
+        .args(["config", "tag.gpgSign", "false"])
+        .current_dir(dir)
+        .status();
     fs::write(dir.join("init.txt"), "x\n").unwrap();
     let _ = std::process::Command::new("git")
         .args(["add", "-A"])
