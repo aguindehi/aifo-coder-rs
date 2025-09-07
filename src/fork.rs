@@ -1553,24 +1553,9 @@ pub fn fork_autoclean_if_enabled() {
     }
 }
 
-/// Merge helper: fetch pane branches and optionally octopus-merge them.
-pub fn fork_merge_branches(
-    repo_root: &Path,
-    sid: &str,
-    panes: &[(PathBuf, String)],
-    base_ref_or_sha: &str,
-    strategy: crate::MergingStrategy,
-    verbose: bool,
-    dry_run: bool,
-) -> std::io::Result<()> {
-    if matches!(strategy, crate::MergingStrategy::None) {
-        return Ok(());
-    }
-
-    // Resolve actual branch names from pane dirs in case they changed
+fn collect_pane_branches(panes: &[(PathBuf, String)]) -> std::io::Result<Vec<(PathBuf, String)>> {
     let mut pane_branches: Vec<(PathBuf, String)> = Vec::new();
     for (pdir, branch_hint) in panes {
-        // Determine current branch; fall back to provided hint if needed
         let actual_branch = Command::new("git")
             .arg("-C")
             .arg(pdir)
@@ -1589,7 +1574,6 @@ pub fn fork_merge_branches(
             .filter(|s| !s.is_empty() && s.as_str() != "HEAD")
             .unwrap_or_else(|| branch_hint.clone());
         if actual_branch.is_empty() || actual_branch == "HEAD" {
-            // Skip detached or unknown branches
             continue;
         }
         pane_branches.push((pdir.clone(), actual_branch));
@@ -1600,6 +1584,167 @@ pub fn fork_merge_branches(
             "no pane branches to process (empty pane set or detached HEAD)",
         ));
     }
+    Ok(pane_branches)
+}
+
+fn preflight_clean_working_tree(repo_root: &Path) -> std::io::Result<()> {
+    let dirty = match Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .arg("status")
+        .arg("--porcelain=v1")
+        .arg("-uall")
+        .output()
+    {
+        Ok(o) => {
+            if !o.status.success() {
+                true
+            } else {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.lines().any(|line| {
+                    let path = if line.len() > 3 { &line[3..] } else { "" };
+                    let ignore = path == ".aifo-coder"
+                        || path.starts_with(".aifo-coder/")
+                        || path.starts_with(".aifo-coder\\");
+                    !ignore && !path.is_empty()
+                })
+            }
+        }
+        Err(_) => true,
+    };
+    if dirty {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "octopus merge requires a clean working tree in the original repository",
+        ));
+    }
+    Ok(())
+}
+
+fn compose_merge_message(
+    repo_root: &Path,
+    pane_branches: &[(PathBuf, String)],
+    base_ref_or_sha: &str,
+) -> String {
+    let mut merge_message = String::new();
+
+    let mut summary_parts: Vec<String> = Vec::new();
+    for (_p, br) in pane_branches {
+        let subj_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        if let Some(o) = subj_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                for s in body.lines() {
+                    let mut t = s.trim().to_string();
+                    if t.is_empty() {
+                        continue;
+                    }
+                    if let Some(pos) = t.find(':') {
+                        let (prefix, rest) = t.split_at(pos);
+                        let pref = prefix.to_ascii_lowercase();
+                        if [
+                            "feat", "fix", "docs", "style", "refactor", "perf", "test", "chore",
+                            "build", "ci", "revert",
+                        ]
+                        .contains(&pref.as_str())
+                        {
+                            t = rest.trim_start_matches(':').trim().to_string();
+                        }
+                    }
+                    t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if t.is_empty() {
+                        continue;
+                    }
+                    if !summary_parts.iter().any(|e| e.eq_ignore_ascii_case(&t)) {
+                        summary_parts.push(t);
+                    }
+                }
+            }
+        }
+    }
+    let mut summary_line = if summary_parts.is_empty() {
+        format!("Octopus merge of {} branch(es)", pane_branches.len())
+    } else {
+        let joined = summary_parts.join(" / ");
+        if joined.len() > 160 {
+            format!("{} …", &joined[..160].trim_end())
+        } else {
+            joined
+        }
+    };
+    if !summary_line
+        .to_ascii_lowercase()
+        .starts_with("octopus merge")
+    {
+        summary_line = format!("Octopus merge: {}", summary_line);
+    }
+    merge_message.push_str(&format!(
+        "{}\n\nBranch summaries relative to {}:\n",
+        summary_line, base_ref_or_sha
+    ));
+
+    for (_p, br) in pane_branches {
+        let log_out = Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("log")
+            .arg("--no-merges")
+            .arg("--pretty=format:%h %s")
+            .arg(format!("{}..{}", base_ref_or_sha, br))
+            .output()
+            .ok();
+        merge_message.push_str(&format!("- branch '{}':\n", br));
+        if let Some(o) = log_out {
+            if o.status.success() {
+                let body = String::from_utf8_lossy(&o.stdout);
+                let mut has_any = false;
+                for line in body.lines() {
+                    let t = line.trim();
+                    if !t.is_empty() {
+                        has_any = true;
+                        merge_message.push_str("  * ");
+                        merge_message.push_str(t);
+                        merge_message.push('\n');
+                    }
+                }
+                if !has_any {
+                    merge_message.push_str("  (no changes)\n");
+                }
+            } else {
+                merge_message.push_str("  (unable to summarize changes)\n");
+            }
+        } else {
+            merge_message.push_str("  (unable to summarize changes)\n");
+        }
+        merge_message.push('\n');
+    }
+
+    merge_message
+}
+
+/// Merge helper: fetch pane branches and optionally octopus-merge them.
+pub fn fork_merge_branches(
+    repo_root: &Path,
+    sid: &str,
+    panes: &[(PathBuf, String)],
+    base_ref_or_sha: &str,
+    strategy: crate::MergingStrategy,
+    verbose: bool,
+    dry_run: bool,
+) -> std::io::Result<()> {
+    if matches!(strategy, crate::MergingStrategy::None) {
+        return Ok(());
+    }
+
+    let pane_branches = collect_pane_branches(panes)?;
 
     // 1) Fetch each pane branch back into the original repo as a local branch with the same name
     for (pdir, br) in &pane_branches {
@@ -1665,38 +1810,7 @@ pub fn fork_merge_branches(
         return Ok(());
     }
 
-    // 2) Octopus merge: preflight clean working tree (ignore .aifo-coder/ artifacts)
-    let dirty = match Command::new("git")
-        .arg("-C")
-        .arg(repo_root)
-        .arg("status")
-        .arg("--porcelain=v1")
-        .arg("-uall")
-        .output()
-    {
-        Ok(o) => {
-            if !o.status.success() {
-                true
-            } else {
-                let s = String::from_utf8_lossy(&o.stdout);
-                s.lines().any(|line| {
-                    // Lines are "XY <path>" or "?? <path>"
-                    let path = if line.len() > 3 { &line[3..] } else { "" };
-                    let ignore = path == ".aifo-coder"
-                        || path.starts_with(".aifo-coder/")
-                        || path.starts_with(".aifo-coder\\");
-                    !ignore && !path.is_empty()
-                })
-            }
-        }
-        Err(_) => true,
-    };
-    if dirty {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "octopus merge requires a clean working tree in the original repository",
-        ));
-    }
+    preflight_clean_working_tree(repo_root)?;
 
     // Checkout or create merge/<sid> at base_ref_or_sha
     let target = format!("merge/{}", sid);
@@ -1729,113 +1843,7 @@ pub fn fork_merge_branches(
         }
     }
 
-    // Compose a detailed octopus merge message with a one-line summary and per-branch sections
-    let mut merge_message = String::new();
-
-    // Build one-line summary from commit subjects across branches
-    let mut summary_parts: Vec<String> = Vec::new();
-    for (_p, br) in &pane_branches {
-        let subj_out = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("log")
-            .arg("--no-merges")
-            .arg("--pretty=format:%s")
-            .arg(format!("{}..{}", base_ref_or_sha, br))
-            .output()
-            .ok();
-        if let Some(o) = subj_out {
-            if o.status.success() {
-                let body = String::from_utf8_lossy(&o.stdout);
-                for s in body.lines() {
-                    let mut t = s.trim().to_string();
-                    if t.is_empty() {
-                        continue;
-                    }
-                    // Strip common conventional commit prefixes
-                    if let Some(pos) = t.find(':') {
-                        let (prefix, rest) = t.split_at(pos);
-                        let pref = prefix.to_ascii_lowercase();
-                        if [
-                            "feat", "fix", "docs", "style", "refactor", "perf", "test", "chore",
-                            "build", "ci", "revert",
-                        ]
-                        .contains(&pref.as_str())
-                        {
-                            t = rest.trim_start_matches(':').trim().to_string();
-                        }
-                    }
-                    // Normalize whitespace
-                    t = t.split_whitespace().collect::<Vec<_>>().join(" ");
-                    if t.is_empty() {
-                        continue;
-                    }
-                    // De-duplicate case-insensitively
-                    if !summary_parts.iter().any(|e| e.eq_ignore_ascii_case(&t)) {
-                        summary_parts.push(t);
-                    }
-                }
-            }
-        }
-    }
-    // Truncate overly long summary for the first line
-    let mut summary_line = if summary_parts.is_empty() {
-        format!("Octopus merge of {} branch(es)", pane_branches.len())
-    } else {
-        let joined = summary_parts.join(" / ");
-        if joined.len() > 160 {
-            format!("{} …", &joined[..160].trim_end())
-        } else {
-            joined
-        }
-    };
-    if !summary_line
-        .to_ascii_lowercase()
-        .starts_with("octopus merge")
-    {
-        summary_line = format!("Octopus merge: {}", summary_line);
-    }
-    merge_message.push_str(&format!(
-        "{}\n\nBranch summaries relative to {}:\n",
-        summary_line, base_ref_or_sha
-    ));
-
-    for (_p, br) in &pane_branches {
-        // Collect commit subjects relative to the base (skip merge commits)
-        let log_out = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("log")
-            .arg("--no-merges")
-            .arg("--pretty=format:%h %s")
-            .arg(format!("{}..{}", base_ref_or_sha, br))
-            .output()
-            .ok();
-        merge_message.push_str(&format!("- branch '{}':\n", br));
-        if let Some(o) = log_out {
-            if o.status.success() {
-                let body = String::from_utf8_lossy(&o.stdout);
-                let mut has_any = false;
-                for line in body.lines() {
-                    let t = line.trim();
-                    if !t.is_empty() {
-                        has_any = true;
-                        merge_message.push_str("  * ");
-                        merge_message.push_str(t);
-                        merge_message.push('\n');
-                    }
-                }
-                if !has_any {
-                    merge_message.push_str("  (no changes)\n");
-                }
-            } else {
-                merge_message.push_str("  (unable to summarize changes)\n");
-            }
-        } else {
-            merge_message.push_str("  (unable to summarize changes)\n");
-        }
-        merge_message.push('\n');
-    }
+    let merge_message = compose_merge_message(repo_root, &pane_branches, base_ref_or_sha);
 
     // Prepare merge message file path; write it unless dry_run
     let mut merge_msg_path: Option<std::path::PathBuf> = None;
