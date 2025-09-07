@@ -176,7 +176,7 @@ pub fn preferred_registry_prefix() -> String {
 }
 
 /// Quiet variant for preferred registry prefix resolution without emitting any logs.
-pub(crate) fn preferred_registry_prefix_quiet_legacy() -> String {
+pub fn preferred_registry_prefix_quiet() -> String {
     if let Some(mode) = REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
@@ -262,7 +262,7 @@ pub(crate) fn preferred_registry_prefix_quiet_legacy() -> String {
 }
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
-pub(crate) fn preferred_registry_source_legacy() -> String {
+pub fn preferred_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")

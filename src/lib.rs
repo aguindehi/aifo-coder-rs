@@ -13,7 +13,6 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
-use which::which;
 mod color;
 mod util;
 mod apparmor;
@@ -396,6 +395,7 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
 ///    - non-empty is normalized to end with a single '/' and used as-is
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
+#[cfg(any())]
 pub(crate) fn preferred_registry_prefix_legacy() -> String {
     // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
