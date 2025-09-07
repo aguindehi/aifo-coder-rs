@@ -50,7 +50,6 @@ pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
                 }
             }
         }
-    }
     true
 }
 
