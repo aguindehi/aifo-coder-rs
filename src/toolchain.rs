@@ -83,7 +83,17 @@ fn default_toolchain_image(kind: &str) -> String {
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
-        "rust" => format!("aifo-rust-toolchain:{}", version),
+        "rust" => {
+            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                format!("rust:{}-bookworm", version)
+            } else {
+                format!("aifo-rust-toolchain:{}", version)
+            }
+        }
         "node" | "typescript" => format!("node:{}-bookworm-slim", version),
         "python" => format!("python:{}-slim", version),
         "go" => format!("golang:{}-bookworm", version),
@@ -947,6 +957,16 @@ pub fn toolchain_start_session(
         for (kk, vv) in overrides {
             if normalize_toolchain_kind(kk) == kind {
                 image = vv.clone();
+            }
+        }
+        // Phase 2: mark official rust image so proxy execs can engage bootstrap (Phase 4)
+        if kind == "rust" {
+            if is_official_rust_image(&image)
+                || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+            {
+                env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+            } else {
+                env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
             }
         }
         let name = sidecar_container_name(kind.as_str(), &session_id);
