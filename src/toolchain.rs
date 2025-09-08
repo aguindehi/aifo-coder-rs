@@ -261,14 +261,133 @@ pub fn build_sidecar_run_preview(
 
     match kind {
         "rust" => {
-            if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-                args.push("-v".to_string());
-                args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
-            }
+            // Normative env for rust sidecar
             args.push("-e".to_string());
-            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            args.push("-e".to_string());
+            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            // Default RUST_BACKTRACE=1 when unset
+            let rb = env::var("RUST_BACKTRACE").ok();
+            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+                args.push("-e".to_string());
+                args.push("RUST_BACKTRACE=1".to_string());
+            }
+            // Cargo cache mounts
+            if !no_cache {
+                let force_named = cfg!(windows)
+                    || env::var("AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES")
+                        .ok()
+                        .as_deref()
+                        == Some("1");
+                if force_named {
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                } else {
+                    let mut mounted_registry = false;
+                    let mut mounted_git = false;
+                    if let Some(hd) = home::home_dir() {
+                        let reg = hd.join(".cargo").join("registry");
+                        let git = hd.join(".cargo").join("git");
+                        if reg.exists() {
+                            args.push("-v".to_string());
+                            args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
+                            mounted_registry = true;
+                        }
+                        if git.exists() {
+                            args.push("-v".to_string());
+                            args.push(format!("{}:/home/coder/.cargo/git", git.display()));
+                            mounted_git = true;
+                        }
+                    }
+                    if !mounted_registry {
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                    }
+                    if !mounted_git {
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                    }
+                }
+            }
+            // Optional: host cargo config (read-only)
+            if env::var("AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                if let Some(hd) = home::home_dir() {
+                    let cargo_dir = hd.join(".cargo");
+                    let cfg_toml = cargo_dir.join("config.toml");
+                    let cfg = cargo_dir.join("config");
+                    let src = if cfg_toml.exists() {
+                        Some(cfg_toml)
+                    } else if cfg.exists() {
+                        Some(cfg)
+                    } else {
+                        None
+                    };
+                    if let Some(p) = src {
+                        args.push("-v".to_string());
+                        args.push(format!("{}:/home/coder/.cargo/config.toml:ro", p.display()));
+                    }
+                }
+            }
+            // Optional: SSH agent forwarding
+            if env::var("AIFO_TOOLCHAIN_SSH_FORWARD")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                if let Ok(sock) = env::var("SSH_AUTH_SOCK") {
+                    if !sock.trim().is_empty() {
+                        args.push("-v".to_string());
+                        args.push(format!("{0}:{0}", sock));
+                        args.push("-e".to_string());
+                        args.push(format!("SSH_AUTH_SOCK={}", sock));
+                    }
+                }
+            }
+            // Optional: sccache
+            if env::var("AIFO_RUST_SCCACHE").ok().as_deref() == Some("1") {
+                let target = "/home/coder/.cache/sccache";
+                if let Ok(dir) = env::var("AIFO_RUST_SCCACHE_DIR") {
+                    if !dir.trim().is_empty() {
+                        args.push("-v".to_string());
+                        args.push(format!("{}:{}", dir, target));
+                    } else {
+                        args.push("-v".to_string());
+                        args.push(format!("aifo-sccache:{}", target));
+                    }
+                } else {
+                    args.push("-v".to_string());
+                    args.push(format!("aifo-sccache:{}", target));
+                }
+                args.push("-e".to_string());
+                args.push("RUSTC_WRAPPER=sccache".to_string());
+                args.push("-e".to_string());
+                args.push(format!("SCCACHE_DIR={}", target));
+            }
+            // Pass-through proxies and cargo networking envs
+            let passthrough = [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "NO_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "no_proxy",
+                "CARGO_NET_GIT_FETCH_WITH_CLI",
+                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+            ];
+            for name in passthrough.iter() {
+                if let Ok(val) = env::var(name) {
+                    if !val.is_empty() {
+                        args.push("-e".to_string());
+                        args.push(format!("{}={}", name, val));
+                    }
+                }
+            }
         }
         "node" => {
             if !no_cache {
@@ -369,7 +488,15 @@ pub fn build_sidecar_exec_preview(
     match kind {
         "rust" => {
             args.push("-e".to_string());
-            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            args.push("-e".to_string());
+            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            // Default RUST_BACKTRACE=1 when unset
+            let rb = env::var("RUST_BACKTRACE").ok();
+            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+                args.push("-e".to_string());
+                args.push("RUST_BACKTRACE=1".to_string());
+            }
         }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
