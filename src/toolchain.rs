@@ -1175,14 +1175,8 @@ pub fn toolexec_start_proxy(
                         }
                     }
                     if tool.is_empty() {
-                        // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
-                        if !auth_ok {
-                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        } else if !proto_ok {
+                        // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
+                        if !proto_ok {
                             let msg = b"Unsupported shim protocol; expected 1\n";
                             let header = format!(
                                 "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1190,6 +1184,12 @@ pub fn toolexec_start_proxy(
                             );
                             let _ = stream.write_all(header.as_bytes());
                             let _ = stream.write_all(msg);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        } else if !auth_ok {
+                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(header.as_bytes());
                             let _ = stream.flush();
                             let _ = stream.shutdown(Shutdown::Both);
                             continue;
@@ -1243,14 +1243,7 @@ pub fn toolexec_start_proxy(
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
-                    // Now enforce Authorization for allowed tools
-                    if !auth_ok {
-                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
+                    // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
                     if !proto_ok {
                         let msg = b"Unsupported shim protocol; expected 1\n";
                         let header = format!(
@@ -1259,6 +1252,13 @@ pub fn toolexec_start_proxy(
                         );
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.write_all(msg);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    if !auth_ok {
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
                         let _ = stream.flush();
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
@@ -1487,15 +1487,8 @@ pub fn toolexec_start_proxy(
                 }
             }
             if tool.is_empty() {
-                // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
-                if !auth_ok {
-                    let header =
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                } else if !proto_ok {
+                // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
+                if !proto_ok {
                     let msg = b"Unsupported shim protocol; expected 1\n";
                     let header = format!(
                         "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1503,6 +1496,13 @@ pub fn toolexec_start_proxy(
                     );
                     let _ = stream.write_all(header.as_bytes());
                     let _ = stream.write_all(msg);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                } else if !auth_ok {
+                    let header =
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(header.as_bytes());
                     let _ = stream.flush();
                     let _ = stream.shutdown(Shutdown::Both);
                     continue;
@@ -1554,15 +1554,7 @@ pub fn toolexec_start_proxy(
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
-            // Now enforce Authorization for allowed tools, then protocol
-            if !auth_ok {
-                let header =
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
+            // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
             if !proto_ok {
                 let msg = b"Unsupported shim protocol; expected 1\n";
                 let header = format!(
@@ -1571,6 +1563,14 @@ pub fn toolexec_start_proxy(
                 );
                 let _ = stream.write_all(header.as_bytes());
                 let _ = stream.write_all(msg);
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
+            if !auth_ok {
+                let header =
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
