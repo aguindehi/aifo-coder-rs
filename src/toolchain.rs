@@ -1127,6 +1127,7 @@ pub fn toolexec_start_proxy(
                     let mut auth_ok = false;
                     let mut content_len: usize = 0;
                     let mut proto_ok = false;
+                    let mut proto_present = false;
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
@@ -1153,6 +1154,7 @@ pub fn toolexec_start_proxy(
                             }
                         } else if lower.starts_with("x-aifo-proto:") {
                             if let Some((_, v)) = l.split_once(':') {
+                                proto_present = true;
                                 proto_ok = v.trim() == "1";
                             }
                         }
@@ -1180,7 +1182,7 @@ pub fn toolexec_start_proxy(
                     }
                     if tool.is_empty() {
                         // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
-                        if !proto_ok {
+                        if proto_present && !proto_ok {
                             let msg = b"Unsupported shim protocol; expected 1\n";
                             let header = format!(
                                 "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1248,7 +1250,7 @@ pub fn toolexec_start_proxy(
                         continue;
                     }
                     // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
-                    if !proto_ok {
+                    if proto_present && !proto_ok {
                         let msg = b"Unsupported shim protocol; expected 1\n";
                         let header = format!(
                             "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1444,6 +1446,7 @@ pub fn toolexec_start_proxy(
             let mut auth_ok = false;
             let mut content_len: usize = 0;
             let mut proto_ok = false;
+            let mut proto_present = false;
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
@@ -1468,6 +1471,7 @@ pub fn toolexec_start_proxy(
                     }
                 } else if lower.starts_with("x-aifo-proto:") {
                     if let Some((_, v)) = l.split_once(':') {
+                        proto_present = true;
                         proto_ok = v.trim() == "1";
                     }
                 }
@@ -1495,7 +1499,7 @@ pub fn toolexec_start_proxy(
             }
             if tool.is_empty() {
                 // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
-                if !proto_ok {
+                if proto_present && !proto_ok {
                     let msg = b"Unsupported shim protocol; expected 1\n";
                     let header = format!(
                         "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1562,7 +1566,7 @@ pub fn toolexec_start_proxy(
                 continue;
             }
             // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
-            if !proto_ok {
+            if proto_present && !proto_ok {
                 let msg = b"Unsupported shim protocol; expected 1\n";
                 let header = format!(
                     "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
