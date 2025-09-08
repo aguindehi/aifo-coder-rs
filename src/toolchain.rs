@@ -364,7 +364,7 @@ pub fn build_sidecar_run_preview(
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
             args.push("-e".to_string());
-            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Default RUST_BACKTRACE=1 when unset
             let rb = env::var("RUST_BACKTRACE").ok();
             if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
@@ -384,11 +384,6 @@ pub fn build_sidecar_run_preview(
                     args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
                     args.push("-v".to_string());
                     args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
-                    // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                 } else {
                     let mut mounted_registry = false;
                     let mut mounted_git = false;
@@ -411,29 +406,15 @@ pub fn build_sidecar_run_preview(
                             args.push(format!("{}:/home/coder/.cargo/git", git.display()));
                             mounted_git = true;
                         }
-                        // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools (use named volumes to ensure presence regardless of host path)
-                        if reg.exists() {
-                            args.push("-v".to_string());
-                            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-                        }
-                        if git.exists() {
-                            args.push("-v".to_string());
-                            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
-                        }
+                        // no legacy mounts at /usr/local/cargo in v7
                     }
                     if !mounted_registry {
                         args.push("-v".to_string());
                         args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
-                        // Back-compat legacy path
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
                     }
                     if !mounted_git {
                         args.push("-v".to_string());
                         args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
-                        // Back-compat legacy path
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                     }
                 }
             }
@@ -638,7 +619,7 @@ pub fn build_sidecar_exec_preview(
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
             args.push("-e".to_string());
-            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Default RUST_BACKTRACE=1 when unset
             let rb = env::var("RUST_BACKTRACE").ok();
             if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
@@ -1507,13 +1488,17 @@ pub fn toolexec_start_proxy(
                         {
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
-                                // Accept bare token, or any scheme where the last whitespace-separated token matches
+                                // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
                                 if value == token_for_thread2 {
                                     auth_ok = true;
                                 } else {
-                                    let parts: Vec<&str> = value.split_whitespace().collect();
+                                    let parts: Vec<&str> =
+                                        value.split(|c: char| c.is_whitespace() || c == '=').collect();
                                     if let Some(last) = parts.last() {
-                                        if *last == token_for_thread2 {
+                                        let last_clean = last.trim_matches(|c: char| {
+                                            c == ',' || c == ';' || c == '"' || c == '\''
+                                        });
+                                        if last_clean == token_for_thread2 {
                                             auth_ok = true;
                                         }
                                     }
@@ -1877,13 +1862,17 @@ pub fn toolexec_start_proxy(
                 {
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
-                        // Accept bare token, or any scheme where the last whitespace-separated token matches
+                        // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
                         if value == token_for_thread {
                             auth_ok = true;
                         } else {
-                            let parts: Vec<&str> = value.split_whitespace().collect();
+                            let parts: Vec<&str> =
+                                value.split(|c: char| c.is_whitespace() || c == '=').collect();
                             if let Some(last) = parts.last() {
-                                if *last == token_for_thread {
+                                let last_clean = last.trim_matches(|c: char| {
+                                    c == ',' || c == ';' || c == '"' || c == '\''
+                                });
+                                if last_clean == token_for_thread {
                                     auth_ok = true;
                                 }
                             }

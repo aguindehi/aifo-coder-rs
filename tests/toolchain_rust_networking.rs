@@ -1,3 +1,5 @@
+use std::env;
+
 #[test]
 fn test_rust_sidecar_network_and_add_host_linux() {
     // Skip if docker isn't available on this host (align with other preview tests)
