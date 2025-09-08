@@ -388,6 +388,27 @@ pub fn build_sidecar_run_preview(
                     }
                 }
             }
+            // Optional: fast linkers via RUSTFLAGS (lld/mold)
+            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
+                let lk = linker.to_ascii_lowercase();
+                let extra = if lk == "lld" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
+                } else if lk == "mold" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
+                } else {
+                    None
+                };
+                if let Some(add) = extra {
+                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
+                    let rf = if base.trim().is_empty() {
+                        add.to_string()
+                    } else {
+                        format!("{} {}", base, add)
+                    };
+                    args.push("-e".to_string());
+                    args.push(format!("RUSTFLAGS={}", rf));
+                }
+            }
         }
         "node" => {
             if !no_cache {
@@ -496,6 +517,27 @@ pub fn build_sidecar_exec_preview(
             if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
                 args.push("-e".to_string());
                 args.push("RUST_BACKTRACE=1".to_string());
+            }
+            // Optional: fast linkers via RUSTFLAGS (lld/mold)
+            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
+                let lk = linker.to_ascii_lowercase();
+                let extra = if lk == "lld" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
+                } else if lk == "mold" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
+                } else {
+                    None
+                };
+                if let Some(add) = extra {
+                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
+                    let rf = if base.trim().is_empty() {
+                        add.to_string()
+                    } else {
+                        format!("{} {}", base, add)
+                    };
+                    args.push("-e".to_string());
+                    args.push(format!("RUSTFLAGS={}", rf));
+                }
             }
         }
         "python" => {
