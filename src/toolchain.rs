@@ -335,11 +335,7 @@ pub fn build_sidecar_run_preview(
                 }
             }
             // Optional: SSH agent forwarding
-            if env::var("AIFO_TOOLCHAIN_SSH_FORWARD")
-                .ok()
-                .as_deref()
-                == Some("1")
-            {
+            if env::var("AIFO_TOOLCHAIN_SSH_FORWARD").ok().as_deref() == Some("1") {
                 if let Ok(sock) = env::var("SSH_AUTH_SOCK") {
                     if !sock.trim().is_empty() {
                         args.push("-v".to_string());
