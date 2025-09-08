@@ -1188,7 +1188,8 @@ pub fn toolexec_start_proxy(
                         .into_iter()
                         .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
                     {
-                        match k.as_str() {
+                        let kl = k.to_ascii_lowercase();
+                        match kl.as_str() {
                             "tool" => tool = v,
                             "cwd" => cwd = v,
                             "arg" => argv.push(v),
@@ -1520,7 +1521,8 @@ pub fn toolexec_start_proxy(
                 .into_iter()
                 .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
             {
-                match k.as_str() {
+                let kl = k.to_ascii_lowercase();
+                match kl.as_str() {
                     "tool" => tool = v,
                     "cwd" => cwd = v,
                     "arg" => argv.push(v),
