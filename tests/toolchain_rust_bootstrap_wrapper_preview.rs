@@ -12,7 +12,6 @@ fn test_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
     let pwd = td.path();
 
     // Save and set marker to simulate official rust image selection
-    let old_marker = env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
     env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
 
     // Build exec preview for rust; expect bootstrap wrapper (sh -lc and cargo nextest probe)
