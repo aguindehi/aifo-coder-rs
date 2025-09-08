@@ -1155,7 +1155,7 @@ pub fn toolexec_start_proxy(
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
-                        if lower.starts_with("authorization:") {
+                        if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:") {
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
                                 // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
@@ -1502,7 +1502,7 @@ pub fn toolexec_start_proxy(
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
-                if lower.starts_with("authorization:") {
+                if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:") {
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
                         // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
