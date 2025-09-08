@@ -617,9 +617,26 @@ pub fn build_sidecar_exec_preview(
     }
 
     args.push(name.to_string());
-    // user command
-    for a in user_args {
-        args.push(a.clone());
+    // user command (bootstrap on official rust images)
+    let use_bootstrap = kind == "rust"
+        && std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+            .ok()
+            .as_deref()
+            == Some("1");
+    if use_bootstrap {
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-rust-toolchain image with sccache' >&2; fi; exec \"$@\"";
+        args.push("sh".to_string());
+        args.push("-lc".to_string());
+        args.push(bootstrap.to_string());
+        // Name for $0, subsequent args become "$@"
+        args.push("aifo-exec".to_string());
+        for a in user_args {
+            args.push(a.clone());
+        }
+    } else {
+        for a in user_args {
+            args.push(a.clone());
+        }
     }
     // include pwd to silence unused warning; it's already used for run mount
     let _ = pwd;
