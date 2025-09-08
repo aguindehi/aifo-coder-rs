@@ -1492,8 +1492,9 @@ pub fn toolexec_start_proxy(
                                 if value == token_for_thread2 {
                                     auth_ok = true;
                                 } else {
-                                    let parts: Vec<&str> =
-                                        value.split(|c: char| c.is_whitespace() || c == '=').collect();
+                                    let parts: Vec<&str> = value
+                                        .split(|c: char| c.is_whitespace() || c == '=')
+                                        .collect();
                                     if let Some(last) = parts.last() {
                                         let last_clean = last.trim_matches(|c: char| {
                                             c == ',' || c == ';' || c == '"' || c == '\''
@@ -1866,8 +1867,9 @@ pub fn toolexec_start_proxy(
                         if value == token_for_thread {
                             auth_ok = true;
                         } else {
-                            let parts: Vec<&str> =
-                                value.split(|c: char| c.is_whitespace() || c == '=').collect();
+                            let parts: Vec<&str> = value
+                                .split(|c: char| c.is_whitespace() || c == '=')
+                                .collect();
                             if let Some(last) = parts.last() {
                                 let last_clean = last.trim_matches(|c: char| {
                                     c == ',' || c == ';' || c == '"' || c == '\''
