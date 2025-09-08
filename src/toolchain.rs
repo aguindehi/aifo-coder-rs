@@ -396,12 +396,18 @@ pub fn build_sidecar_run_preview(
                         let reg = hd.join(".cargo").join("registry");
                         let git = hd.join(".cargo").join("git");
                         if reg.exists() {
+                            // Ensure named volume exists at normative path, then override with host mount (host-preferred)
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
                             // Primary host-preferred mounts at normative CARGO_HOME
                             args.push("-v".to_string());
                             args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
                             mounted_registry = true;
                         }
                         if git.exists() {
+                            // Ensure named volume exists at normative path, then override with host mount (host-preferred)
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
                             args.push("-v".to_string());
                             args.push(format!("{}:/home/coder/.cargo/git", git.display()));
                             mounted_git = true;
