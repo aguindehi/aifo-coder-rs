@@ -151,7 +151,7 @@ fn init_rust_named_volume(
         uid = uid,
         gid = gid
     );
-    let mut args: Vec<String> = vec![
+    let args: Vec<String> = vec![
         "docker".to_string(),
         "run".to_string(),
         "--rm".to_string(),
