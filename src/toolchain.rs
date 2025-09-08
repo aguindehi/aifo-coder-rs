@@ -312,14 +312,14 @@ pub fn build_sidecar_run_preview(
                             args.push(format!("{}:/home/coder/.cargo/git", git.display()));
                             mounted_git = true;
                         }
-                        // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools
+                        // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools (use named volumes to ensure presence regardless of host path)
                         if reg.exists() {
                             args.push("-v".to_string());
-                            args.push(format!("{}:/usr/local/cargo/registry", reg.display()));
+                            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
                         }
                         if git.exists() {
                             args.push("-v".to_string());
-                            args.push(format!("{}:/usr/local/cargo/git", git.display()));
+                            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                         }
                     }
                     if !mounted_registry {
