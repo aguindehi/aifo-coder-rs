@@ -398,7 +398,9 @@ pub fn build_sidecar_run_preview(
                         if reg.exists() {
                             // Ensure named volume exists at normative path, then override with host mount (host-preferred)
                             args.push("-v".to_string());
-                            args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                            args.push(
+                                "aifo-cargo-registry:/home/coder/.cargo/registry".to_string(),
+                            );
                             // Primary host-preferred mounts at normative CARGO_HOME
                             args.push("-v".to_string());
                             args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
