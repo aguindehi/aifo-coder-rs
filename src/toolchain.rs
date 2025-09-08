@@ -1467,7 +1467,9 @@ pub fn toolexec_start_proxy(
                             if let Some(idx) = first_line.find("?tool=") {
                                 let rest = &first_line[idx + 6..];
                                 let end = rest
-                                    .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
+                                    .find(|c: char| {
+                                        c == '&' || c.is_ascii_whitespace() || c == '\r'
+                                    })
                                     .unwrap_or(rest.len());
                                 let val = &rest[..end];
                                 tool = url_decode(val);
