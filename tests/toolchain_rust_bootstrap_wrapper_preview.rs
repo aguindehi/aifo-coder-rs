@@ -33,13 +33,7 @@ fn test_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
     );
 
     // Now disable the marker; expect no bootstrap wrapper in preview
-    if let Some(v) = old_marker {
-        // original env was set to some value; restore now to ensure "disabled"
-        // If that value was "1", we want to explicitly remove to test non-bootstrap path.
-        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
-    } else {
-        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
-    }
+    env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
 
     let without_bootstrap = aifo_coder::shell_join(&aifo_coder::build_sidecar_exec_preview(
         "tc-rust-noboot",
