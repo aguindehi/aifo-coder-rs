@@ -1159,6 +1159,18 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
+                    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+                    let mut query_pairs: Vec<(String, String)> = Vec::new();
+                    if let Some(first_line) = header_str.lines().next() {
+                        let mut parts = first_line.split_whitespace();
+                        let _method = parts.next();
+                        if let Some(target) = parts.next() {
+                            if let Some(idx) = target.find('?') {
+                                let q = &target[idx + 1..];
+                                query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
+                            }
+                        }
+                    }
                     // Read body
                     let mut body = buf[hend..].to_vec();
                     while body.len() < content_len {
@@ -1172,7 +1184,10 @@ pub fn toolexec_start_proxy(
                     let mut tool = String::new();
                     let mut cwd = "/workspace".to_string();
                     let mut argv: Vec<String> = Vec::new();
-                    for (k, v) in crate::toolchain::parse_form_urlencoded(&form) {
+                    for (k, v) in query_pairs
+                        .into_iter()
+                        .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
+                    {
                         match k.as_str() {
                             "tool" => tool = v,
                             "cwd" => cwd = v,
@@ -1476,6 +1491,18 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
+            // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+            let mut query_pairs: Vec<(String, String)> = Vec::new();
+            if let Some(first_line) = header_str.lines().next() {
+                let mut parts = first_line.split_whitespace();
+                let _method = parts.next();
+                if let Some(target) = parts.next() {
+                    if let Some(idx) = target.find('?') {
+                        let q = &target[idx + 1..];
+                        query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
+                    }
+                }
+            }
             // Read body
             let mut body = buf[hend..].to_vec();
             while body.len() < content_len {
@@ -1489,7 +1516,10 @@ pub fn toolexec_start_proxy(
             let mut tool = String::new();
             let mut cwd = "/workspace".to_string();
             let mut argv: Vec<String> = Vec::new();
-            for (k, v) in crate::toolchain::parse_form_urlencoded(&form) {
+            for (k, v) in query_pairs
+                .into_iter()
+                .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
+            {
                 match k.as_str() {
                     "tool" => tool = v,
                     "cwd" => cwd = v,
