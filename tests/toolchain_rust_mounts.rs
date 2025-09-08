@@ -1,5 +1,4 @@
 use std::env;
-use std::path::PathBuf;
 
 #[test]
 fn test_rust_mounts_host_present_preferred() {
