@@ -1103,7 +1103,8 @@ pub fn toolexec_start_proxy(
                                 buf.extend_from_slice(&tmp[..n]);
                                 if let Some(end) = find_header_end(&buf) {
                                     header_end = Some(end);
-                                } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
+                                } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n")
+                                {
                                     // Be tolerant to LF-only header termination used by some simple clients/tests
                                     header_end = Some(pos);
                                 }
