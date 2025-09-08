@@ -1473,6 +1473,9 @@ pub fn toolexec_start_proxy(
                         if rp.ends_with("/notifications")
                             || rp.ends_with("/notifications-cmd")
                             || rp.ends_with("/notify")
+                            || rp.contains("/notifications")
+                            || rp.contains("/notifications-cmd")
+                            || rp.contains("/notify")
                         {
                             tool = "notifications-cmd".to_string();
                         }
@@ -1840,6 +1843,9 @@ pub fn toolexec_start_proxy(
                 if rp.ends_with("/notifications")
                     || rp.ends_with("/notifications-cmd")
                     || rp.ends_with("/notify")
+                    || rp.contains("/notifications")
+                    || rp.contains("/notifications-cmd")
+                    || rp.contains("/notify")
                 {
                     tool = "notifications-cmd".to_string();
                 }
