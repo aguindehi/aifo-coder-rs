@@ -1195,7 +1195,10 @@ pub fn toolexec_start_proxy(
                     }
                     if tool.is_empty() {
                         let rp = request_path_lc.as_str();
-                        if rp.ends_with("/notifications") || rp.ends_with("/notifications-cmd") || rp.ends_with("/notify") {
+                        if rp.ends_with("/notifications")
+                            || rp.ends_with("/notifications-cmd")
+                            || rp.ends_with("/notify")
+                        {
                             tool = "notifications-cmd".to_string();
                         }
                     }
@@ -1537,7 +1540,10 @@ pub fn toolexec_start_proxy(
             }
             if tool.is_empty() {
                 let rp = request_path_lc.as_str();
-                if rp.ends_with("/notifications") || rp.ends_with("/notifications-cmd") || rp.ends_with("/notify") {
+                if rp.ends_with("/notifications")
+                    || rp.ends_with("/notifications-cmd")
+                    || rp.ends_with("/notify")
+                {
                     tool = "notifications-cmd".to_string();
                 }
             }
