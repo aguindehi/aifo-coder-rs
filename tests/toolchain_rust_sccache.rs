@@ -18,7 +18,7 @@ fn test_rust_sccache_default_volume_and_envs() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);
@@ -67,7 +67,7 @@ fn test_rust_sccache_dir_override() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);

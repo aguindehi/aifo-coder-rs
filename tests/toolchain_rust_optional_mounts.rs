@@ -25,7 +25,7 @@ fn test_rust_host_cargo_config_mount() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);
@@ -69,7 +69,7 @@ fn test_rust_ssh_agent_forwarding_mount_and_env() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);

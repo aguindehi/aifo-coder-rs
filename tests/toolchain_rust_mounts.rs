@@ -163,7 +163,7 @@ fn test_rust_force_named_volumes_env() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);
@@ -205,7 +205,7 @@ fn test_rust_windows_defaults_to_named_volumes() {
         "rust",
         "rust:1.80-slim",
         false,
-        &td.path().to_path_buf(),
+        td.path(),
         None,
     );
     let preview = aifo_coder::shell_join(&args);
