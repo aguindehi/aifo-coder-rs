@@ -79,13 +79,7 @@ fn default_toolchain_image(kind: &str) -> String {
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
-        "rust" => {
-            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
-                format!("rust:{}-bookworm", version)
-            } else {
-                format!("aifo-rust-toolchain:{}", version)
-            }
-        }
+        "rust" => format!("rust:{}-slim", version),
         "node" | "typescript" => format!("node:{}-bookworm-slim", version),
         "python" => format!("python:{}-slim", version),
         "go" => format!("golang:{}-bookworm", version),
