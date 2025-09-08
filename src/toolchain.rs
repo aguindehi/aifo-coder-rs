@@ -287,7 +287,12 @@ pub fn build_sidecar_run_preview(
                 } else {
                     let mut mounted_registry = false;
                     let mut mounted_git = false;
-                    if let Some(hd) = home::home_dir() {
+                    let hd_opt = env::var("HOME")
+                        .ok()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(PathBuf::from)
+                        .or_else(|| home::home_dir());
+                    if let Some(hd) = hd_opt {
                         let reg = hd.join(".cargo").join("registry");
                         let git = hd.join(".cargo").join("git");
                         if reg.exists() {
@@ -317,7 +322,12 @@ pub fn build_sidecar_run_preview(
                 .as_deref()
                 == Some("1")
             {
-                if let Some(hd) = home::home_dir() {
+                let hd_opt = env::var("HOME")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(PathBuf::from)
+                    .or_else(|| home::home_dir());
+                if let Some(hd) = hd_opt {
                     let cargo_dir = hd.join(".cargo");
                     let cfg_toml = cargo_dir.join("config.toml");
                     let cfg = cargo_dir.join("config");
@@ -466,7 +476,7 @@ pub fn build_sidecar_run_preview(
     }
 
     args.push(image.to_string());
-    args.push("sleep".to_string());
+    args.push("/bin/sleep".to_string());
     args.push("infinity".to_string());
     args
 }
