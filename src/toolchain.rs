@@ -371,11 +371,6 @@ pub fn build_sidecar_run_preview(
                 args.push("-e".to_string());
                 args.push("RUST_BACKTRACE=1".to_string());
             }
-            // For official rust images, preserve legacy CARGO_HOME for test/back-compat
-            if is_official_rust_image(image) {
-                args.push("-e".to_string());
-                args.push("CARGO_HOME=/usr/local/cargo".to_string());
-            }
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
