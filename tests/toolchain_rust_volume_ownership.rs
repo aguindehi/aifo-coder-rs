@@ -14,7 +14,13 @@ fn test_rust_named_volume_ownership_init_creates_stamp_files() {
 
     // Best-effort: remove volumes first to ensure a clean slate (ignore errors)
     let _ = Command::new(&runtime)
-        .args(["volume", "rm", "-f", "aifo-cargo-registry", "aifo-cargo-git"])
+        .args([
+            "volume",
+            "rm",
+            "-f",
+            "aifo-cargo-registry",
+            "aifo-cargo-git",
+        ])
         .status();
 
     // Force named volumes; use official rust image for availability
@@ -52,7 +58,10 @@ fn test_rust_named_volume_ownership_init_creates_stamp_files() {
         check("registry"),
         "expected stamp file in cargo registry named volume"
     );
-    assert!(check("git"), "expected stamp file in cargo git named volume");
+    assert!(
+        check("git"),
+        "expected stamp file in cargo git named volume"
+    );
 
     // Second run should remain successful (idempotent)
     let code2 = aifo_coder::toolchain_run(

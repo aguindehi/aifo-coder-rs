@@ -1,4 +1,3 @@
-
 #[test]
 fn test_rust_run_and_exec_include_user_flags_and_path_env() {
     // For consistency with other tests, skip if docker isn't available
