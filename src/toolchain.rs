@@ -1460,6 +1460,20 @@ pub fn toolexec_start_proxy(
                             tool = "notifications-cmd".to_string();
                         }
                     }
+                    // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
+                    // This helps when clients don't send a body or Content-Length is missing.
+                    if tool.is_empty() {
+                        if let Some(first_line) = header_str.lines().next() {
+                            if let Some(idx) = first_line.find("?tool=") {
+                                let rest = &first_line[idx + 6..];
+                                let end = rest
+                                    .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
+                                    .unwrap_or(rest.len());
+                                let val = &rest[..end];
+                                tool = url_decode(val);
+                            }
+                        }
+                    }
                     if tool.is_empty() {
                         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
                         if auth_ok && (!proto_present || !proto_ok) {
@@ -1809,6 +1823,20 @@ pub fn toolexec_start_proxy(
                     || rp.ends_with("/notify")
                 {
                     tool = "notifications-cmd".to_string();
+                }
+            }
+            // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
+            // This helps when clients don't send a body or Content-Length is missing.
+            if tool.is_empty() {
+                if let Some(first_line) = header_str.lines().next() {
+                    if let Some(idx) = first_line.find("?tool=") {
+                        let rest = &first_line[idx + 6..];
+                        let end = rest
+                            .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
+                            .unwrap_or(rest.len());
+                        let val = &rest[..end];
+                        tool = url_decode(val);
+                    }
                 }
             }
             if tool.is_empty() {
