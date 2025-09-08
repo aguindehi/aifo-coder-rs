@@ -8,15 +8,21 @@ fn test_rust_envs_in_run_and_exec_previews() {
     }
 
     // Save and set proxy/cargo networking envs
-    let saved: Vec<( &'static str, Option<String>)> = vec![
+    let saved: Vec<(&'static str, Option<String>)> = vec![
         ("HTTP_PROXY", env::var("HTTP_PROXY").ok()),
         ("HTTPS_PROXY", env::var("HTTPS_PROXY").ok()),
         ("NO_PROXY", env::var("NO_PROXY").ok()),
         ("http_proxy", env::var("http_proxy").ok()),
         ("https_proxy", env::var("https_proxy").ok()),
         ("no_proxy", env::var("no_proxy").ok()),
-        ("CARGO_NET_GIT_FETCH_WITH_CLI", env::var("CARGO_NET_GIT_FETCH_WITH_CLI").ok()),
-        ("CARGO_REGISTRIES_CRATES_IO_PROTOCOL", env::var("CARGO_REGISTRIES_CRATES_IO_PROTOCOL").ok()),
+        (
+            "CARGO_NET_GIT_FETCH_WITH_CLI",
+            env::var("CARGO_NET_GIT_FETCH_WITH_CLI").ok(),
+        ),
+        (
+            "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+            env::var("CARGO_REGISTRIES_CRATES_IO_PROTOCOL").ok(),
+        ),
         ("RUSTFLAGS", env::var("RUSTFLAGS").ok()),
         ("RUST_BACKTRACE", env::var("RUST_BACKTRACE").ok()),
     ];
@@ -66,8 +72,14 @@ fn test_rust_envs_in_run_and_exec_previews() {
     );
     // Proxies and cargo networking envs
     for key in &[
-        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
-        "CARGO_NET_GIT_FETCH_WITH_CLI", "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "CARGO_NET_GIT_FETCH_WITH_CLI",
+        "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
             run_preview.contains(&format!("-e {}=", key)),
@@ -105,8 +117,14 @@ fn test_rust_envs_in_run_and_exec_previews() {
         exec_preview
     );
     for key in &[
-        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
-        "CARGO_NET_GIT_FETCH_WITH_CLI", "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "CARGO_NET_GIT_FETCH_WITH_CLI",
+        "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
             exec_preview.contains(&format!("-e {}=", key)),
