@@ -1507,17 +1507,15 @@ pub fn toolexec_start_proxy(
                         {
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
-                                // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                                // Accept bare token, or any scheme where the last whitespace-separated token matches
                                 if value == token_for_thread2 {
                                     auth_ok = true;
                                 } else {
-                                    let mut it = value.split_whitespace();
-                                    let scheme = it.next().unwrap_or("");
-                                    let cred = it.next().unwrap_or("");
-                                    if scheme.eq_ignore_ascii_case("bearer")
-                                        && cred == token_for_thread2
-                                    {
-                                        auth_ok = true;
+                                    let parts: Vec<&str> = value.split_whitespace().collect();
+                                    if let Some(last) = parts.last() {
+                                        if *last == token_for_thread2 {
+                                            auth_ok = true;
+                                        }
                                     }
                                 }
                             }
@@ -1879,15 +1877,15 @@ pub fn toolexec_start_proxy(
                 {
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
-                        // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                        // Accept bare token, or any scheme where the last whitespace-separated token matches
                         if value == token_for_thread {
                             auth_ok = true;
                         } else {
-                            let mut it = value.split_whitespace();
-                            let scheme = it.next().unwrap_or("");
-                            let cred = it.next().unwrap_or("");
-                            if scheme.eq_ignore_ascii_case("bearer") && cred == token_for_thread {
-                                auth_ok = true;
+                            let parts: Vec<&str> = value.split_whitespace().collect();
+                            if let Some(last) = parts.last() {
+                                if *last == token_for_thread {
+                                    auth_ok = true;
+                                }
                             }
                         }
                     }
