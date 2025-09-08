@@ -1,5 +1,11 @@
 use std::env;
 
+fn contains_env(preview: &str, key: &str) -> bool {
+    preview.contains(&format!("-e {}=", key))
+        || preview.contains(&format!("-e '{}=", key))
+        || preview.contains(&format!("-e \"{}=", key))
+}
+
 #[test]
 fn test_rust_envs_in_run_and_exec_previews() {
     if aifo_coder::container_runtime_path().is_err() {
@@ -82,7 +88,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
-            run_preview.contains(&format!("-e {}=", key)),
+            contains_env(&run_preview, key),
             "missing {} passthrough in run preview: {}",
             key,
             run_preview
@@ -127,7 +133,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
-            exec_preview.contains(&format!("-e {}=", key)),
+            contains_env(&exec_preview, key),
             "missing {} passthrough in exec preview: {}",
             key,
             exec_preview
