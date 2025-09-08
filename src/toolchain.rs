@@ -291,7 +291,7 @@ pub fn build_sidecar_run_preview(
                         .ok()
                         .filter(|s| !s.trim().is_empty())
                         .map(PathBuf::from)
-                        .or_else(|| home::home_dir());
+                        .or_else(home::home_dir);
                     if let Some(hd) = hd_opt {
                         let reg = hd.join(".cargo").join("registry");
                         let git = hd.join(".cargo").join("git");
@@ -326,7 +326,7 @@ pub fn build_sidecar_run_preview(
                     .ok()
                     .filter(|s| !s.trim().is_empty())
                     .map(PathBuf::from)
-                    .or_else(|| home::home_dir());
+                    .or_else(home::home_dir);
                 if let Some(hd) = hd_opt {
                     let cargo_dir = hd.join(".cargo");
                     let cfg_toml = cargo_dir.join("config.toml");
