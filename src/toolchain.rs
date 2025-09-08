@@ -1197,8 +1197,8 @@ pub fn toolexec_start_proxy(
                         }
                     }
                     if tool.is_empty() {
-                        // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
-                        if proto_present && !proto_ok {
+                        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
+                        if auth_ok && (!proto_present || !proto_ok) {
                             let msg = b"Unsupported shim protocol; expected 1\n";
                             let header = format!(
                                 "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1265,8 +1265,8 @@ pub fn toolexec_start_proxy(
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
-                    // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
-                    if proto_present && !proto_ok {
+                    // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
+                    if auth_ok && (!proto_present || !proto_ok) {
                         let msg = b"Unsupported shim protocol; expected 1\n";
                         let header = format!(
                             "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1530,8 +1530,8 @@ pub fn toolexec_start_proxy(
                 }
             }
             if tool.is_empty() {
-                // If bad protocol, prefer 426; else if auth is missing/invalid, return 401; else 400 for malformed body
-                if proto_present && !proto_ok {
+                // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
+                if auth_ok && (!proto_present || !proto_ok) {
                     let msg = b"Unsupported shim protocol; expected 1\n";
                     let header = format!(
                         "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1597,8 +1597,8 @@ pub fn toolexec_start_proxy(
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
-            // Enforce protocol first (426 on bad proto), then Authorization (401 when missing/invalid)
-            if proto_present && !proto_ok {
+            // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
+            if auth_ok && (!proto_present || !proto_ok) {
                 let msg = b"Unsupported shim protocol; expected 1\n";
                 let header = format!(
                     "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
