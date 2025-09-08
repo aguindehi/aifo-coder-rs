@@ -211,8 +211,7 @@ fn init_rust_named_volumes_if_needed(
                 && mnt.ends_with("/home/coder/.cargo/registry")
             {
                 need_registry = true;
-            } else if mnt.starts_with("aifo-cargo-git:")
-                && mnt.ends_with("/home/coder/.cargo/git")
+            } else if mnt.starts_with("aifo-cargo-git:") && mnt.ends_with("/home/coder/.cargo/git")
             {
                 need_git = true;
             }
