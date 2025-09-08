@@ -272,6 +272,11 @@ pub fn build_sidecar_run_preview(
                 args.push("-e".to_string());
                 args.push("RUST_BACKTRACE=1".to_string());
             }
+            // For official rust images, preserve legacy CARGO_HOME for test/back-compat
+            if is_official_rust_image(image) {
+                args.push("-e".to_string());
+                args.push("CARGO_HOME=/usr/local/cargo".to_string());
+            }
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
@@ -1355,7 +1360,12 @@ pub fn toolexec_start_proxy(
                             Err(_) => break,
                         }
                     }
-                    let Some(hend) = header_end else {
+                    let hend = if let Some(h) = header_end {
+                        h
+                    } else if !buf.is_empty() {
+                        // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
+                        buf.len()
+                    } else {
                         let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.flush();
@@ -1703,7 +1713,12 @@ pub fn toolexec_start_proxy(
                     Err(_) => break,
                 }
             }
-            let Some(hend) = header_end else {
+            let hend = if let Some(h) = header_end {
+                h
+            } else if !buf.is_empty() {
+                // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
+                buf.len()
+            } else {
                 let header =
                     "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());
