@@ -30,7 +30,10 @@ fn test_rust_host_cargo_config_mount() {
     );
     let preview = aifo_coder::shell_join(&args);
     assert!(
-        preview.contains(&format!("{}:/home/coder/.cargo/config.toml:ro", cfg.display())),
+        preview.contains(&format!(
+            "{}:/home/coder/.cargo/config.toml:ro",
+            cfg.display()
+        )),
         "missing host cargo config mount: {}",
         preview
     );
