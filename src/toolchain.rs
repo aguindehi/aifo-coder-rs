@@ -50,23 +50,31 @@ fn default_toolchain_image(kind: &str) -> String {
             }
             // Force official rust image when requested; prefer versioned tag if provided
             if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
-                if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
-                    let v = ver.trim();
-                    if !v.is_empty() {
-                        return format!("rust:{}-bookworm", v);
+                let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
+                let v_opt = ver
+                    .as_deref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty());
+                return official_rust_image_for_version(v_opt);
+            }
+            // Prefer our first-party toolchain image; versioned when requested, with availability probe and fallback
+            if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
+                let v = ver.trim().to_string();
+                if !v.is_empty() {
+                    let cand = format!("aifo-rust-toolchain:{}", v);
+                    if docker_image_available(&cand) {
+                        return cand;
+                    } else {
+                        return official_rust_image_for_version(Some(v.as_str()));
                     }
                 }
-                // Default to the baseline tag used by our toolchain image when no version is provided
-                return "rust:1.80-bookworm".to_string();
             }
-            // Otherwise prefer our first-party toolchain image (versioned when requested)
-            if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
-                let v = ver.trim();
-                if !v.is_empty() {
-                    return format!("aifo-rust-toolchain:{}", v);
-                }
+            let cand = "aifo-rust-toolchain:latest".to_string();
+            if docker_image_available(&cand) {
+                cand
+            } else {
+                official_rust_image_for_version(None)
             }
-            "aifo-rust-toolchain:latest".to_string()
         }
         "node" => "node:20-bookworm-slim".to_string(),
         "python" => "python:3.12-slim".to_string(),
@@ -79,7 +87,7 @@ fn default_toolchain_image(kind: &str) -> String {
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
-        "rust" => format!("rust:{}-slim", version),
+        "rust" => format!("aifo-rust-toolchain:{}", version),
         "node" | "typescript" => format!("node:{}-bookworm-slim", version),
         "python" => format!("python:{}-slim", version),
         "go" => format!("golang:{}-bookworm", version),
@@ -88,7 +96,7 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
     }
 }
 
-// Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
+ // Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
 fn is_official_rust_image(image: &str) -> bool {
     let image = image.trim();
     if image.is_empty() {
@@ -101,6 +109,31 @@ fn is_official_rust_image(image: &str) -> bool {
     // Last path segment should be "rust" for official images
     let last_seg = repo.rsplit('/').next().unwrap_or(repo);
     last_seg == "rust"
+}
+
+fn official_rust_image_for_version(version_opt: Option<&str>) -> String {
+    let v = match version_opt {
+        Some(s) if !s.is_empty() => s,
+        _ => "1.80",
+    };
+    format!("rust:{}-bookworm", v)
+}
+
+// Best-effort check: return true if image is present locally. If docker is unavailable, assume true.
+fn docker_image_available(image: &str) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        if let Ok(status) = Command::new(&runtime)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        {
+            return status.success();
+        }
+    }
+    true
 }
 
 fn sidecar_container_name(kind: &str, id: &str) -> String {
