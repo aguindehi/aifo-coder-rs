@@ -332,15 +332,14 @@ pub fn build_sidecar_exec_preview(
     args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
 
     // Phase 2 marking: when executing with an official rust image, mark for bootstrap (Phase 4 will consume this)
-    if kind == "rust" {
-        if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+    if kind == "rust"
+        && std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
             .ok()
             .as_deref()
             == Some("1")
-        {
-            args.push("-e".to_string());
-            args.push("AIFO_RUST_OFFICIAL_BOOTSTRAP=1".to_string());
-        }
+    {
+        args.push("-e".to_string());
+        args.push("AIFO_RUST_OFFICIAL_BOOTSTRAP=1".to_string());
     }
 
     match kind {
