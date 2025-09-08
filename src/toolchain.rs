@@ -51,10 +51,7 @@ fn default_toolchain_image(kind: &str) -> String {
             // Force official rust image when requested; prefer versioned tag if provided
             if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
                 let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
-                let v_opt = ver
-                    .as_deref()
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty());
+                let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
                 return official_rust_image_for_version(v_opt);
             }
             // Prefer our first-party toolchain image; versioned when requested, with availability probe and fallback
@@ -96,7 +93,7 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
     }
 }
 
- // Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
+// Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
 fn is_official_rust_image(image: &str) -> bool {
     let image = image.trim();
     if image.is_empty() {
