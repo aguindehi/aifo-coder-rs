@@ -49,11 +49,7 @@ fn default_toolchain_image(kind: &str) -> String {
                 }
             }
             // Force official rust image when requested; prefer versioned tag if provided
-            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
-                .ok()
-                .as_deref()
-                == Some("1")
-            {
+            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
                 if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
                     let v = ver.trim();
                     if !v.is_empty() {
@@ -84,11 +80,7 @@ fn default_toolchain_image(kind: &str) -> String {
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
         "rust" => {
-            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
-                .ok()
-                .as_deref()
-                == Some("1")
-            {
+            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
                 format!("rust:{}-bookworm", version)
             } else {
                 format!("aifo-rust-toolchain:{}", version)

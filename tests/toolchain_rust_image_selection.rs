@@ -7,21 +7,17 @@ fn test_rust_image_selection_default_and_official() {
 
     // Default mapping: our image for versioned rust
     env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
-    let img_default =
-        aifo_coder::default_toolchain_image_for_version("rust", "1.80");
+    let img_default = aifo_coder::default_toolchain_image_for_version("rust", "1.80");
     assert_eq!(
-        img_default,
-        "aifo-rust-toolchain:1.80",
+        img_default, "aifo-rust-toolchain:1.80",
         "expected our toolchain image by default"
     );
 
     // Official mapping when requested
     env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
-    let img_official =
-        aifo_coder::default_toolchain_image_for_version("rust", "1.80");
+    let img_official = aifo_coder::default_toolchain_image_for_version("rust", "1.80");
     assert_eq!(
-        img_official,
-        "rust:1.80-bookworm",
+        img_official, "rust:1.80-bookworm",
         "expected official rust image when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1"
     );
 
