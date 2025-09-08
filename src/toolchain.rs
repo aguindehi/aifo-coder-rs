@@ -41,7 +41,37 @@ pub fn normalize_toolchain_kind(kind: &str) -> String {
 
 fn default_toolchain_image(kind: &str) -> String {
     match kind {
-        "rust" => "rust:1.80-slim".to_string(),
+        "rust" => {
+            // Explicit override takes precedence
+            if let Ok(img) = env::var("AIFO_RUST_TOOLCHAIN_IMAGE") {
+                if !img.trim().is_empty() {
+                    return img;
+                }
+            }
+            // Force official rust image when requested; prefer versioned tag if provided
+            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
+                    let v = ver.trim();
+                    if !v.is_empty() {
+                        return format!("rust:{}-bookworm", v);
+                    }
+                }
+                // Default to the baseline tag used by our toolchain image when no version is provided
+                return "rust:1.80-bookworm".to_string();
+            }
+            // Otherwise prefer our first-party toolchain image (versioned when requested)
+            if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
+                let v = ver.trim();
+                if !v.is_empty() {
+                    return format!("aifo-rust-toolchain:{}", v);
+                }
+            }
+            "aifo-rust-toolchain:latest".to_string()
+        }
         "node" => "node:20-bookworm-slim".to_string(),
         "python" => "python:3.12-slim".to_string(),
         "c-cpp" => "aifo-cpp-toolchain:latest".to_string(),
@@ -53,13 +83,28 @@ fn default_toolchain_image(kind: &str) -> String {
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
-        "rust" => format!("rust:{}-slim", version),
+        "rust" => format!("aifo-rust-toolchain:{}", version),
         "node" | "typescript" => format!("node:{}-bookworm-slim", version),
         "python" => format!("python:{}-slim", version),
         "go" => format!("golang:{}-bookworm", version),
         "c-cpp" => "aifo-cpp-toolchain:latest".to_string(), // no version mapping
         _ => default_toolchain_image(kind),
     }
+}
+
+// Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
+fn is_official_rust_image(image: &str) -> bool {
+    let image = image.trim();
+    if image.is_empty() {
+        return false;
+    }
+    // Take the repository component before the last ':' to avoid confusing registry host:port
+    let mut parts = image.rsplitn(2, ':');
+    let _tag = parts.next().unwrap_or("");
+    let repo = parts.next().unwrap_or(image);
+    // Last path segment should be "rust" for official images
+    let last_seg = repo.rsplit('/').next().unwrap_or(repo);
+    last_seg == "rust"
 }
 
 fn sidecar_container_name(kind: &str, id: &str) -> String {
@@ -284,6 +329,18 @@ pub fn build_sidecar_exec_preview(
     args.push("-e".to_string());
     args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
 
+    // Phase 2 marking: when executing with an official rust image, mark for bootstrap (Phase 4 will consume this)
+    if kind == "rust" {
+        if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            args.push("-e".to_string());
+            args.push("AIFO_RUST_OFFICIAL_BOOTSTRAP=1".to_string());
+        }
+    }
+
     match kind {
         "rust" => {
             args.push("-e".to_string());
@@ -390,6 +447,10 @@ pub fn toolchain_run(
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
+    // Phase 2: mark official rust image selection to engage bootstrap in exec (handled in Phase 4)
+    let bootstrap_official_rust = sidecar_kind == "rust"
+        && (env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+            || is_official_rust_image(&image));
     let session_id = env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -473,6 +534,11 @@ pub fn toolchain_run(
     }
 
     // docker exec
+    if bootstrap_official_rust {
+        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+    } else {
+        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    }
     let exec_preview_args = build_sidecar_exec_preview(
         &name,
         if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -498,6 +564,8 @@ pub fn toolchain_run(
             .map_err(|e| io::Error::new(e.kind(), format!("failed to exec in sidecar: {e}")))?;
         exit_code = status.code().unwrap_or(1);
     }
+    // Clear bootstrap marker from environment (best-effort)
+    env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
 
     // Cleanup: stop sidecar and remove network (best-effort)
     if !dry_run {
