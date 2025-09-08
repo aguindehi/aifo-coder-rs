@@ -1155,10 +1155,13 @@ pub fn toolexec_start_proxy(
                     }
                     // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
                     let mut query_pairs: Vec<(String, String)> = Vec::new();
+                    let mut request_path_lc = String::new();
                     if let Some(first_line) = header_str.lines().next() {
                         let mut parts = first_line.split_whitespace();
                         let _method = parts.next();
                         if let Some(target) = parts.next() {
+                            let path_only = target.split('?').next().unwrap_or(target);
+                            request_path_lc = path_only.to_ascii_lowercase();
                             if let Some(idx) = target.find('?') {
                                 let q = &target[idx + 1..];
                                 query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
@@ -1191,6 +1194,12 @@ pub fn toolexec_start_proxy(
                         }
                     }
                     if tool.is_empty() {
+                        let rp = request_path_lc.as_str();
+                        if rp.ends_with("/notifications") || rp.ends_with("/notifications-cmd") || rp.ends_with("/notify") {
+                            tool = "notifications-cmd".to_string();
+                        }
+                    }
+                    if tool.is_empty() {
                         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
                         if auth_ok && (!proto_present || !proto_ok) {
                             let msg = b"Unsupported shim protocol; expected 1\n";
@@ -1217,7 +1226,7 @@ pub fn toolexec_start_proxy(
                             continue;
                         }
                     }
-                    if tool == "notifications-cmd" {
+                    if tool.eq_ignore_ascii_case("notifications-cmd") {
                         match crate::toolchain::notifications_handle_request(
                             &argv,
                             verbose,
@@ -1488,10 +1497,13 @@ pub fn toolexec_start_proxy(
             }
             // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
             let mut query_pairs: Vec<(String, String)> = Vec::new();
+            let mut request_path_lc = String::new();
             if let Some(first_line) = header_str.lines().next() {
                 let mut parts = first_line.split_whitespace();
                 let _method = parts.next();
                 if let Some(target) = parts.next() {
+                    let path_only = target.split('?').next().unwrap_or(target);
+                    request_path_lc = path_only.to_ascii_lowercase();
                     if let Some(idx) = target.find('?') {
                         let q = &target[idx + 1..];
                         query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
@@ -1524,6 +1536,12 @@ pub fn toolexec_start_proxy(
                 }
             }
             if tool.is_empty() {
+                let rp = request_path_lc.as_str();
+                if rp.ends_with("/notifications") || rp.ends_with("/notifications-cmd") || rp.ends_with("/notify") {
+                    tool = "notifications-cmd".to_string();
+                }
+            }
+            if tool.is_empty() {
                 // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
                 if auth_ok && (!proto_present || !proto_ok) {
                     let msg = b"Unsupported shim protocol; expected 1\n";
@@ -1552,7 +1570,7 @@ pub fn toolexec_start_proxy(
                     continue;
                 }
             }
-            if tool == "notifications-cmd" {
+            if tool.eq_ignore_ascii_case("notifications-cmd") {
                 match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
