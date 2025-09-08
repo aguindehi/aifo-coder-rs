@@ -539,6 +539,25 @@ pub fn build_sidecar_exec_preview(
                     args.push(format!("RUSTFLAGS={}", rf));
                 }
             }
+            // Pass-through proxies and cargo networking envs for exec as well
+            let passthrough = [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "NO_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "no_proxy",
+                "CARGO_NET_GIT_FETCH_WITH_CLI",
+                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+            ];
+            for name in passthrough.iter() {
+                if let Ok(val) = env::var(name) {
+                    if !val.is_empty() {
+                        args.push("-e".to_string());
+                        args.push(format!("{}={}", name, val));
+                    }
+                }
+            }
         }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
