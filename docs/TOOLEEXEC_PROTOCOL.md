@@ -50,7 +50,7 @@ Tool routing and allowlists
   - Node/TS tools: node, npm, npx, tsc, ts-node → node sidecar.
   - Python tools: python, python3, pip, pip3 → python sidecar.
   - Go tools: go, gofmt → go sidecar.
-- Alowlists per sidecar include relevant dev tools to allow execution where present.
+- Allowlists per sidecar include relevant dev tools to allow execution where present.
 
 Notes
 - The server does not set a write timeout in streaming mode to avoid mid-body truncation.
