@@ -31,6 +31,14 @@ RUN set -eux; \
       tzdata \
       locales; \
     rm -rf /var/lib/apt/lists/*
+    
+# Optionally trust corporate CA via BuildKit secret and update system trust store
+# Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
+RUN --mount=type=secret,id=migros_root_ca,required=false,target=/run/secrets/MigrosRootCA2.crt \
+    if [ -s /run/secrets/MigrosRootCA2.crt ]; then \
+      cp /run/secrets/MigrosRootCA2.crt /usr/local/share/ca-certificates/MigrosRootCA2.crt; \
+      update-ca-certificates; \
+    fi
 
 # Locale
 ENV LANG=C.UTF-8 \
