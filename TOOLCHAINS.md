@@ -1,145 +1,152 @@
-# Toolchains Guide
+# AIFO Rust Toolchain (v7)
 
-This guide explains how to use language toolchains with aifo-coder: sidecar containers, PATH shims, the toolexec proxy, caches, and the optional Linux unix-socket transport.
+This document explains how to use the Rust toolchain sidecar in AIFO Coder. It covers image selection, cache strategy and mounts, required environment defaults, optional integrations (SSH, sccache, proxies, fast linkers), Windows-specific behavior, and ownership initialization of named volumes. Migration notes and troubleshooting tips are provided at the end.
 
-Contents
-- Overview
-- Commands and flags
-- Linux unix-socket mode
-- C/C++ sidecar image (build and publish)
-- Caches and cache purge
-- Examples
-- Notes
-- Tests
+Quick start
+- Default behavior “just works” on Linux/macOS when launching an agent with the rust toolchain:
+  - CARGO_HOME=/home/coder/.cargo
+  - PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH
+  - cargo nextest, clippy, rustfmt are available by default when using aifo-rust-toolchain images.
+- Caches:
+  - Host-preferred cargo caches if $HOME/.cargo/{registry,git} exist.
+  - Otherwise fall back to named Docker volumes aifo-cargo-registry and aifo-cargo-git.
+- Windows defaults to named volumes for cargo caches.
 
-## Overview
+Image selection
+- Prefer the first-party toolchain image by default:
+  - aifo-rust-toolchain:<version|latest>
+- Environment variables:
+  - AIFO_RUST_TOOLCHAIN_IMAGE: Full image override (highest precedence).
+  - AIFO_RUST_TOOLCHAIN_VERSION: Preferred tag for aifo-rust-toolchain; defaults to latest when unset.
+  - AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1: Force official rust:<version>-bookworm/slim and enable the bootstrap wrapper.
+- Fallback:
+  - If aifo-rust-toolchain is unavailable, we fall back to an official rust image and engage the bootstrap to install cargo-nextest and rustup components when needed.
 
-- When you attach toolchains, aifo-coder starts one or more language-specific “sidecar” containers and injects a small shim directory on PATH inside the agent, so tools like cargo, npx, python, gcc, go work transparently via a host-side proxy.
-- Sidecars share the same workspace bind mount and use named Docker volumes for caching (cargo, npm, pip, ccache, go) to speed up builds across runs.
-- No Docker socket is mounted into containers; AppArmor is used when available.
+Toolchain image contents (aifo-rust-toolchain)
+- Preinstalled rustup components:
+  - clippy, rustfmt, rust-src, llvm-tools-preview
+- Cargo tools:
+  - cargo-nextest (installed with cargo install --locked)
+- System packages commonly needed by crates:
+  - build-essential, pkg-config, cmake, ninja, clang, libclang-dev
+  - python3, libssl-dev, zlib1g-dev, libsqlite3-dev, libcurl4-openssl-dev
+  - git, ca-certificates, curl, tzdata, locales
+- Environment in image:
+  - CARGO_HOME=/home/coder/.cargo
+  - PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH
+  - LANG/LC_ALL=C.UTF-8
 
-See also: Fork mode documentation in the README (Fork mode section) and the man page (aifo-coder(1), FORK MODE).
+Runtime environment in sidecar
+- Always set in rust sidecar:
+  - HOME=/home/coder
+  - GNUPGHOME=/home/coder/.gnupg
+  - CARGO_HOME=/home/coder/.cargo
+  - PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH
+  - Default RUST_BACKTRACE=1 when unset
+- Networking:
+  - Sidecars join a session network: aifo-net-<sid>.
+  - Linux: when AIFO_TOOLEEXEC_ADD_HOST=1, add --add-host host.docker.internal:host-gateway for host connectivity.
+  - The agent proxy can optionally use a unix socket transport on Linux when AIFO_TOOLEEXEC_USE_UNIX=1 (mounted at /run/aifo).
 
-## Commands and flags
+Cache strategy and mounts
+- Linux/macOS defaults (unless caches disabled):
+  - If $HOME/.cargo/registry exists: mount to /home/coder/.cargo/registry; else use named volume aifo-cargo-registry at that path.
+  - If $HOME/.cargo/git exists: mount to /home/coder/.cargo/git; else use named volume aifo-cargo-git at that path.
+  - For compatibility with older workflows, named volumes are also mounted at legacy paths:
+    - /usr/local/cargo/registry and /usr/local/cargo/git
+- Windows defaults:
+  - Always use named volumes by default:
+    - aifo-cargo-registry -> /home/coder/.cargo/registry
+    - aifo-cargo-git -> /home/coder/.cargo/git
+- Disabling caches:
+  - AIFO_TOOLCHAIN_NO_CACHE=1 disables cargo cache mounts entirely.
+- Forcing named volumes:
+  - AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES=1 forces aifo-cargo-{registry,git} even if host caches are present.
 
-- Global agent invocation with toolchains:
-  - Use one or more `--toolchain` flags (repeatable).
-  - Optional versioned toolchain specs:
-    - `--toolchain-spec kind[@version]`, e.g. `rust@1.80` → `rust:1.80-slim`, `node@20` → `node:20-bookworm-slim`
-  - Optional image overrides and cache controls:
-    - `--toolchain-image KIND=IMAGE`
-    - `--no-toolchain-cache`
-  - Optional Linux-only unix socket transport:
-    - `--toolchain-unix-socket`
-  - Optional bootstrap actions:
-    - `--toolchain-bootstrap typescript=global` (installs a global `tsc` in the node sidecar if requested)
+Ownership initialization
+- When named volumes are used for cargo caches, the sidecar performs best-effort “ownership initialization” to ensure writability by the mapped uid:gid:
+  - Creates /home/coder/.cargo/{registry,git} if missing.
+  - chown -R to uid:gid inside a short-lived helper container.
+  - Writes a stamp file to avoid repeat work:
+    - /home/coder/.cargo/<subdir>/.aifo-init-done
+- This runs once per volume, re-attempting if the stamp is missing or the directory remains unwritable.
+- Verbose mode (AIFO_TOOLCHAIN_VERBOSE=1) prints the helper invocation and concise diagnostics.
+- Troubleshooting ownership:
+  - Remove volumes then retry to reinitialize: docker volume rm -f aifo-cargo-registry aifo-cargo-git
+  - Re-run the tool; initialization should recreate and chown the paths.
 
-### Examples
+Optional mounts and environment
+- Host cargo config (read-only):
+  - AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG=1 mounts $HOME/.cargo/config(.toml) as /home/coder/.cargo/config.toml:ro when present.
+- SSH agent forwarding:
+  - AIFO_TOOLCHAIN_SSH_FORWARD=1 and SSH_AUTH_SOCK set:
+    - Binds the socket path and exports SSH_AUTH_SOCK inside the container.
+- sccache:
+  - AIFO_RUST_SCCACHE=1 enables sccache.
+  - Mounts:
+    - If AIFO_RUST_SCCACHE_DIR is set: -v $AIFO_RUST_SCCACHE_DIR:/home/coder/.cache/sccache
+    - Else: -v aifo-sccache:/home/coder/.cache/sccache
+  - Exports:
+    - RUSTC_WRAPPER=sccache
+    - SCCACHE_DIR=/home/coder/.cache/sccache
+  - sccache can significantly accelerate rebuilds across sessions.
+- Proxies and cargo networking:
+  - Pass-through when set on the host:
+    - HTTP_PROXY, HTTPS_PROXY, NO_PROXY and lowercase variants
+    - CARGO_NET_GIT_FETCH_WITH_CLI
+    - CARGO_REGISTRIES_CRATES_IO_PROTOCOL
+- Fast linkers:
+  - AIFO_RUST_LINKER=lld or mold appends to RUSTFLAGS:
+    - lld: -Clinker=clang -Clink-arg=-fuse-ld=lld
+    - mold: -Clinker=clang -Clink-arg=-fuse-ld=mold
 
-TCP proxy (default; works on macOS, Windows, Linux):
-```bash
-aifo-coder --toolchain rust aider -- cargo --version
-aifo-coder --toolchain node aider -- npx --version
-aifo-coder --toolchain python aider -- python -m pip --version
-aifo-coder --toolchain c-cpp aider -- cmake --version
-```
+Bootstrap wrapper (official rust images)
+- When using official rust:<tag>-bookworm/slim images, the first exec is wrapped to ensure required developer tools:
+  - cargo nextest -V succeeds or cargo install cargo-nextest --locked is run.
+  - rustup component add clippy rustfmt when missing.
+  - If AIFO_RUST_SCCACHE=1 and sccache is not installed, a concise warning is printed.
+- Idempotent: subsequent execs are fast as tools are cached inside the container.
+- Verbosity:
+  - AIFO_TOOLCHAIN_VERBOSE=1 prints the commands executed by the wrapper.
 
-Versioned specs and bootstrap:
-```bash
-aifo-coder --toolchain-spec rust@1.80 --toolchain-spec node@20 aider -- cargo --version
-aifo-coder --toolchain node --toolchain-bootstrap typescript=global aider -- tsc --version
-```
+Windows guidance
+- Cargo caches use named volumes by default (host path semantics vary on Windows).
+- All environment defaults remain the same:
+  - CARGO_HOME=/home/coder/.cargo
+  - PATH includes $CARGO_HOME/bin and /usr/local/cargo/bin.
+- Optional features (sccache, proxies, linkers) are enabled via the same environment variables.
 
-Per-run overrides:
-```bash
-aifo-coder --toolchain rust --toolchain-image rust=rust:1.80-slim aider -- cargo --help
-aifo-coder --toolchain node --no-toolchain-cache aider -- npm ci
-```
+Environment variables (summary)
+- Image selection:
+  - AIFO_RUST_TOOLCHAIN_IMAGE
+  - AIFO_RUST_TOOLCHAIN_VERSION
+  - AIFO_RUST_TOOLCHAIN_USE_OFFICIAL
+- Caches:
+  - AIFO_TOOLCHAIN_NO_CACHE
+  - AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES
+  - AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG
+- SSH:
+  - AIFO_TOOLCHAIN_SSH_FORWARD, SSH_AUTH_SOCK
+- sccache:
+  - AIFO_RUST_SCCACHE, AIFO_RUST_SCCACHE_DIR
+- Linkers:
+  - AIFO_RUST_LINKER
+- Proxies/cargo networking:
+  - HTTP_PROXY, HTTPS_PROXY, NO_PROXY (and lowercase)
+  - CARGO_NET_GIT_FETCH_WITH_CLI, CARGO_REGISTRIES_CRATES_IO_PROTOCOL
+- Diagnostics:
+  - AIFO_TOOLCHAIN_VERBOSE, RUST_BACKTRACE
 
-## Linux unix-socket mode
+Migration notes
+- CARGO_HOME is standardized as /home/coder/.cargo (was /usr/local/cargo in earlier versions).
+- PATH must include $CARGO_HOME/bin and retain /usr/local/cargo/bin as fallback.
+- Named volumes for registry and git cache remain aifo-cargo-registry and aifo-cargo-git.
+- Legacy mounts at /usr/local/cargo/{registry,git} may also be present to ease transition for older tooling.
 
-- On Linux, you can use a unix domain socket for the toolexec proxy instead of TCP.
-- Benefits: smaller network surface; no reliance on `host.docker.internal`.
-
-How to enable:
-```bash
-aifo-coder --toolchain rust --toolchain-unix-socket aider -- cargo --version
-```
-
-Under the hood:
-- The proxy binds to a unix socket, and the socket directory is mounted into the agent at `/run/aifo`.
-- The shim resolves `AIFO_TOOLEEXEC_URL=unix:///run/aifo/toolexec.sock` and connects via UnixStream.
-
-## C/C++ sidecar image (build and publish)
-
-- Default reference: `aifo-cpp-toolchain:latest` (Debian bookworm-slim, build-essential, clang, cmake, ninja, pkg-config, ccache).
-
-Build locally:
-```bash
-make build-toolchain-cpp
-```
-
-Rebuild without cache:
-```bash
-make rebuild-toolchain-cpp
-```
-
-Safe multi-arch publish (never to Docker Hub by default):
-- Set a private registry prefix via `REGISTRY` or `AIFO_CODER_REGISTRY_PREFIX`.
-```bash
-make publish-toolchain-cpp PLATFORMS=linux/amd64,linux/arm64 PUSH=1 REGISTRY=repository.migros.net/
-```
-- If `REGISTRY` is not provided and `PUSH=1`, an OCI archive is written to `dist/aifo-cpp-toolchain-latest.oci.tar` instead of pushing.
-
-## Caches and cache purge
-
-- Caches are enabled by default and persist across runs via named Docker volumes:
-  - Rust: `aifo-cargo-registry`, `aifo-cargo-git`
-  - Node: `aifo-npm-cache`
-  - Python: `aifo-pip-cache`
-  - C/C++: `aifo-ccache`
-  - Go: `aifo-go`
-- Disable caches for a single run: `--no-toolchain-cache`
-
-Purge caches:
-```bash
-aifo-coder toolchain-cache-clear
-make toolchain-cache-clear
-```
-
-## Examples
-
-Dry run to preview Docker commands:
-```bash
-aifo-coder --verbose --dry-run --toolchain rust aider -- cargo build --release
-```
-
-Use toolchain subcommand (Phase 1 behavior) to run commands directly in a sidecar:
-```bash
-aifo-coder toolchain rust -- cargo --version
-aifo-coder toolchain node -- npx --version
-aifo-coder toolchain python -- python -m pip --version
-aifo-coder toolchain c-cpp -- cmake --version
-```
-
-## Notes
-
-- On Linux, when using TCP mode, aifo-coder adds `--add-host=host.docker.internal:host-gateway` to ensure connectivity to the host proxy from inside containers.
-- On macOS/Windows, `host.docker.internal` resolves automatically inside Docker Desktop/VMs.
-
-## Tests
-
-- TCP proxy smoke (ignored by default; runs when you pass `-- --ignored`):
-```bash
-make test-proxy-smoke
-```
-
-- Linux-only unix-socket proxy smoke (falls back to TCP on non-Linux):
-```bash
-make test-proxy-unix
-```
-
-- C/C++ sidecar dry-run tests:
-```bash
-make test-toolchain-cpp
-```
+Troubleshooting
+- cargo-nextest not found on official rust images:
+  - Use AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=0 (or unset) to prefer aifo-rust-toolchain, or rely on the bootstrap wrapper which installs nextest on first run.
+- Permission denied under /home/coder/.cargo/{registry,git}:
+  - Remove volumes (docker volume rm -f aifo-cargo-registry aifo-cargo-git) and retry, or run with AIFO_TOOLCHAIN_VERBOSE=1 to see ownership initialization attempts.
+- Network access to host from sidecar on Linux:
+  - Set AIFO_TOOLEEXEC_ADD_HOST=1 to add host.docker.internal:host-gateway to sidecar runs.
