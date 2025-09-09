@@ -18,6 +18,10 @@ RUN apt-get update \
     git \
  && rm -rf /var/lib/apt/lists/*
 
+# Ensure traditional compiler entrypoints exist (hardlink cc/c++ to gcc/g++)
+# Some build scripts expect 'cc'/'c++' explicitly.
+RUN ln -f /usr/bin/gcc /usr/bin/cc && ln -f /usr/bin/g++ /usr/bin/c++
+
 # Prepare a world-writable HOME for arbitrary uid:gid mappings
 RUN mkdir -p /home/coder/.cache/ccache \
  && chmod -R 0777 /home/coder
