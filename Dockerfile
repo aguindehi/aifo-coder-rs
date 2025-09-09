@@ -48,6 +48,38 @@ RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
     for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'set -e' \
+  'if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then' \
+  '  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2' \
+  '  exit 86' \
+  'fi' \
+  'tool="$(basename "$0")"' \
+  'cwd="$(pwd)"' \
+  'tmp="${TMPDIR:-/tmp}/aifo-shim.$$"' \
+  'mkdir -p "$tmp"' \
+  'conf="$tmp/curl.conf"' \
+  ': > "$conf"' \
+  'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
+  'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
+  'printf "%s\n" "request = POST" >> "$conf"' \
+  'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
+  'printf "%s\n" "header = TE: trailers" >> "$conf"' \
+  'printf "data = tool=%s\n" "$tool" >> "$conf"' \
+  'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
+  'for a in "$@"; do' \
+  '  printf "data = arg=%s\n" "$a" >> "$conf"' \
+  'done' \
+  'printf "url = %s\n" "$AIFO_TOOLEEXEC_URL" >> "$conf"' \
+  'curl --config "$conf"' \
+  'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
+  'rm -rf "$tmp"' \
+  'case "$ec" in "") ec=1 ;; esac' \
+  'exit "$ec"' \
+  > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -213,6 +245,38 @@ RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
     for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'set -e' \
+  'if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then' \
+  '  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2' \
+  '  exit 86' \
+  'fi' \
+  'tool="$(basename "$0")"' \
+  'cwd="$(pwd)"' \
+  'tmp="${TMPDIR:-/tmp}/aifo-shim.$$"' \
+  'mkdir -p "$tmp"' \
+  'conf="$tmp/curl.conf"' \
+  ': > "$conf"' \
+  'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
+  'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
+  'printf "%s\n" "request = POST" >> "$conf"' \
+  'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
+  'printf "%s\n" "header = TE: trailers" >> "$conf"' \
+  'printf "data = tool=%s\n" "$tool" >> "$conf"' \
+  'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
+  'for a in "$@"; do' \
+  '  printf "data = arg=%s\n" "$a" >> "$conf"' \
+  'done' \
+  'printf "url = %s\n" "$AIFO_TOOLEEXEC_URL" >> "$conf"' \
+  'curl --config "$conf"' \
+  'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
+  'rm -rf "$tmp"' \
+  'case "$ec" in "") ec=1 ;; esac' \
+  'exit "$ec"' \
+  > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
