@@ -667,7 +667,7 @@ mod tests {
             joined
         );
         assert!(
-            joined.contains("CARGO_HOME=/usr/local/cargo"),
+            joined.contains("CARGO_HOME=/home/coder/.cargo"),
             "missing CARGO_HOME env: {}",
             joined
         );
