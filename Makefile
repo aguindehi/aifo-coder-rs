@@ -353,6 +353,7 @@ build-debug:
 build-toolchain-rust:
 	@set -e; \
 	echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."; \
+	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
 	RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
 	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
@@ -379,6 +380,7 @@ build-toolchain-rust:
 rebuild-toolchain-rust:
 	@set -e; \
 	echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
+	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
 	RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
 	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
@@ -398,27 +400,16 @@ rebuild-toolchain-rust:
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
 	fi
 
-.PHONY: build-toolchain-cpp rebuild-toolchain-cpp
-build-toolchain-cpp:
-	@echo "Building aifo-cpp-toolchain:latest ..."
-	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
-
-rebuild-toolchain-cpp:
-	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
-	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
-
 .PHONY: publish-toolchain-rust
 publish-toolchain-rust:
 	@set -e; \
 	echo "Publishing aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	# Normalize REG to have optional trailing slash
 	case "$$REG" in \
 	  */) ;; \
 	  "") ;; \
 	  *) REG="$$REG/";; \
 	esac; \
-	# Determine registry prefix for base images (internal when reachable) \
 	RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
 	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
@@ -441,12 +432,20 @@ publish-toolchain-rust:
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
 	fi
 
+.PHONY: build-toolchain-cpp rebuild-toolchain-cpp
+build-toolchain-cpp:
+	@echo "Building aifo-cpp-toolchain:latest ..."
+	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
+rebuild-toolchain-cpp:
+	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
+	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	# Normalize REG to have optional trailing slash
 	case "$$REG" in \
 	  */) ;; \
 	  "") ;; \
