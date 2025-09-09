@@ -219,7 +219,8 @@ RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 RUST_TOOLCHAIN_TAG ?= latest
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
-RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca,src=$(MIGROS_CA),)
+COMMA := ,
+RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
