@@ -1406,7 +1406,7 @@ cwd="$(pwd)"
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
-cmd=(curl -sS -D "$tmp/h" -o "$tmp/b" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN")
+cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2")
 cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
@@ -1415,7 +1415,7 @@ done
 cmd+=("$AIFO_TOOLEEXEC_URL")
 "${cmd[@]}"
 ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
-cat "$tmp/b"
+: # body streamed directly by curl
 rm -rf "$tmp"
 # Fallback to 1 if header missing
 case "$ec" in '' ) ec=1 ;; esac
@@ -1621,7 +1621,7 @@ pub fn toolexec_start_proxy(
                         }
                     };
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
-                    let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
+                    let _ = stream.set_write_timeout(None);
                     // Read request (simple HTTP)
                     let mut buf = Vec::new();
                     let mut hdr = Vec::new();
@@ -1665,6 +1665,8 @@ pub fn toolexec_start_proxy(
                     let mut content_len: usize = 0;
                     let mut proto_ok = false;
                     let mut proto_present = false;
+                    let mut proto_ver: u8 = 0;
+                    let mut proto_ver: u8 = 0;
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
@@ -1697,7 +1699,11 @@ pub fn toolexec_start_proxy(
                         } else if lower.starts_with("x-aifo-proto:") {
                             if let Some((_, v)) = l.split_once(':') {
                                 proto_present = true;
-                                proto_ok = v.trim() == "1";
+                                let vt = v.trim();
+                                if vt == "1" || vt == "2" {
+                                    proto_ok = true;
+                                    proto_ver = if vt == "2" { 2 } else { 1 };
+                                }
                             }
                         }
                     }
@@ -1936,6 +1942,80 @@ pub fn toolexec_start_proxy(
                         eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
                         eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
                     }
+                    // If client requested streaming (protocol v2), stream chunked output with exit code as trailer
+                    if proto_present && proto_ok && proto_ver == 2 {
+                        let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(hdr);
+                        let _ = stream.flush();
+
+                        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+                        let runtime_cl = runtime.clone();
+                        let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+
+                        let mut cmd = Command::new(&runtime_cl);
+                        for a in &args_clone {
+                            cmd.arg(a);
+                        }
+                        cmd.stdout(Stdio::piped());
+                        cmd.stderr(Stdio::piped());
+                        let mut child = match cmd.spawn() {
+                            Ok(c) => c,
+                            Err(e) => {
+                                let _ = write!(stream, "0\r\nX-Exit-Code: 1\r\n\r\n");
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                eprintln!("aifo-coder: proxy spawn error: {}", e);
+                                continue;
+                            }
+                        };
+
+                        if let Some(mut so) = child.stdout.take() {
+                            let txo = tx.clone();
+                            std::thread::spawn(move || {
+                                let mut buf = [0u8; 8192];
+                                loop {
+                                    match so.read(&mut buf) {
+                                        Ok(0) => break,
+                                        Ok(n) => { let _ = txo.send(buf[..n].to_vec()); }
+                                        Err(_) => break,
+                                    }
+                                }
+                            });
+                        }
+                        if let Some(mut se) = child.stderr.take() {
+                            let txe = tx.clone();
+                            std::thread::spawn(move || {
+                                let mut buf = [0u8; 4096];
+                                loop {
+                                    match se.read(&mut buf) {
+                                        Ok(0) => break,
+                                        Ok(n) => { let _ = txe.send(buf[..n].to_vec()); }
+                                        Err(_) => break,
+                                    }
+                                }
+                            });
+                        }
+
+                        // Drain chunks and forward to client
+                        while let Ok(chunk) = rx.recv_timeout(Duration::from_millis(250)) {
+                            if !chunk.is_empty() {
+                                let _ = write!(stream, "{:X}\r\n", chunk.len());
+                                let _ = stream.write_all(&chunk);
+                                let _ = stream.write_all(b"\r\n");
+                                let _ = stream.flush();
+                            }
+                        }
+
+                        let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+                        // Final chunk + trailer with exit code
+                        let _ = stream.write_all(b"0\r\n");
+                        let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
+                        let _ = stream.write_all(trailer.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+
                     let started = std::time::Instant::now();
                     let (status_code, body_out) = {
                         let (tx, rx) = std::sync::mpsc::channel();
@@ -2049,7 +2129,7 @@ pub fn toolexec_start_proxy(
                 }
             };
             let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
-            let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
+            let _ = stream.set_write_timeout(None);
             // Read request (simple HTTP)
             let mut buf = Vec::new();
             let mut hdr = Vec::new();
@@ -2125,7 +2205,11 @@ pub fn toolexec_start_proxy(
                 } else if lower.starts_with("x-aifo-proto:") {
                     if let Some((_, v)) = l.split_once(':') {
                         proto_present = true;
-                        proto_ok = v.trim() == "1";
+                        let vt = v.trim();
+                        if vt == "1" || vt == "2" {
+                            proto_ok = true;
+                            proto_ver = if vt == "2" { 2 } else { 1 };
+                        }
                     }
                 }
             }
@@ -2359,6 +2443,80 @@ pub fn toolexec_start_proxy(
                 eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
                 eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
             }
+            // If client requested streaming (protocol v2), stream chunked output with exit code as trailer
+            if proto_present && proto_ok && proto_ver == 2 {
+                let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(hdr);
+                let _ = stream.flush();
+
+                let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+                let runtime_cl = runtime.clone();
+                let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+
+                let mut cmd = Command::new(&runtime_cl);
+                for a in &args_clone {
+                    cmd.arg(a);
+                }
+                cmd.stdout(Stdio::piped());
+                cmd.stderr(Stdio::piped());
+                let mut child = match cmd.spawn() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = write!(stream, "0\r\nX-Exit-Code: 1\r\n\r\n");
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        eprintln!("aifo-coder: proxy spawn error: {}", e);
+                        continue;
+                    }
+                };
+
+                if let Some(mut so) = child.stdout.take() {
+                    let txo = tx.clone();
+                    std::thread::spawn(move || {
+                        let mut buf = [0u8; 8192];
+                        loop {
+                            match so.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => { let _ = txo.send(buf[..n].to_vec()); }
+                                Err(_) => break,
+                            }
+                        }
+                    });
+                }
+                if let Some(mut se) = child.stderr.take() {
+                    let txe = tx.clone();
+                    std::thread::spawn(move || {
+                        let mut buf = [0u8; 4096];
+                        loop {
+                            match se.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => { let _ = txe.send(buf[..n].to_vec()); }
+                                Err(_) => break,
+                            }
+                        }
+                    });
+                }
+
+                // Drain chunks and forward to client
+                while let Ok(chunk) = rx.recv_timeout(Duration::from_millis(250)) {
+                    if !chunk.is_empty() {
+                        let _ = write!(stream, "{:X}\r\n", chunk.len());
+                        let _ = stream.write_all(&chunk);
+                        let _ = stream.write_all(b"\r\n");
+                        let _ = stream.flush();
+                    }
+                }
+
+                let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+                // Final chunk + trailer with exit code
+                let _ = stream.write_all(b"0\r\n");
+                let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
+                let _ = stream.write_all(trailer.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
+
             let started = std::time::Instant::now();
             let (status_code, body_out) = {
                 let (tx, rx) = std::sync::mpsc::channel();
