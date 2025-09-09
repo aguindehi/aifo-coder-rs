@@ -62,6 +62,8 @@ Client (shell shim) behavior
 - Uses curl -sS --no-buffer with:
   - -D "$tmp/h" to capture headers and trailers
   - -H "X-Aifo-Proto: 2" and -H "TE: trailers" to enable streaming
+- Unix socket transport (Linux):
+  - If AIFO_TOOLEEXEC_URL starts with unix://path/to.sock, the shim passes --unix-socket path/to.sock to curl and uses http://localhost/exec as the request URL.
 - Streams response body directly to stdout (no -o)
 - Extracts X-Exit-Code from headers (trailers appear at the end of the header file)
 - Exits with that code (falls back to 1 if header/trailer missing)

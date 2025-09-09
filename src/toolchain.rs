@@ -1412,7 +1412,15 @@ cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 for a in "$@"; do
   cmd+=(-d "arg=$a")
 done
-cmd+=("$AIFO_TOOLEEXEC_URL")
+# Detect optional unix socket URL (Linux unix transport)
+if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
+  SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
+  cmd+=(--unix-socket "$SOCKET")
+  URL="http://localhost/exec"
+else
+  URL="$AIFO_TOOLEEXEC_URL"
+fi
+cmd+=("$URL")
 "${cmd[@]}" || true
 ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
 : # body streamed directly by curl
