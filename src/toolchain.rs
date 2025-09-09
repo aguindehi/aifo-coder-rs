@@ -1406,7 +1406,7 @@ cwd="$(pwd)"
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
-cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2")
+cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers")
 cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
@@ -1914,6 +1914,22 @@ pub fn toolexec_start_proxy(
                             pwd.display()
                         );
                     }
+                    // If selected sidecar isn't running and no alternative was available, return a helpful error
+                    if !container_exists(&name) {
+                        let msg = format!(
+                            "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
+                            tool
+                        );
+                        let header = format!(
+                            "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            msg.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(msg.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
                     let mut full_args: Vec<String>;
                     if tool == "tsc" {
                         let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
@@ -1946,6 +1962,7 @@ pub fn toolexec_start_proxy(
                         let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(hdr);
                         let _ = stream.flush();
+                        let started = std::time::Instant::now();
 
                         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
                         let runtime_cl = runtime.clone();
@@ -2027,6 +2044,15 @@ pub fn toolexec_start_proxy(
                         }
 
                         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+                        let dur_ms = started.elapsed().as_millis();
+                        if verbose {
+                            let _ = std::io::stdout().flush();
+                            let _ = std::io::stderr().flush();
+                            eprintln!(
+                                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                                tool, kind, code, dur_ms
+                            );
+                        }
                         // Final chunk + trailer with exit code
                         let _ = stream.write_all(b"0\r\n");
                         let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
@@ -2428,6 +2454,22 @@ pub fn toolexec_start_proxy(
                 continue;
             }
             let name = sidecar_container_name(kind, &session);
+            // If selected sidecar isn't running and no alternative was available, return a helpful error
+            if !container_exists(&name) {
+                let msg = format!(
+                    "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
+                    tool
+                );
+                let header = format!(
+                    "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    msg.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(msg.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
             let pwd = PathBuf::from(cwd);
             if verbose {
                 let _ = std::io::stdout().flush();
@@ -2472,6 +2514,7 @@ pub fn toolexec_start_proxy(
                 let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(hdr);
                 let _ = stream.flush();
+                let started = std::time::Instant::now();
 
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
                 let runtime_cl = runtime.clone();
@@ -2553,6 +2596,15 @@ pub fn toolexec_start_proxy(
                 }
 
                 let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+                let dur_ms = started.elapsed().as_millis();
+                if verbose {
+                    let _ = std::io::stdout().flush();
+                    let _ = std::io::stderr().flush();
+                    eprintln!(
+                        "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                        tool, kind, code, dur_ms
+                    );
+                }
                 // Final chunk + trailer with exit code
                 let _ = stream.write_all(b"0\r\n");
                 let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
