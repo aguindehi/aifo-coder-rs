@@ -15,6 +15,7 @@ use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
+use std::collections::HashMap;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -743,12 +744,61 @@ pub fn build_sidecar_exec_preview(
 
 fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     match kind {
-        "rust" => &["cargo", "rustc"],
-        "node" => &["node", "npm", "npx", "tsc", "ts-node"],
-        "python" => &["python", "python3", "pip", "pip3"],
+        "rust" => &[
+            "cargo",
+            "rustc",
+            // allow common dev tools present in rust toolchain
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
+        "node" => &[
+            "node",
+            "npm",
+            "npx",
+            "tsc",
+            "ts-node",
+            // allow dev tools if present in node image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
+        "python" => &[
+            "python",
+            "python3",
+            "pip",
+            "pip3",
+            // allow dev tools if present in python image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
         "c-cpp" => &[
             "gcc",
             "g++",
+            "cc",
+            "c++",
             "clang",
             "clang++",
             "make",
@@ -756,7 +806,21 @@ fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
             "ninja",
             "pkg-config",
         ],
-        "go" => &["go", "gofmt"],
+        "go" => &[
+            "go",
+            "gofmt",
+            // allow dev tools if present in go image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
         _ => &[],
     }
 }
@@ -777,6 +841,101 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
         "go" | "gofmt" => "go",
         _ => "node",
     }
+}
+
+// Determine if a tool is a generic build tool that may exist across sidecars
+fn is_dev_tool(tool: &str) -> bool {
+    matches!(
+        tool,
+        "make"
+            | "cmake"
+            | "ninja"
+            | "pkg-config"
+            | "gcc"
+            | "g++"
+            | "clang"
+            | "clang++"
+            | "cc"
+            | "c++"
+    )
+}
+
+// Best-effort: check if a container with the given name exists (running or created)
+fn container_exists(name: &str) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        return Command::new(&runtime)
+            .arg("inspect")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
+
+// Best-effort: check if tool is available inside the given container (cached by caller)
+fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        let mut cmd = Command::new(&runtime);
+        cmd.arg("exec")
+            .arg(name)
+            .arg("sh")
+            .arg("-lc")
+            .arg(format!("command -v {} >/dev/null 2>&1", tool))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // Run with a simple timeout by spawning and joining
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let st = cmd.status();
+            let _ = tx.send(st.ok().map(|s| s.success()).unwrap_or(false));
+        });
+        if let Ok(ok) = rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            return ok;
+        }
+    }
+    false
+}
+
+// Preferred sidecars for a given tool (in order)
+fn preferred_kinds_for_tool(tool: &str) -> Vec<&'static str> {
+    let t = tool.to_ascii_lowercase();
+    if is_dev_tool(&t) {
+        vec!["c-cpp", "rust", "go", "node", "python"]
+    } else {
+        vec![route_tool_to_sidecar(&t)]
+    }
+}
+
+// Select the best sidecar kind for tool based on running containers and availability; fallback to primary preference.
+fn select_kind_for_tool(
+    session_id: &str,
+    tool: &str,
+    timeout_secs: u64,
+    cache: &mut HashMap<(String, String), bool>,
+) -> String {
+    let prefs = preferred_kinds_for_tool(tool);
+    for k in &prefs {
+        let name = sidecar_container_name(k, session_id);
+        if !container_exists(&name) {
+            continue;
+        }
+        let key = (name.clone(), tool.to_ascii_lowercase());
+        let ok = if let Some(cached) = cache.get(&key) {
+            *cached
+        } else {
+            let avail = tool_available_in(&name, tool, timeout_secs);
+            cache.insert(key.clone(), avail);
+            avail
+        };
+        if ok {
+            return (*k).to_string();
+        }
+    }
+    // fallback to first preference (may not be running; higher layers handle errors)
+    prefs[0].to_string()
 }
 
 /// Run a tool in a toolchain sidecar; returns exit code.
@@ -1222,6 +1381,8 @@ pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
         "pip3",
         "gcc",
         "g++",
+        "cc",
+        "c++",
         "clang",
         "clang++",
         "make",
@@ -1443,6 +1604,7 @@ pub fn toolexec_start_proxy(
             let running_cl2 = running.clone();
             let token_for_thread2 = token_for_thread.clone();
             let handle = std::thread::spawn(move || {
+                let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -1705,7 +1867,8 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
-                    let kind = crate::toolchain::route_tool_to_sidecar(&tool);
+                    let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+                    let kind = selected_kind.as_str();
                     let allow = sidecar_allowlist(kind);
                     if !allow.contains(&tool.as_str()) {
                         let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -1869,6 +2032,7 @@ pub fn toolexec_start_proxy(
                 bind_host
             );
         }
+        let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -2123,7 +2287,8 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
-            let kind = crate::toolchain::route_tool_to_sidecar(&tool);
+            let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+            let kind = selected_kind.as_str();
             let allow = sidecar_allowlist(kind);
             if !allow.contains(&tool.as_str()) {
                 let header =
