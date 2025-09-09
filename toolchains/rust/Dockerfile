@@ -4,9 +4,9 @@
 # - System packages commonly needed by crates
 # - Ensures CARGO_HOME=/home/coder/.cargo and PATH prepends $CARGO_HOME/bin, keeps /usr/local/cargo/bin
 
-ARG RUST_TOOLCHAIN_TAG=bookworm
+ARG RUST_TAG=1-bookworm
 ARG REGISTRY_PREFIX
-FROM ${REGISTRY_PREFIX}rust:${RUST_TOOLCHAIN_TAG}
+FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
