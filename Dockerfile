@@ -47,7 +47,7 @@ WORKDIR /workspace
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -212,7 +212,7 @@ WORKDIR /workspace
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
