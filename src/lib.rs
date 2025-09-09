@@ -667,7 +667,7 @@ mod tests {
             joined
         );
         assert!(
-            joined.contains("CARGO_HOME=/usr/local/cargo"),
+            joined.contains("CARGO_HOME=/home/coder/.cargo"),
             "missing CARGO_HOME env: {}",
             joined
         );
@@ -1283,6 +1283,15 @@ mod tests {
             .status();
         let _ = std::process::Command::new("git")
             .args(["config", "user.email", "ut@example.com"])
+            .current_dir(dir)
+            .status();
+        // Disable GPG signing to avoid interactive pinentry during test commits
+        let _ = std::process::Command::new("git")
+            .args(["config", "commit.gpgsign", "false"])
+            .current_dir(dir)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "tag.gpgSign", "false"])
             .current_dir(dir)
             .status();
         let _ = std::fs::write(dir.join("init.txt"), "x\n");

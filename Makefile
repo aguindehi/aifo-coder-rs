@@ -86,6 +86,7 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-toolchain-rust ........ Build the rust toolchain sidecar image (aifo-rust-toolchain:latest)"
 	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
@@ -104,6 +105,7 @@ help:
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
+	@echo "  rebuild-toolchain-rust ...... Rebuild only the rust toolchain image without cache"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the c-cpp toolchain image without cache"
 	@echo ""
 	@echo "Rebuild existing images by prefix:"
@@ -113,6 +115,7 @@ help:
 	@echo ""
 	@echo "Publish images:"
 	@echo ""
+	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "Utilities:"
@@ -152,6 +155,8 @@ help:
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
+	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
+	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -211,6 +216,12 @@ CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
 CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+RUST_TOOLCHAIN_TAG ?= latest
+RUST_BASE_TAG ?= 1-bookworm
+# Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
+MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
+COMMA := ,
+RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
@@ -338,6 +349,89 @@ build-debug:
 	    -t "$$OUT" .; \
 	fi
 
+.PHONY: build-toolchain-rust rebuild-toolchain-rust
+build-toolchain-rust:
+	@set -e; \
+	echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."; \
+	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	else \
+	  if [ -n "$$RP" ]; then \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	  else \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	  fi; \
+	fi
+
+rebuild-toolchain-rust:
+	@set -e; \
+	echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
+	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	else \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	fi
+
+.PHONY: publish-toolchain-rust
+publish-toolchain-rust:
+	@set -e; \
+	echo "Publishing aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in \
+	  */) ;; \
+	  "") ;; \
+	  *) REG="$$REG/";; \
+	esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	fi; \
+	if [ "$(PUSH)" = "1" ]; then \
+	  if [ -n "$$REG" ]; then \
+	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	  else \
+	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
+	    mkdir -p dist; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar $(RUST_CA_SECRET) .; \
+	    echo "Wrote dist/aifo-rust-toolchain-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
+	  fi; \
+	else \
+	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	fi
+
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@echo "Building aifo-cpp-toolchain:latest ..."
@@ -352,7 +446,6 @@ publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	# Normalize REG to have optional trailing slash
 	case "$$REG" in \
 	  */) ;; \
 	  "") ;; \
@@ -531,7 +624,7 @@ test:
 	if command -v rustup >/dev/null 2>&1; then \
 	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    rustup run stable cargo nextest run $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -539,15 +632,15 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not found locally and docker unavailable; falling back to 'cargo test' via rustup ..."; \
-	    rustup run stable cargo test $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo test $(ARGS); \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    cargo nextest run $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -555,10 +648,10 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
-	    cargo test $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
 	  fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
@@ -567,7 +660,7 @@ test:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run $(ARGS)'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS)'; \
 	else \
 	  echo "Error: neither cargo-nextest/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -587,10 +680,10 @@ test-cargo:
 	esac; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo test locally via rustup (stable toolchain) ..."; \
-	  rustup run stable cargo test; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo test; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo test locally via cargo ..."; \
-	  cargo test; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running cargo test inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -598,7 +691,7 @@ test-cargo:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) cargo test; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo test'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -633,6 +726,79 @@ test-proxy-unix:
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
 	cargo test --test toolchain_cpp
+
+.PHONY: test-toolchain-rust test-toolchain-rust-e2e
+test-toolchain-rust:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+	  echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  else \
+	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running rust sidecar tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	    *) case "$$ARCH" in \
+	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	         *) DOCKER_PLATFORM_ARGS="" ;; \
+	       esac ;; \
+	  esac; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
+
+test-toolchain-rust-e2e:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+	  echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  else \
+	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running rust sidecar E2E tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	    *) case "$$ARCH" in \
+	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	         *) DOCKER_PLATFORM_ARGS="" ;; \
+	       esac ;; \
+	  esac; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
 
 .PHONY: toolchain-cache-clear
 toolchain-cache-clear:

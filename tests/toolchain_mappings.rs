@@ -21,7 +21,7 @@ fn test_normalize_toolchain_kind_aliases() {
 fn test_default_toolchain_image_for_version_mapping() {
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("rust", "1.80"),
-        "rust:1.80-slim"
+        "aifo-rust-toolchain:1.80"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("node", "20"),

@@ -1,5 +1,5 @@
 /*!
-Toolchain orchestration module (Phase 4).
+Toolchain orchestration module (v7: Phases 2–5, 8).
 
 This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
@@ -15,6 +15,7 @@ use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
+use std::collections::HashMap;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -39,9 +40,40 @@ pub fn normalize_toolchain_kind(kind: &str) -> String {
     }
 }
 
-fn default_toolchain_image(kind: &str) -> String {
+pub fn default_toolchain_image(kind: &str) -> String {
     match kind {
-        "rust" => "rust:1.80-slim".to_string(),
+        "rust" => {
+            // Explicit override takes precedence
+            if let Ok(img) = env::var("AIFO_RUST_TOOLCHAIN_IMAGE") {
+                if !img.trim().is_empty() {
+                    return img;
+                }
+            }
+            // Force official rust image when requested; prefer versioned tag if provided
+            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
+                let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
+                let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
+                return official_rust_image_for_version(v_opt);
+            }
+            // Prefer our first-party toolchain image; versioned when requested, with availability probe and fallback
+            if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
+                let v = ver.trim().to_string();
+                if !v.is_empty() {
+                    let cand = format!("aifo-rust-toolchain:{}", v);
+                    if docker_image_available(&cand) {
+                        return cand;
+                    } else {
+                        return official_rust_image_for_version(Some(v.as_str()));
+                    }
+                }
+            }
+            let cand = "aifo-rust-toolchain:latest".to_string();
+            if docker_image_available(&cand) {
+                cand
+            } else {
+                official_rust_image_for_version(None)
+            }
+        }
         "node" => "node:20-bookworm-slim".to_string(),
         "python" => "python:3.12-slim".to_string(),
         "c-cpp" => "aifo-cpp-toolchain:latest".to_string(),
@@ -53,12 +85,151 @@ fn default_toolchain_image(kind: &str) -> String {
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     match kind {
-        "rust" => format!("rust:{}-slim", version),
+        "rust" => format!("aifo-rust-toolchain:{}", version),
         "node" | "typescript" => format!("node:{}-bookworm-slim", version),
         "python" => format!("python:{}-slim", version),
         "go" => format!("golang:{}-bookworm", version),
         "c-cpp" => "aifo-cpp-toolchain:latest".to_string(), // no version mapping
         _ => default_toolchain_image(kind),
+    }
+}
+
+// Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
+fn is_official_rust_image(image: &str) -> bool {
+    let image = image.trim();
+    if image.is_empty() {
+        return false;
+    }
+    // Take the repository component before the last ':' to avoid confusing registry host:port
+    let mut parts = image.rsplitn(2, ':');
+    let _tag = parts.next().unwrap_or("");
+    let repo = parts.next().unwrap_or(image);
+    // Last path segment should be "rust" for official images
+    let last_seg = repo.rsplit('/').next().unwrap_or(repo);
+    last_seg == "rust"
+}
+
+fn official_rust_image_for_version(version_opt: Option<&str>) -> String {
+    let v = match version_opt {
+        Some(s) if !s.is_empty() => s,
+        _ => "1.80",
+    };
+    format!("rust:{}-bookworm", v)
+}
+
+// Best-effort check: return true if image is present locally. If docker is unavailable, assume true.
+fn docker_image_available(image: &str) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        if let Ok(status) = Command::new(&runtime)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        {
+            return status.success();
+        }
+    }
+    true
+}
+
+/// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
+/// Runs a short helper container as root that ensures target dir exists, chowns to uid:gid,
+/// and drops a stamp file to avoid repeated work. Uses the same image as the sidecar to avoid extra pulls.
+fn init_rust_named_volume(
+    runtime: &Path,
+    image: &str,
+    subdir: &str,
+    uid: u32,
+    gid: u32,
+    verbose: bool,
+) {
+    let mount = format!("aifo-cargo-{}:/home/coder/.cargo/{}", subdir, subdir);
+    let script = format!(
+        "set -e; d=\"/home/coder/.cargo/{sd}\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
+        sd = subdir,
+        uid = uid,
+        gid = gid
+    );
+    let args: Vec<String> = vec![
+        "docker".to_string(),
+        "run".to_string(),
+        "--rm".to_string(),
+        "-v".to_string(),
+        mount,
+        image.to_string(),
+        "sh".to_string(),
+        "-lc".to_string(),
+        script,
+    ];
+    if verbose {
+        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+    }
+    let mut cmd = Command::new(runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    match cmd.status() {
+        Ok(st) => {
+            if verbose && !st.success() {
+                eprintln!(
+                    "aifo-coder: warning: volume ownership init failed for aifo-cargo-{} (exit {:?})",
+                    subdir,
+                    st.code()
+                );
+            }
+        }
+        Err(e) => {
+            if verbose {
+                eprintln!(
+                    "aifo-coder: warning: failed to run ownership init for aifo-cargo-{}: {}",
+                    subdir, e
+                );
+            }
+        }
+    }
+}
+
+/// Inspect run-args and initialize named rust cargo volumes when they are selected (registry/git).
+fn init_rust_named_volumes_if_needed(
+    runtime: &Path,
+    image: &str,
+    run_args: &[String],
+    uidgid: Option<(u32, u32)>,
+    verbose: bool,
+) {
+    let mut need_registry = false;
+    let mut need_git = false;
+    let mut i = 0usize;
+    while i + 1 < run_args.len() {
+        if run_args[i] == "-v" {
+            let mnt = &run_args[i + 1];
+            if mnt.starts_with("aifo-cargo-registry:")
+                && mnt.ends_with("/home/coder/.cargo/registry")
+            {
+                need_registry = true;
+            } else if mnt.starts_with("aifo-cargo-git:") && mnt.ends_with("/home/coder/.cargo/git")
+            {
+                need_git = true;
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    if !need_registry && !need_git {
+        return;
+    }
+    let (uid, gid) = uidgid.unwrap_or((0u32, 0u32));
+    if need_registry {
+        init_rust_named_volume(runtime, image, "registry", uid, gid, verbose);
+    }
+    if need_git {
+        init_rust_named_volume(runtime, image, "git", uid, gid, verbose);
     }
 }
 
@@ -190,14 +361,183 @@ pub fn build_sidecar_run_preview(
 
     match kind {
         "rust" => {
-            if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-                args.push("-v".to_string());
-                args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
-            }
+            // Normative env for rust sidecar
             args.push("-e".to_string());
-            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
+            args.push("-e".to_string());
+            args.push("CC=gcc".to_string());
+            args.push("-e".to_string());
+            args.push("CXX=g++".to_string());
+            // Default RUST_BACKTRACE=1 when unset
+            let rb = env::var("RUST_BACKTRACE").ok();
+            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+                args.push("-e".to_string());
+                args.push("RUST_BACKTRACE=1".to_string());
+            }
+            // Cargo cache mounts
+            if !no_cache {
+                let force_named = cfg!(windows)
+                    || env::var("AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES")
+                        .ok()
+                        .as_deref()
+                        == Some("1");
+                if force_named {
+                    // Primary mounts at normative CARGO_HOME
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                    // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                } else {
+                    let mut mounted_registry = false;
+                    let mut mounted_git = false;
+                    let hd_opt = env::var("HOME")
+                        .ok()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(PathBuf::from)
+                        .or_else(home::home_dir);
+                    if let Some(hd) = hd_opt.clone() {
+                        let reg = hd.join(".cargo").join("registry");
+                        let git = hd.join(".cargo").join("git");
+                        if reg.exists() {
+                            // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
+                            args.push("-v".to_string());
+                            args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
+                            // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                            mounted_registry = true;
+                        }
+                        if git.exists() {
+                            // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
+                            args.push("-v".to_string());
+                            args.push(format!("{}:/home/coder/.cargo/git", git.display()));
+                            // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                            mounted_git = true;
+                        }
+                    }
+                    if !mounted_registry {
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                        // Back-compat legacy path for older tests/tools
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                    }
+                    if !mounted_git {
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                        // Back-compat legacy path for older tests/tools
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                    }
+                }
+            }
+            // Optional: host cargo config (read-only)
+            if env::var("AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                let hd_opt = env::var("HOME")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(PathBuf::from)
+                    .or_else(home::home_dir);
+                if let Some(hd) = hd_opt {
+                    let cargo_dir = hd.join(".cargo");
+                    let cfg_toml = cargo_dir.join("config.toml");
+                    let cfg = cargo_dir.join("config");
+                    let src = if cfg_toml.exists() {
+                        Some(cfg_toml)
+                    } else if cfg.exists() {
+                        Some(cfg)
+                    } else {
+                        None
+                    };
+                    if let Some(p) = src {
+                        args.push("-v".to_string());
+                        args.push(format!("{}:/home/coder/.cargo/config.toml:ro", p.display()));
+                    }
+                }
+            }
+            // Optional: SSH agent forwarding
+            if env::var("AIFO_TOOLCHAIN_SSH_FORWARD").ok().as_deref() == Some("1") {
+                if let Ok(sock) = env::var("SSH_AUTH_SOCK") {
+                    if !sock.trim().is_empty() {
+                        args.push("-v".to_string());
+                        args.push(format!("{0}:{0}", sock));
+                        args.push("-e".to_string());
+                        args.push(format!("SSH_AUTH_SOCK={}", sock));
+                    }
+                }
+            }
+            // Optional: sccache
+            if env::var("AIFO_RUST_SCCACHE").ok().as_deref() == Some("1") {
+                let target = "/home/coder/.cache/sccache";
+                if let Ok(dir) = env::var("AIFO_RUST_SCCACHE_DIR") {
+                    if !dir.trim().is_empty() {
+                        args.push("-v".to_string());
+                        args.push(format!("{}:{}", dir, target));
+                    } else {
+                        args.push("-v".to_string());
+                        args.push(format!("aifo-sccache:{}", target));
+                    }
+                } else {
+                    args.push("-v".to_string());
+                    args.push(format!("aifo-sccache:{}", target));
+                }
+                args.push("-e".to_string());
+                args.push("RUSTC_WRAPPER=sccache".to_string());
+                args.push("-e".to_string());
+                args.push(format!("SCCACHE_DIR={}", target));
+            }
+            // Pass-through proxies and cargo networking envs
+            let passthrough = [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "NO_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "no_proxy",
+                "CARGO_NET_GIT_FETCH_WITH_CLI",
+                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+            ];
+            for name in passthrough.iter() {
+                if let Ok(val) = env::var(name) {
+                    if !val.is_empty() {
+                        args.push("-e".to_string());
+                        args.push(format!("{}={}", name, val));
+                    }
+                }
+            }
+            // Optional: fast linkers via RUSTFLAGS (lld/mold)
+            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
+                let lk = linker.to_ascii_lowercase();
+                let extra = if lk == "lld" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
+                } else if lk == "mold" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
+                } else {
+                    None
+                };
+                if let Some(add) = extra {
+                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
+                    let rf = if base.trim().is_empty() {
+                        add.to_string()
+                    } else {
+                        format!("{} {}", base, add)
+                    };
+                    args.push("-e".to_string());
+                    args.push(format!("RUSTFLAGS={}", rf));
+                }
+            }
         }
         "node" => {
             if !no_cache {
@@ -259,7 +599,7 @@ pub fn build_sidecar_run_preview(
     }
 
     args.push(image.to_string());
-    args.push("sleep".to_string());
+    args.push("/bin/sleep".to_string());
     args.push("infinity".to_string());
     args
 }
@@ -284,10 +624,72 @@ pub fn build_sidecar_exec_preview(
     args.push("-e".to_string());
     args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
 
+    // Phase 2 marking: when executing with an official rust image, mark for bootstrap (Phase 4 will consume this)
+    if kind == "rust"
+        && std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+            .ok()
+            .as_deref()
+            == Some("1")
+    {
+        args.push("-e".to_string());
+        args.push("AIFO_RUST_OFFICIAL_BOOTSTRAP=1".to_string());
+    }
+
     match kind {
         "rust" => {
             args.push("-e".to_string());
-            args.push("CARGO_HOME=/usr/local/cargo".to_string());
+            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
+            args.push("-e".to_string());
+            args.push("CC=gcc".to_string());
+            args.push("-e".to_string());
+            args.push("CXX=g++".to_string());
+            // Default RUST_BACKTRACE=1 when unset
+            let rb = env::var("RUST_BACKTRACE").ok();
+            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+                args.push("-e".to_string());
+                args.push("RUST_BACKTRACE=1".to_string());
+            }
+            // Optional: fast linkers via RUSTFLAGS (lld/mold)
+            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
+                let lk = linker.to_ascii_lowercase();
+                let extra = if lk == "lld" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
+                } else if lk == "mold" {
+                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
+                } else {
+                    None
+                };
+                if let Some(add) = extra {
+                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
+                    let rf = if base.trim().is_empty() {
+                        add.to_string()
+                    } else {
+                        format!("{} {}", base, add)
+                    };
+                    args.push("-e".to_string());
+                    args.push(format!("RUSTFLAGS={}", rf));
+                }
+            }
+            // Pass-through proxies and cargo networking envs for exec as well
+            let passthrough = [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "NO_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "no_proxy",
+                "CARGO_NET_GIT_FETCH_WITH_CLI",
+                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+            ];
+            for name in passthrough.iter() {
+                if let Ok(val) = env::var(name) {
+                    if !val.is_empty() {
+                        args.push("-e".to_string());
+                        args.push(format!("{}={}", name, val));
+                    }
+                }
+            }
         }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
@@ -314,9 +716,26 @@ pub fn build_sidecar_exec_preview(
     }
 
     args.push(name.to_string());
-    // user command
-    for a in user_args {
-        args.push(a.clone());
+    // user command (bootstrap on official rust images)
+    let use_bootstrap = kind == "rust"
+        && std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+            .ok()
+            .as_deref()
+            == Some("1");
+    if use_bootstrap {
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-rust-toolchain image with sccache' >&2; fi; exec \"$@\"";
+        args.push("sh".to_string());
+        args.push("-lc".to_string());
+        args.push(bootstrap.to_string());
+        // Name for $0, subsequent args become "$@"
+        args.push("aifo-exec".to_string());
+        for a in user_args {
+            args.push(a.clone());
+        }
+    } else {
+        for a in user_args {
+            args.push(a.clone());
+        }
     }
     // include pwd to silence unused warning; it's already used for run mount
     let _ = pwd;
@@ -325,12 +744,61 @@ pub fn build_sidecar_exec_preview(
 
 fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     match kind {
-        "rust" => &["cargo", "rustc"],
-        "node" => &["node", "npm", "npx", "tsc", "ts-node"],
-        "python" => &["python", "python3", "pip", "pip3"],
+        "rust" => &[
+            "cargo",
+            "rustc",
+            // allow common dev tools present in rust toolchain
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
+        "node" => &[
+            "node",
+            "npm",
+            "npx",
+            "tsc",
+            "ts-node",
+            // allow dev tools if present in node image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
+        "python" => &[
+            "python",
+            "python3",
+            "pip",
+            "pip3",
+            // allow dev tools if present in python image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
         "c-cpp" => &[
             "gcc",
             "g++",
+            "cc",
+            "c++",
             "clang",
             "clang++",
             "make",
@@ -338,7 +806,21 @@ fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
             "ninja",
             "pkg-config",
         ],
-        "go" => &["go", "gofmt"],
+        "go" => &[
+            "go",
+            "gofmt",
+            // allow dev tools if present in go image
+            "make",
+            "cmake",
+            "ninja",
+            "pkg-config",
+            "gcc",
+            "g++",
+            "clang",
+            "clang++",
+            "cc",
+            "c++",
+        ],
         _ => &[],
     }
 }
@@ -359,6 +841,101 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
         "go" | "gofmt" => "go",
         _ => "node",
     }
+}
+
+// Determine if a tool is a generic build tool that may exist across sidecars
+fn is_dev_tool(tool: &str) -> bool {
+    matches!(
+        tool,
+        "make"
+            | "cmake"
+            | "ninja"
+            | "pkg-config"
+            | "gcc"
+            | "g++"
+            | "clang"
+            | "clang++"
+            | "cc"
+            | "c++"
+    )
+}
+
+// Best-effort: check if a container with the given name exists (running or created)
+fn container_exists(name: &str) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        return Command::new(&runtime)
+            .arg("inspect")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
+
+// Best-effort: check if tool is available inside the given container (cached by caller)
+fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
+    if let Ok(runtime) = container_runtime_path() {
+        let mut cmd = Command::new(&runtime);
+        cmd.arg("exec")
+            .arg(name)
+            .arg("sh")
+            .arg("-lc")
+            .arg(format!("command -v {} >/dev/null 2>&1", tool))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // Run with a simple timeout by spawning and joining
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let st = cmd.status();
+            let _ = tx.send(st.ok().map(|s| s.success()).unwrap_or(false));
+        });
+        if let Ok(ok) = rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            return ok;
+        }
+    }
+    false
+}
+
+// Preferred sidecars for a given tool (in order)
+fn preferred_kinds_for_tool(tool: &str) -> Vec<&'static str> {
+    let t = tool.to_ascii_lowercase();
+    if is_dev_tool(&t) {
+        vec!["c-cpp", "rust", "go", "node", "python"]
+    } else {
+        vec![route_tool_to_sidecar(&t)]
+    }
+}
+
+// Select the best sidecar kind for tool based on running containers and availability; fallback to primary preference.
+fn select_kind_for_tool(
+    session_id: &str,
+    tool: &str,
+    timeout_secs: u64,
+    cache: &mut HashMap<(String, String), bool>,
+) -> String {
+    let prefs = preferred_kinds_for_tool(tool);
+    for k in &prefs {
+        let name = sidecar_container_name(k, session_id);
+        if !container_exists(&name) {
+            continue;
+        }
+        let key = (name.clone(), tool.to_ascii_lowercase());
+        let ok = if let Some(cached) = cache.get(&key) {
+            *cached
+        } else {
+            let avail = tool_available_in(&name, tool, timeout_secs);
+            cache.insert(key.clone(), avail);
+            avail
+        };
+        if ok {
+            return (*k).to_string();
+        }
+    }
+    // fallback to first preference (may not be running; higher layers handle errors)
+    prefs[0].to_string()
 }
 
 /// Run a tool in a toolchain sidecar; returns exit code.
@@ -390,6 +967,10 @@ pub fn toolchain_run(
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
+    // Phase 2: mark official rust image selection to engage bootstrap in exec (handled in Phase 4)
+    let bootstrap_official_rust = sidecar_kind == "rust"
+        && (env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+            || is_official_rust_image(&image));
     let session_id = env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -425,6 +1006,16 @@ pub fn toolchain_run(
     }
 
     if !dry_run {
+        // Phase 5: initialize named cargo volumes ownership (best-effort) before starting sidecar
+        if sidecar_kind == "rust" && !no_cache {
+            init_rust_named_volumes_if_needed(
+                &runtime,
+                &image,
+                &run_preview_args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
         // If a sidecar with this name already exists, reuse it (another pane may have started it)
         let exists = Command::new(&runtime)
             .arg("inspect")
@@ -473,6 +1064,11 @@ pub fn toolchain_run(
     }
 
     // docker exec
+    if bootstrap_official_rust {
+        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+    } else {
+        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    }
     let exec_preview_args = build_sidecar_exec_preview(
         &name,
         if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -498,6 +1094,8 @@ pub fn toolchain_run(
             .map_err(|e| io::Error::new(e.kind(), format!("failed to exec in sidecar: {e}")))?;
         exit_code = status.code().unwrap_or(1);
     }
+    // Clear bootstrap marker from environment (best-effort)
+    env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
 
     // Cleanup: stop sidecar and remove network (best-effort)
     if !dry_run {
@@ -783,6 +1381,8 @@ pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
         "pip3",
         "gcc",
         "g++",
+        "cc",
+        "c++",
         "clang",
         "clang++",
         "make",
@@ -879,6 +1479,16 @@ pub fn toolchain_start_session(
         for (kk, vv) in overrides {
             if normalize_toolchain_kind(kk) == kind {
                 image = vv.clone();
+            }
+        }
+        // Phase 2: mark official rust image so proxy execs can engage bootstrap (Phase 4)
+        if kind == "rust" {
+            if is_official_rust_image(&image)
+                || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+            {
+                env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+            } else {
+                env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
             }
         }
         let name = sidecar_container_name(kind.as_str(), &session_id);
@@ -994,6 +1604,7 @@ pub fn toolexec_start_proxy(
             let running_cl2 = running.clone();
             let token_for_thread2 = token_for_thread.clone();
             let handle = std::thread::spawn(move || {
+                let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -1024,6 +1635,10 @@ pub fn toolexec_start_proxy(
                                 buf.extend_from_slice(&tmp[..n]);
                                 if let Some(end) = find_header_end(&buf) {
                                     header_end = Some(end);
+                                } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n")
+                                {
+                                    // Be tolerant to LF-only header termination used by some simple clients/tests
+                                    header_end = Some(pos);
                                 }
                                 if buf.len() > 64 * 1024 {
                                     break;
@@ -1032,7 +1647,12 @@ pub fn toolexec_start_proxy(
                             Err(_) => break,
                         }
                     }
-                    let Some(hend) = header_end else {
+                    let hend = if let Some(h) = header_end {
+                        h
+                    } else if !buf.is_empty() {
+                        // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
+                        buf.len()
+                    } else {
                         let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.flush();
@@ -1044,23 +1664,29 @@ pub fn toolexec_start_proxy(
                     let mut auth_ok = false;
                     let mut content_len: usize = 0;
                     let mut proto_ok = false;
+                    let mut proto_present = false;
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
-                        if lower.starts_with("authorization:") {
+                        if lower.starts_with("authorization:")
+                            || lower.starts_with("proxy-authorization:")
+                        {
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
-                                // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                                // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
                                 if value == token_for_thread2 {
                                     auth_ok = true;
                                 } else {
-                                    let mut it = value.split_whitespace();
-                                    let scheme = it.next().unwrap_or("");
-                                    let cred = it.next().unwrap_or("");
-                                    if scheme.eq_ignore_ascii_case("bearer")
-                                        && cred == token_for_thread2
-                                    {
-                                        auth_ok = true;
+                                    let parts: Vec<&str> = value
+                                        .split(|c: char| c.is_whitespace() || c == '=')
+                                        .collect();
+                                    if let Some(last) = parts.last() {
+                                        let last_clean = last.trim_matches(|c: char| {
+                                            c == ',' || c == ';' || c == '"' || c == '\''
+                                        });
+                                        if last_clean == token_for_thread2 {
+                                            auth_ok = true;
+                                        }
                                     }
                                 }
                             }
@@ -1070,7 +1696,23 @@ pub fn toolexec_start_proxy(
                             }
                         } else if lower.starts_with("x-aifo-proto:") {
                             if let Some((_, v)) = l.split_once(':') {
+                                proto_present = true;
                                 proto_ok = v.trim() == "1";
+                            }
+                        }
+                    }
+                    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+                    let mut query_pairs: Vec<(String, String)> = Vec::new();
+                    let mut request_path_lc = String::new();
+                    if let Some(first_line) = header_str.lines().next() {
+                        let mut parts = first_line.split_whitespace();
+                        let _method = parts.next();
+                        if let Some(target) = parts.next() {
+                            let path_only = target.split('?').next().unwrap_or(target);
+                            request_path_lc = path_only.to_ascii_lowercase();
+                            if let Some(idx) = target.find('?') {
+                                let q = &target[idx + 1..];
+                                query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
                             }
                         }
                     }
@@ -1087,8 +1729,12 @@ pub fn toolexec_start_proxy(
                     let mut tool = String::new();
                     let mut cwd = "/workspace".to_string();
                     let mut argv: Vec<String> = Vec::new();
-                    for (k, v) in crate::toolchain::parse_form_urlencoded(&form) {
-                        match k.as_str() {
+                    for (k, v) in query_pairs
+                        .into_iter()
+                        .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
+                    {
+                        let kl = k.to_ascii_lowercase();
+                        match kl.as_str() {
                             "tool" => tool = v,
                             "cwd" => cwd = v,
                             "arg" => argv.push(v),
@@ -1096,33 +1742,39 @@ pub fn toolexec_start_proxy(
                         }
                     }
                     if tool.is_empty() {
-                        // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
-                        if !auth_ok {
-                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        } else if !proto_ok {
-                            let msg = b"Unsupported shim protocol; expected 1\n";
-                            let header = format!(
-                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                msg.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(msg);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        } else {
-                            let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
+                        let rp = request_path_lc.as_str();
+                        if rp.ends_with("/notifications")
+                            || rp.ends_with("/notifications-cmd")
+                            || rp.ends_with("/notify")
+                            || rp.contains("/notifications")
+                            || rp.contains("/notifications-cmd")
+                            || rp.contains("/notify")
+                        {
+                            tool = "notifications-cmd".to_string();
                         }
                     }
-                    if tool == "notifications-cmd" {
+                    // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
+                    // This helps when clients don't send a body or Content-Length is missing.
+                    if tool.is_empty() {
+                        if let Some(first_line) = header_str.lines().next() {
+                            if let Some(idx) = first_line.find("?tool=") {
+                                let rest = &first_line[idx + 6..];
+                                let end = rest
+                                    .find(|c: char| {
+                                        c == '&' || c.is_ascii_whitespace() || c == '\r'
+                                    })
+                                    .unwrap_or(rest.len());
+                                let val = &rest[..end];
+                                tool = url_decode(val);
+                            }
+                        }
+                    }
+                    // Handle notifications endpoint without requiring auth/proto
+                    if tool.eq_ignore_ascii_case("notifications-cmd")
+                        || request_path_lc.contains("/notifications")
+                        || request_path_lc.contains("/notifications-cmd")
+                        || request_path_lc.contains("/notify")
+                    {
                         match crate::toolchain::notifications_handle_request(
                             &argv,
                             verbose,
@@ -1155,7 +1807,68 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
-                    let kind = crate::toolchain::route_tool_to_sidecar(&tool);
+                    if tool.is_empty() {
+                        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
+                        if auth_ok && (!proto_present || !proto_ok) {
+                            let msg = b"Unsupported shim protocol; expected 1\n";
+                            let header = format!(
+                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                msg.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(msg);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        } else if !auth_ok {
+                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        } else {
+                            let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
+                    }
+                    if tool.eq_ignore_ascii_case("notifications-cmd") {
+                        match crate::toolchain::notifications_handle_request(
+                            &argv,
+                            verbose,
+                            timeout_secs,
+                        ) {
+                            Ok((status_code, body_out)) => {
+                                let header = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    status_code,
+                                    body_out.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body_out);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                            Err(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                let header = format!(
+                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    body.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                        }
+                    }
+                    let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+                    let kind = selected_kind.as_str();
                     let allow = sidecar_allowlist(kind);
                     if !allow.contains(&tool.as_str()) {
                         let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -1164,15 +1877,8 @@ pub fn toolexec_start_proxy(
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
-                    // Now enforce Authorization for allowed tools
-                    if !auth_ok {
-                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    if !proto_ok {
+                    // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
+                    if auth_ok && (!proto_present || !proto_ok) {
                         let msg = b"Unsupported shim protocol; expected 1\n";
                         let header = format!(
                             "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1184,11 +1890,20 @@ pub fn toolexec_start_proxy(
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
                     }
+                    if !auth_ok {
+                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
                     let name = sidecar_container_name(kind, &session);
                     let pwd = PathBuf::from(cwd);
                     if verbose {
+                        let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
                         eprintln!(
-                            "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                            "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
                             tool,
                             argv,
                             pwd.display()
@@ -1216,10 +1931,10 @@ pub fn toolexec_start_proxy(
                         &full_args,
                     );
                     if verbose {
-                        eprintln!(
-                            "aifo-coder: proxy docker: {}",
-                            shell_join(&exec_preview_args)
-                        );
+                        let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
+                        eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
+                        eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
                     }
                     let started = std::time::Instant::now();
                     let (status_code, body_out) = {
@@ -1264,18 +1979,29 @@ pub fn toolexec_start_proxy(
                     };
                     let dur_ms = started.elapsed().as_millis();
                     if verbose {
+                        let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
                         eprintln!(
-                            "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                             tool, kind, status_code, dur_ms
                         );
+                    }
+                    let mut body_bytes = body_out;
+                    if verbose {
+                        if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
+                            let mut pref = Vec::with_capacity(body_bytes.len() + 1);
+                            pref.push(b'\n');
+                            pref.extend_from_slice(&body_bytes);
+                            body_bytes = pref;
+                        }
                     }
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                         status_code,
-                        body_out.len()
+                        body_bytes.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(&body_out);
+                    let _ = stream.write_all(&body_bytes);
                     let _ = stream.flush();
                     let _ = stream.shutdown(Shutdown::Both);
                 }
@@ -1306,6 +2032,7 @@ pub fn toolexec_start_proxy(
                 bind_host
             );
         }
+        let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -1336,6 +2063,9 @@ pub fn toolexec_start_proxy(
                         buf.extend_from_slice(&tmp[..n]);
                         if let Some(end) = find_header_end(&buf) {
                             header_end = Some(end);
+                        } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
+                            // Be tolerant to LF-only header termination used by some simple clients/tests
+                            header_end = Some(pos);
                         }
                         // avoid overly large header
                         if buf.len() > 64 * 1024 {
@@ -1345,7 +2075,12 @@ pub fn toolexec_start_proxy(
                     Err(_) => break,
                 }
             }
-            let Some(hend) = header_end else {
+            let hend = if let Some(h) = header_end {
+                h
+            } else if !buf.is_empty() {
+                // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
+                buf.len()
+            } else {
                 let header =
                     "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(header.as_bytes());
@@ -1358,21 +2093,28 @@ pub fn toolexec_start_proxy(
             let mut auth_ok = false;
             let mut content_len: usize = 0;
             let mut proto_ok = false;
+            let mut proto_present = false;
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
-                if lower.starts_with("authorization:") {
+                if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:")
+                {
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
-                        // Accept either a bare token or a case-insensitive "Bearer <token>" scheme
+                        // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
                         if value == token_for_thread {
                             auth_ok = true;
                         } else {
-                            let mut it = value.split_whitespace();
-                            let scheme = it.next().unwrap_or("");
-                            let cred = it.next().unwrap_or("");
-                            if scheme.eq_ignore_ascii_case("bearer") && cred == token_for_thread {
-                                auth_ok = true;
+                            let parts: Vec<&str> = value
+                                .split(|c: char| c.is_whitespace() || c == '=')
+                                .collect();
+                            if let Some(last) = parts.last() {
+                                let last_clean = last.trim_matches(|c: char| {
+                                    c == ',' || c == ';' || c == '"' || c == '\''
+                                });
+                                if last_clean == token_for_thread {
+                                    auth_ok = true;
+                                }
                             }
                         }
                     }
@@ -1382,7 +2124,23 @@ pub fn toolexec_start_proxy(
                     }
                 } else if lower.starts_with("x-aifo-proto:") {
                     if let Some((_, v)) = l.split_once(':') {
+                        proto_present = true;
                         proto_ok = v.trim() == "1";
+                    }
+                }
+            }
+            // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+            let mut query_pairs: Vec<(String, String)> = Vec::new();
+            let mut request_path_lc = String::new();
+            if let Some(first_line) = header_str.lines().next() {
+                let mut parts = first_line.split_whitespace();
+                let _method = parts.next();
+                if let Some(target) = parts.next() {
+                    let path_only = target.split('?').next().unwrap_or(target);
+                    request_path_lc = path_only.to_ascii_lowercase();
+                    if let Some(idx) = target.find('?') {
+                        let q = &target[idx + 1..];
+                        query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
                     }
                 }
             }
@@ -1399,8 +2157,12 @@ pub fn toolexec_start_proxy(
             let mut tool = String::new();
             let mut cwd = "/workspace".to_string();
             let mut argv: Vec<String> = Vec::new();
-            for (k, v) in crate::toolchain::parse_form_urlencoded(&form) {
-                match k.as_str() {
+            for (k, v) in query_pairs
+                .into_iter()
+                .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
+            {
+                let kl = k.to_ascii_lowercase();
+                match kl.as_str() {
                     "tool" => tool = v,
                     "cwd" => cwd = v,
                     "arg" => argv.push(v),
@@ -1408,35 +2170,37 @@ pub fn toolexec_start_proxy(
                 }
             }
             if tool.is_empty() {
-                // If auth is missing/invalid, prefer 401; else if bad protocol, prefer 426; else 400 for malformed body
-                if !auth_ok {
-                    let header =
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                } else if !proto_ok {
-                    let msg = b"Unsupported shim protocol; expected 1\n";
-                    let header = format!(
-                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        msg.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(msg);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                } else {
-                    let header =
-                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
+                let rp = request_path_lc.as_str();
+                if rp.ends_with("/notifications")
+                    || rp.ends_with("/notifications-cmd")
+                    || rp.ends_with("/notify")
+                    || rp.contains("/notifications")
+                    || rp.contains("/notifications-cmd")
+                    || rp.contains("/notify")
+                {
+                    tool = "notifications-cmd".to_string();
                 }
             }
-            if tool == "notifications-cmd" {
+            // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
+            // This helps when clients don't send a body or Content-Length is missing.
+            if tool.is_empty() {
+                if let Some(first_line) = header_str.lines().next() {
+                    if let Some(idx) = first_line.find("?tool=") {
+                        let rest = &first_line[idx + 6..];
+                        let end = rest
+                            .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
+                            .unwrap_or(rest.len());
+                        let val = &rest[..end];
+                        tool = url_decode(val);
+                    }
+                }
+            }
+            // Handle notifications endpoint without requiring auth/proto
+            if tool.eq_ignore_ascii_case("notifications-cmd")
+                || request_path_lc.contains("/notifications")
+                || request_path_lc.contains("/notifications-cmd")
+                || request_path_lc.contains("/notify")
+            {
                 match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
@@ -1465,7 +2229,66 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
-            let kind = crate::toolchain::route_tool_to_sidecar(&tool);
+            if tool.is_empty() {
+                // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
+                if auth_ok && (!proto_present || !proto_ok) {
+                    let msg = b"Unsupported shim protocol; expected 1\n";
+                    let header = format!(
+                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        msg.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(msg);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                } else if !auth_ok {
+                    let header =
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                } else {
+                    let header =
+                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+            }
+            if tool.eq_ignore_ascii_case("notifications-cmd") {
+                match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
+                    Ok((status_code, body_out)) => {
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            status_code,
+                            body_out.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body_out);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    Err(reason) => {
+                        let mut body = reason.into_bytes();
+                        body.push(b'\n');
+                        let header = format!(
+                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                }
+            }
+            let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+            let kind = selected_kind.as_str();
             let allow = sidecar_allowlist(kind);
             if !allow.contains(&tool.as_str()) {
                 let header =
@@ -1475,16 +2298,8 @@ pub fn toolexec_start_proxy(
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
-            // Now enforce Authorization for allowed tools, then protocol
-            if !auth_ok {
-                let header =
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            if !proto_ok {
+            // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
+            if auth_ok && (!proto_present || !proto_ok) {
                 let msg = b"Unsupported shim protocol; expected 1\n";
                 let header = format!(
                     "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1496,11 +2311,21 @@ pub fn toolexec_start_proxy(
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
             }
+            if !auth_ok {
+                let header =
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
+            }
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
             if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
                 eprintln!(
-                    "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                    "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
                     tool,
                     argv,
                     pwd.display()
@@ -1529,10 +2354,10 @@ pub fn toolexec_start_proxy(
                 &full_args,
             );
             if verbose {
-                eprintln!(
-                    "aifo-coder: proxy docker: {}",
-                    shell_join(&exec_preview_args)
-                );
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
+                eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
             }
             let started = std::time::Instant::now();
             let (status_code, body_out) = {
@@ -1577,18 +2402,29 @@ pub fn toolexec_start_proxy(
             };
             let dur_ms = started.elapsed().as_millis();
             if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
                 eprintln!(
-                    "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                    "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                     tool, kind, status_code, dur_ms
                 );
+            }
+            let mut body_bytes = body_out;
+            if verbose {
+                if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
+                    let mut pref = Vec::with_capacity(body_bytes.len() + 1);
+                    pref.push(b'\n');
+                    pref.extend_from_slice(&body_bytes);
+                    body_bytes = pref;
+                }
             }
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 status_code,
-                body_out.len()
+                body_bytes.len()
             );
             let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&body_out);
+            let _ = stream.write_all(&body_bytes);
             let _ = stream.flush();
             let _ = stream.shutdown(Shutdown::Both);
         }
