@@ -433,17 +433,55 @@ publish-toolchain-rust:
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
-	@echo "Building aifo-cpp-toolchain:latest ..."
-	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build c-cpp toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" .; \
+	else \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	fi
 
 rebuild-toolchain-cpp:
-	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
-	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild c-cpp toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" .; \
+	else \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	fi
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging with registry prefix when pushing."; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; proceeding without prefix unless REGISTRY is set."; \
+	fi; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
 	case "$$REG" in \
 	  */) ;; \

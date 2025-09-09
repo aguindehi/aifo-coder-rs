@@ -108,7 +108,7 @@ if command -v docker >/dev/null 2>&1; then
       -v "$HOME/.cargo/registry:/root/.cargo/registry" \
       -v "$HOME/.cargo/git:/root/.cargo/git" \
       -v "$PWD/target:/workspace/target" \
-      aifo-coder-rust-builder cargo build --release $CARGO_TARGET
+      "${RUST_BUILDER_IMAGE:-aifo-coder-rust-builder}" cargo build --release $CARGO_TARGET
   BIN="./target/${RELEASE_FOLDER}release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     exec "$BIN" "$@"

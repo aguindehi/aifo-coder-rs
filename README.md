@@ -237,6 +237,12 @@ All trailing arguments after the agent subcommand are passed through to the agen
 For transparent PATH shims, the toolexec proxy (TCP and Linux unix sockets), per-language caches, the C/C++ sidecar image, and optional smokes, see:
 - docs/TOOLCHAINS.md
 
+Dev‑tool routing:
+- For make, cmake, ninja, pkg-config, gcc, g++, clang, clang++, cc, c++, the proxy selects the first running sidecar that provides the tool, in this order: c-cpp, rust, go, node, python. This avoids starting unnecessary sidecars when a tool is already available in another running sidecar (for example, make inside rust).
+
+Linux note:
+- On Linux you can use a unix:/// transport for the tool‑exec proxy to reduce TCP surface and simplify networking. See INSTALL.md for unix sockets and the TCP host‑gateway note.
+
 ## Fork mode
 
 Run multiple containerized agent panes side by side on cloned workspaces to explore different approaches in parallel, then merge back when done.
