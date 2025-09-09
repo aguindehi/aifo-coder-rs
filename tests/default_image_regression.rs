@@ -94,3 +94,39 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
         preview
     );
 }
+
+#[test]
+fn test_rust_official_fallback_env_forces_official_image() {
+    // Save and clear conflicting env overrides
+    let old_img = std::env::var("AIFO_RUST_TOOLCHAIN_IMAGE").ok();
+    let old_ver = std::env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
+    let old_off = std::env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok();
+
+    std::env::remove_var("AIFO_RUST_TOOLCHAIN_IMAGE");
+    std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+    std::env::set_var("AIFO_RUST_TOOLCHAIN_VERSION", "1.80");
+
+    let img = aifo_coder::default_toolchain_image("rust");
+    assert!(
+        img.starts_with("rust:"),
+        "expected official rust image when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1, got {}",
+        img
+    );
+
+    // Restore env
+    if let Some(v) = old_img {
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_IMAGE", v);
+    } else {
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_IMAGE");
+    }
+    if let Some(v) = old_ver {
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_VERSION", v);
+    } else {
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_VERSION");
+    }
+    if let Some(v) = old_off {
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
+    } else {
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+    }
+}
