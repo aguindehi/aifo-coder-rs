@@ -45,9 +45,7 @@ WORKDIR /workspace
 
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
-RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Installing POSIX shell shim below; symlinks will be created afterwards
 # Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
 RUN printf '%s\n' \
   '#!/bin/sh' \
@@ -84,6 +82,8 @@ RUN printf '%s\n' \
   'case "$ec" in "") ec=1 ;; esac' \
   'exit "$ec"' \
   > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
+# Create PATH symlinks to the shim
+RUN for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -246,9 +246,7 @@ WORKDIR /workspace
 
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
-RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-    for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Installing POSIX shell shim below; symlinks will be created afterwards
 # Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
 RUN printf '%s\n' \
   '#!/bin/sh' \
@@ -285,6 +283,8 @@ RUN printf '%s\n' \
   'case "$ec" in "") ec=1 ;; esac' \
   'exit "$ec"' \
   > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
+# Create PATH symlinks to the shim
+RUN for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
