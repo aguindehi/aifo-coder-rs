@@ -74,7 +74,7 @@ RUN printf '%s\n' \
   '  printf "data = arg=%s\n" "$a" >> "$conf"' \
   'done' \
   'printf "url = %s\n" "$AIFO_TOOLEEXEC_URL" >> "$conf"' \
-  'curl --config "$conf"' \
+  'curl --config "$conf" || true' \
   'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
   'rm -rf "$tmp"' \
   'case "$ec" in "") ec=1 ;; esac' \
@@ -271,7 +271,7 @@ RUN printf '%s\n' \
   '  printf "data = arg=%s\n" "$a" >> "$conf"' \
   'done' \
   'printf "url = %s\n" "$AIFO_TOOLEEXEC_URL" >> "$conf"' \
-  'curl --config "$conf"' \
+  'curl --config "$conf" || true' \
   'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
   'rm -rf "$tmp"' \
   'case "$ec" in "") ec=1 ;; esac' \

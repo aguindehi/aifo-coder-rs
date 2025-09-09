@@ -1413,7 +1413,7 @@ for a in "$@"; do
   cmd+=(-d "arg=$a")
 done
 cmd+=("$AIFO_TOOLEEXEC_URL")
-"${cmd[@]}"
+"${cmd[@]}" || true
 ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
 : # body streamed directly by curl
 rm -rf "$tmp"
