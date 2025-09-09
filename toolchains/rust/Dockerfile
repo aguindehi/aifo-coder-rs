@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # AIFO Rust Toolchain image (Phase 0)
 # - Preinstalls: clippy, rustfmt, rust-src, llvm-tools-preview
 # - Cargo tools: cargo-nextest (installed with --locked)
