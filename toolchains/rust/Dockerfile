@@ -4,9 +4,9 @@
 # - System packages commonly needed by crates
 # - Ensures CARGO_HOME=/home/coder/.cargo and PATH prepends $CARGO_HOME/bin, keeps /usr/local/cargo/bin
 
-ARG RUST_TAG=1.80-bookworm
+ARG RUST_TOOLCHAIN_TAG=bookworm
 ARG REGISTRY_PREFIX
-FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
+FROM ${REGISTRY_PREFIX}rust:${RUST_TOOLCHAIN_TAG}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -31,7 +31,7 @@ RUN set -eux; \
       tzdata \
       locales; \
     rm -rf /var/lib/apt/lists/*
-    
+
 # Optionally trust corporate CA via BuildKit secret and update system trust store
 # Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
 RUN --mount=type=secret,id=migros_root_ca,required=false,target=/run/secrets/MigrosRootCA2.crt \
