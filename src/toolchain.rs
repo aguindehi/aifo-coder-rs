@@ -1732,6 +1732,7 @@ pub fn toolexec_start_proxy(
                     let pwd = PathBuf::from(cwd);
                     if verbose {
                         let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
                         eprintln!(
                             "\naifo-coder: proxy exec: tool={} args={:?} cwd={}",
                             tool,
@@ -1762,10 +1763,9 @@ pub fn toolexec_start_proxy(
                     );
                     if verbose {
                         let _ = std::io::stdout().flush();
-                        eprintln!(
-                            "\naifo-coder: proxy docker: {}",
-                            shell_join(&exec_preview_args)
-                        );
+                        let _ = std::io::stderr().flush();
+                        eprintln!("\naifo-coder: proxy docker:");
+                        eprintln!("  {}", shell_join(&exec_preview_args));
                     }
                     let started = std::time::Instant::now();
                     let (status_code, body_out) = {
@@ -1811,6 +1811,7 @@ pub fn toolexec_start_proxy(
                     let dur_ms = started.elapsed().as_millis();
                     if verbose {
                         let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
                         eprintln!(
                             "\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                             tool, kind, status_code, dur_ms
@@ -2142,6 +2143,7 @@ pub fn toolexec_start_proxy(
             let pwd = PathBuf::from(cwd);
             if verbose {
                 let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
                 eprintln!(
                     "\naifo-coder: proxy exec: tool={} args={:?} cwd={}",
                     tool,
@@ -2173,10 +2175,9 @@ pub fn toolexec_start_proxy(
             );
             if verbose {
                 let _ = std::io::stdout().flush();
-                eprintln!(
-                    "\naifo-coder: proxy docker: {}",
-                    shell_join(&exec_preview_args)
-                );
+                let _ = std::io::stderr().flush();
+                eprintln!("\naifo-coder: proxy docker:");
+                eprintln!("  {}", shell_join(&exec_preview_args));
             }
             let started = std::time::Instant::now();
             let (status_code, body_out) = {
@@ -2222,6 +2223,7 @@ pub fn toolexec_start_proxy(
             let dur_ms = started.elapsed().as_millis();
             if verbose {
                 let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
                 eprintln!(
                     "\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                     tool, kind, status_code, dur_ms
