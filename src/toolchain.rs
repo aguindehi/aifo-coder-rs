@@ -1949,10 +1949,30 @@ pub fn toolexec_start_proxy(
 
                         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
                         let runtime_cl = runtime.clone();
-                        let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+                        // Rebuild args to wrap user command in 'sh -lc "<cmd> 2>&1"' to preserve output ordering
+                        let mut spawn_args: Vec<String> = Vec::new();
+                        let mut idx = None;
+                        for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
+                            if a == &name {
+                                idx = Some(i);
+                                break;
+                            }
+                        }
+                        let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
+                        // Up to and including container name
+                        spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+                        // User command slice after container name
+                        let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
+                        let script = {
+                            let s = shell_join(&user_slice);
+                            format!("{} 2>&1", s)
+                        };
+                        spawn_args.push("sh".to_string());
+                        spawn_args.push("-lc".to_string());
+                        spawn_args.push(script);
 
                         let mut cmd = Command::new(&runtime_cl);
-                        for a in &args_clone {
+                        for a in &spawn_args {
                             cmd.arg(a);
                         }
                         cmd.stdout(Stdio::piped());
@@ -2455,10 +2475,30 @@ pub fn toolexec_start_proxy(
 
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
                 let runtime_cl = runtime.clone();
-                let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+                // Rebuild args to wrap user command in 'sh -lc "<cmd> 2>&1"' to preserve output ordering
+                let mut spawn_args: Vec<String> = Vec::new();
+                let mut idx = None;
+                for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
+                    if a == &name {
+                        idx = Some(i);
+                        break;
+                    }
+                }
+                let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
+                // Up to and including container name
+                spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+                // User command slice after container name
+                let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
+                let script = {
+                    let s = shell_join(&user_slice);
+                    format!("{} 2>&1", s)
+                };
+                spawn_args.push("sh".to_string());
+                spawn_args.push("-lc".to_string());
+                spawn_args.push(script);
 
                 let mut cmd = Command::new(&runtime_cl);
-                for a in &args_clone {
+                for a in &spawn_args {
                     cmd.arg(a);
                 }
                 cmd.stdout(Stdio::piped());
