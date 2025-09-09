@@ -65,3 +65,8 @@ Client (shell shim) behavior
 - Streams response body directly to stdout (no -o)
 - Extracts X-Exit-Code from headers (trailers appear at the end of the header file)
 - Exits with that code (falls back to 1 if header/trailer missing)
+
+Backward compatibility
+- The proxy supports both v1 (buffered) and v2 (streaming) protocols; clients choose via X-Aifo-Proto.
+- If Authorization succeeds but the client omits or sets an unsupported protocol, the server responds with 426 Upgrade Required and a clear message.
+- v1 remains the default for legacy clients; v2 is recommended for improved UX via live streaming and exit code trailers.
