@@ -1608,6 +1608,44 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
+                    // Handle notifications endpoint without requiring auth/proto
+                    if tool.eq_ignore_ascii_case("notifications-cmd")
+                        || request_path_lc.contains("/notifications")
+                        || request_path_lc.contains("/notifications-cmd")
+                        || request_path_lc.contains("/notify")
+                    {
+                        match crate::toolchain::notifications_handle_request(
+                            &argv,
+                            verbose,
+                            timeout_secs,
+                        ) {
+                            Ok((status_code, body_out)) => {
+                                let header = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    status_code,
+                                    body_out.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body_out);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                            Err(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                let header = format!(
+                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                    body.len()
+                                );
+                                let _ = stream.write_all(header.as_bytes());
+                                let _ = stream.write_all(&body);
+                                let _ = stream.flush();
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                        }
+                    }
                     if tool.is_empty() {
                         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
                         if auth_ok && (!proto_present || !proto_ok) {
@@ -1978,6 +2016,40 @@ pub fn toolexec_start_proxy(
                             .unwrap_or(rest.len());
                         let val = &rest[..end];
                         tool = url_decode(val);
+                    }
+                }
+            }
+            // Handle notifications endpoint without requiring auth/proto
+            if tool.eq_ignore_ascii_case("notifications-cmd")
+                || request_path_lc.contains("/notifications")
+                || request_path_lc.contains("/notifications-cmd")
+                || request_path_lc.contains("/notify")
+            {
+                match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
+                    Ok((status_code, body_out)) => {
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            status_code,
+                            body_out.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body_out);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    Err(reason) => {
+                        let mut body = reason.into_bytes();
+                        body.push(b'\n');
+                        let header = format!(
+                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&body);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
                     }
                 }
             }
