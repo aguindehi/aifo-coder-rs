@@ -363,8 +363,11 @@ pub fn build_sidecar_run_preview(
             // Normative env for rust sidecar
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("CC=gcc".to_string());
+            args.push("-e".to_string());
+            args.push("CXX=g++".to_string());
             // Default RUST_BACKTRACE=1 when unset
             let rb = env::var("RUST_BACKTRACE").ok();
             if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
@@ -635,8 +638,11 @@ pub fn build_sidecar_exec_preview(
         "rust" => {
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("CC=gcc".to_string());
+            args.push("-e".to_string());
+            args.push("CXX=g++".to_string());
             // Default RUST_BACKTRACE=1 when unset
             let rb = env::var("RUST_BACKTRACE").ok();
             if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
