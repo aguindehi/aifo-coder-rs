@@ -1731,8 +1731,9 @@ pub fn toolexec_start_proxy(
                     let name = sidecar_container_name(kind, &session);
                     let pwd = PathBuf::from(cwd);
                     if verbose {
+                        let _ = std::io::stdout().flush();
                         eprintln!(
-                            "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                            "\naifo-coder: proxy exec: tool={} args={:?} cwd={}",
                             tool,
                             argv,
                             pwd.display()
@@ -1760,8 +1761,9 @@ pub fn toolexec_start_proxy(
                         &full_args,
                     );
                     if verbose {
+                        let _ = std::io::stdout().flush();
                         eprintln!(
-                            "aifo-coder: proxy docker: {}",
+                            "\naifo-coder: proxy docker: {}",
                             shell_join(&exec_preview_args)
                         );
                     }
@@ -1808,8 +1810,9 @@ pub fn toolexec_start_proxy(
                     };
                     let dur_ms = started.elapsed().as_millis();
                     if verbose {
+                        let _ = std::io::stdout().flush();
                         eprintln!(
-                            "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                            "\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                             tool, kind, status_code, dur_ms
                         );
                     }
@@ -2138,8 +2141,9 @@ pub fn toolexec_start_proxy(
             let name = sidecar_container_name(kind, &session);
             let pwd = PathBuf::from(cwd);
             if verbose {
+                let _ = std::io::stdout().flush();
                 eprintln!(
-                    "aifo-coder: proxy exec: tool={} args={:?} cwd={}",
+                    "\naifo-coder: proxy exec: tool={} args={:?} cwd={}",
                     tool,
                     argv,
                     pwd.display()
@@ -2168,8 +2172,9 @@ pub fn toolexec_start_proxy(
                 &full_args,
             );
             if verbose {
+                let _ = std::io::stdout().flush();
                 eprintln!(
-                    "aifo-coder: proxy docker: {}",
+                    "\naifo-coder: proxy docker: {}",
                     shell_join(&exec_preview_args)
                 );
             }
@@ -2216,8 +2221,9 @@ pub fn toolexec_start_proxy(
             };
             let dur_ms = started.elapsed().as_millis();
             if verbose {
+                let _ = std::io::stdout().flush();
                 eprintln!(
-                    "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                    "\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                     tool, kind, status_code, dur_ms
                 );
             }
