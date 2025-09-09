@@ -1,4 +1,4 @@
-# AIFO Rust Toolchain
+# AIFO Rust Toolchain (v7)
 
 This document explains how to use the Rust toolchain sidecar in AIFO Coder. It covers image selection, cache strategy and mounts, required environment defaults, optional integrations (SSH, sccache, proxies, fast linkers), Windows-specific behavior, and ownership initialization of named volumes. Migration notes and troubleshooting tips are provided at the end.
 

@@ -1,5 +1,5 @@
 /*!
-Toolchain orchestration module (Phase 4).
+Toolchain orchestration module (v7: Phases 2–5, 8).
 
 This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
