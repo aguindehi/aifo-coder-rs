@@ -384,6 +384,11 @@ pub fn build_sidecar_run_preview(
                     args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
                     args.push("-v".to_string());
                     args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                    // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                    args.push("-v".to_string());
+                    args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                 } else {
                     let mut mounted_registry = false;
                     let mut mounted_git = false;
@@ -404,6 +409,9 @@ pub fn build_sidecar_run_preview(
                             // Primary host-preferred mounts at normative CARGO_HOME
                             args.push("-v".to_string());
                             args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
+                            // Back-compat: also mount named volume at legacy /usr/local/cargo path
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
                             mounted_registry = true;
                         }
                         if git.exists() {
@@ -412,17 +420,25 @@ pub fn build_sidecar_run_preview(
                             args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
                             args.push("-v".to_string());
                             args.push(format!("{}:/home/coder/.cargo/git", git.display()));
+                            // Back-compat: also mount named volume at legacy /usr/local/cargo path
+                            args.push("-v".to_string());
+                            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                             mounted_git = true;
                         }
-                        // no legacy mounts at /usr/local/cargo in v7
                     }
                     if !mounted_registry {
                         args.push("-v".to_string());
                         args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                        // Back-compat legacy path for older tests/tools
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
                     }
                     if !mounted_git {
                         args.push("-v".to_string());
                         args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                        // Back-compat legacy path for older tests/tools
+                        args.push("-v".to_string());
+                        args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
                     }
                 }
             }
