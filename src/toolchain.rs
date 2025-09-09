@@ -39,7 +39,7 @@ pub fn normalize_toolchain_kind(kind: &str) -> String {
     }
 }
 
-fn default_toolchain_image(kind: &str) -> String {
+pub fn default_toolchain_image(kind: &str) -> String {
     match kind {
         "rust" => {
             // Explicit override takes precedence
