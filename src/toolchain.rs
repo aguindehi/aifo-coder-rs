@@ -1817,13 +1817,22 @@ pub fn toolexec_start_proxy(
                             tool, kind, status_code, dur_ms
                         );
                     }
+                    let mut body_bytes = body_out;
+                    if verbose {
+                        if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
+                            let mut pref = Vec::with_capacity(body_bytes.len() + 1);
+                            pref.push(b'\n');
+                            pref.extend_from_slice(&body_bytes);
+                            body_bytes = pref;
+                        }
+                    }
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                         status_code,
-                        body_out.len()
+                        body_bytes.len()
                     );
                     let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(&body_out);
+                    let _ = stream.write_all(&body_bytes);
                     let _ = stream.flush();
                     let _ = stream.shutdown(Shutdown::Both);
                 }
@@ -2229,13 +2238,22 @@ pub fn toolexec_start_proxy(
                     tool, kind, status_code, dur_ms
                 );
             }
+            let mut body_bytes = body_out;
+            if verbose {
+                if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
+                    let mut pref = Vec::with_capacity(body_bytes.len() + 1);
+                    pref.push(b'\n');
+                    pref.extend_from_slice(&body_bytes);
+                    body_bytes = pref;
+                }
+            }
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 status_code,
-                body_out.len()
+                body_bytes.len()
             );
             let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&body_out);
+            let _ = stream.write_all(&body_bytes);
             let _ = stream.flush();
             let _ = stream.shutdown(Shutdown::Both);
         }
