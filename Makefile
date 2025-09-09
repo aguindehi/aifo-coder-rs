@@ -155,6 +155,8 @@ help:
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
+	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
+	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -708,6 +710,79 @@ test-proxy-unix:
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
 	cargo test --test toolchain_cpp
+
+.PHONY: test-toolchain-rust test-toolchain-rust-e2e
+test-toolchain-rust:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+	  echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  else \
+	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running rust sidecar tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	    *) case "$$ARCH" in \
+	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	         *) DOCKER_PLATFORM_ARGS="" ;; \
+	       esac ;; \
+	  esac; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
+
+test-toolchain-rust-e2e:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+	  echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  else \
+	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
+	  fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running rust sidecar E2E tests inside $(RUST_BUILDER_IMAGE) ..."; \
+	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	  case "$$OS" in \
+	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	    *) case "$$ARCH" in \
+	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	         *) DOCKER_PLATFORM_ARGS="" ;; \
+	       esac ;; \
+	  esac; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
+	  exit 1; \
+	fi
 
 .PHONY: toolchain-cache-clear
 toolchain-cache-clear:
