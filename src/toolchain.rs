@@ -1598,7 +1598,7 @@ pub fn toolexec_start_proxy(
         #[cfg(target_os = "linux")]
         {
             // Create host socket directory and bind UnixListener
-            let base = "/tmp/aifo";
+            let base = "/run/aifo";
             let _ = fs::create_dir_all(base);
             let host_dir = format!("{}/aifo-{}", base, session);
             let _ = fs::create_dir_all(&host_dir);
