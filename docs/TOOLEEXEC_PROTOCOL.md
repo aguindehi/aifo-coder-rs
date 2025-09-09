@@ -72,3 +72,11 @@ Backward compatibility
 - The proxy supports both v1 (buffered) and v2 (streaming) protocols; clients choose via X-Aifo-Proto.
 - If Authorization succeeds but the client omits or sets an unsupported protocol, the server responds with 426 Upgrade Required and a clear message.
 - v1 remains the default for legacy clients; v2 is recommended for improved UX via live streaming and exit code trailers.
+
+Implementation status
+- Protocol v2 (streaming with chunked transfer + X-Exit-Code trailer) is implemented in both TCP and unix-socket proxy paths.
+- The shim now streams output live using curl --no-buffer, requests v2 via X-Aifo-Proto: 2, and supports unix:// URLs via --unix-socket.
+- Backward compatibility with v1 is preserved (buffered response with Content-Length and X-Exit-Code header).
+- Dynamic tool routing is implemented: dev tools (make, cmake, ninja, pkg-config, gcc, g++, clang, clang++, cc, c++) route to the first running sidecar that provides them (preferring c-cpp, then rust, go, node, python).
+- Allowlists expanded accordingly; rust sidecar exports CARGO_HOME, CC, CXX and relies on its image PATH (no PATH override).
+- Verbose logging is line-safe (flush + clear line) and does not interfere with streamed output.
