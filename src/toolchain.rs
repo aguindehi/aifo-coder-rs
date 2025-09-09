@@ -1666,7 +1666,6 @@ pub fn toolexec_start_proxy(
                     let mut proto_ok = false;
                     let mut proto_present = false;
                     let mut proto_ver: u8 = 0;
-                    let mut proto_ver: u8 = 0;
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
@@ -1997,7 +1996,8 @@ pub fn toolexec_start_proxy(
                         }
 
                         // Drain chunks and forward to client
-                        while let Ok(chunk) = rx.recv_timeout(Duration::from_millis(250)) {
+                        drop(tx);
+                        while let Ok(chunk) = rx.recv() {
                             if !chunk.is_empty() {
                                 let _ = write!(stream, "{:X}\r\n", chunk.len());
                                 let _ = stream.write_all(&chunk);
@@ -2073,6 +2073,9 @@ pub fn toolexec_start_proxy(
                             pref.push(b'\n');
                             pref.extend_from_slice(&body_bytes);
                             body_bytes = pref;
+                        }
+                        if !body_bytes.ends_with(b"\n") && !body_bytes.ends_with(b"\r") {
+                            body_bytes.push(b'\n');
                         }
                     }
                     let header = format!(
@@ -2174,6 +2177,7 @@ pub fn toolexec_start_proxy(
             let mut content_len: usize = 0;
             let mut proto_ok = false;
             let mut proto_present = false;
+            let mut proto_ver: u8 = 0;
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
@@ -2498,7 +2502,8 @@ pub fn toolexec_start_proxy(
                 }
 
                 // Drain chunks and forward to client
-                while let Ok(chunk) = rx.recv_timeout(Duration::from_millis(250)) {
+                drop(tx);
+                while let Ok(chunk) = rx.recv() {
                     if !chunk.is_empty() {
                         let _ = write!(stream, "{:X}\r\n", chunk.len());
                         let _ = stream.write_all(&chunk);
@@ -2574,6 +2579,9 @@ pub fn toolexec_start_proxy(
                     pref.push(b'\n');
                     pref.extend_from_slice(&body_bytes);
                     body_bytes = pref;
+                }
+                if !body_bytes.ends_with(b"\n") && !body_bytes.ends_with(b"\r") {
+                    body_bytes.push(b'\n');
                 }
             }
             let header = format!(
