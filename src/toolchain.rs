@@ -2018,19 +2018,7 @@ pub fn toolexec_start_proxy(
                                 }
                             });
                         }
-                        if let Some(mut se) = child.stderr.take() {
-                            let txe = tx.clone();
-                            std::thread::spawn(move || {
-                                let mut buf = [0u8; 4096];
-                                loop {
-                                    match se.read(&mut buf) {
-                                        Ok(0) => break,
-                                        Ok(n) => { let _ = txe.send(buf[..n].to_vec()); }
-                                        Err(_) => break,
-                                    }
-                                }
-                            });
-                        }
+                        // stderr merged into stdout via '2>&1'; no separate reader
 
                         // Drain chunks and forward to client
                         drop(tx);
@@ -2570,19 +2558,7 @@ pub fn toolexec_start_proxy(
                         }
                     });
                 }
-                if let Some(mut se) = child.stderr.take() {
-                    let txe = tx.clone();
-                    std::thread::spawn(move || {
-                        let mut buf = [0u8; 4096];
-                        loop {
-                            match se.read(&mut buf) {
-                                Ok(0) => break,
-                                Ok(n) => { let _ = txe.send(buf[..n].to_vec()); }
-                                Err(_) => break,
-                            }
-                        }
-                    });
-                }
+                // stderr merged into stdout via '2>&1'; no separate reader
 
                 // Drain chunks and forward to client
                 drop(tx);
