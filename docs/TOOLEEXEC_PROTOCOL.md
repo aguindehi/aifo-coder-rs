@@ -68,6 +68,14 @@ Client (shell shim) behavior
 - Extracts X-Exit-Code from headers (trailers appear at the end of the header file)
 - Exits with that code (falls back to 1 if header/trailer missing)
 
+Error semantics
+- 200 OK: success; X-Exit-Code provided in trailer (v2) or header (v1).
+- 401 Unauthorized: token missing or invalid.
+- 403 Forbidden: tool not permitted by the selected sidecar’s allowlist.
+- 409 Conflict: requested dev tool is not available in any running sidecar; body suggests which toolchains to start.
+- 426 Upgrade Required: Authorization valid but X-Aifo-Proto is missing or unsupported (require 1 or 2).
+- 504 Gateway Timeout: tool execution timed out.
+
 Backward compatibility
 - The proxy supports both v1 (buffered) and v2 (streaming) protocols; clients choose via X-Aifo-Proto.
 - If Authorization succeeds but the client omits or sets an unsupported protocol, the server responds with 426 Upgrade Required and a clear message.
