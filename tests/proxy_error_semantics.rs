@@ -71,7 +71,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
 
         // Split headers/body
         let mut status: u16 = 0;
-        let mut headers_s = String::new();
+        let headers_s;
         let mut body_out: Vec<u8> = Vec::new();
 
         if let Some(pos) =

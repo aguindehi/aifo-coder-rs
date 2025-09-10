@@ -35,7 +35,7 @@ fn test_proxy_tcp_streaming_rust_and_node() {
         // host:port/rest
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         let p = host_port
-            .rsplitn(2, ':')
+            .rsplit(':')
             .next()
             .and_then(|s| s.parse::<u16>().ok())
             .expect("failed to parse port from URL");
@@ -141,7 +141,7 @@ fn test_proxy_tcp_streaming_rust_and_node() {
             if n == 0 {
                 break;
             }
-            let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+            let tl = tline.trim_end_matches(['\r', '\n']);
             if tl.is_empty() {
                 break;
             }

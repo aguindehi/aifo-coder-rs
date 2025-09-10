@@ -204,7 +204,7 @@ fn test_proxy_unix_socket_rust_and_node() {
             if n == 0 {
                 break;
             }
-            let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+            let tl = tline.trim_end_matches(['\r', '\n']);
             if tl.is_empty() {
                 break;
             }

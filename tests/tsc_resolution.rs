@@ -153,7 +153,7 @@ fn test_tsc_local_resolution_tcp_v2() {
         if n == 0 {
             break;
         }
-        let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+        let tl = tline.trim_end_matches(['\r', '\n']);
         if tl.is_empty() {
             break;
         }
