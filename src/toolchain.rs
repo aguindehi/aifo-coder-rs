@@ -1680,10 +1680,14 @@ pub fn toolexec_start_proxy(
                         {
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
-                                // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
-                                if value == token_for_thread2 {
+                                // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
+                                let value_lax = value.trim_matches(|c: char| {
+                                    c == ',' || c == ';' || c == '"' || c == '\''
+                                });
+                                if value_lax.contains(&token_for_thread2) || value == token_for_thread2 {
                                     auth_ok = true;
                                 } else {
+                                    // Legacy fallback: split and compare the last token after trimming
                                     let parts: Vec<&str> = value
                                         .split(|c: char| c.is_whitespace() || c == '=')
                                         .collect();
@@ -2356,10 +2360,14 @@ pub fn toolexec_start_proxy(
                 {
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
-                        // Accept bare token, or any scheme where the last token (split on whitespace or '=') matches after trimming punctuation
-                        if value == token_for_thread {
+                        // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
+                        let value_lax = value.trim_matches(|c: char| {
+                            c == ',' || c == ';' || c == '"' || c == '\''
+                        });
+                        if value_lax.contains(&token_for_thread) || value == token_for_thread {
                             auth_ok = true;
                         } else {
+                            // Legacy fallback: split and compare last token
                             let parts: Vec<&str> = value
                                 .split(|c: char| c.is_whitespace() || c == '=')
                                 .collect();
