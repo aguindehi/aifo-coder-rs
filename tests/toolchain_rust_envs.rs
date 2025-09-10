@@ -62,7 +62,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
     );
     common::assert_preview_path_includes(
         &run_preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
     assert!(
         run_preview.contains("-e RUST_BACKTRACE=1"),
@@ -105,7 +105,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
     );
     common::assert_preview_path_includes(
         &exec_preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
     assert!(
         exec_preview.contains("-e RUST_BACKTRACE=1"),

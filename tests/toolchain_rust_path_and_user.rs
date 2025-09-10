@@ -47,7 +47,7 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
         );
         common::assert_preview_path_includes(
             &run_preview,
-            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
+            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
         );
 
         // Exec preview: expect -u and PATH/CARGO_HOME envs
@@ -71,7 +71,7 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
         );
         common::assert_preview_path_includes(
             &exec_preview,
-            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
+            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
         );
     }
 }

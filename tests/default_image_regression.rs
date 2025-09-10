@@ -91,7 +91,7 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
     );
     common::assert_preview_path_includes(
         &preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
 }
 
