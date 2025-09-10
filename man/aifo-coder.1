@@ -287,6 +287,28 @@ or
 .B go
 invoked inside the agent are transparently executed via the sidecars.
 .P
+Dev\-tool routing:
+For common development tools
+.B make ,
+.B cmake ,
+.B ninja ,
+.B pkg\-config ,
+.B gcc ,
+.B g++ ,
+.B clang ,
+.B clang++ ,
+.B cc
+and
+.B c++ ,
+the proxy selects the first running sidecar that provides the tool, in this order:
+.BR c\-cpp ,
+.BR rust ,
+.BR go ,
+.BR node ,
+then
+.BR python .
+This avoids starting unnecessary sidecars when a tool is already available in another running sidecar (for example, \fBmake\fR inside the rust toolchain).
+.P
 .SH TOOLCHAIN CACHE
 Purge all named Docker volumes used for toolchain caches. This removes caches for
 Rust (cargo registry/git), Node (npm), Python (pip), C/C++ (ccache), and Go.

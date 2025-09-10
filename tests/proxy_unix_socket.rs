@@ -147,6 +147,11 @@ fn test_proxy_unix_socket_rust_and_node() {
             "expected chunked transfer, header: {}",
             header
         );
+        assert!(
+            header.to_ascii_lowercase().contains("trailer: x-exit-code"),
+            "expected Trailer: X-Exit-Code header, got: {}",
+            header
+        );
 
         // Read chunked body; we don't need to assemble it fully, but keep for return text
         let mut body_out = Vec::new();
