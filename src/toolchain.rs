@@ -1842,7 +1842,9 @@ pub fn toolexec_start_proxy(
                             continue;
                         }
                     }
-                    if tool.eq_ignore_ascii_case("notifications-cmd") || form.contains("tool=notifications-cmd") {
+                    if tool.eq_ignore_ascii_case("notifications-cmd")
+                        || form.contains("tool=notifications-cmd")
+                    {
                         match crate::toolchain::notifications_handle_request(
                             &argv,
                             verbose,
@@ -2409,7 +2411,9 @@ pub fn toolexec_start_proxy(
                     continue;
                 }
             }
-            if tool.eq_ignore_ascii_case("notifications-cmd") || form.contains("tool=notifications-cmd") {
+            if tool.eq_ignore_ascii_case("notifications-cmd")
+                || form.contains("tool=notifications-cmd")
+            {
                 match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
