@@ -31,7 +31,6 @@ pub fn assert_preview_path_has_any(preview: &str, components: &[&str]) {
     assert!(
         ok,
         "PATH lacks any of {:?}; preview: {}",
-        components,
-        preview
+        components, preview
     );
 }
