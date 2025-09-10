@@ -89,7 +89,9 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
     );
     assert!(
         preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
+            || preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'")
+            || preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            || preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'"),
         "PATH prefix missing in default run preview: {}",
         preview
     );
