@@ -157,6 +157,148 @@ fn test_dev_tool_routing_make_rust_only_tcp_v2() {
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
+fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
+    // Skip if docker isn't available on this host
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+
+    // Force TCP
+    std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
+
+    // Start both sidecars
+    let kinds = vec!["rust".to_string(), "c-cpp".to_string()];
+    let overrides: Vec<(String, String)> = Vec::new();
+    let no_cache = false;
+    let verbose = true;
+
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
+        .expect("failed to start both sidecars");
+
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, verbose).expect("failed to start proxy");
+
+    // Extract port from URL; connect to localhost:<port> from the host
+    let port: u16 = {
+        let without_proto = url.trim_start_matches("http://");
+        let host_port = without_proto.split('/').next().unwrap_or(without_proto);
+        host_port
+            .rsplitn(2, ':')
+            .next()
+            .and_then(|s| s.parse::<u16>().ok())
+            .expect("failed to parse port from URL")
+    };
+
+    // Minimal HTTP client speaking v2 (streaming), returns only code for simplicity
+    fn run_tool(port: u16, token: &str, tool: &str, args: &[&str]) -> i32 {
+        use std::io::{BufRead, BufReader, Read, Write};
+        use std::net::TcpStream;
+        let mut stream =
+            TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
+
+        let mut body = format!(
+            "tool={}&cwd={}",
+            urlencoding::Encoded::new(tool),
+            urlencoding::Encoded::new(".")
+        );
+        for a in args {
+            body.push('&');
+            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+        }
+        let req = format!(
+            "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nTE: trailers\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            token,
+            body.len(),
+            body
+        );
+        stream.write_all(req.as_bytes()).expect("write failed");
+
+        // Read headers until CRLFCRLF
+        let mut reader = BufReader::new(stream);
+        let mut header = String::new();
+        loop {
+            let mut line = String::new();
+            let n = reader.read_line(&mut line).expect("read header line failed");
+            if n == 0 {
+                break;
+            }
+            header.push_str(&line);
+            if header.ends_with("\r\n\r\n") || header.ends_with("\n\n") {
+                break;
+            }
+            if header.len() > 128 * 1024 {
+                break;
+            }
+        }
+        // Drain chunks (discard body)
+        loop {
+            let mut size_line = String::new();
+            if reader.read_line(&mut size_line).unwrap_or(0) == 0 {
+                break;
+            }
+            let size_str = size_line.trim();
+            let size_only = size_str.split(';').next().unwrap_or(size_str);
+            let Ok(sz) = usize::from_str_radix(size_only, 16) else {
+                break;
+            };
+            if sz == 0 {
+                break;
+            }
+            let mut chunk = vec![0u8; sz];
+            reader.read_exact(&mut chunk).expect("read chunk failed");
+            let mut crlf = [0u8; 2];
+            reader.read_exact(&mut crlf).expect("read CRLF failed");
+        }
+        // Read trailers; extract X-Exit-Code
+        let mut code: i32 = 1;
+        loop {
+            let mut tline = String::new();
+            let n = reader.read_line(&mut tline).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+            if tl.is_empty() {
+                break;
+            }
+            if let Some(v) = tl.strip_prefix("X-Exit-Code: ") {
+                code = v.trim().parse::<i32>().unwrap_or(1);
+            }
+        }
+        code
+    }
+
+    // Prefer c-cpp when both running
+    let code_make = run_tool(port, &token, "make", &["--version"]);
+    assert_eq!(code_make, 0, "make --version failed with both sidecars present");
+
+    // Stop c-cpp sidecar to force fallback to rust
+    {
+        let runtime = aifo_coder::container_runtime_path().expect("docker not found");
+        let name_cpp = format!("aifo-tc-c-cpp-{}", sid);
+        let _ = Command::new(&runtime)
+            .arg("stop")
+            .arg(&name_cpp)
+            .status();
+    }
+
+    // Now it should fall back to rust
+    let code_make2 = run_tool(port, &token, "make", &["--version"]);
+    assert_eq!(
+        code_make2, 0,
+        "make --version failed after stopping c-cpp (should fall back to rust)"
+    );
+
+    // Cleanup
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = handle.join();
+    aifo_coder::toolchain_cleanup_session(&sid, verbose);
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[ignore]
+#[test]
 fn test_dev_tool_routing_make_cpp_only_tcp_v2() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {

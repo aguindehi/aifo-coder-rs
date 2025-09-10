@@ -732,7 +732,7 @@ test-cargo:
 
 test-legacy: test-cargo
 
-.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
+.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
 	@echo "Running proxy smoke test (ignored by default) ..."
 	cargo test --test proxy_smoke -- --ignored
@@ -755,6 +755,10 @@ test-proxy-unix:
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
 	  cargo test --test proxy_smoke -- --ignored; \
 	fi
+
+test-proxy-errors:
+	@echo "Running proxy error semantics tests (ignored by default) ..."
+	cargo test --test proxy_error_semantics -- --ignored
 
 .PHONY: test-proxy-tcp
 test-proxy-tcp:
