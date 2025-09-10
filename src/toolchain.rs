@@ -339,7 +339,7 @@ pub fn build_sidecar_run_preview(
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
             // Ensure PATH exposes cargo-installed tools first and preserves existing PATH
             args.push("-e".to_string());
-            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
@@ -617,7 +617,7 @@ pub fn build_sidecar_exec_preview(
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
             // Ensure PATH exposes cargo-installed tools first and preserves existing PATH
             args.push("-e".to_string());
-            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
