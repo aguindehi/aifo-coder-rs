@@ -107,7 +107,6 @@ fn official_rust_image_for_version(version_opt: Option<&str>) -> String {
     format!("rust:{}-bookworm", v)
 }
 
-
 /// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
 /// Runs a short helper container as root that ensures target dir exists, chowns to uid:gid,
 /// and drops a stamp file to avoid repeated work. Uses the same image as the sidecar to avoid extra pulls.
