@@ -80,7 +80,7 @@ This v5 specification consolidates v4 and incorporates complete, precise details
 5. Launch agent container:
    - Join the session network; bind mount workspace.
    - Inject AIFO_TOOLEEXEC_URL and AIFO_TOOLEEXEC_TOKEN.
-   - Linux TCP: add --add-host=host.docker.internal:host-gateway to agent and sidecars.
+   - Linux TCP: add --add-host=host.docker.internal:host-gateway to the agent; sidecars do not need it.
    - Linux unix: bind-mount proxy socket directory into agent at /run/aifo; set URL to unix:///run/aifo/aifo-<sid>/toolexec.sock.
    - Apply AppArmor profile where available.
 6. During run, when the agent invokes a tool:
