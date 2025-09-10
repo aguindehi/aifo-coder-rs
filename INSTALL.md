@@ -147,6 +147,10 @@ make test-proxy-tcp
 ```bash
 make test-dev-tool-routing
 ```
+- TypeScript local tsc resolution (ignored by default):
+```bash
+make test-tsc-resolution
+```
 - C/C++ dry-run tests:
 ```bash
 make test-toolchain-cpp

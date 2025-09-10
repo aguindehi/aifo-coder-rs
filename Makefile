@@ -770,6 +770,11 @@ test-dev-tool-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
 	cargo test --test dev_tool_routing -- --ignored
 
+.PHONY: test-tsc-resolution
+test-tsc-resolution:
+	@echo "Running TypeScript local tsc resolution test (ignored by default) ..."
+	cargo test --test tsc_resolution -- --ignored
+
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
 	cargo test --test toolchain_cpp
