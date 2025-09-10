@@ -10,6 +10,10 @@ FROM ${REGISTRY_PREFIX}rust:1-bookworm AS rust-base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y upgrade \
  && rm -rf /var/lib/apt/lists/*
+# Trust enterprise root CA when provided via BuildKit secret (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/migros-root-ca.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /workspace
 
 # --- Rust target builder for Linux, Windows & macOS ---
@@ -41,6 +45,10 @@ RUN apt-get update \
     && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init emacs-nox vim nano mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
+# Trust enterprise root CA when provided via BuildKit secret (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/migros-root-ca.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /workspace
 
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
@@ -242,6 +250,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
     git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file \
  && rm -rf /var/lib/apt/lists/*
+# Trust enterprise root CA when provided via BuildKit secret (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/migros-root-ca.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /workspace
 
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH

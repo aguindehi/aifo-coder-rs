@@ -226,6 +226,7 @@ RUST_BASE_TAG ?= 1-bookworm
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
+CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
@@ -247,9 +248,9 @@ build-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-crush:
@@ -267,9 +268,9 @@ build-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-aider:
@@ -287,9 +288,9 @@ build-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-rust-builder:
@@ -344,13 +345,13 @@ build-debug:
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
 	    --target "$$STAGE" \
 	    -t "$$OUT" \
-	    -t "$${RP}$$OUT" .; \
+	    -t "$${RP}$$OUT" $(CA_SECRET) .; \
 	else \
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
 	    --target "$$STAGE" \
-	    -t "$$OUT" .; \
+	    -t "$$OUT" $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-rust rebuild-toolchain-rust
@@ -447,9 +448,9 @@ build-toolchain-cpp:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" .; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-cpp:
@@ -467,9 +468,9 @@ rebuild-toolchain-cpp:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" .; \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 .PHONY: publish-toolchain-cpp
@@ -491,16 +492,16 @@ publish-toolchain-cpp:
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" .; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar .; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/aifo-cpp-toolchain-latest.oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
@@ -521,9 +522,9 @@ build-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-crush-slim:
@@ -541,9 +542,9 @@ build-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-aider-slim:
@@ -561,9 +562,9 @@ build-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-launcher:
@@ -882,9 +883,9 @@ rebuild-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-crush:
@@ -902,9 +903,9 @@ rebuild-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-aider:
@@ -922,9 +923,9 @@ rebuild-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-rust-builder:
@@ -965,9 +966,9 @@ rebuild-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 rebuild-crush-slim:
@@ -985,9 +986,9 @@ rebuild-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 rebuild-aider-slim:
@@ -1005,9 +1006,9 @@ rebuild-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache

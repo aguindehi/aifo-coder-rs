@@ -17,6 +17,9 @@ RUN apt-get update \
     ca-certificates \
     git \
  && rm -rf /var/lib/apt/lists/*
+# Trust enterprise root CA when provided via BuildKit secret (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Ensure traditional compiler entrypoints exist (hardlink cc/c++ to gcc/g++)
 # Some build scripts expect 'cc'/'c++' explicitly.
