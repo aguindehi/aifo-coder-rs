@@ -1792,13 +1792,37 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
-                    // Handle notifications endpoint without requiring auth/proto
+                    // Notifications endpoint: require Authorization and valid protocol, then enforce exact-args
                     if tool.eq_ignore_ascii_case("notifications-cmd")
                         || form.contains("tool=notifications-cmd")
                         || request_path_lc.contains("/notifications")
                         || request_path_lc.contains("/notifications-cmd")
                         || request_path_lc.contains("/notify")
                     {
+                        if !auth_ok {
+                            let body = b"unauthorized\n";
+                            let header = format!(
+                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(body);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
+                        if !proto_present || !proto_ok {
+                            let msg = b"Unsupported shim protocol; expected 1 or 2\n";
+                            let header = format!(
+                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                msg.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(msg);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
                         match crate::toolchain::notifications_handle_request(
                             &argv,
                             verbose,
@@ -1862,45 +1886,6 @@ pub fn toolexec_start_proxy(
                             let _ = stream.shutdown(Shutdown::Both);
                             continue;
                         } else if !auth_ok {
-                            // Allow notifications endpoint without auth/proto as a special case
-                            let is_notif = tool.eq_ignore_ascii_case("notifications-cmd")
-                                || form.contains("tool=notifications-cmd")
-                                || request_path_lc.contains("/notifications")
-                                || request_path_lc.contains("/notifications-cmd")
-                                || request_path_lc.contains("/notify");
-                            if is_notif {
-                                match crate::toolchain::notifications_handle_request(
-                                    &argv,
-                                    verbose,
-                                    timeout_secs,
-                                ) {
-                                    Ok((status_code, body_out)) => {
-                                        let header = format!(
-                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                            status_code,
-                                            body_out.len()
-                                        );
-                                        let _ = stream.write_all(header.as_bytes());
-                                        let _ = stream.write_all(&body_out);
-                                        let _ = stream.flush();
-                                        let _ = stream.shutdown(Shutdown::Both);
-                                        continue;
-                                    }
-                                    Err(reason) => {
-                                        let mut body = reason.into_bytes();
-                                        body.push(b'\n');
-                                        let header = format!(
-                                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                            body.len()
-                                        );
-                                        let _ = stream.write_all(header.as_bytes());
-                                        let _ = stream.write_all(&body);
-                                        let _ = stream.flush();
-                                        let _ = stream.shutdown(Shutdown::Both);
-                                        continue;
-                                    }
-                                }
-                            }
                             let body = b"unauthorized\n";
                             let header = format!(
                                 "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1927,6 +1912,30 @@ pub fn toolexec_start_proxy(
                     if tool.eq_ignore_ascii_case("notifications-cmd")
                         || form.contains("tool=notifications-cmd")
                     {
+                        if !auth_ok {
+                            let body = b"unauthorized\n";
+                            let header = format!(
+                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(body);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
+                        if !proto_present || !proto_ok {
+                            let msg = b"Unsupported shim protocol; expected 1 or 2\n";
+                            let header = format!(
+                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                msg.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(msg);
+                            let _ = stream.flush();
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
                         match crate::toolchain::notifications_handle_request(
                             &argv,
                             verbose,
@@ -2469,13 +2478,37 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
-            // Handle notifications endpoint without requiring auth/proto
+            // Notifications endpoint: require Authorization and valid protocol, then enforce exact-args
             if tool.eq_ignore_ascii_case("notifications-cmd")
                 || form.contains("tool=notifications-cmd")
                 || request_path_lc.contains("/notifications")
                 || request_path_lc.contains("/notifications-cmd")
                 || request_path_lc.contains("/notify")
             {
+                if !auth_ok {
+                    let body = b"unauthorized\n";
+                    let header = format!(
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(body);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                if !proto_present || !proto_ok {
+                    let msg = b"Unsupported shim protocol; expected 1 or 2\n";
+                    let header = format!(
+                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        msg.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(msg);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
                 match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
@@ -2535,45 +2568,6 @@ pub fn toolexec_start_proxy(
                     let _ = stream.shutdown(Shutdown::Both);
                     continue;
                 } else if !auth_ok {
-                    // Allow notifications endpoint without auth/proto as a special case
-                    let is_notif = tool.eq_ignore_ascii_case("notifications-cmd")
-                        || form.contains("tool=notifications-cmd")
-                        || request_path_lc.contains("/notifications")
-                        || request_path_lc.contains("/notifications-cmd")
-                        || request_path_lc.contains("/notify");
-                    if is_notif {
-                        match crate::toolchain::notifications_handle_request(
-                            &argv,
-                            verbose,
-                            timeout_secs,
-                        ) {
-                            Ok((status_code, body_out)) => {
-                                let header = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    status_code,
-                                    body_out.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body_out);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                            Err(reason) => {
-                                let mut body = reason.into_bytes();
-                                body.push(b'\n');
-                                let header = format!(
-                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    body.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                        }
-                    }
                     let body = b"unauthorized\n";
                     let header = format!(
                         "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
