@@ -139,6 +139,14 @@ make test-proxy-smoke
 ```bash
 make test-proxy-unix
 ```
+- TCP streaming integration (ignored by default):
+```bash
+make test-proxy-tcp
+```
+- Dev-tool routing across sidecars (ignored by default):
+```bash
+make test-dev-tool-routing
+```
 - C/C++ dry-run tests:
 ```bash
 make test-toolchain-cpp
