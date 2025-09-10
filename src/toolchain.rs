@@ -107,22 +107,6 @@ fn official_rust_image_for_version(version_opt: Option<&str>) -> String {
     format!("rust:{}-bookworm", v)
 }
 
-// Best-effort check: return true if image is present locally. If docker is unavailable, assume true.
-fn docker_image_available(image: &str) -> bool {
-    if let Ok(runtime) = container_runtime_path() {
-        if let Ok(status) = Command::new(&runtime)
-            .arg("image")
-            .arg("inspect")
-            .arg(image)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-        {
-            return status.success();
-        }
-    }
-    true
-}
 
 /// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
 /// Runs a short helper container as root that ensures target dir exists, chowns to uid:gid,
