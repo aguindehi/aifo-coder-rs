@@ -69,18 +69,9 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
             "CARGO_HOME missing in exec preview: {}",
             exec_preview
         );
-        assert!(
-            exec_preview.contains("-e 'PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH'")
-                || exec_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
-                || exec_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
-                || exec_preview
-                    .contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-                || exec_preview
-                    .contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'")
-                || exec_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-                || exec_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'"),
-            "PATH prefix missing in exec preview: {}",
-            exec_preview
+        common::assert_preview_path_includes(
+            &exec_preview,
+            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
         );
     }
 }
