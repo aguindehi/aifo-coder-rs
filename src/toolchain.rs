@@ -2108,6 +2108,11 @@ pub fn toolexec_start_proxy(
                         let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(hdr);
                         let _ = stream.flush();
+                        if verbose {
+                            let _ = std::io::stdout().flush();
+                            let _ = std::io::stderr().flush();
+                            eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
+                        }
                         let started = std::time::Instant::now();
 
                         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
@@ -2124,6 +2129,8 @@ pub fn toolexec_start_proxy(
                         let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
                         // Up to and including container name
                         spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+                        // Allocate a TTY for streaming to improve interactive flushing
+                        spawn_args.insert(1, "-t".to_string());
                         // User command slice after container name
                         let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
                         let script = {
@@ -2150,6 +2157,20 @@ pub fn toolexec_start_proxy(
                                 continue;
                             }
                         };
+
+                        // Drain docker exec stderr to prevent pipe backpressure from stalling long outputs
+                        if let Some(mut se) = child.stderr.take() {
+                            std::thread::spawn(move || {
+                                let mut buf = [0u8; 8192];
+                                loop {
+                                    match se.read(&mut buf) {
+                                        Ok(0) => break,
+                                        Ok(_n) => {}
+                                        Err(_) => break,
+                                    }
+                                }
+                            });
+                        }
 
                         if let Some(mut so) = child.stdout.take() {
                             let txo = tx.clone();
@@ -2198,6 +2219,11 @@ pub fn toolexec_start_proxy(
                         continue;
                     }
 
+                    if verbose {
+                        let _ = std::io::stdout().flush();
+                        let _ = std::io::stderr().flush();
+                        eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v1 (buffered)");
+                    }
                     let started = std::time::Instant::now();
                     let (status_code, body_out) = {
                         let (tx, rx) = std::sync::mpsc::channel();
@@ -2748,6 +2774,11 @@ pub fn toolexec_start_proxy(
                 let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
                 let _ = stream.write_all(hdr);
                 let _ = stream.flush();
+                if verbose {
+                    let _ = std::io::stdout().flush();
+                    let _ = std::io::stderr().flush();
+                    eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
+                }
                 let started = std::time::Instant::now();
 
                 let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
@@ -2764,6 +2795,8 @@ pub fn toolexec_start_proxy(
                 let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
                 // Up to and including container name
                 spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+                // Allocate a TTY for streaming to improve interactive flushing
+                spawn_args.insert(1, "-t".to_string());
                 // User command slice after container name
                 let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
                 let script = {
@@ -2790,6 +2823,20 @@ pub fn toolexec_start_proxy(
                         continue;
                     }
                 };
+
+                // Drain docker exec stderr to prevent pipe backpressure from stalling long outputs
+                if let Some(mut se) = child.stderr.take() {
+                    std::thread::spawn(move || {
+                        let mut buf = [0u8; 8192];
+                        loop {
+                            match se.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(_n) => {}
+                                Err(_) => break,
+                            }
+                        }
+                    });
+                }
 
                 if let Some(mut so) = child.stdout.take() {
                     let txo = tx.clone();
@@ -2838,6 +2885,11 @@ pub fn toolexec_start_proxy(
                 continue;
             }
 
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v1 (buffered)");
+            }
             let started = std::time::Instant::now();
             let (status_code, body_out) = {
                 let (tx, rx) = std::sync::mpsc::channel();
