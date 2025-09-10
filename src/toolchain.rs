@@ -55,24 +55,14 @@ pub fn default_toolchain_image(kind: &str) -> String {
                 let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
                 return official_rust_image_for_version(v_opt);
             }
-            // Prefer our first-party toolchain image; versioned when requested, with availability probe and fallback
+            // Prefer our first-party toolchain image; versioned when requested.
             if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
-                let v = ver.trim().to_string();
+                let v = ver.trim();
                 if !v.is_empty() {
-                    let cand = format!("aifo-rust-toolchain:{}", v);
-                    if docker_image_available(&cand) {
-                        return cand;
-                    } else {
-                        return official_rust_image_for_version(Some(v.as_str()));
-                    }
+                    return format!("aifo-rust-toolchain:{}", v);
                 }
             }
-            let cand = "aifo-rust-toolchain:latest".to_string();
-            if docker_image_available(&cand) {
-                cand
-            } else {
-                official_rust_image_for_version(None)
-            }
+            "aifo-rust-toolchain:latest".to_string()
         }
         "node" => "node:20-bookworm-slim".to_string(),
         "python" => "python:3.12-slim".to_string(),
@@ -364,9 +354,9 @@ pub fn build_sidecar_run_preview(
             // Normative env for rust sidecar
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
-            // Ensure PATH exposes cargo-installed tools first and retains system paths
+            // Ensure PATH exposes cargo-installed tools first and preserves existing PATH
             args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
@@ -642,9 +632,9 @@ pub fn build_sidecar_exec_preview(
         "rust" => {
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
-            // Ensure PATH exposes cargo-installed tools first and retains system paths
+            // Ensure PATH exposes cargo-installed tools first and preserves existing PATH
             args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+            args.push("PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
