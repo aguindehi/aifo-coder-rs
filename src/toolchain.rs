@@ -1661,8 +1661,13 @@ pub fn toolexec_start_proxy(
                         // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
                         buf.len()
                     } else {
-                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let body = b"unauthorized\n";
+                        let header = format!(
+                            "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
                         let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(body);
                         let _ = stream.flush();
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
@@ -1834,14 +1839,24 @@ pub fn toolexec_start_proxy(
                             let _ = stream.shutdown(Shutdown::Both);
                             continue;
                         } else if !auth_ok {
-                            let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let body = b"unauthorized\n";
+                            let header = format!(
+                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
                             let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(body);
                             let _ = stream.flush();
                             let _ = stream.shutdown(Shutdown::Both);
                             continue;
                         } else {
-                            let header = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let body = b"bad request\n";
+                            let header = format!(
+                                "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
                             let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(body);
                             let _ = stream.flush();
                             let _ = stream.shutdown(Shutdown::Both);
                             continue;
@@ -1909,8 +1924,13 @@ pub fn toolexec_start_proxy(
                         continue;
                     }
                     if !auth_ok {
-                        let header = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let body = b"unauthorized\n";
+                        let header = format!(
+                            "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
                         let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(body);
                         let _ = stream.flush();
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
@@ -2211,9 +2231,13 @@ pub fn toolexec_start_proxy(
                 // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
                 buf.len()
             } else {
-                let header =
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let body = b"unauthorized\n";
+                let header = format!(
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
                 let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(body);
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
@@ -2378,16 +2402,24 @@ pub fn toolexec_start_proxy(
                     let _ = stream.shutdown(Shutdown::Both);
                     continue;
                 } else if !auth_ok {
-                    let header =
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let body = b"unauthorized\n";
+                    let header = format!(
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
                     let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(body);
                     let _ = stream.flush();
                     let _ = stream.shutdown(Shutdown::Both);
                     continue;
                 } else {
-                    let header =
-                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let body = b"bad request\n";
+                    let header = format!(
+                        "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
                     let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(body);
                     let _ = stream.flush();
                     let _ = stream.shutdown(Shutdown::Both);
                     continue;
