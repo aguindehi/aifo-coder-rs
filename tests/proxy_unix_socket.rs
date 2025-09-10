@@ -128,7 +128,9 @@ fn test_proxy_unix_socket_rust_and_node() {
         let mut header = String::new();
         loop {
             let mut line = String::new();
-            let n = reader.read_line(&mut line).expect("read header line failed");
+            let n = reader
+                .read_line(&mut line)
+                .expect("read header line failed");
             if n == 0 {
                 break;
             }
@@ -143,7 +145,9 @@ fn test_proxy_unix_socket_rust_and_node() {
 
         // Ensure chunked transfer and Trailer header present
         assert!(
-            header.to_ascii_lowercase().contains("transfer-encoding: chunked"),
+            header
+                .to_ascii_lowercase()
+                .contains("transfer-encoding: chunked"),
             "expected chunked transfer, header: {}",
             header
         );
@@ -183,7 +187,9 @@ fn test_proxy_unix_socket_rust_and_node() {
             }
             // Read exactly sz bytes of data
             let mut chunk = vec![0u8; sz];
-            reader.read_exact(&mut chunk).expect("read chunk data failed");
+            reader
+                .read_exact(&mut chunk)
+                .expect("read chunk data failed");
             body_out.extend_from_slice(&chunk);
             // Consume CRLF after chunk
             let mut crlf = [0u8; 2];
@@ -220,8 +226,12 @@ fn test_proxy_unix_socket_rust_and_node() {
     assert_eq!(code_node, 0, "npx --version failed via unix proxy");
 
     // v2 streaming: rust cargo --version
-    let (code_rust_v2, _out_rust_v2) = post_exec_unix_v2(&sock_path, &token, "cargo", &["--version"]);
-    assert_eq!(code_rust_v2, 0, "cargo --version failed via unix proxy (v2)");
+    let (code_rust_v2, _out_rust_v2) =
+        post_exec_unix_v2(&sock_path, &token, "cargo", &["--version"]);
+    assert_eq!(
+        code_rust_v2, 0,
+        "cargo --version failed via unix proxy (v2)"
+    );
 
     // v2 streaming: node npx --version
     let (code_node_v2, _out_node_v2) = post_exec_unix_v2(&sock_path, &token, "npx", &["--version"]);

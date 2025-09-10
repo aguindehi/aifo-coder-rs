@@ -52,7 +52,10 @@ fn test_tsc_local_resolution_tcp_v2() {
 
     // Extract port from URL; connect to localhost:<port> from the host
     let port: u16 = {
-        assert!(url.starts_with("http://"), "expected http:// URL, got: {url}");
+        assert!(
+            url.starts_with("http://"),
+            "expected http:// URL, got: {url}"
+        );
         let without_proto = url.trim_start_matches("http://");
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         host_port
@@ -88,7 +91,9 @@ fn test_tsc_local_resolution_tcp_v2() {
     let mut header = String::new();
     loop {
         let mut line = String::new();
-        let n = reader.read_line(&mut line).expect("read header line failed");
+        let n = reader
+            .read_line(&mut line)
+            .expect("read header line failed");
         if n == 0 {
             break;
         }
@@ -101,7 +106,9 @@ fn test_tsc_local_resolution_tcp_v2() {
         }
     }
     assert!(
-        header.to_ascii_lowercase().contains("transfer-encoding: chunked"),
+        header
+            .to_ascii_lowercase()
+            .contains("transfer-encoding: chunked"),
         "expected chunked transfer, header: {}",
         header
     );
@@ -130,7 +137,9 @@ fn test_tsc_local_resolution_tcp_v2() {
             break;
         }
         let mut chunk = vec![0u8; sz];
-        reader.read_exact(&mut chunk).expect("read chunk data failed");
+        reader
+            .read_exact(&mut chunk)
+            .expect("read chunk data failed");
         body_out.extend_from_slice(&chunk);
         let mut crlf = [0u8; 2];
         reader.read_exact(&mut crlf).expect("read CRLF failed");

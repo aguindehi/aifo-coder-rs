@@ -10,7 +10,10 @@ fn test_error_semantics_tcp_v1_and_v2() {
 
     // Helper: parse port from http://host.docker.internal:<port>/exec
     fn port_from_url(url: &str) -> u16 {
-        assert!(url.starts_with("http://"), "expected http:// URL, got: {url}");
+        assert!(
+            url.starts_with("http://"),
+            "expected http:// URL, got: {url}"
+        );
         let without_proto = url.trim_start_matches("http://");
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         host_port
@@ -71,7 +74,9 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let mut headers_s = String::new();
         let mut body_out: Vec<u8> = Vec::new();
 
-        if let Some(pos) = aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n")) {
+        if let Some(pos) =
+            aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
+        {
             let h = &buf[..pos];
             headers_s = String::from_utf8_lossy(h).to_string();
             // Parse status
@@ -98,10 +103,14 @@ fn test_error_semantics_tcp_v1_and_v2() {
     {
         std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
         let sid = "ut-err-401";
-        let (_url, _token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+        let (_url, _token, flag, handle) =
+            aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&_url);
         let (status, headers, body) = http_post_tcp(port, &[], &[("tool", "cargo"), ("cwd", ".")]);
-        assert_eq!(status, 401, "expected 401, got {status}\nheaders:\n{headers}");
+        assert_eq!(
+            status, 401,
+            "expected 401, got {status}\nheaders:\n{headers}"
+        );
         assert!(
             headers.to_ascii_lowercase().contains("x-exit-code: 86"),
             "expected X-Exit-Code: 86 in headers:\n{}",
@@ -116,7 +125,8 @@ fn test_error_semantics_tcp_v1_and_v2() {
     {
         std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
         let sid = "ut-err-426";
-        let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+        let (url, token, flag, handle) =
+            aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Send Authorization but no X-Aifo-Proto
         let (status, headers, body) = http_post_tcp(
@@ -124,7 +134,10 @@ fn test_error_semantics_tcp_v1_and_v2() {
             &[("Authorization", &format!("Bearer {}", token))],
             &[("tool", "cargo"), ("cwd", ".")],
         );
-        assert_eq!(status, 426, "expected 426, got {status}\nheaders:\n{headers}");
+        assert_eq!(
+            status, 426,
+            "expected 426, got {status}\nheaders:\n{headers}"
+        );
         assert!(
             String::from_utf8_lossy(&body).contains("expected 1 or 2"),
             "expected body to mention expected 1 or 2, got:\n{}",
@@ -144,15 +157,22 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let verbose = true;
         let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
             .expect("start rust sidecar");
-        let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+        let (url, token, flag, handle) =
+            aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Request "ls" which is not present in allowlists
         let (status, headers, body) = http_post_tcp(
             port,
-            &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+            &[
+                ("Authorization", &format!("Bearer {}", token)),
+                ("X-Aifo-Proto", "1"),
+            ],
             &[("tool", "ls"), ("cwd", ".")],
         );
-        assert_eq!(status, 403, "expected 403, got {status}\nheaders:\n{headers}");
+        assert_eq!(
+            status, 403,
+            "expected 403, got {status}\nheaders:\n{headers}"
+        );
         assert!(
             headers.to_ascii_lowercase().contains("x-exit-code: 86"),
             "expected X-Exit-Code: 86 in headers:\n{}",
@@ -168,17 +188,22 @@ fn test_error_semantics_tcp_v1_and_v2() {
     {
         std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
         let sid = "ut-err-409";
-        let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
+        let (url, token, flag, handle) =
+            aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&url);
         let (status, _headers, body) = http_post_tcp(
             port,
-            &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+            &[
+                ("Authorization", &format!("Bearer {}", token)),
+                ("X-Aifo-Proto", "1"),
+            ],
             &[("tool", "make"), ("cwd", ".")],
         );
         assert_eq!(status, 409, "expected 409, got {status}");
         let body_s = String::from_utf8_lossy(&body);
         assert!(
-            body_s.contains("tool 'make' not available") || body_s.contains("start an appropriate toolchain"),
+            body_s.contains("tool 'make' not available")
+                || body_s.contains("start an appropriate toolchain"),
             "expected helpful guidance in 409 body, got:\n{}",
             body_s
         );
@@ -196,7 +221,8 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let verbose = true;
         let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
             .expect("start node sidecar");
-        let (url, token, flag, handle) = aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
+        let (url, token, flag, handle) =
+            aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Use protocol v1 (buffered) to trigger recv_timeout. Run node for ~2 seconds.
         let (status, headers, _body) = http_post_tcp(
@@ -205,9 +231,17 @@ fn test_error_semantics_tcp_v1_and_v2() {
                 ("Authorization", &format!("Bearer {}", token)),
                 ("X-Aifo-Proto", "1"),
             ],
-            &[("tool", "node"), ("cwd", "."), ("arg", "-e"), ("arg", "setTimeout(()=>{},2000)")],
+            &[
+                ("tool", "node"),
+                ("cwd", "."),
+                ("arg", "-e"),
+                ("arg", "setTimeout(()=>{},2000)"),
+            ],
         );
-        assert_eq!(status, 504, "expected 504, got {status}\nheaders:\n{headers}");
+        assert_eq!(
+            status, 504,
+            "expected 504, got {status}\nheaders:\n{headers}"
+        );
         assert!(
             headers.to_ascii_lowercase().contains("x-exit-code: 124"),
             "expected X-Exit-Code: 124 in headers:\n{}",

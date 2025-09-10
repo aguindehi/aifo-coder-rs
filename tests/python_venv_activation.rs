@@ -81,7 +81,9 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
     let mut header = String::new();
     loop {
         let mut line = String::new();
-        let n = reader.read_line(&mut line).expect("read header line failed");
+        let n = reader
+            .read_line(&mut line)
+            .expect("read header line failed");
         if n == 0 {
             break;
         }
@@ -94,7 +96,9 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
         }
     }
     assert!(
-        header.to_ascii_lowercase().contains("transfer-encoding: chunked"),
+        header
+            .to_ascii_lowercase()
+            .contains("transfer-encoding: chunked"),
         "expected chunked transfer, header: {}",
         header
     );
@@ -115,7 +119,9 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
             break;
         }
         let mut chunk = vec![0u8; sz];
-        reader.read_exact(&mut chunk).expect("read chunk data failed");
+        reader
+            .read_exact(&mut chunk)
+            .expect("read chunk data failed");
         out.extend_from_slice(&chunk);
         let mut crlf = [0u8; 2];
         reader.read_exact(&mut crlf).expect("read CRLF failed");

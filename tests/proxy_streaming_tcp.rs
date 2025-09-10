@@ -72,7 +72,9 @@ fn test_proxy_tcp_streaming_rust_and_node() {
         let mut header = String::new();
         loop {
             let mut line = String::new();
-            let n = reader.read_line(&mut line).expect("read header line failed");
+            let n = reader
+                .read_line(&mut line)
+                .expect("read header line failed");
             if n == 0 {
                 break;
             }
@@ -87,7 +89,9 @@ fn test_proxy_tcp_streaming_rust_and_node() {
 
         // Ensure chunked transfer and Trailer header present
         assert!(
-            header.to_ascii_lowercase().contains("transfer-encoding: chunked"),
+            header
+                .to_ascii_lowercase()
+                .contains("transfer-encoding: chunked"),
             "expected chunked transfer, header: {}",
             header
         );
@@ -120,7 +124,9 @@ fn test_proxy_tcp_streaming_rust_and_node() {
             }
             // Read exactly sz bytes
             let mut chunk = vec![0u8; sz];
-            reader.read_exact(&mut chunk).expect("read chunk data failed");
+            reader
+                .read_exact(&mut chunk)
+                .expect("read chunk data failed");
             body_out.extend_from_slice(&chunk);
             // Consume CRLF after chunk
             let mut crlf = [0u8; 2];

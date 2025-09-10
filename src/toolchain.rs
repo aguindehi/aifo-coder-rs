@@ -5,6 +5,7 @@ This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
@@ -15,7 +16,6 @@ use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
-use std::collections::HashMap;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -1895,7 +1895,8 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
-                    let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+                    let selected_kind =
+                        select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
                     let kind = selected_kind.as_str();
                     let allow = sidecar_allowlist(kind);
                     if !allow.contains(&tool.as_str()) {
@@ -2045,7 +2046,9 @@ pub fn toolexec_start_proxy(
                                 loop {
                                     match so.read(&mut buf) {
                                         Ok(0) => break,
-                                        Ok(n) => { let _ = txo.send(buf[..n].to_vec()); }
+                                        Ok(n) => {
+                                            let _ = txo.send(buf[..n].to_vec());
+                                        }
                                         Err(_) => break,
                                     }
                                 }
@@ -2454,7 +2457,8 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
-            let selected_kind = select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
+            let selected_kind =
+                select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
             let kind = selected_kind.as_str();
             let allow = sidecar_allowlist(kind);
             if !allow.contains(&tool.as_str()) {
@@ -2605,7 +2609,9 @@ pub fn toolexec_start_proxy(
                         loop {
                             match so.read(&mut buf) {
                                 Ok(0) => break,
-                                Ok(n) => { let _ = txo.send(buf[..n].to_vec()); }
+                                Ok(n) => {
+                                    let _ = txo.send(buf[..n].to_vec());
+                                }
                                 Err(_) => break,
                             }
                         }
