@@ -21,6 +21,7 @@ pub fn assert_preview_path_includes(preview: &str, components: &[&str]) {
     }
 }
 
+#[allow(dead_code)]
 pub fn assert_preview_path_has_any(preview: &str, components: &[&str]) {
     assert!(
         contains_env(preview, "PATH") || preview.contains(" PATH="),
