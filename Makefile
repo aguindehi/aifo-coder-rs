@@ -756,6 +756,16 @@ test-proxy-unix:
 	  cargo test --test proxy_smoke -- --ignored; \
 	fi
 
+.PHONY: test-proxy-tcp
+test-proxy-tcp:
+	@echo "Running TCP streaming proxy test (ignored by default) ..."
+	cargo test --test proxy_streaming_tcp -- --ignored
+
+.PHONY: test-dev-tool-routing
+test-dev-tool-routing:
+	@echo "Running dev-tool routing tests (ignored by default) ..."
+	cargo test --test dev_tool_routing -- --ignored
+
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
 	cargo test --test toolchain_cpp
