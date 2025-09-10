@@ -1684,7 +1684,9 @@ pub fn toolexec_start_proxy(
                                 let value_lax = value.trim_matches(|c: char| {
                                     c == ',' || c == ';' || c == '"' || c == '\''
                                 });
-                                if value_lax.contains(&token_for_thread2) || value == token_for_thread2 {
+                                if value_lax.contains(&token_for_thread2)
+                                    || value == token_for_thread2
+                                {
                                     auth_ok = true;
                                 } else {
                                     // Legacy fallback: split and compare the last token after trimming
@@ -2361,9 +2363,8 @@ pub fn toolexec_start_proxy(
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
                         // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
-                        let value_lax = value.trim_matches(|c: char| {
-                            c == ',' || c == ';' || c == '"' || c == '\''
-                        });
+                        let value_lax = value
+                            .trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
                         if value_lax.contains(&token_for_thread) || value == token_for_thread {
                             auth_ok = true;
                         } else {
