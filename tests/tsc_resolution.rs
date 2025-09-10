@@ -66,13 +66,13 @@ fn test_tsc_local_resolution_tcp_v2() {
     };
 
     // Minimal HTTP v2 client to run tool=tsc and read chunked body and trailers
-    use std::io::{BufRead, BufReader, Read, Write};
+    use std::io::{BufRead, BufReader, Read};
     use std::net::TcpStream;
 
     let mut stream =
         TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-    let mut body = format!(
+    let body = format!(
         "tool={}&cwd={}",
         urlencoding::Encoded::new("tsc"),
         urlencoding::Encoded::new(".")
