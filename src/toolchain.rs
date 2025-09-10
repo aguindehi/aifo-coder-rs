@@ -957,12 +957,17 @@ pub fn toolchain_run(
     let net_name = sidecar_network_name(&session_id);
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
 
-    // Ensure network exists before starting sidecar
+    // Ensure network exists before starting sidecar; if it cannot be created (e.g., Docker address pools exhausted),
+    // fall back to the default 'bridge' network by omitting --network.
+    let mut net_for_run: Option<String> = Some(net_name.clone());
     if !dry_run && !ensure_network_exists(&runtime, &net_name, verbose) {
-        return Err(io::Error::other(format!(
-            "failed to create or verify network {}",
-            net_name
-        )));
+        if verbose {
+            eprintln!(
+                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
+                net_name
+            );
+        }
+        net_for_run = None;
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -970,7 +975,7 @@ pub fn toolchain_run(
     // Build and optionally run sidecar
     let run_preview_args = build_sidecar_run_preview(
         &name,
-        Some(&net_name),
+        net_for_run.as_deref(),
         if cfg!(unix) { Some((uid, gid)) } else { None },
         sidecar_kind.as_str(),
         &image,
@@ -1454,8 +1459,17 @@ pub fn toolchain_start_session(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(create_session_id);
     let net_name = sidecar_network_name(&session_id);
+    // Attempt to create the session network; if it fails due to exhausted address pools or other issues,
+    // fall back to the default 'bridge' network by omitting --network.
+    let mut net_for_run: Option<String> = Some(net_name.clone());
     if !ensure_network_exists(&runtime, &net_name, verbose) {
-        return Err(io::Error::other("failed to create session network"));
+        if verbose {
+            eprintln!(
+                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
+                net_name
+            );
+        }
+        net_for_run = None;
     }
 
     let apparmor_profile = desired_apparmor_profile();
@@ -1481,7 +1495,7 @@ pub fn toolchain_start_session(
         let name = sidecar_container_name(kind.as_str(), &session_id);
         let args = build_sidecar_run_preview(
             &name,
-            Some(&net_name),
+            net_for_run.as_deref(),
             if cfg!(unix) { Some((uid, gid)) } else { None },
             kind.as_str(),
             &image,
