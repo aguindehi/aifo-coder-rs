@@ -116,7 +116,7 @@ CMD ["bash"]
 # --- Codex image (adds only Codex CLI on top of base) ---
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/migros_root_ca; npm config set cafile=/run/secrets/migros_root_ca >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NPM_CONFIG_CAFILE="$CAF"; npm config set cafile="$CAF" >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -309,7 +309,7 @@ CMD ["bash"]
 
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/migros_root_ca; npm config set cafile=/run/secrets/migros_root_ca >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NPM_CONFIG_CAFILE="$CAF"; npm config set cafile="$CAF" >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -331,7 +331,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/migros_root_ca; npm config set cafile=/run/secrets/migros_root_ca >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NPM_CONFIG_CAFILE="$CAF"; npm config set cafile="$CAF" >/dev/null 2>&1 || true; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
