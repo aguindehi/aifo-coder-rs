@@ -55,7 +55,7 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
     };
 
     // Send v2 streaming request: tool=python args=['--version'] and expect "venv-python"
-    use std::io::{BufRead, BufReader, Read, Write};
+    use std::io::{BufRead, BufReader, Read};
     use std::net::TcpStream;
 
     let mut stream =
