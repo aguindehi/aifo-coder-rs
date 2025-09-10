@@ -150,7 +150,7 @@ This v5 specification consolidates v4 and incorporates complete, precise details
 
 8.2 Host addressability
 - macOS/Windows: host.docker.internal resolves to host automatically.
-- Linux (TCP): add --add-host=host.docker.internal:host-gateway to both agent and all sidecars when toolchains enabled.
+- Linux (TCP): add --add-host=host.docker.internal:host-gateway to the agent when toolchains are enabled.
 
 8.3 Binding strategy
 - macOS/Windows: proxy binds 127.0.0.1:<random high port>.
