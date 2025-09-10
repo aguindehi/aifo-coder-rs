@@ -364,6 +364,9 @@ pub fn build_sidecar_run_preview(
             // Normative env for rust sidecar
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure PATH exposes cargo-installed tools first and retains system paths
+            args.push("-e".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
@@ -639,6 +642,9 @@ pub fn build_sidecar_exec_preview(
         "rust" => {
             args.push("-e".to_string());
             args.push("CARGO_HOME=/home/coder/.cargo".to_string());
+            // Ensure PATH exposes cargo-installed tools first and retains system paths
+            args.push("-e".to_string());
+            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
             // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
             args.push("-e".to_string());
             args.push("CC=gcc".to_string());
