@@ -1713,8 +1713,14 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
-                    // Read body
-                    let mut body = buf[hend..].to_vec();
+                    // Read body (skip header terminator if present)
+                    let mut body_start = hend;
+                    if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
+                        body_start = hend + 4;
+                    } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
+                        body_start = hend + 2;
+                    }
+                    let mut body = buf[body_start..].to_vec();
                     while body.len() < content_len {
                         match stream.read(&mut tmp) {
                             Ok(0) => break,
@@ -2383,8 +2389,14 @@ pub fn toolexec_start_proxy(
                     }
                 }
             }
-            // Read body
-            let mut body = buf[hend..].to_vec();
+            // Read body (skip header terminator if present)
+            let mut body_start = hend;
+            if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
+                body_start = hend + 4;
+            } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
+                body_start = hend + 2;
+            }
+            let mut body = buf[body_start..].to_vec();
             while body.len() < content_len {
                 match stream.read(&mut tmp) {
                     Ok(0) => break,
