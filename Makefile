@@ -370,11 +370,7 @@ build-toolchain-rust:
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
 	else \
-	  if [ -n "$$RP" ]; then \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
-	  else \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
-	  fi; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-rust:
