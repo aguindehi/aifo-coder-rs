@@ -34,7 +34,7 @@ fn test_dev_tool_routing_make_rust_only_tcp_v2() {
         // host:port/rest
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         let p = host_port
-            .rsplitn(2, ':')
+            .rsplit(':')
             .next()
             .and_then(|s| s.parse::<u16>().ok())
             .expect("failed to parse port from URL");
@@ -134,7 +134,7 @@ fn test_dev_tool_routing_make_rust_only_tcp_v2() {
             if n == 0 {
                 break;
             }
-            let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+            let tl = tline.trim_end_matches(['\r', '\n']);
             if tl.is_empty() {
                 break;
             }
@@ -266,7 +266,7 @@ fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
             if n == 0 {
                 break;
             }
-            let tl = tline.trim_end_matches(|c| c == '\r' || c == '\n');
+            let tl = tline.trim_end_matches(['\r', '\n']);
             if tl.is_empty() {
                 break;
             }
@@ -329,7 +329,7 @@ fn test_dev_tool_routing_make_cpp_only_tcp_v2() {
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, no_cache, verbose)
         .expect("failed to start c-cpp sidecar session");
 
-    let (_url, token, flag, handle) =
+    let (_url, _token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, verbose).expect("failed to start proxy");
 
     // Bind host address is implementation-defined; use host.docker.internal from shim semantics
