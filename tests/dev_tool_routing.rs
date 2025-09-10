@@ -277,7 +277,7 @@ fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
     {
         let runtime = aifo_coder::container_runtime_path().expect("docker not found");
         let name_cpp = format!("aifo-tc-c-cpp-{}", sid);
-        let _ = Command::new(&runtime)
+        let _ = std::process::Command::new(&runtime)
             .arg("stop")
             .arg(&name_cpp)
             .status();
