@@ -1,3 +1,5 @@
+mod common;
+
 #[test]
 fn test_rust_run_and_exec_include_user_flags_and_path_env() {
     // For consistency with other tests, skip if docker isn't available
@@ -43,18 +45,9 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
             "CARGO_HOME missing in run preview: {}",
             run_preview
         );
-        assert!(
-            run_preview.contains("-e 'PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH'")
-                || run_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
-                || run_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
-                || run_preview
-                    .contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-                || run_preview
-                    .contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'")
-                || run_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-                || run_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'"),
-            "PATH prefix missing in run preview: {}",
-            run_preview
+        common::assert_preview_path_includes(
+            &run_preview,
+            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"]
         );
 
         // Exec preview: expect -u and PATH/CARGO_HOME envs
