@@ -190,7 +190,7 @@ fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
         let without_proto = url.trim_start_matches("http://");
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         host_port
-            .rsplitn(2, ':')
+            .rsplit(':')
             .next()
             .and_then(|s| s.parse::<u16>().ok())
             .expect("failed to parse port from URL")
