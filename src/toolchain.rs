@@ -1884,8 +1884,13 @@ pub fn toolexec_start_proxy(
                     let kind = selected_kind.as_str();
                     let allow = sidecar_allowlist(kind);
                     if !allow.contains(&tool.as_str()) {
-                        let header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let body = b"forbidden\n";
+                        let header = format!(
+                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
                         let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(body);
                         let _ = stream.flush();
                         let _ = stream.shutdown(Shutdown::Both);
                         continue;
@@ -2421,9 +2426,13 @@ pub fn toolexec_start_proxy(
             let kind = selected_kind.as_str();
             let allow = sidecar_allowlist(kind);
             if !allow.contains(&tool.as_str()) {
-                let header =
-                    "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let body = b"forbidden\n";
+                let header = format!(
+                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
                 let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(body);
                 let _ = stream.flush();
                 let _ = stream.shutdown(Shutdown::Both);
                 continue;
