@@ -1805,6 +1805,23 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     }
+                    // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
+                    if !tool.is_empty()
+                        && !{
+                            let tl = tool.to_ascii_lowercase();
+                            ["rust", "node", "python", "c-cpp", "go"]
+                                .iter()
+                                .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
+                        }
+                    {
+                        let body = b"forbidden\n";
+                        let header = format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(body);
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue;
+                    }
                     if tool.is_empty() {
                         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
                         if auth_ok && (!proto_present || !proto_ok) {
@@ -2373,6 +2390,23 @@ pub fn toolexec_start_proxy(
                         continue;
                     }
                 }
+            }
+            // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
+            if !tool.is_empty()
+                && !{
+                    let tl = tool.to_ascii_lowercase();
+                    ["rust", "node", "python", "c-cpp", "go"]
+                        .iter()
+                        .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
+                }
+            {
+                let body = b"forbidden\n";
+                let header = format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(body);
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Both);
+                continue;
             }
             if tool.is_empty() {
                 // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
