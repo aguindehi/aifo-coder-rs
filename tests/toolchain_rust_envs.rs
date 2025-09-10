@@ -69,7 +69,9 @@ fn test_rust_envs_in_run_and_exec_previews() {
             || run_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
             || run_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
             || run_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || run_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
+            || run_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'")
+            || run_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            || run_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'"),
         "PATH prefix missing in run preview: {}",
         run_preview
     );
@@ -117,7 +119,9 @@ fn test_rust_envs_in_run_and_exec_previews() {
             || exec_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
             || exec_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
             || exec_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || exec_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
+            || exec_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'")
+            || exec_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            || exec_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'"),
         "PATH prefix missing in exec preview: {}",
         exec_preview
     );
