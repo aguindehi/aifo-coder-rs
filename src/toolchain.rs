@@ -2594,6 +2594,30 @@ pub fn toolexec_start_proxy(
             if tool.eq_ignore_ascii_case("notifications-cmd")
                 || form.contains("tool=notifications-cmd")
             {
+                if !auth_ok {
+                    let body = b"unauthorized\n";
+                    let header = format!(
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(body);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                if !proto_present || !proto_ok {
+                    let msg = b"Unsupported shim protocol; expected 1 or 2\n";
+                    let header = format!(
+                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        msg.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(msg);
+                    let _ = stream.flush();
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue;
+                }
                 match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
