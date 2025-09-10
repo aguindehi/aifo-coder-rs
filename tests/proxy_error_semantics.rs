@@ -17,7 +17,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let without_proto = url.trim_start_matches("http://");
         let host_port = without_proto.split('/').next().unwrap_or(without_proto);
         host_port
-            .rsplitn(2, ':')
+            .rsplit(':')
             .next()
             .and_then(|s| s.parse::<u16>().ok())
             .expect("failed to parse port from URL")
