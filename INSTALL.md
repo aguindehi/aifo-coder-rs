@@ -151,6 +151,10 @@ make test-dev-tool-routing
 ```bash
 make test-tsc-resolution
 ```
+- Proxy error semantics (ignored by default):
+```bash
+make test-proxy-errors
+```
 - C/C++ dry-run tests:
 ```bash
 make test-toolchain-cpp
