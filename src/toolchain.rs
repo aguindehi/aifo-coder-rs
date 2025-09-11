@@ -2146,6 +2146,7 @@ fn handle_connection<S: Read + Write>(
             let _ = std::io::stderr().flush();
             eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
         }
+        eprintln!("\r");
         let started = std::time::Instant::now();
 
         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
