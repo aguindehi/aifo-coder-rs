@@ -22,11 +22,13 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
         export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export SSL_CERT_DIR=/etc/ssl/certs; \
         export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
     apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
+    export RUSTUP_USE_CURL=1; \
     /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
