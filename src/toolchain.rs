@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener};
+use std::net::TcpListener;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
@@ -701,81 +701,91 @@ pub fn build_sidecar_exec_preview(
     args
 }
 
+const ALLOW_RUST: &[&str] = &[
+    "cargo",
+    "rustc",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_NODE: &[&str] = &[
+    "node",
+    "npm",
+    "npx",
+    "tsc",
+    "ts-node",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_PYTHON: &[&str] = &[
+    "python",
+    "python3",
+    "pip",
+    "pip3",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_CCPP: &[&str] = &[
+    "gcc",
+    "g++",
+    "cc",
+    "c++",
+    "clang",
+    "clang++",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+];
+
+const ALLOW_GO: &[&str] = &[
+    "go",
+    "gofmt",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
 fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     match kind {
-        "rust" => &[
-            "cargo",
-            "rustc",
-            DEV_TOOLS[0],
-            DEV_TOOLS[1],
-            DEV_TOOLS[2],
-            DEV_TOOLS[3],
-            DEV_TOOLS[4],
-            DEV_TOOLS[5],
-            DEV_TOOLS[6],
-            DEV_TOOLS[7],
-            DEV_TOOLS[8],
-            DEV_TOOLS[9],
-        ],
-        "node" => &[
-            "node",
-            "npm",
-            "npx",
-            "tsc",
-            "ts-node",
-            DEV_TOOLS[0],
-            DEV_TOOLS[1],
-            DEV_TOOLS[2],
-            DEV_TOOLS[3],
-            DEV_TOOLS[4],
-            DEV_TOOLS[5],
-            DEV_TOOLS[6],
-            DEV_TOOLS[7],
-            DEV_TOOLS[8],
-            DEV_TOOLS[9],
-        ],
-        "python" => &[
-            "python",
-            "python3",
-            "pip",
-            "pip3",
-            DEV_TOOLS[0],
-            DEV_TOOLS[1],
-            DEV_TOOLS[2],
-            DEV_TOOLS[3],
-            DEV_TOOLS[4],
-            DEV_TOOLS[5],
-            DEV_TOOLS[6],
-            DEV_TOOLS[7],
-            DEV_TOOLS[8],
-            DEV_TOOLS[9],
-        ],
-        "c-cpp" => &[
-            "gcc",
-            "g++",
-            "cc",
-            "c++",
-            "clang",
-            "clang++",
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-        ],
-        "go" => &[
-            "go",
-            "gofmt",
-            DEV_TOOLS[0],
-            DEV_TOOLS[1],
-            DEV_TOOLS[2],
-            DEV_TOOLS[3],
-            DEV_TOOLS[4],
-            DEV_TOOLS[5],
-            DEV_TOOLS[6],
-            DEV_TOOLS[7],
-            DEV_TOOLS[8],
-            DEV_TOOLS[9],
-        ],
+        "rust" => ALLOW_RUST,
+        "node" => ALLOW_NODE,
+        "python" => ALLOW_PYTHON,
+        "c-cpp" => ALLOW_CCPP,
+        "go" => ALLOW_GO,
         _ => &[],
     }
 }
@@ -1914,7 +1924,6 @@ fn handle_connection<S: Read + Write>(
         if !auth_ok {
             respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
             let _ = stream.flush();
-            let _ = stream.by_ref();
             return;
         }
         if !proto_present || !proto_ok {
