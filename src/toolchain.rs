@@ -1926,12 +1926,7 @@ fn handle_connection<S: Read + Write>(
         || request_path_lc.contains("/notify");
     if !is_notifications_path_hint {
         if method_up != "POST" {
-            respond_plain(
-                stream,
-                "405 Method Not Allowed",
-                86,
-                ERR_METHOD_NOT_ALLOWED,
-            );
+            respond_plain(stream, "405 Method Not Allowed", 86, ERR_METHOD_NOT_ALLOWED);
             let _ = stream.flush();
             return;
         }
@@ -2008,12 +2003,7 @@ fn handle_connection<S: Read + Write>(
         && auth_ok
     {
         if !proto_present || !proto_ok {
-            respond_plain(
-                stream,
-                "426 Upgrade Required",
-                86,
-                ERR_UNSUPPORTED_PROTO,
-            );
+            respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
         }
@@ -2048,12 +2038,7 @@ fn handle_connection<S: Read + Write>(
     if tool.is_empty() {
         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
         if auth_ok && (!proto_present || !proto_ok) {
-            respond_plain(
-                stream,
-                "426 Upgrade Required",
-                86,
-                ERR_UNSUPPORTED_PROTO,
-            );
+            respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
         } else if !auth_ok {
@@ -2105,12 +2090,7 @@ fn handle_connection<S: Read + Write>(
     }
     // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
     if auth_ok && (!proto_present || !proto_ok) {
-        respond_plain(
-            stream,
-            "426 Upgrade Required",
-            86,
-            ERR_UNSUPPORTED_PROTO,
-        );
+        respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
         let _ = stream.flush();
         return;
     }
