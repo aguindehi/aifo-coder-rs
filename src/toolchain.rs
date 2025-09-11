@@ -197,8 +197,8 @@ fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 }
 
 fn apply_rust_common_env(args: &mut Vec<String>) {
+    // Normative env for rust sidecars; rely on image PATH (do not override via -e)
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
-    push_env(args, "PATH", RUST_PATH);
     push_env(args, "CC", "gcc");
     push_env(args, "CXX", "g++");
     let rb = env::var("RUST_BACKTRACE").ok();
@@ -666,7 +666,8 @@ pub fn build_sidecar_run_preview(
         }
     }
 
-    // Linux connectivity (host proxy via host-gateway) for sidecars as well
+    // Linux connectivity for sidecars (optional; typically only the agent needs host-gateway).
+    // Enable via AIFO_TOOLEEXEC_ADD_HOST=1 for troubleshooting if required.
     #[cfg(target_os = "linux")]
     {
         if std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
@@ -1572,6 +1573,13 @@ pub fn toolchain_start_session(
     Ok(session_id)
 }
 
+const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
+const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
+const ERR_BAD_REQUEST: &[u8] = b"bad request\n";
+const ERR_METHOD_NOT_ALLOWED: &[u8] = b"method not allowed\n";
+const ERR_NOT_FOUND: &[u8] = b"not found\n";
+const ERR_UNSUPPORTED_PROTO: &[u8] = b"Unsupported shim protocol; expected 1 or 2\n";
+
 /// Response helpers (common).
 fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
     let header = format!(
@@ -1618,8 +1626,12 @@ fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String])
     let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
     // Up to and including container name
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-    // Allocate a TTY for streaming to improve interactive flushing
-    spawn_args.insert(1, "-t".to_string());
+    // Allocate a TTY for streaming to improve interactive flushing.
+    // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
+    let use_tty = env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+    if use_tty {
+        spawn_args.insert(1, "-t".to_string());
+    }
     // User command slice after container name
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
     let script = {
@@ -1918,13 +1930,13 @@ fn handle_connection<S: Read + Write>(
                 stream,
                 "405 Method Not Allowed",
                 86,
-                b"method not allowed\n",
+                ERR_METHOD_NOT_ALLOWED,
             );
             let _ = stream.flush();
             return;
         }
         if !request_path_lc.ends_with("/exec") {
-            respond_plain(stream, "404 Not Found", 86, b"not found\n");
+            respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
             let _ = stream.flush();
             return;
         }
@@ -2000,7 +2012,7 @@ fn handle_connection<S: Read + Write>(
                 stream,
                 "426 Upgrade Required",
                 86,
-                b"Unsupported shim protocol; expected 1 or 2\n",
+                ERR_UNSUPPORTED_PROTO,
             );
             let _ = stream.flush();
             return;
@@ -2029,7 +2041,7 @@ fn handle_connection<S: Read + Write>(
     // If not authorized, fall through to the no-auth bypass block below.
     // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
     if !tool.is_empty() && !is_tool_allowed_any_sidecar(&tool) {
-        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
         return;
     }
@@ -2040,16 +2052,16 @@ fn handle_connection<S: Read + Write>(
                 stream,
                 "426 Upgrade Required",
                 86,
-                b"Unsupported shim protocol; expected 1 or 2\n",
+                ERR_UNSUPPORTED_PROTO,
             );
             let _ = stream.flush();
             return;
         } else if !auth_ok {
-            respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+            respond_plain(stream, "401 Unauthorized", 86, ERR_UNAUTHORIZED);
             let _ = stream.flush();
             return;
         } else {
-            respond_plain(stream, "400 Bad Request", 86, b"bad request\n");
+            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
             let _ = stream.flush();
             return;
         }
@@ -2087,7 +2099,7 @@ fn handle_connection<S: Read + Write>(
     let kind = selected_kind.as_str();
     let allow = sidecar_allowlist(kind);
     if !allow.contains(&tool.as_str()) {
-        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
         return;
     }
@@ -2097,13 +2109,13 @@ fn handle_connection<S: Read + Write>(
             stream,
             "426 Upgrade Required",
             86,
-            b"Unsupported shim protocol; expected 1 or 2\n",
+            ERR_UNSUPPORTED_PROTO,
         );
         let _ = stream.flush();
         return;
     }
     if !auth_ok {
-        respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+        respond_plain(stream, "401 Unauthorized", 86, ERR_UNAUTHORIZED);
         let _ = stream.flush();
         return;
     }
