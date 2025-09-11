@@ -136,22 +136,22 @@ fn default_image_fmt_for_kind_const(kind: &str) -> Option<&'static str> {
     None
 }
 
-/// Return true when an Authorization header value authorizes the given token.
+/// Return true when an Authorization header value authorizes the given token
+/// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
-/// - "Bearer <token>" (scheme case-insensitive, flexible whitespace)
-/// - Bare "<token>" value (no scheme)
-///   Trims common punctuation/quotes around the credential.
+/// - "Bearer <token>" (scheme case-insensitive; at least one ASCII whitespace
+///   separating scheme and credentials)
 fn authorization_value_matches(value: &str, token: &str) -> bool {
-    let mut cred = value.trim();
-    let lower = cred.to_ascii_lowercase();
-    if lower.starts_with("bearer") {
-        // Split off scheme and keep the remainder as credentials
-        let mut it = cred.splitn(2, |c: char| c.is_whitespace());
-        let _scheme = it.next();
-        cred = it.next().unwrap_or("").trim();
+    let v = value.trim();
+    // Split at the first ASCII whitespace to separate scheme and credentials
+    if let Some(idx) = v.find(|c: char| c.is_ascii_whitespace()) {
+        let (scheme, rest) = v.split_at(idx);
+        if scheme.eq_ignore_ascii_case("bearer") {
+            let cred = rest.trim_start();
+            return !cred.is_empty() && cred == token;
+        }
     }
-    let clean = cred.trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
-    clean == token || cred == token
+    false
 }
 
 fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
@@ -2424,14 +2424,14 @@ mod auth_tests {
         assert!(authorization_value_matches("BEARER tok", "tok"));
     }
     #[test]
-    fn auth_bearer_punct() {
-        assert!(authorization_value_matches("Bearer \"tok\"", "tok"));
-        assert!(authorization_value_matches("Bearer tok,", "tok"));
-        assert!(authorization_value_matches("'Bearer tok';", "tok"));
+    fn auth_bearer_punct_rejected() {
+        assert!(!authorization_value_matches("Bearer \"tok\"", "tok"));
+        assert!(!authorization_value_matches("Bearer tok,", "tok"));
+        assert!(!authorization_value_matches("'Bearer tok';", "tok"));
     }
     #[test]
-    fn auth_bare_token_ok() {
-        assert!(authorization_value_matches("tok", "tok"));
+    fn auth_bare_token_rejected() {
+        assert!(!authorization_value_matches("tok", "tok"));
     }
     #[test]
     fn auth_wrong() {
