@@ -154,6 +154,10 @@ help:
 	@echo "  test-toolchain-live ......... Run live toolchain tests (ignored by default)"
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-proxy-errors ........... Run proxy error semantics tests (ignored by default)"
+	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
+	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
+	@echo "  test-tsc-resolution ......... Run TypeScript local tsc resolution test (ignored by default)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
@@ -222,6 +226,7 @@ RUST_BASE_TAG ?= 1-bookworm
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
+CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
 .PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
@@ -243,9 +248,9 @@ build-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-crush:
@@ -263,9 +268,9 @@ build-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-aider:
@@ -283,9 +288,9 @@ build-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-rust-builder:
@@ -340,24 +345,24 @@ build-debug:
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
 	    --target "$$STAGE" \
 	    -t "$$OUT" \
-	    -t "$${RP}$$OUT" .; \
+	    -t "$${RP}$$OUT" $(CA_SECRET) .; \
 	else \
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
 	    --target "$$STAGE" \
-	    -t "$$OUT" .; \
+	    -t "$$OUT" $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-rust rebuild-toolchain-rust
 build-toolchain-rust:
 	@set -e; \
 	echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."; \
-	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
 	RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
 	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
 	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	  echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
 	else \
 	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
 	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
@@ -370,17 +375,12 @@ build-toolchain-rust:
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
 	else \
-	  if [ -n "$$RP" ]; then \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
-	  else \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
-	  fi; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-rust:
 	@set -e; \
 	echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
-	echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
 	RP=""; \
 	echo "Checking reachability of https://repository.migros.net ..." ; \
 	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
@@ -434,17 +434,55 @@ publish-toolchain-rust:
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
-	@echo "Building aifo-cpp-toolchain:latest ..."
-	docker build -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build c-cpp toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	fi
 
 rebuild-toolchain-cpp:
-	@echo "Rebuilding aifo-cpp-toolchain:latest (no cache) ..."
-	docker build --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .
+	@RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild c-cpp toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --no-cache -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	fi
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; tagging with registry prefix when pushing."; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; proceeding without prefix unless REGISTRY is set."; \
+	fi; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
 	case "$$REG" in \
 	  */) ;; \
@@ -454,16 +492,16 @@ publish-toolchain-cpp:
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" .; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar .; \
+	    $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/aifo-cpp-toolchain-latest.oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest .; \
+	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
@@ -484,9 +522,9 @@ build-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-crush-slim:
@@ -504,9 +542,9 @@ build-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-aider-slim:
@@ -524,9 +562,9 @@ build-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-launcher:
@@ -699,7 +737,7 @@ test-cargo:
 
 test-legacy: test-cargo
 
-.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp
+.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
 	@echo "Running proxy smoke test (ignored by default) ..."
 	cargo test --test proxy_smoke -- --ignored
@@ -722,6 +760,25 @@ test-proxy-unix:
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
 	  cargo test --test proxy_smoke -- --ignored; \
 	fi
+
+test-proxy-errors:
+	@echo "Running proxy error semantics tests (ignored by default) ..."
+	cargo test --test proxy_error_semantics -- --ignored
+
+.PHONY: test-proxy-tcp
+test-proxy-tcp:
+	@echo "Running TCP streaming proxy test (ignored by default) ..."
+	cargo test --test proxy_streaming_tcp -- --ignored
+
+.PHONY: test-dev-tool-routing
+test-dev-tool-routing:
+	@echo "Running dev-tool routing tests (ignored by default) ..."
+	cargo test --test dev_tool_routing -- --ignored
+
+.PHONY: test-tsc-resolution
+test-tsc-resolution:
+	@echo "Running TypeScript local tsc resolution test (ignored by default) ..."
+	cargo test --test tsc_resolution -- --ignored
 
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
@@ -826,9 +883,9 @@ rebuild-codex:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${RP}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-crush:
@@ -846,9 +903,9 @@ rebuild-crush:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${RP}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-aider:
@@ -866,9 +923,9 @@ rebuild-aider:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${RP}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-rust-builder:
@@ -909,9 +966,9 @@ rebuild-codex-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${RP}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 rebuild-crush-slim:
@@ -929,9 +986,9 @@ rebuild-crush-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${RP}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 rebuild-aider-slim:
@@ -949,9 +1006,9 @@ rebuild-aider-slim:
 	  fi; \
 	fi; \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${RP}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 # Rebuild all existing local images for this prefix (all tags) using cache

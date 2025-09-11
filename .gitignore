@@ -15,3 +15,4 @@ dist
 ISSUES
 target/**
 Cargo.lock
+node_modules/**

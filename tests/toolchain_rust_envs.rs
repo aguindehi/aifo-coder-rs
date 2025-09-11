@@ -1,10 +1,6 @@
 use std::env;
 
-fn contains_env(preview: &str, key: &str) -> bool {
-    preview.contains(&format!("-e {}=", key))
-        || preview.contains(&format!("-e '{}=", key))
-        || preview.contains(&format!("-e \"{}=", key))
-}
+mod common;
 
 #[test]
 fn test_rust_envs_in_run_and_exec_previews() {
@@ -64,14 +60,9 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_HOME missing in run preview: {}",
         run_preview
     );
-    assert!(
-        run_preview.contains("-e 'PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH'")
-            || run_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
-            || run_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
-            || run_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || run_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
-        "PATH prefix missing in run preview: {}",
-        run_preview
+    common::assert_preview_path_includes(
+        &run_preview,
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
     assert!(
         run_preview.contains("-e RUST_BACKTRACE=1"),
@@ -90,7 +81,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
-            contains_env(&run_preview, key),
+            common::contains_env(&run_preview, key),
             "missing {} passthrough in run preview: {}",
             key,
             run_preview
@@ -112,14 +103,9 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_HOME missing in exec preview: {}",
         exec_preview
     );
-    assert!(
-        exec_preview.contains("-e 'PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH'")
-            || exec_preview.contains("-e \"$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH\"")
-            || exec_preview.contains("-e PATH=$CARGO_HOME/bin:/usr/local/cargo/bin:$PATH")
-            || exec_preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || exec_preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
-        "PATH prefix missing in exec preview: {}",
-        exec_preview
+    common::assert_preview_path_includes(
+        &exec_preview,
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
     assert!(
         exec_preview.contains("-e RUST_BACKTRACE=1"),
@@ -137,7 +123,7 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
     ] {
         assert!(
-            contains_env(&exec_preview, key),
+            common::contains_env(&exec_preview, key),
             "missing {} passthrough in exec preview: {}",
             key,
             exec_preview

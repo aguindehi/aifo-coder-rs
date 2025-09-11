@@ -1,5 +1,7 @@
 use std::process::Command;
 
+mod common;
+
 /// Helper: is docker available and does the given image exist locally?
 fn docker_has_image(img: &str) -> bool {
     if let Ok(rt) = aifo_coder::container_runtime_path() {
@@ -87,11 +89,9 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
         "CARGO_HOME missing in default run preview: {}",
         preview
     );
-    assert!(
-        preview.contains("-e PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH")
-            || preview.contains("-e 'PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH'"),
-        "PATH prefix missing in default run preview: {}",
-        preview
+    common::assert_preview_path_includes(
+        &preview,
+        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
     );
 }
 
