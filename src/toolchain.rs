@@ -1574,6 +1574,15 @@ fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
         .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
 }
 
+struct ProxyCtx {
+    runtime: PathBuf,
+    token: String,
+    session: String,
+    timeout_secs: u64,
+    verbose: bool,
+    uidgid: Option<(u32, u32)>,
+}
+
 /// Start a minimal proxy to execute tools via shims inside sidecars.
 /// Returns (url, token, running_flag, thread_handle).
 pub fn toolexec_start_proxy(
@@ -1649,16 +1658,15 @@ pub fn toolexec_start_proxy(
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
                     let _ = stream.set_write_timeout(None);
 
-                    handle_connection(
-                        &runtime,
-                        &mut stream,
-                        &token_for_thread2,
-                        &session,
+                    let ctx = ProxyCtx {
+                        runtime: runtime.clone(),
+                        token: token_for_thread2.clone(),
+                        session: session.clone(),
                         timeout_secs,
                         verbose,
-                        if cfg!(unix) { Some((uid, gid)) } else { None },
-                        &mut tool_cache,
-                    );
+                        uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+                    };
+                    handle_connection(&ctx, &mut stream, &mut tool_cache);
                 }
                 if verbose {
                     eprintln!("aifo-coder: toolexec proxy stopped");
@@ -1709,16 +1717,15 @@ pub fn toolexec_start_proxy(
             let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
             let _ = stream.set_write_timeout(None);
 
-            handle_connection(
-                &runtime,
-                &mut stream,
-                &token_for_thread,
-                &session,
+            let ctx = ProxyCtx {
+                runtime: runtime.clone(),
+                token: token_for_thread.clone(),
+                session: session.clone(),
                 timeout_secs,
                 verbose,
-                if cfg!(unix) { Some((uid, gid)) } else { None },
-                &mut tool_cache,
-            );
+                uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+            };
+            handle_connection(&ctx, &mut stream, &mut tool_cache);
         }
         if verbose {
             eprintln!("aifo-coder: toolexec proxy stopped");
@@ -1731,15 +1738,16 @@ pub fn toolexec_start_proxy(
 
 /// Handle a single proxy connection: parse request, route, exec, and respond.
 fn handle_connection<S: Read + Write>(
-    runtime: &Path,
+    ctx: &ProxyCtx,
     stream: &mut S,
-    token: &str,
-    session: &str,
-    timeout_secs: u64,
-    verbose: bool,
-    uidgid: Option<(u32, u32)>,
     tool_cache: &mut HashMap<(String, String), bool>,
 ) {
+    let runtime: &Path = &ctx.runtime;
+    let token: &str = &ctx.token;
+    let session: &str = &ctx.session;
+    let timeout_secs: u64 = ctx.timeout_secs;
+    let verbose: bool = ctx.verbose;
+    let uidgid = ctx.uidgid;
     // Read request (simple HTTP)
     let mut buf = Vec::new();
     let mut hdr = Vec::new();
