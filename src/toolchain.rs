@@ -2166,6 +2166,7 @@ pub fn toolexec_start_proxy(
                             let _ = std::io::stdout().flush();
                             let _ = std::io::stderr().flush();
                             eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
+                            eprintln!("\r");
                         }
 
                         let mut cmd = Command::new(&runtime_cl);
@@ -2232,6 +2233,7 @@ pub fn toolexec_start_proxy(
                         if verbose {
                             let _ = std::io::stdout().flush();
                             let _ = std::io::stderr().flush();
+                            eprintln!("\r");
                             eprintln!(
                                 "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                                 tool, kind, code, dur_ms
@@ -2856,6 +2858,7 @@ pub fn toolexec_start_proxy(
                     let _ = std::io::stdout().flush();
                     let _ = std::io::stderr().flush();
                     eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
+                    eprintln!("\r");
                 }
 
                 let mut cmd = Command::new(&runtime_cl);
@@ -2922,6 +2925,7 @@ pub fn toolexec_start_proxy(
                 if verbose {
                     let _ = std::io::stdout().flush();
                     let _ = std::io::stderr().flush();
+                    eprintln!("\r");
                     eprintln!(
                         "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                         tool, kind, code, dur_ms
