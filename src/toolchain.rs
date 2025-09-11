@@ -710,6 +710,18 @@ pub fn build_sidecar_exec_preview(
     match kind {
         "rust" => {
             apply_rust_common_env(&mut args);
+            // When bootstrapping official rust images, ensure $CARGO_HOME/bin is on PATH at exec time.
+            if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                push_env(
+                    &mut args,
+                    "PATH",
+                    "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                );
+            }
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
             apply_rust_linker_flags_if_set(&mut args);
             // Pass-through proxies and cargo networking envs for exec as well
