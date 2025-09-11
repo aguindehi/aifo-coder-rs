@@ -704,7 +704,7 @@ pub fn build_sidecar_exec_preview(
     if use_bootstrap {
         let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-rust-toolchain image with sccache' >&2; fi; exec \"$@\"";
         args.push("sh".to_string());
-        args.push("-lc".to_string());
+        args.push("-c".to_string());
         args.push(bootstrap.to_string());
         // Name for $0, subsequent args become "$@"
         args.push("aifo-exec".to_string());
@@ -2159,8 +2159,14 @@ pub fn toolexec_start_proxy(
                             format!("{} 2>&1", s)
                         };
                         spawn_args.push("sh".to_string());
-                        spawn_args.push("-lc".to_string());
+                        spawn_args.push("-c".to_string());
                         spawn_args.push(script);
+
+                        if verbose {
+                            let _ = std::io::stdout().flush();
+                            let _ = std::io::stderr().flush();
+                            eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
+                        }
 
                         let mut cmd = Command::new(&runtime_cl);
                         for a in &spawn_args {
@@ -2843,8 +2849,14 @@ pub fn toolexec_start_proxy(
                     format!("{} 2>&1", s)
                 };
                 spawn_args.push("sh".to_string());
-                spawn_args.push("-lc".to_string());
+                spawn_args.push("-c".to_string());
                 spawn_args.push(script);
+
+                if verbose {
+                    let _ = std::io::stdout().flush();
+                    let _ = std::io::stderr().flush();
+                    eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
+                }
 
                 let mut cmd = Command::new(&runtime_cl);
                 for a in &spawn_args {
