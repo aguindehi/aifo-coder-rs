@@ -82,10 +82,10 @@ const SHIM_TOOLS: &[&str] = &[
     "notifications-cmd",
 ];
 
-/// Structured mappings for toolchain normalization and default images
-
-/// Canonical kind aliases (lhs -> rhs)
-const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
+—/// Structured mappings for toolchain normalization and default images
++/// Structured mappings for toolchain normalization and default images
++/// Canonical kind aliases (lhs -> rhs)
+ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
     ("rust", "rust"),
     ("node", "node"),
     ("ts", "node"),
