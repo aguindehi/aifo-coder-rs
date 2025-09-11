@@ -29,8 +29,8 @@ fn test_proxy_allowlist_rejects_disallowed_tool() {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
     let body = "tool=bash&cwd=.";
     let req = format!(
-        "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nProxy-Authorization: Bearer {}\r\nX-Aifo-Token: {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-        token, token, token, body.len(), body
+        "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+        token, body.len(), body
     );
     stream.write_all(req.as_bytes()).expect("write failed");
     let mut resp = Vec::new();

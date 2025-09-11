@@ -1417,7 +1417,7 @@ fi
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
-cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "Proxy-Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Token: $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
+cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
 cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
@@ -1844,22 +1844,11 @@ fn handle_connection<S: Read + Write>(
     let mut proto_present = false;
     let mut proto_ver: u8 = 0;
     let mut saw_auth = false;
-    let mut saw_proxy_auth = false;
-    let mut saw_x_token = false;
     for line in header_str.lines() {
         let l = line.trim();
         let lower = l.to_ascii_lowercase();
-        if lower.starts_with("authorization:")
-            || lower.starts_with("proxy-authorization:")
-            || lower.starts_with("x-aifo-token:")
-        {
-            if lower.starts_with("authorization:") {
-                saw_auth = true;
-            } else if lower.starts_with("proxy-authorization:") {
-                saw_proxy_auth = true;
-            } else if lower.starts_with("x-aifo-token:") {
-                saw_x_token = true;
-            }
+        if lower.starts_with("authorization:") {
+            saw_auth = true;
             if let Some((_, v)) = l.split_once(':') {
                 let value = v.trim();
                 // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
@@ -1869,9 +1858,8 @@ fn handle_connection<S: Read + Write>(
                     auth_ok = true;
                 } else {
                     // Legacy fallback: split and compare last token
-                    let parts: Vec<&str> = value
-                        .split(|c: char| c.is_whitespace() || c == '=')
-                        .collect();
+                    let parts: Vec<&str> =
+                        value.split(|c: char| c.is_whitespace() || c == '=').collect();
                     if let Some(last) = parts.last() {
                         let last_clean = last
                             .trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
@@ -1898,8 +1886,10 @@ fn handle_connection<S: Read + Write>(
     }
     if verbose {
         eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} proxy_auth_seen={} x_token_seen={} auth_ok={} proto_v={}",
-            saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
+            "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} auth_ok={} proto_v={}",
+            saw_auth,
+            auth_ok,
+            if proto_present { proto_ver as i32 } else { 0 }
         );
     }
     // Early protocol enforcement: when Authorization is valid but protocol header is missing/unsupported -> 426.
