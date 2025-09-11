@@ -165,7 +165,13 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Python: Aider via uv (PEP 668-safe)
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
-RUN sh -lc 'set -e; \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        export CURL_CA_BUNDLE="$CAF"; \
+        export REQUESTS_CA_BUNDLE="$CAF"; \
+        export SSL_CERT_FILE="$CAF"; \
+    fi; \
     curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
@@ -359,7 +365,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Python: Aider via uv (PEP 668-safe)
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        export CURL_CA_BUNDLE="$CAF"; \
+        export REQUESTS_CA_BUNDLE="$CAF"; \
+        export SSL_CERT_FILE="$CAF"; \
+    fi; \
+    curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
+    sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
     uv pip install --python /opt/venv/bin/python --upgrade pip; \
@@ -367,7 +381,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
     fi; \
-    find /opt/venv -name 'pycache' -type d -exec rm -rf {} +; find /opt/venv -name '*.pyc' -delete; \
+    find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
@@ -383,7 +397,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
         rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
-    fi
+    fi'
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
