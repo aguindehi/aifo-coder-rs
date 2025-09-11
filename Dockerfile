@@ -93,10 +93,16 @@ RUN printf '%s\n' \
   'mkdir -p "$tmp"' \
   'conf="$tmp/curl.conf"' \
   ': > "$conf"' \
+  'if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then' \
+  '  echo "aifo-shim: tool=$tool cwd=$cwd" >&2' \
+  '  echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2' \
+  'fi' \
   'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
   'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
   'printf "%s\n" "request = POST" >> "$conf"' \
   'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = Authorization: %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
   'printf "%s\n" "header = TE: trailers" >> "$conf"' \
   'printf "data = tool=%s\n" "$tool" >> "$conf"' \
@@ -315,10 +321,16 @@ RUN printf '%s\n' \
   'mkdir -p "$tmp"' \
   'conf="$tmp/curl.conf"' \
   ': > "$conf"' \
+  'if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then' \
+  '  echo "aifo-shim: tool=$tool cwd=$cwd" >&2' \
+  '  echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2' \
+  'fi' \
   'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
   'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
   'printf "%s\n" "request = POST" >> "$conf"' \
   'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = Authorization: %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
   'printf "%s\n" "header = TE: trailers" >> "$conf"' \
   'printf "data = tool=%s\n" "$tool" >> "$conf"' \

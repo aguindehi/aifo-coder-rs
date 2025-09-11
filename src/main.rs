@@ -3678,6 +3678,9 @@ fn main() -> ExitCode {
                     Ok((url, token, flag, handle)) => {
                         std::env::set_var("AIFO_TOOLEEXEC_URL", &url);
                         std::env::set_var("AIFO_TOOLEEXEC_TOKEN", &token);
+                        if cli.verbose {
+                            std::env::set_var("AIFO_TOOLCHAIN_VERBOSE", "1");
+                        }
                         tc_proxy_flag = Some(flag);
                         tc_proxy_handle = Some(handle);
                     }

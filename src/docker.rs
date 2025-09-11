@@ -36,6 +36,7 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         // Tool-exec proxy (Phase 2)
         "AIFO_TOOLEEXEC_URL",
         "AIFO_TOOLEEXEC_TOKEN",
+        "AIFO_TOOLCHAIN_VERBOSE",
     ]
 });
 
