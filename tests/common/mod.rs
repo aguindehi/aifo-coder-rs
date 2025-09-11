@@ -5,6 +5,7 @@ pub fn contains_env(preview: &str, key: &str) -> bool {
         || preview.contains(&format!(" {}=", key)) // tolerate raw KEY= forms in some previews
 }
 
+#[allow(dead_code)]
 pub fn assert_preview_path_includes(preview: &str, components: &[&str]) {
     assert!(
         contains_env(preview, "PATH") || preview.contains(" PATH="),
