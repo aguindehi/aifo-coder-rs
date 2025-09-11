@@ -140,10 +140,10 @@ fn default_image_fmt_for_kind_const(kind: &str) -> Option<&'static str> {
 /// Accepts:
 /// - "Bearer <token>" (scheme case-insensitive, flexible whitespace)
 /// - Bare "<token>" value (no scheme)
-////   Trims common punctuation/quotes around the credential.
+///   Trims common punctuation/quotes around the credential.
 fn authorization_value_matches(value: &str, token: &str) -> bool {
     let mut cred = value.trim();
-    let mut lower = cred.to_ascii_lowercase();
+    let lower = cred.to_ascii_lowercase();
     if lower.starts_with("bearer") {
         // Split off scheme and keep the remainder as credentials
         let mut it = cred.splitn(2, |c: char| c.is_whitespace());
