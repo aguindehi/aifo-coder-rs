@@ -102,9 +102,9 @@ RUN printf '%s\n' \
   'printf "%s\n" "request = POST" >> "$conf"' \
   'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = Authorization: %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
   'printf "%s\n" "header = TE: trailers" >> "$conf"' \
+  'printf "%s\n" "header = Content-Type: application/x-www-form-urlencoded" >> "$conf"' \
   'printf "data = tool=%s\n" "$tool" >> "$conf"' \
   'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
   'for a in "$@"; do' \
@@ -330,9 +330,9 @@ RUN printf '%s\n' \
   'printf "%s\n" "request = POST" >> "$conf"' \
   'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = Authorization: %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
   'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
   'printf "%s\n" "header = TE: trailers" >> "$conf"' \
+  'printf "%s\n" "header = Content-Type: application/x-www-form-urlencoded" >> "$conf"' \
   'printf "data = tool=%s\n" "$tool" >> "$conf"' \
   'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
   'for a in "$@"; do' \

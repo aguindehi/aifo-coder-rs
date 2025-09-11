@@ -33,10 +33,6 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "EDITOR",
         "VISUAL",
         "TERM",
-        // Tool-exec proxy (Phase 2)
-        "AIFO_TOOLEEXEC_URL",
-        "AIFO_TOOLEEXEC_TOKEN",
-        "AIFO_TOOLCHAIN_VERBOSE",
     ]
 });
 
@@ -163,6 +159,12 @@ pub fn build_docker_cmd(
         if !v.is_empty() {
             env_flags.push(OsString::from("-e"));
             env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_TOOLCHAIN_VERBOSE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLCHAIN_VERBOSE={v}")));
         }
     }
 

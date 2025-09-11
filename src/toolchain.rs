@@ -1387,10 +1387,14 @@ if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then
 fi
 tool="$(basename "$0")"
 cwd="$(pwd)"
+if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+  echo "aifo-shim: tool=$tool cwd=$cwd" >&2
+  echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2
+fi"
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
-cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers")
+cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "Proxy-Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
 cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
@@ -1672,12 +1676,23 @@ pub fn toolexec_start_proxy(
                     let mut proto_ok = false;
                     let mut proto_present = false;
                     let mut proto_ver: u8 = 0;
+                    let mut saw_auth = false;
+                    let mut saw_proxy_auth = false;
+                    let mut saw_x_token = false;
                     for line in header_str.lines() {
                         let l = line.trim();
                         let lower = l.to_ascii_lowercase();
                         if lower.starts_with("authorization:")
                             || lower.starts_with("proxy-authorization:")
+                            || lower.starts_with("x-aifo-token:")
                         {
+                            if lower.starts_with("authorization:") {
+                                saw_auth = true;
+                            } else if lower.starts_with("proxy-authorization:") {
+                                saw_proxy_auth = true;
+                            } else if lower.starts_with("x-aifo-token:") {
+                                saw_x_token = true;
+                            }
                             if let Some((_, v)) = l.split_once(':') {
                                 let value = v.trim();
                                 // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
@@ -1717,6 +1732,12 @@ pub fn toolexec_start_proxy(
                                 }
                             }
                         }
+                    }
+                    if verbose {
+                        eprintln!(
+                            "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} proxy_auth_seen={} x_token_seen={} auth_ok={} proto_v={}",
+                            saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
+                        );
                     }
                     // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
                     let mut query_pairs: Vec<(String, String)> = Vec::new();
@@ -2390,11 +2411,21 @@ pub fn toolexec_start_proxy(
             let mut proto_ok = false;
             let mut proto_present = false;
             let mut proto_ver: u8 = 0;
+            let mut saw_auth = false;
+            let mut saw_proxy_auth = false;
+            let mut saw_x_token = false;
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
-                if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:")
+                if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:") || lower.starts_with("x-aifo-token:")
                 {
+                    if lower.starts_with("authorization:") {
+                        saw_auth = true;
+                    } else if lower.starts_with("proxy-authorization:") {
+                        saw_proxy_auth = true;
+                    } else if lower.starts_with("x-aifo-token:") {
+                        saw_x_token = true;
+                    }
                     if let Some((_, v)) = l.split_once(':') {
                         let value = v.trim();
                         // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
@@ -2431,6 +2462,12 @@ pub fn toolexec_start_proxy(
                         }
                     }
                 }
+            }
+            if verbose {
+                eprintln!(
+                    "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} proxy_auth_seen={} x_token_seen={} auth_ok={} proto_v={}",
+                    saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
+                );
             }
             // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
             let mut query_pairs: Vec<(String, String)> = Vec::new();
