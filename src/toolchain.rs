@@ -1964,46 +1964,45 @@ fn handle_connection<S: Read + Write>(
     }
     // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
     // If Authorization is valid, still require protocol header (1 or 2).
-    if tool.eq_ignore_ascii_case("notifications-cmd")
+    if (tool.eq_ignore_ascii_case("notifications-cmd")
         || form.contains("tool=notifications-cmd")
         || request_path_lc.contains("/notifications")
         || request_path_lc.contains("/notifications-cmd")
-        || request_path_lc.contains("/notify")
+        || request_path_lc.contains("/notify"))
+        && auth_ok
     {
-        if auth_ok {
-            if !proto_present || !proto_ok {
-                respond_plain(
-                    stream,
-                    "426 Upgrade Required",
-                    86,
-                    b"Unsupported shim protocol; expected 1 or 2\n",
+        if !proto_present || !proto_ok {
+            respond_plain(
+                stream,
+                "426 Upgrade Required",
+                86,
+                b"Unsupported shim protocol; expected 1 or 2\n",
+            );
+            let _ = stream.flush();
+            return;
+        }
+        match notifications_handle_request(&argv, verbose, timeout_secs) {
+            Ok((status_code, body_out)) => {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    status_code,
+                    body_out.len()
                 );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body_out);
                 let _ = stream.flush();
                 return;
             }
-            match notifications_handle_request(&argv, verbose, timeout_secs) {
-                Ok((status_code, body_out)) => {
-                    let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        status_code,
-                        body_out.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(&body_out);
-                    let _ = stream.flush();
-                    return;
-                }
-                Err(reason) => {
-                    let mut body = reason.into_bytes();
-                    body.push(b'\n');
-                    respond_plain(stream, "403 Forbidden", 86, &body);
-                    let _ = stream.flush();
-                    return;
-                }
+            Err(reason) => {
+                let mut body = reason.into_bytes();
+                body.push(b'\n');
+                respond_plain(stream, "403 Forbidden", 86, &body);
+                let _ = stream.flush();
+                return;
             }
         }
-        // If not authorized, fall through to the no-auth bypass block below.
     }
+    // If not authorized, fall through to the no-auth bypass block below.
     // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
     if !tool.is_empty() && !is_tool_allowed_any_sidecar(&tool) {
         respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
