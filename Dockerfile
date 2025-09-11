@@ -100,21 +100,21 @@ RUN printf '%s\n' \
   'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
   'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
   'printf "%s\n" "request = POST" >> "$conf"' \
-  'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
-  'printf "%s\n" "header = TE: trailers" >> "$conf"' \
-  'printf "%s\n" "header = Content-Type: application/x-www-form-urlencoded" >> "$conf"' \
-  'printf "data = tool=%s\n" "$tool" >> "$conf"' \
-  'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
+  'printf "header = \"Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = \"Proxy-Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "%s\n" "header = \"X-Aifo-Proto: 2\"" >> "$conf"' \
+  'printf "%s\n" "header = \"TE: trailers\"" >> "$conf"' \
+  'printf "%s\n" "header = \"Content-Type: application/x-www-form-urlencoded\"" >> "$conf"' \
+  'printf "data = \"tool=%s\"\\n" "$tool" >> "$conf"' \
+  'printf "data = \"cwd=%s\"\\n" "$cwd" >> "$conf"' \
   'for a in "$@"; do' \
-  '  printf "data = arg=%s\n" "$a" >> "$conf"' \
+  '  printf "data = \"arg=%s\"\\n" "$a" >> "$conf"' \
   'done' \
   'URL="$AIFO_TOOLEEXEC_URL"' \
   'case "$URL" in' \
   '  unix://*) SOCKET="${URL#unix://}"; printf "unix-socket = %s\n" "$SOCKET" >> "$conf"; URL="http://localhost/exec" ;;' \
   'esac' \
-  'printf "url = %s\n" "$URL" >> "$conf"' \
+  'printf "url = \"%s\"\\n" "$URL" >> "$conf"' \
   'curl --config "$conf" || true' \
   'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
   'rm -rf "$tmp"' \
@@ -328,21 +328,21 @@ RUN printf '%s\n' \
   'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
   'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
   'printf "%s\n" "request = POST" >> "$conf"' \
-  'printf "header = Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = Proxy-Authorization: Bearer %s\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "%s\n" "header = X-Aifo-Proto: 2" >> "$conf"' \
-  'printf "%s\n" "header = TE: trailers" >> "$conf"' \
-  'printf "%s\n" "header = Content-Type: application/x-www-form-urlencoded" >> "$conf"' \
-  'printf "data = tool=%s\n" "$tool" >> "$conf"' \
-  'printf "data = cwd=%s\n" "$cwd" >> "$conf"' \
+  'printf "header = \"Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "header = \"Proxy-Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
+  'printf "%s\n" "header = \"X-Aifo-Proto: 2\"" >> "$conf"' \
+  'printf "%s\n" "header = \"TE: trailers\"" >> "$conf"' \
+  'printf "%s\n" "header = \"Content-Type: application/x-www-form-urlencoded\"" >> "$conf"' \
+  'printf "data = \"tool=%s\"\\n" "$tool" >> "$conf"' \
+  'printf "data = \"cwd=%s\"\\n" "$cwd" >> "$conf"' \
   'for a in "$@"; do' \
-  '  printf "data = arg=%s\n" "$a" >> "$conf"' \
+  '  printf "data = \"arg=%s\"\\n" "$a" >> "$conf"' \
   'done' \
   'URL="$AIFO_TOOLEEXEC_URL"' \
   'case "$URL" in' \
   '  unix://*) SOCKET="${URL#unix://}"; printf "unix-socket = %s\n" "$SOCKET" >> "$conf"; URL="http://localhost/exec" ;;' \
   'esac' \
-  'printf "url = %s\n" "$URL" >> "$conf"' \
+  'printf "url = \"%s\"\\n" "$URL" >> "$conf"' \
   'curl --config "$conf" || true' \
   'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
   'rm -rf "$tmp"' \
