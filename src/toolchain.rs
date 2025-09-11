@@ -212,11 +212,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
         // Force official rust image when requested; prefer versioned tag if provided
-        if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
-            .ok()
-            .as_deref()
-            == Some("1")
-        {
+        if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
             let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
             let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
             return official_rust_image_for_version(v_opt);
@@ -1858,8 +1854,9 @@ fn handle_connection<S: Read + Write>(
                     auth_ok = true;
                 } else {
                     // Legacy fallback: split and compare last token
-                    let parts: Vec<&str> =
-                        value.split(|c: char| c.is_whitespace() || c == '=').collect();
+                    let parts: Vec<&str> = value
+                        .split(|c: char| c.is_whitespace() || c == '=')
+                        .collect();
                     if let Some(last) = parts.last() {
                         let last_clean = last
                             .trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
