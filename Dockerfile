@@ -46,7 +46,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
-    cargo install cargo-nextest --locked; \
+    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
