@@ -1914,7 +1914,12 @@ fn handle_connection<S: Read + Write>(
         || request_path_lc.contains("/notify");
     if !is_notifications_path_hint {
         if method_up != "POST" {
-            respond_plain(stream, "405 Method Not Allowed", 86, b"method not allowed\n");
+            respond_plain(
+                stream,
+                "405 Method Not Allowed",
+                86,
+                b"method not allowed\n",
+            );
             let _ = stream.flush();
             return;
         }
