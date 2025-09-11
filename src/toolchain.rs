@@ -1850,6 +1850,18 @@ fn handle_connection<S: Read + Write>(
             saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
         );
     }
+    // Early protocol enforcement: when Authorization is valid but protocol header is missing/unsupported -> 426.
+    // This matches the spec and test expectations (tests/proxy_protocol.rs).
+    if auth_ok && (!proto_present || !proto_ok) {
+        respond_plain(
+            stream,
+            "426 Upgrade Required",
+            86,
+            b"Unsupported shim protocol; expected 1 or 2\n",
+        );
+        let _ = stream.flush();
+        return;
+    }
     // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
     let mut query_pairs: Vec<(String, String)> = Vec::new();
     let mut request_path_lc = String::new();
