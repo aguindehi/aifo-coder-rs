@@ -1431,10 +1431,10 @@ tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
-cmd+=(-d "tool=$tool" -d "cwd=$cwd")
+cmd+=(--data-urlencode "tool=$tool" --data-urlencode "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
-  cmd+=(-d "arg=$a")
+  cmd+=(--data-urlencode "arg=$a")
 done
 # Detect optional unix socket URL (Linux unix transport)
 if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
@@ -1737,7 +1737,7 @@ pub fn toolexec_start_proxy(
                     eprintln!("aifo-coder: toolexec proxy stopped");
                 }
             });
-            let url = "unix:///run/aifo/toolexec.sock".to_string();
+            let url = format!("unix://{}/toolexec.sock", host_dir);
             return Ok((url, token, running, handle));
         }
     }
@@ -1890,12 +1890,15 @@ fn handle_connection<S: Read + Write>(
             if proto_present { proto_ver as i32 } else { 0 }
         );
     }
-    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+    // Extract query parameters and validate method/target early
     let mut query_pairs: Vec<(String, String)> = Vec::new();
     let mut request_path_lc = String::new();
+    let mut method_up = String::new();
     if let Some(first_line) = header_str.lines().next() {
         let mut parts = first_line.split_whitespace();
-        let _method = parts.next();
+        if let Some(m) = parts.next() {
+            method_up = m.to_ascii_uppercase();
+        }
         if let Some(target) = parts.next() {
             let path_only = target.split('?').next().unwrap_or(target);
             request_path_lc = path_only.to_ascii_lowercase();
@@ -1903,6 +1906,22 @@ fn handle_connection<S: Read + Write>(
                 let q = &target[idx + 1..];
                 query_pairs.extend(parse_form_urlencoded(q));
             }
+        }
+    }
+    // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
+    let is_notifications_path_hint = request_path_lc.contains("/notifications")
+        || request_path_lc.contains("/notifications-cmd")
+        || request_path_lc.contains("/notify");
+    if !is_notifications_path_hint {
+        if method_up != "POST" {
+            respond_plain(stream, "405 Method Not Allowed", 86, b"method not allowed\n");
+            let _ = stream.flush();
+            return;
+        }
+        if !request_path_lc.ends_with("/exec") {
+            respond_plain(stream, "404 Not Found", 86, b"not found\n");
+            let _ = stream.flush();
+            return;
         }
     }
     // Read body (skip header terminator if present)
