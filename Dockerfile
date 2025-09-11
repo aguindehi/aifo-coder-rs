@@ -214,9 +214,22 @@ ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
-RUN if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+        CAF=/run/secrets/migros_root_ca; \
+        if [ -f "$CAF" ]; then \
+            install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+            command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+            export NODE_EXTRA_CA_CERTS="$CAF"; \
+            export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+            export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        fi; \
         /opt/venv/bin/python -m playwright install --with-deps chromium; \
-    fi
+        if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+            rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+            command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        fi; \
+    fi'
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
