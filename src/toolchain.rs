@@ -154,7 +154,6 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     clean == token || cred == token
 }
 
-
 fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
     args.push("-e".to_string());
     args.push(format!("{k}={v}"));
