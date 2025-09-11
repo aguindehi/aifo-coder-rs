@@ -28,7 +28,16 @@ use crate::{
 
 /// Common DEV tools shared across allowlists and shims.
 const DEV_TOOLS: &[&str] = &[
-    "make", "cmake", "ninja", "pkg-config", "gcc", "g++", "clang", "clang++", "cc", "c++",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
 ];
 
 /// Rust normative PATH (static; no $PATH expansion).
@@ -462,14 +471,20 @@ pub fn build_sidecar_run_preview(
                         let git = hd.join(".cargo").join("git");
                         if reg.exists() {
                             // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
-                            push_mount(&mut args, &format!("{}:/home/coder/.cargo/registry", reg.display()));
+                            push_mount(
+                                &mut args,
+                                &format!("{}:/home/coder/.cargo/registry", reg.display()),
+                            );
                             // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
                             push_mount(&mut args, "aifo-cargo-registry:/usr/local/cargo/registry");
                             mounted_registry = true;
                         }
                         if git.exists() {
                             // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
-                            push_mount(&mut args, &format!("{}:/home/coder/.cargo/git", git.display()));
+                            push_mount(
+                                &mut args,
+                                &format!("{}:/home/coder/.cargo/git", git.display()),
+                            );
                             // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
                             push_mount(&mut args, "aifo-cargo-git:/usr/local/cargo/git");
                             mounted_git = true;
@@ -510,7 +525,10 @@ pub fn build_sidecar_run_preview(
                         None
                     };
                     if let Some(p) = src {
-                        push_mount(&mut args, &format!("{}:/home/coder/.cargo/config.toml:ro", p.display()));
+                        push_mount(
+                            &mut args,
+                            &format!("{}:/home/coder/.cargo/config.toml:ro", p.display()),
+                        );
                     }
                 }
             }
@@ -1781,8 +1799,9 @@ fn handle_connection<S: Read + Write>(
                     auth_ok = true;
                 } else {
                     // Legacy fallback: split and compare last token
-                    let parts: Vec<&str> =
-                        value.split(|c: char| c.is_whitespace() || c == '=').collect();
+                    let parts: Vec<&str> = value
+                        .split(|c: char| c.is_whitespace() || c == '=')
+                        .collect();
                     if let Some(last) = parts.last() {
                         let last_clean = last
                             .trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
@@ -2181,7 +2200,12 @@ fn handle_connection<S: Read + Write>(
                 (1, b)
             }
             Err(_timeout) => {
-                respond_plain(stream, "504 Gateway Timeout", 124, b"aifo-coder proxy timeout\n");
+                respond_plain(
+                    stream,
+                    "504 Gateway Timeout",
+                    124,
+                    b"aifo-coder proxy timeout\n",
+                );
                 let _ = stream.flush();
                 return;
             }
