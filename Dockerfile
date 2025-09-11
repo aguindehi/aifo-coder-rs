@@ -21,11 +21,11 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-        # Point all TLS consumers at the enterprise CA explicitly (in addition to system store) \
-        export SSL_CERT_FILE="$CAF"; \
-        export SSL_CERT_DIR="/etc/ssl/certs"; \
-        export CARGO_HTTP_CAINFO="$CAF"; \
-        export CURL_CA_BUNDLE="$CAF"; \
+        # Use the consolidated system CA bundle (includes enterprise CA) for all TLS clients \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export SSL_CERT_DIR=/etc/ssl/certs; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
     apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; \
