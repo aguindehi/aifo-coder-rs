@@ -168,9 +168,11 @@ ARG KEEP_APT=0
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
-        export CURL_CA_BUNDLE="$CAF"; \
-        export REQUESTS_CA_BUNDLE="$CAF"; \
-        export SSL_CERT_FILE="$CAF"; \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+        export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
         export UV_NATIVE_TLS=1; \
     fi; \
     curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
@@ -184,6 +186,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
@@ -369,9 +375,11 @@ ARG KEEP_APT=0
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
-        export CURL_CA_BUNDLE="$CAF"; \
-        export REQUESTS_CA_BUNDLE="$CAF"; \
-        export SSL_CERT_FILE="$CAF"; \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+        export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
         export UV_NATIVE_TLS=1; \
     fi; \
     curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
@@ -385,6 +393,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
