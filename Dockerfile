@@ -16,15 +16,56 @@ FROM rust-base AS rust-builder
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; \
+    rm -rf /var/lib/apt/lists/*; \
+    /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 
 # Pre-install cargo-nextest to speed up tests inside this container
-RUN cargo install cargo-nextest --locked
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    cargo install cargo-nextest --locked; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 
 # Build the Rust aifo-shim binary for the current build platform
 COPY Cargo.toml .
 COPY src ./src
-RUN cargo build --release --bin aifo-shim
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    cargo build --release --bin aifo-shim; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
