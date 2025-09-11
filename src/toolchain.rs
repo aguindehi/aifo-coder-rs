@@ -2417,7 +2417,9 @@ pub fn toolexec_start_proxy(
             for line in header_str.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
-                if lower.starts_with("authorization:") || lower.starts_with("proxy-authorization:") || lower.starts_with("x-aifo-token:")
+                if lower.starts_with("authorization:")
+                    || lower.starts_with("proxy-authorization:")
+                    || lower.starts_with("x-aifo-token:")
                 {
                     if lower.starts_with("authorization:") {
                         saw_auth = true;
