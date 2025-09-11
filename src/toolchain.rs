@@ -140,7 +140,7 @@ fn default_image_fmt_for_kind_const(kind: &str) -> Option<&'static str> {
 /// Accepts:
 /// - "Bearer <token>" (scheme case-insensitive, flexible whitespace)
 /// - Bare "<token>" value (no scheme)
-/// Trims common punctuation/quotes around the credential.
+////   Trims common punctuation/quotes around the credential.
 fn authorization_value_matches(value: &str, token: &str) -> bool {
     let mut cred = value.trim();
     let mut lower = cred.to_ascii_lowercase();
@@ -149,42 +149,11 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
         let mut it = cred.splitn(2, |c: char| c.is_whitespace());
         let _scheme = it.next();
         cred = it.next().unwrap_or("").trim();
-        lower = cred.to_ascii_lowercase();
     }
     let clean = cred.trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
     clean == token || cred == token
 }
 
-#[cfg(test)]
-mod auth_tests {
-    use super::authorization_value_matches;
-
-    #[test]
-    fn auth_bearer_basic() {
-        assert!(authorization_value_matches("Bearer tok", "tok"));
-    }
-    #[test]
-    fn auth_bearer_case_whitespace() {
-        assert!(authorization_value_matches("bearer    tok", "tok"));
-        assert!(authorization_value_matches("BEARER tok", "tok"));
-    }
-    #[test]
-    fn auth_bearer_punct() {
-        assert!(authorization_value_matches("Bearer \"tok\"", "tok"));
-        assert!(authorization_value_matches("Bearer tok,", "tok"));
-        assert!(authorization_value_matches("'Bearer tok';", "tok"));
-    }
-    #[test]
-    fn auth_bare_token_ok() {
-        assert!(authorization_value_matches("tok", "tok"));
-    }
-    #[test]
-    fn auth_wrong() {
-        assert!(!authorization_value_matches("Bearer nope", "tok"));
-        assert!(!authorization_value_matches("Basic tok", "tok"));
-        assert!(!authorization_value_matches("nearlytok", "tok"));
-    }
-}
 
 fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
     args.push("-e".to_string());
@@ -2454,4 +2423,35 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     }
     let _ = cmd.status();
     Ok(())
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::authorization_value_matches;
+
+    #[test]
+    fn auth_bearer_basic() {
+        assert!(authorization_value_matches("Bearer tok", "tok"));
+    }
+    #[test]
+    fn auth_bearer_case_whitespace() {
+        assert!(authorization_value_matches("bearer    tok", "tok"));
+        assert!(authorization_value_matches("BEARER tok", "tok"));
+    }
+    #[test]
+    fn auth_bearer_punct() {
+        assert!(authorization_value_matches("Bearer \"tok\"", "tok"));
+        assert!(authorization_value_matches("Bearer tok,", "tok"));
+        assert!(authorization_value_matches("'Bearer tok';", "tok"));
+    }
+    #[test]
+    fn auth_bare_token_ok() {
+        assert!(authorization_value_matches("tok", "tok"));
+    }
+    #[test]
+    fn auth_wrong() {
+        assert!(!authorization_value_matches("Bearer nope", "tok"));
+        assert!(!authorization_value_matches("Basic tok", "tok"));
+        assert!(!authorization_value_matches("nearlytok", "tok"));
+    }
 }
