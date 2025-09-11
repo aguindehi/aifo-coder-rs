@@ -40,7 +40,6 @@ const DEV_TOOLS: &[&str] = &[
     "c++",
 ];
 
-
 /// Proxy/cargo-related environment variables to pass through to sidecars.
 const PROXY_ENV_NAMES: &[&str] = &[
     "HTTP_PROXY",
