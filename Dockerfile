@@ -171,15 +171,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE="$CAF"; \
         export REQUESTS_CA_BUNDLE="$CAF"; \
         export SSL_CERT_FILE="$CAF"; \
+        export UV_NATIVE_TLS=1; \
     fi; \
     curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
-    uv pip install --python /opt/venv/bin/python --upgrade pip; \
-    uv pip install --python /opt/venv/bin/python aider-chat; \
+    uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
+    uv pip install --native-tls --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
+        uv pip install --native-tls --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
     fi; \
     find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
@@ -371,15 +372,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE="$CAF"; \
         export REQUESTS_CA_BUNDLE="$CAF"; \
         export SSL_CERT_FILE="$CAF"; \
+        export UV_NATIVE_TLS=1; \
     fi; \
     curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
-    uv pip install --python /opt/venv/bin/python --upgrade pip; \
-    uv pip install --python /opt/venv/bin/python aider-chat; \
+    uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
+    uv pip install --native-tls --python /opt/venv/bin/python aider-chat; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        uv pip install --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
+        uv pip install --native-tls --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
     fi; \
     find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
