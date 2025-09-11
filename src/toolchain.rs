@@ -40,8 +40,6 @@ const DEV_TOOLS: &[&str] = &[
     "c++",
 ];
 
-/// Rust normative PATH (static; no $PATH expansion).
-const RUST_PATH: &str = "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 /// Proxy/cargo-related environment variables to pass through to sidecars.
 const PROXY_ENV_NAMES: &[&str] = &[
