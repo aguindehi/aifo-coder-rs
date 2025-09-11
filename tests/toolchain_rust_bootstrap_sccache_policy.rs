@@ -27,7 +27,7 @@ fn test_bootstrap_sccache_policy_warning_in_preview() {
 
     // Expect bootstrap wrapper present
     assert!(
-        preview.contains(" sh -lc "),
+        preview.contains(" sh -c "),
         "expected bootstrap wrapper when AIFO_RUST_OFFICIAL_BOOTSTRAP=1; got:\n{}",
         preview
     );

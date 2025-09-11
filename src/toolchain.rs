@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener};
+use std::net::TcpListener;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
@@ -26,62 +26,236 @@ use crate::{
     strip_outer_quotes, url_decode,
 };
 
-// Normalize toolchain kind names to canonical identifiers
-pub fn normalize_toolchain_kind(kind: &str) -> String {
-    let lower = kind.to_ascii_lowercase();
-    match lower.as_str() {
-        "rust" => "rust".to_string(),
-        "node" => "node".to_string(),
-        "ts" | "typescript" => "node".to_string(), // typescript uses the node sidecar
-        "python" | "py" => "python".to_string(),
-        "c" | "cpp" | "c-cpp" | "c_cpp" | "c++" => "c-cpp".to_string(),
-        "go" | "golang" => "go".to_string(),
-        _ => lower,
+/// Common DEV tools shared across allowlists and shims.
+const DEV_TOOLS: &[&str] = &[
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+/// Rust normative PATH (static; no $PATH expansion).
+const RUST_PATH: &str = "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+/// Proxy/cargo-related environment variables to pass through to sidecars.
+const PROXY_ENV_NAMES: &[&str] = &[
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "CARGO_NET_GIT_FETCH_WITH_CLI",
+    "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+];
+
+/// Full set of shim tools to write into the shim dir.
+const SHIM_TOOLS: &[&str] = &[
+    "cargo",
+    "rustc",
+    "node",
+    "npm",
+    "npx",
+    "tsc",
+    "ts-node",
+    "python",
+    "pip",
+    "pip3",
+    "gcc",
+    "g++",
+    "cc",
+    "c++",
+    "clang",
+    "clang++",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "go",
+    "gofmt",
+    "notifications-cmd",
+];
+
+/// Structured mappings for toolchain normalization and default images
+/// Canonical kind aliases (lhs -> rhs)
+const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
+    ("rust", "rust"),
+    ("node", "node"),
+    ("ts", "node"),
+    ("typescript", "node"),
+    ("python", "python"),
+    ("py", "python"),
+    ("c", "c-cpp"),
+    ("cpp", "c-cpp"),
+    ("c-cpp", "c-cpp"),
+    ("c_cpp", "c-cpp"),
+    ("c++", "c-cpp"),
+    ("go", "go"),
+    ("golang", "go"),
+];
+
+/// Default images by normalized kind
+const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
+    ("rust", "aifo-rust-toolchain:latest"),
+    ("node", "node:20-bookworm-slim"),
+    ("python", "python:3.12-slim"),
+    ("c-cpp", "aifo-cpp-toolchain:latest"),
+    ("go", "golang:1.22-bookworm"),
+];
+
+/// Default image templates for kind@version (use {version} placeholder)
+const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
+    ("rust", "aifo-rust-toolchain:{version}"),
+    ("node", "node:{version}-bookworm-slim"),
+    ("python", "python:{version}-slim"),
+    ("go", "golang:{version}-bookworm"),
+    // c-cpp has no versioned mapping; falls back to non-versioned default
+];
+
+fn default_image_for_kind_const(kind: &str) -> Option<&'static str> {
+    for (k, v) in DEFAULT_IMAGE_BY_KIND.iter() {
+        if *k == kind {
+            return Some(*v);
+        }
+    }
+    None
+}
+
+fn default_image_fmt_for_kind_const(kind: &str) -> Option<&'static str> {
+    for (k, v) in DEFAULT_IMAGE_FMT_BY_KIND.iter() {
+        if *k == kind {
+            return Some(*v);
+        }
+    }
+    None
+}
+
+/// Return true when an Authorization header value authorizes the given token
+/// using the standard Bearer scheme (RFC 6750).
+/// Accepts:
+/// - "Bearer <token>" (scheme case-insensitive; at least one ASCII whitespace
+///   separating scheme and credentials)
+fn authorization_value_matches(value: &str, token: &str) -> bool {
+    let v = value.trim();
+    // Split at the first ASCII whitespace to separate scheme and credentials
+    if let Some(idx) = v.find(|c: char| c.is_ascii_whitespace()) {
+        let (scheme, rest) = v.split_at(idx);
+        if scheme.eq_ignore_ascii_case("bearer") {
+            let cred = rest.trim_start();
+            return !cred.is_empty() && cred == token;
+        }
+    }
+    false
+}
+
+fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
+    args.push("-e".to_string());
+    args.push(format!("{k}={v}"));
+}
+
+fn push_mount(args: &mut Vec<String>, spec: &str) {
+    args.push("-v".to_string());
+    args.push(spec.to_string());
+}
+
+fn apply_passthrough_envs(args: &mut Vec<String>, keys: &[&str]) {
+    for name in keys {
+        if let Ok(val) = env::var(name) {
+            if !val.is_empty() {
+                push_env(args, name, &val);
+            }
+        }
     }
 }
 
-pub fn default_toolchain_image(kind: &str) -> String {
-    match kind {
-        "rust" => {
-            // Explicit override takes precedence
-            if let Ok(img) = env::var("AIFO_RUST_TOOLCHAIN_IMAGE") {
-                if !img.trim().is_empty() {
-                    return img;
-                }
-            }
-            // Force official rust image when requested; prefer versioned tag if provided
-            if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
-                let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
-                let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
-                return official_rust_image_for_version(v_opt);
-            }
-            // Prefer our first-party toolchain image; versioned when requested.
-            if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
-                let v = ver.trim();
-                if !v.is_empty() {
-                    return format!("aifo-rust-toolchain:{}", v);
-                }
-            }
-            "aifo-rust-toolchain:latest".to_string()
+fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
+    if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
+        let lk = linker.to_ascii_lowercase();
+        let extra = if lk == "lld" {
+            Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
+        } else if lk == "mold" {
+            Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
+        } else {
+            None
+        };
+        if let Some(add) = extra {
+            let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
+            let rf = if base.trim().is_empty() {
+                add.to_string()
+            } else {
+                format!("{base} {add}")
+            };
+            push_env(args, "RUSTFLAGS", &rf);
         }
-        "node" => "node:20-bookworm-slim".to_string(),
-        "python" => "python:3.12-slim".to_string(),
-        "c-cpp" => "aifo-cpp-toolchain:latest".to_string(),
-        "go" => "golang:1.22-bookworm".to_string(),
-        _ => "node:20-bookworm-slim".to_string(),
     }
+}
+
+fn apply_rust_common_env(args: &mut Vec<String>) {
+    push_env(args, "CARGO_HOME", "/home/coder/.cargo");
+    push_env(args, "PATH", RUST_PATH);
+    push_env(args, "CC", "gcc");
+    push_env(args, "CXX", "g++");
+    let rb = env::var("RUST_BACKTRACE").ok();
+    if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+        push_env(args, "RUST_BACKTRACE", "1");
+    }
+}
+
+/// Normalize toolchain kind names to canonical identifiers
+pub fn normalize_toolchain_kind(kind: &str) -> String {
+    let lower = kind.to_ascii_lowercase();
+    for (alias, canon) in TOOLCHAIN_ALIASES.iter() {
+        if alias.eq(&lower.as_str()) {
+            return (*canon).to_string();
+        }
+    }
+    lower
+}
+
+pub fn default_toolchain_image(kind: &str) -> String {
+    let k = normalize_toolchain_kind(kind);
+    if k == "rust" {
+        // Explicit override takes precedence
+        if let Ok(img) = env::var("AIFO_RUST_TOOLCHAIN_IMAGE") {
+            let img = img.trim();
+            if !img.is_empty() {
+                return img.to_string();
+            }
+        }
+        // Force official rust image when requested; prefer versioned tag if provided
+        if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
+            let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
+            let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
+            return official_rust_image_for_version(v_opt);
+        }
+        // Prefer our first-party toolchain image; versioned when requested.
+        if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
+            let v = ver.trim();
+            if !v.is_empty() {
+                return format!("aifo-rust-toolchain:{v}");
+            }
+        }
+        // fall through to default constant
+    }
+    default_image_for_kind_const(&k)
+        .unwrap_or("node:20-bookworm-slim")
+        .to_string()
 }
 
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
-    match kind {
-        "rust" => format!("aifo-rust-toolchain:{}", version),
-        "node" | "typescript" => format!("node:{}-bookworm-slim", version),
-        "python" => format!("python:{}-slim", version),
-        "go" => format!("golang:{}-bookworm", version),
-        "c-cpp" => "aifo-cpp-toolchain:latest".to_string(), // no version mapping
-        _ => default_toolchain_image(kind),
+    let k = normalize_toolchain_kind(kind);
+    if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
+        return fmt.replace("{version}", version);
     }
+    // No version mapping for this kind; fall back to non-versioned default
+    default_toolchain_image(&k)
 }
 
 // Heuristic to detect official rust images like "rust:<tag>" (with or without a registry prefix)
@@ -104,7 +278,7 @@ fn official_rust_image_for_version(version_opt: Option<&str>) -> String {
         Some(s) if !s.is_empty() => s,
         _ => "1.80",
     };
-    format!("rust:{}-bookworm", v)
+    format!("rust:{v}-bookworm")
 }
 
 /// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
@@ -118,7 +292,7 @@ fn init_rust_named_volume(
     gid: u32,
     verbose: bool,
 ) {
-    let mount = format!("aifo-cargo-{}:/home/coder/.cargo/{}", subdir, subdir);
+    let mount = format!("aifo-cargo-{subdir}:/home/coder/.cargo/{subdir}");
     let script = format!(
         "set -e; d=\"/home/coder/.cargo/{sd}\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
         sd = subdir,
@@ -126,14 +300,14 @@ fn init_rust_named_volume(
         gid = gid
     );
     let args: Vec<String> = vec![
-        "docker".to_string(),
-        "run".to_string(),
-        "--rm".to_string(),
-        "-v".to_string(),
+        "docker".into(),
+        "run".into(),
+        "--rm".into(),
+        "-v".into(),
         mount,
-        image.to_string(),
-        "sh".to_string(),
-        "-lc".to_string(),
+        image.into(),
+        "sh".into(),
+        "-lc".into(),
         script,
     ];
     if verbose {
@@ -329,28 +503,12 @@ pub fn build_sidecar_run_preview(
         args.push(format!("{uid}:{gid}"));
     }
     // mounts
-    args.push("-v".to_string());
-    args.push(format!("{}:/workspace", pwd.display()));
+    push_mount(&mut args, &format!("{}:/workspace", pwd.display()));
 
     match kind {
         "rust" => {
             // Normative env for rust sidecar
-            args.push("-e".to_string());
-            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
-            // Ensure PATH exposes cargo-installed tools first using static search paths (no $PATH expansion in Docker)
-            args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
-            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
-            args.push("-e".to_string());
-            args.push("CC=gcc".to_string());
-            args.push("-e".to_string());
-            args.push("CXX=g++".to_string());
-            // Default RUST_BACKTRACE=1 when unset
-            let rb = env::var("RUST_BACKTRACE").ok();
-            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
-                args.push("-e".to_string());
-                args.push("RUST_BACKTRACE=1".to_string());
-            }
+            apply_rust_common_env(&mut args);
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
@@ -360,15 +518,11 @@ pub fn build_sidecar_run_preview(
                         == Some("1");
                 if force_named {
                     // Primary mounts at normative CARGO_HOME
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                    push_mount(&mut args, "aifo-cargo-registry:/home/coder/.cargo/registry");
+                    push_mount(&mut args, "aifo-cargo-git:/home/coder/.cargo/git");
                     // Back-compat: also mount at legacy /usr/local/cargo paths for older tests/tools
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
-                    args.push("-v".to_string());
-                    args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                    push_mount(&mut args, "aifo-cargo-registry:/usr/local/cargo/registry");
+                    push_mount(&mut args, "aifo-cargo-git:/usr/local/cargo/git");
                 } else {
                     let mut mounted_registry = false;
                     let mut mounted_git = false;
@@ -382,36 +536,34 @@ pub fn build_sidecar_run_preview(
                         let git = hd.join(".cargo").join("git");
                         if reg.exists() {
                             // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
-                            args.push("-v".to_string());
-                            args.push(format!("{}:/home/coder/.cargo/registry", reg.display()));
+                            push_mount(
+                                &mut args,
+                                &format!("{}:/home/coder/.cargo/registry", reg.display()),
+                            );
                             // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
-                            args.push("-v".to_string());
-                            args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                            push_mount(&mut args, "aifo-cargo-registry:/usr/local/cargo/registry");
                             mounted_registry = true;
                         }
                         if git.exists() {
                             // Host-preferred mount at normative CARGO_HOME (avoid duplicate mount points)
-                            args.push("-v".to_string());
-                            args.push(format!("{}:/home/coder/.cargo/git", git.display()));
+                            push_mount(
+                                &mut args,
+                                &format!("{}:/home/coder/.cargo/git", git.display()),
+                            );
                             // Back-compat: also mount named volume at legacy /usr/local/cargo path (different target)
-                            args.push("-v".to_string());
-                            args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                            push_mount(&mut args, "aifo-cargo-git:/usr/local/cargo/git");
                             mounted_git = true;
                         }
                     }
                     if !mounted_registry {
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-registry:/home/coder/.cargo/registry".to_string());
+                        push_mount(&mut args, "aifo-cargo-registry:/home/coder/.cargo/registry");
                         // Back-compat legacy path for older tests/tools
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-registry:/usr/local/cargo/registry".to_string());
+                        push_mount(&mut args, "aifo-cargo-registry:/usr/local/cargo/registry");
                     }
                     if !mounted_git {
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-git:/home/coder/.cargo/git".to_string());
+                        push_mount(&mut args, "aifo-cargo-git:/home/coder/.cargo/git");
                         // Back-compat legacy path for older tests/tools
-                        args.push("-v".to_string());
-                        args.push("aifo-cargo-git:/usr/local/cargo/git".to_string());
+                        push_mount(&mut args, "aifo-cargo-git:/usr/local/cargo/git");
                     }
                 }
             }
@@ -438,8 +590,10 @@ pub fn build_sidecar_run_preview(
                         None
                     };
                     if let Some(p) = src {
-                        args.push("-v".to_string());
-                        args.push(format!("{}:/home/coder/.cargo/config.toml:ro", p.display()));
+                        push_mount(
+                            &mut args,
+                            &format!("{}:/home/coder/.cargo/config.toml:ro", p.display()),
+                        );
                     }
                 }
             }
@@ -447,10 +601,8 @@ pub fn build_sidecar_run_preview(
             if env::var("AIFO_TOOLCHAIN_SSH_FORWARD").ok().as_deref() == Some("1") {
                 if let Ok(sock) = env::var("SSH_AUTH_SOCK") {
                     if !sock.trim().is_empty() {
-                        args.push("-v".to_string());
-                        args.push(format!("{0}:{0}", sock));
-                        args.push("-e".to_string());
-                        args.push(format!("SSH_AUTH_SOCK={}", sock));
+                        push_mount(&mut args, &format!("{0}:{0}", sock));
+                        push_env(&mut args, "SSH_AUTH_SOCK", &sock);
                     }
                 }
             }
@@ -459,102 +611,51 @@ pub fn build_sidecar_run_preview(
                 let target = "/home/coder/.cache/sccache";
                 if let Ok(dir) = env::var("AIFO_RUST_SCCACHE_DIR") {
                     if !dir.trim().is_empty() {
-                        args.push("-v".to_string());
-                        args.push(format!("{}:{}", dir, target));
+                        push_mount(&mut args, &format!("{dir}:{target}"));
                     } else {
-                        args.push("-v".to_string());
-                        args.push(format!("aifo-sccache:{}", target));
+                        push_mount(&mut args, &format!("aifo-sccache:{target}"));
                     }
                 } else {
-                    args.push("-v".to_string());
-                    args.push(format!("aifo-sccache:{}", target));
+                    push_mount(&mut args, &format!("aifo-sccache:{target}"));
                 }
-                args.push("-e".to_string());
-                args.push("RUSTC_WRAPPER=sccache".to_string());
-                args.push("-e".to_string());
-                args.push(format!("SCCACHE_DIR={}", target));
+                push_env(&mut args, "RUSTC_WRAPPER", "sccache");
+                push_env(&mut args, "SCCACHE_DIR", target);
             }
             // Pass-through proxies and cargo networking envs
-            let passthrough = [
-                "HTTP_PROXY",
-                "HTTPS_PROXY",
-                "NO_PROXY",
-                "http_proxy",
-                "https_proxy",
-                "no_proxy",
-                "CARGO_NET_GIT_FETCH_WITH_CLI",
-                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
-            ];
-            for name in passthrough.iter() {
-                if let Ok(val) = env::var(name) {
-                    if !val.is_empty() {
-                        args.push("-e".to_string());
-                        args.push(format!("{}={}", name, val));
-                    }
-                }
-            }
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
-            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
-                let lk = linker.to_ascii_lowercase();
-                let extra = if lk == "lld" {
-                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
-                } else if lk == "mold" {
-                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
-                } else {
-                    None
-                };
-                if let Some(add) = extra {
-                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
-                    let rf = if base.trim().is_empty() {
-                        add.to_string()
-                    } else {
-                        format!("{} {}", base, add)
-                    };
-                    args.push("-e".to_string());
-                    args.push(format!("RUSTFLAGS={}", rf));
-                }
-            }
+            apply_rust_linker_flags_if_set(&mut args);
         }
         "node" => {
             if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-npm-cache:/home/coder/.npm".to_string());
+                push_mount(&mut args, "aifo-npm-cache:/home/coder/.npm");
             }
         }
         "python" => {
             if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-pip-cache:/home/coder/.cache/pip".to_string());
+                push_mount(&mut args, "aifo-pip-cache:/home/coder/.cache/pip");
             }
         }
         "c-cpp" => {
             if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-ccache:/home/coder/.cache/ccache".to_string());
+                push_mount(&mut args, "aifo-ccache:/home/coder/.cache/ccache");
             }
-            args.push("-e".to_string());
-            args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
+            push_env(&mut args, "CCACHE_DIR", "/home/coder/.cache/ccache");
         }
         "go" => {
             if !no_cache {
-                args.push("-v".to_string());
-                args.push("aifo-go:/go".to_string());
+                push_mount(&mut args, "aifo-go:/go");
             }
-            args.push("-e".to_string());
-            args.push("GOPATH=/go".to_string());
-            args.push("-e".to_string());
-            args.push("GOMODCACHE=/go/pkg/mod".to_string());
-            args.push("-e".to_string());
-            args.push("GOCACHE=/go/build-cache".to_string());
+            push_env(&mut args, "GOPATH", "/go");
+            push_env(&mut args, "GOMODCACHE", "/go/pkg/mod");
+            push_env(&mut args, "GOCACHE", "/go/build-cache");
         }
         _ => {}
     }
 
     // base env and workdir
-    args.push("-e".to_string());
-    args.push("HOME=/home/coder".to_string());
-    args.push("-e".to_string());
-    args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
+    push_env(&mut args, "HOME", "/home/coder");
+    push_env(&mut args, "GNUPGHOME", "/home/coder/.gnupg");
     args.push("-w".to_string());
     args.push("/workspace".to_string());
 
@@ -595,10 +696,8 @@ pub fn build_sidecar_exec_preview(
     args.push("-w".to_string());
     args.push("/workspace".to_string());
     // base env
-    args.push("-e".to_string());
-    args.push("HOME=/home/coder".to_string());
-    args.push("-e".to_string());
-    args.push("GNUPGHOME=/home/coder/.gnupg".to_string());
+    push_env(&mut args, "HOME", "/home/coder");
+    push_env(&mut args, "GNUPGHOME", "/home/coder/.gnupg");
 
     // Phase 2 marking: when executing with an official rust image, mark for bootstrap (Phase 4 will consume this)
     if kind == "rust"
@@ -607,89 +706,35 @@ pub fn build_sidecar_exec_preview(
             .as_deref()
             == Some("1")
     {
-        args.push("-e".to_string());
-        args.push("AIFO_RUST_OFFICIAL_BOOTSTRAP=1".to_string());
+        push_env(&mut args, "AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
     }
 
     match kind {
         "rust" => {
-            args.push("-e".to_string());
-            args.push("CARGO_HOME=/home/coder/.cargo".to_string());
-            // Ensure PATH exposes cargo-installed tools first using static search paths (no $PATH expansion in Docker)
-            args.push("-e".to_string());
-            args.push("PATH=/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
-            // Ensure build scripts use gcc/g++ explicitly; rely on image PATH
-            args.push("-e".to_string());
-            args.push("CC=gcc".to_string());
-            args.push("-e".to_string());
-            args.push("CXX=g++".to_string());
-            // Default RUST_BACKTRACE=1 when unset
-            let rb = env::var("RUST_BACKTRACE").ok();
-            if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
-                args.push("-e".to_string());
-                args.push("RUST_BACKTRACE=1".to_string());
-            }
+            apply_rust_common_env(&mut args);
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
-            if let Ok(linker) = env::var("AIFO_RUST_LINKER") {
-                let lk = linker.to_ascii_lowercase();
-                let extra = if lk == "lld" {
-                    Some("-Clinker=clang -Clink-arg=-fuse-ld=lld")
-                } else if lk == "mold" {
-                    Some("-Clinker=clang -Clink-arg=-fuse-ld=mold")
-                } else {
-                    None
-                };
-                if let Some(add) = extra {
-                    let base = env::var("RUSTFLAGS").ok().unwrap_or_default();
-                    let rf = if base.trim().is_empty() {
-                        add.to_string()
-                    } else {
-                        format!("{} {}", base, add)
-                    };
-                    args.push("-e".to_string());
-                    args.push(format!("RUSTFLAGS={}", rf));
-                }
-            }
+            apply_rust_linker_flags_if_set(&mut args);
             // Pass-through proxies and cargo networking envs for exec as well
-            let passthrough = [
-                "HTTP_PROXY",
-                "HTTPS_PROXY",
-                "NO_PROXY",
-                "http_proxy",
-                "https_proxy",
-                "no_proxy",
-                "CARGO_NET_GIT_FETCH_WITH_CLI",
-                "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
-            ];
-            for name in passthrough.iter() {
-                if let Ok(val) = env::var(name) {
-                    if !val.is_empty() {
-                        args.push("-e".to_string());
-                        args.push(format!("{}={}", name, val));
-                    }
-                }
-            }
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
             if venv_bin.exists() {
-                args.push("-e".to_string());
-                args.push("VIRTUAL_ENV=/workspace/.venv".to_string());
-                args.push("-e".to_string());
-                args.push("PATH=/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+                push_env(&mut args, "VIRTUAL_ENV", "/workspace/.venv");
+                push_env(
+                    &mut args,
+                    "PATH",
+                    "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                );
             }
         }
         "c-cpp" => {
-            args.push("-e".to_string());
-            args.push("CCACHE_DIR=/home/coder/.cache/ccache".to_string());
+            push_env(&mut args, "CCACHE_DIR", "/home/coder/.cache/ccache");
         }
         "go" => {
-            args.push("-e".to_string());
-            args.push("GOPATH=/go".to_string());
-            args.push("-e".to_string());
-            args.push("GOMODCACHE=/go/pkg/mod".to_string());
-            args.push("-e".to_string());
-            args.push("GOCACHE=/go/build-cache".to_string());
+            push_env(&mut args, "GOPATH", "/go");
+            push_env(&mut args, "GOMODCACHE", "/go/pkg/mod");
+            push_env(&mut args, "GOCACHE", "/go/build-cache");
         }
         _ => {}
     }
@@ -721,85 +766,91 @@ pub fn build_sidecar_exec_preview(
     args
 }
 
+const ALLOW_RUST: &[&str] = &[
+    "cargo",
+    "rustc",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_NODE: &[&str] = &[
+    "node",
+    "npm",
+    "npx",
+    "tsc",
+    "ts-node",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_PYTHON: &[&str] = &[
+    "python",
+    "python3",
+    "pip",
+    "pip3",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
+const ALLOW_CCPP: &[&str] = &[
+    "gcc",
+    "g++",
+    "cc",
+    "c++",
+    "clang",
+    "clang++",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+];
+
+const ALLOW_GO: &[&str] = &[
+    "go",
+    "gofmt",
+    "make",
+    "cmake",
+    "ninja",
+    "pkg-config",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "cc",
+    "c++",
+];
+
 fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     match kind {
-        "rust" => &[
-            "cargo",
-            "rustc",
-            // allow common dev tools present in rust toolchain
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-            "gcc",
-            "g++",
-            "clang",
-            "clang++",
-            "cc",
-            "c++",
-        ],
-        "node" => &[
-            "node",
-            "npm",
-            "npx",
-            "tsc",
-            "ts-node",
-            // allow dev tools if present in node image
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-            "gcc",
-            "g++",
-            "clang",
-            "clang++",
-            "cc",
-            "c++",
-        ],
-        "python" => &[
-            "python",
-            "python3",
-            "pip",
-            "pip3",
-            // allow dev tools if present in python image
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-            "gcc",
-            "g++",
-            "clang",
-            "clang++",
-            "cc",
-            "c++",
-        ],
-        "c-cpp" => &[
-            "gcc",
-            "g++",
-            "cc",
-            "c++",
-            "clang",
-            "clang++",
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-        ],
-        "go" => &[
-            "go",
-            "gofmt",
-            // allow dev tools if present in go image
-            "make",
-            "cmake",
-            "ninja",
-            "pkg-config",
-            "gcc",
-            "g++",
-            "clang",
-            "clang++",
-            "cc",
-            "c++",
-        ],
+        "rust" => ALLOW_RUST,
+        "node" => ALLOW_NODE,
+        "python" => ALLOW_PYTHON,
+        "c-cpp" => ALLOW_CCPP,
+        "go" => ALLOW_GO,
         _ => &[],
     }
 }
@@ -824,19 +875,7 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
 
 // Determine if a tool is a generic build tool that may exist across sidecars
 fn is_dev_tool(tool: &str) -> bool {
-    matches!(
-        tool,
-        "make"
-            | "cmake"
-            | "ninja"
-            | "pkg-config"
-            | "gcc"
-            | "g++"
-            | "clang"
-            | "clang++"
-            | "cc"
-            | "c++"
-    )
+    DEV_TOOLS.contains(&tool)
 }
 
 // Best-effort: check if a container with the given name exists (running or created)
@@ -917,6 +956,42 @@ fn select_kind_for_tool(
     prefs[0].to_string()
 }
 
+/// Choose/create the session network and return its name (or None to omit --network).
+fn choose_session_network(
+    runtime: &Path,
+    session_id: &str,
+    verbose: bool,
+    skip_creation: bool,
+) -> Option<String> {
+    let net_name = sidecar_network_name(session_id);
+    if skip_creation {
+        return Some(net_name);
+    }
+    if ensure_network_exists(runtime, &net_name, verbose) {
+        Some(net_name)
+    } else {
+        if verbose {
+            eprintln!(
+                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
+                net_name
+            );
+        }
+        None
+    }
+}
+
+/// Mark/unmark the bootstrap env for official rust images.
+fn mark_official_rust_bootstrap(kind: &str, image: &str) {
+    if kind == "rust"
+        && (env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+            || is_official_rust_image(image))
+    {
+        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+    } else {
+        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    }
+}
+
 /// Run a tool in a toolchain sidecar; returns exit code.
 /// Obeys --no-toolchain-cache and image overrides; prints docker previews when verbose/dry-run.
 pub fn toolchain_run(
@@ -946,29 +1021,18 @@ pub fn toolchain_run(
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
-    // Phase 2: mark official rust image selection to engage bootstrap in exec (handled in Phase 4)
-    let bootstrap_official_rust = sidecar_kind == "rust"
-        && (env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
-            || is_official_rust_image(&image));
+    mark_official_rust_bootstrap(sidecar_kind.as_str(), &image);
+
     let session_id = env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(create_session_id);
-    let net_name = sidecar_network_name(&session_id);
+    let net_for_run = if dry_run {
+        Some(sidecar_network_name(&session_id))
+    } else {
+        choose_session_network(&runtime, &session_id, verbose, false)
+    };
     let name = sidecar_container_name(sidecar_kind.as_str(), &session_id);
-
-    // Ensure network exists before starting sidecar; if it cannot be created (e.g., Docker address pools exhausted),
-    // fall back to the default 'bridge' network by omitting --network.
-    let mut net_for_run: Option<String> = Some(net_name.clone());
-    if !dry_run && !ensure_network_exists(&runtime, &net_name, verbose) {
-        if verbose {
-            eprintln!(
-                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
-                net_name
-            );
-        }
-        net_for_run = None;
-    }
 
     let apparmor_profile = desired_apparmor_profile();
 
@@ -1048,11 +1112,6 @@ pub fn toolchain_run(
     }
 
     // docker exec
-    if bootstrap_official_rust {
-        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
-    } else {
-        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
-    }
     let exec_preview_args = build_sidecar_exec_preview(
         &name,
         if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -1090,7 +1149,9 @@ pub fn toolchain_run(
         }
         let _ = stop_cmd.status();
 
-        remove_network(&runtime, &net_name, verbose);
+        if let Some(net_name) = net_for_run {
+            remove_network(&runtime, &net_name, verbose);
+        }
     }
 
     Ok(exit_code)
@@ -1352,31 +1413,6 @@ pub fn notifications_handle_request(
 
 /// Write aifo-shim and tool wrappers into the given directory.
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
-    let tools = [
-        "cargo",
-        "rustc",
-        "node",
-        "npm",
-        "npx",
-        "tsc",
-        "ts-node",
-        "python",
-        "pip",
-        "pip3",
-        "gcc",
-        "g++",
-        "cc",
-        "c++",
-        "clang",
-        "clang++",
-        "make",
-        "cmake",
-        "ninja",
-        "pkg-config",
-        "go",
-        "gofmt",
-        "notifications-cmd",
-    ];
     fs::create_dir_all(dir)?;
     let shim_path = dir.join("aifo-shim");
     let shim = r#"#!/bin/sh
@@ -1394,7 +1430,7 @@ fi
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
-cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "Proxy-Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Token: $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
+cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
 cmd+=(-d "tool=$tool" -d "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
@@ -1423,7 +1459,7 @@ exit "$ec"
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&shim_path, fs::Permissions::from_mode(0o755))?;
     }
-    for t in tools {
+    for t in SHIM_TOOLS {
         let path = dir.join(t);
         fs::write(
             &path,
@@ -1462,19 +1498,7 @@ pub fn toolchain_start_session(
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(create_session_id);
-    let net_name = sidecar_network_name(&session_id);
-    // Attempt to create the session network; if it fails due to exhausted address pools or other issues,
-    // fall back to the default 'bridge' network by omitting --network.
-    let mut net_for_run: Option<String> = Some(net_name.clone());
-    if !ensure_network_exists(&runtime, &net_name, verbose) {
-        if verbose {
-            eprintln!(
-                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
-                net_name
-            );
-        }
-        net_for_run = None;
-    }
+    let net_for_run = choose_session_network(&runtime, &session_id, verbose, false);
 
     let apparmor_profile = desired_apparmor_profile();
     for k in kinds {
@@ -1486,16 +1510,8 @@ pub fn toolchain_start_session(
                 image = vv.clone();
             }
         }
-        // Phase 2: mark official rust image so proxy execs can engage bootstrap (Phase 4)
-        if kind == "rust" {
-            if is_official_rust_image(&image)
-                || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
-            {
-                env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
-            } else {
-                env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
-            }
-        }
+        mark_official_rust_bootstrap(&kind, &image);
+
         let name = sidecar_container_name(kind.as_str(), &session_id);
         let args = build_sidecar_run_preview(
             &name,
@@ -1556,6 +1572,82 @@ pub fn toolchain_start_session(
     Ok(session_id)
 }
 
+/// Response helpers (common).
+fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
+    let header = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {exit_code}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = w.write_all(header.as_bytes());
+    let _ = w.write_all(body);
+    let _ = w.flush();
+}
+
+fn respond_chunked_prelude<W: Write>(w: &mut W) {
+    let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
+    let _ = w.write_all(hdr);
+    let _ = w.flush();
+}
+
+fn respond_chunked_write_chunk<W: Write>(w: &mut W, chunk: &[u8]) {
+    if !chunk.is_empty() {
+        let _ = write!(w, "{:X}\r\n", chunk.len());
+        let _ = w.write_all(chunk);
+        let _ = w.write_all(b"\r\n");
+        let _ = w.flush();
+    }
+}
+
+fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
+    let _ = w.write_all(b"0\r\n");
+    let trailer = format!("X-Exit-Code: {code}\r\n\r\n");
+    let _ = w.write_all(trailer.as_bytes());
+    let _ = w.flush();
+}
+
+/// Build streaming docker exec spawn args: add -t and wrap with sh -c "... 2>&1".
+fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String]) -> Vec<String> {
+    let mut spawn_args: Vec<String> = Vec::new();
+    let mut idx = None;
+    for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
+        if a == container_name {
+            idx = Some(i);
+            break;
+        }
+    }
+    let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
+    // Up to and including container name
+    spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+    // Allocate a TTY for streaming to improve interactive flushing
+    spawn_args.insert(1, "-t".to_string());
+    // User command slice after container name
+    let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
+    let script = {
+        let s = shell_join(&user_slice);
+        format!("{} 2>&1", s)
+    };
+    spawn_args.push("sh".to_string());
+    spawn_args.push("-c".to_string());
+    spawn_args.push(script);
+    spawn_args
+}
+
+fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
+    let tl = tool.to_ascii_lowercase();
+    ["rust", "node", "python", "c-cpp", "go"]
+        .iter()
+        .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
+}
+
+struct ProxyCtx {
+    runtime: PathBuf,
+    token: String,
+    session: String,
+    timeout_secs: u64,
+    verbose: bool,
+    uidgid: Option<(u32, u32)>,
+}
+
 /// Start a minimal proxy to execute tools via shims inside sidecars.
 /// Returns (url, token, running_flag, thread_handle).
 pub fn toolexec_start_proxy(
@@ -1609,13 +1701,16 @@ pub fn toolexec_start_proxy(
             let running_cl2 = running.clone();
             let token_for_thread2 = token_for_thread.clone();
             let handle = std::thread::spawn(move || {
+                if verbose {
+                    eprintln!("aifo-coder: toolexec proxy listening on unix socket");
+                }
                 let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
                     }
-                    let mut stream = match listener.accept() {
-                        Ok((s, _addr)) => s,
+                    let (mut stream, _addr) = match listener.accept() {
+                        Ok(pair) => pair,
                         Err(e) => {
                             if e.kind() == io::ErrorKind::WouldBlock {
                                 std::thread::sleep(Duration::from_millis(50));
@@ -1627,706 +1722,19 @@ pub fn toolexec_start_proxy(
                     };
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
                     let _ = stream.set_write_timeout(None);
-                    // Read request (simple HTTP)
-                    let mut buf = Vec::new();
-                    let mut hdr = Vec::new();
-                    let mut tmp = [0u8; 1024];
-                    // Read until end of headers
-                    let mut header_end = None;
-                    while header_end.is_none() {
-                        match stream.read(&mut tmp) {
-                            Ok(0) => break,
-                            Ok(n) => {
-                                buf.extend_from_slice(&tmp[..n]);
-                                if let Some(end) = find_header_end(&buf) {
-                                    header_end = Some(end);
-                                } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n")
-                                {
-                                    // Be tolerant to LF-only header termination used by some simple clients/tests
-                                    header_end = Some(pos);
-                                }
-                                if buf.len() > 64 * 1024 {
-                                    break;
-                                }
-                            }
-                            Err(_) => break,
-                        }
-                    }
-                    let hend = if let Some(h) = header_end {
-                        h
-                    } else if !buf.is_empty() {
-                        // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
-                        buf.len()
-                    } else {
-                        let body = b"unauthorized\n";
-                        let header = format!(
-                            "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            body.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
+
+                    let ctx = ProxyCtx {
+                        runtime: runtime.clone(),
+                        token: token_for_thread2.clone(),
+                        session: session.clone(),
+                        timeout_secs,
+                        verbose,
+                        uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
                     };
-                    hdr.extend_from_slice(&buf[..hend]);
-                    let header_str = String::from_utf8_lossy(&hdr);
-                    let mut auth_ok = false;
-                    let mut content_len: usize = 0;
-                    let mut proto_ok = false;
-                    let mut proto_present = false;
-                    let mut proto_ver: u8 = 0;
-                    let mut saw_auth = false;
-                    let mut saw_proxy_auth = false;
-                    let mut saw_x_token = false;
-                    for line in header_str.lines() {
-                        let l = line.trim();
-                        let lower = l.to_ascii_lowercase();
-                        if lower.starts_with("authorization:")
-                            || lower.starts_with("proxy-authorization:")
-                            || lower.starts_with("x-aifo-token:")
-                        {
-                            if lower.starts_with("authorization:") {
-                                saw_auth = true;
-                            } else if lower.starts_with("proxy-authorization:") {
-                                saw_proxy_auth = true;
-                            } else if lower.starts_with("x-aifo-token:") {
-                                saw_x_token = true;
-                            }
-                            if let Some((_, v)) = l.split_once(':') {
-                                let value = v.trim();
-                                // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
-                                let value_lax = value.trim_matches(|c: char| {
-                                    c == ',' || c == ';' || c == '"' || c == '\''
-                                });
-                                if value_lax.contains(&token_for_thread2)
-                                    || value == token_for_thread2
-                                {
-                                    auth_ok = true;
-                                } else {
-                                    // Legacy fallback: split and compare the last token after trimming
-                                    let parts: Vec<&str> = value
-                                        .split(|c: char| c.is_whitespace() || c == '=')
-                                        .collect();
-                                    if let Some(last) = parts.last() {
-                                        let last_clean = last.trim_matches(|c: char| {
-                                            c == ',' || c == ';' || c == '"' || c == '\''
-                                        });
-                                        if last_clean == token_for_thread2 {
-                                            auth_ok = true;
-                                        }
-                                    }
-                                }
-                            }
-                        } else if lower.starts_with("content-length:") {
-                            if let Some((_, v)) = l.split_once(':') {
-                                content_len = v.trim().parse().unwrap_or(0);
-                            }
-                        } else if lower.starts_with("x-aifo-proto:") {
-                            if let Some((_, v)) = l.split_once(':') {
-                                proto_present = true;
-                                let vt = v.trim();
-                                if vt == "1" || vt == "2" {
-                                    proto_ok = true;
-                                    proto_ver = if vt == "2" { 2 } else { 1 };
-                                }
-                            }
-                        }
-                    }
-                    if verbose {
-                        eprintln!(
-                            "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} proxy_auth_seen={} x_token_seen={} auth_ok={} proto_v={}",
-                            saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
-                        );
-                    }
-                    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
-                    let mut query_pairs: Vec<(String, String)> = Vec::new();
-                    let mut request_path_lc = String::new();
-                    if let Some(first_line) = header_str.lines().next() {
-                        let mut parts = first_line.split_whitespace();
-                        let _method = parts.next();
-                        if let Some(target) = parts.next() {
-                            let path_only = target.split('?').next().unwrap_or(target);
-                            request_path_lc = path_only.to_ascii_lowercase();
-                            if let Some(idx) = target.find('?') {
-                                let q = &target[idx + 1..];
-                                query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
-                            }
-                        }
-                    }
-                    // Read body (skip header terminator if present)
-                    let mut body_start = hend;
-                    if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
-                        body_start = hend + 4;
-                    } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
-                        body_start = hend + 2;
-                    }
-                    let mut body = buf[body_start..].to_vec();
-                    while body.len() < content_len {
-                        match stream.read(&mut tmp) {
-                            Ok(0) => break,
-                            Ok(n) => body.extend_from_slice(&tmp[..n]),
-                            Err(_) => break,
-                        }
-                    }
-                    let form = String::from_utf8_lossy(&body).to_string();
-                    let mut tool = String::new();
-                    let mut cwd = "/workspace".to_string();
-                    let mut argv: Vec<String> = Vec::new();
-                    for (k, v) in query_pairs
-                        .into_iter()
-                        .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
-                    {
-                        let kl = k.to_ascii_lowercase();
-                        match kl.as_str() {
-                            "tool" => tool = v,
-                            "cwd" => cwd = v,
-                            "arg" => argv.push(v),
-                            _ => {}
-                        }
-                    }
-                    if tool.is_empty() {
-                        let rp = request_path_lc.as_str();
-                        if rp.ends_with("/notifications")
-                            || rp.ends_with("/notifications-cmd")
-                            || rp.ends_with("/notify")
-                            || rp.contains("/notifications")
-                            || rp.contains("/notifications-cmd")
-                            || rp.contains("/notify")
-                        {
-                            tool = "notifications-cmd".to_string();
-                        }
-                    }
-                    // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
-                    // This helps when clients don't send a body or Content-Length is missing.
-                    if tool.is_empty() {
-                        if let Some(first_line) = header_str.lines().next() {
-                            if let Some(idx) = first_line.find("?tool=") {
-                                let rest = &first_line[idx + 6..];
-                                let end = rest
-                                    .find(|c: char| {
-                                        c == '&' || c.is_ascii_whitespace() || c == '\r'
-                                    })
-                                    .unwrap_or(rest.len());
-                                let val = &rest[..end];
-                                tool = url_decode(val);
-                            }
-                        }
-                    }
-                    // Notifications endpoint: require Authorization and valid protocol, then enforce exact-args
-                    if tool.eq_ignore_ascii_case("notifications-cmd")
-                        || form.contains("tool=notifications-cmd")
-                        || request_path_lc.contains("/notifications")
-                        || request_path_lc.contains("/notifications-cmd")
-                        || request_path_lc.contains("/notify")
-                    {
-                        if !auth_ok {
-                            let body = b"unauthorized\n";
-                            let header = format!(
-                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                body.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(body);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        }
-                        if !proto_present || !proto_ok {
-                            let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                            let header = format!(
-                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                msg.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(msg);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        }
-                        match crate::toolchain::notifications_handle_request(
-                            &argv,
-                            verbose,
-                            timeout_secs,
-                        ) {
-                            Ok((status_code, body_out)) => {
-                                let header = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    status_code,
-                                    body_out.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body_out);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                            Err(reason) => {
-                                let mut body = reason.into_bytes();
-                                body.push(b'\n');
-                                let header = format!(
-                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    body.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                        }
-                    }
-                    // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
-                    if !tool.is_empty()
-                        && !{
-                            let tl = tool.to_ascii_lowercase();
-                            ["rust", "node", "python", "c-cpp", "go"]
-                                .iter()
-                                .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
-                        }
-                    {
-                        let body = b"forbidden\n";
-                        let header = format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    if tool.is_empty() {
-                        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
-                        if auth_ok && (!proto_present || !proto_ok) {
-                            let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                            let header = format!(
-                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                msg.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(msg);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        } else if !auth_ok {
-                            let body = b"unauthorized\n";
-                            let header = format!(
-                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                body.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(body);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        } else {
-                            let body = b"bad request\n";
-                            let header = format!(
-                                "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                body.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(body);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        }
-                    }
-                    if tool.eq_ignore_ascii_case("notifications-cmd")
-                        || form.contains("tool=notifications-cmd")
-                    {
-                        if !auth_ok {
-                            let body = b"unauthorized\n";
-                            let header = format!(
-                                "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                body.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(body);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        }
-                        if !proto_present || !proto_ok {
-                            let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                            let header = format!(
-                                "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                msg.len()
-                            );
-                            let _ = stream.write_all(header.as_bytes());
-                            let _ = stream.write_all(msg);
-                            let _ = stream.flush();
-                            let _ = stream.shutdown(Shutdown::Both);
-                            continue;
-                        }
-                        match crate::toolchain::notifications_handle_request(
-                            &argv,
-                            verbose,
-                            timeout_secs,
-                        ) {
-                            Ok((status_code, body_out)) => {
-                                let header = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    status_code,
-                                    body_out.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body_out);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                            Err(reason) => {
-                                let mut body = reason.into_bytes();
-                                body.push(b'\n');
-                                let header = format!(
-                                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    body.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(&body);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                        }
-                    }
-                    let selected_kind =
-                        select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
-                    let kind = selected_kind.as_str();
-                    let allow = sidecar_allowlist(kind);
-                    if !allow.contains(&tool.as_str()) {
-                        let body = b"forbidden\n";
-                        let header = format!(
-                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            body.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
-                    if auth_ok && (!proto_present || !proto_ok) {
-                        let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                        let header = format!(
-                            "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            msg.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(msg);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    if !auth_ok {
-                        // Allow notifications endpoint without auth/proto as a special case
-                        let is_notif = tool.eq_ignore_ascii_case("notifications-cmd")
-                            || form.contains("tool=notifications-cmd")
-                            || request_path_lc.contains("/notifications")
-                            || request_path_lc.contains("/notifications-cmd")
-                            || request_path_lc.contains("/notify");
-                        if is_notif {
-                            match crate::toolchain::notifications_handle_request(
-                                &argv,
-                                verbose,
-                                timeout_secs,
-                            ) {
-                                Ok((status_code, body_out)) => {
-                                    let header = format!(
-                                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                        status_code,
-                                        body_out.len()
-                                    );
-                                    let _ = stream.write_all(header.as_bytes());
-                                    let _ = stream.write_all(&body_out);
-                                    let _ = stream.flush();
-                                    let _ = stream.shutdown(Shutdown::Both);
-                                    continue;
-                                }
-                                Err(reason) => {
-                                    let mut body = reason.into_bytes();
-                                    body.push(b'\n');
-                                    let header = format!(
-                                        "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                        body.len()
-                                    );
-                                    let _ = stream.write_all(header.as_bytes());
-                                    let _ = stream.write_all(&body);
-                                    let _ = stream.flush();
-                                    let _ = stream.shutdown(Shutdown::Both);
-                                    continue;
-                                }
-                            }
-                        }
-                        let body = b"unauthorized\n";
-                        let header = format!(
-                            "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            body.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    let name = sidecar_container_name(kind, &session);
-                    let pwd = PathBuf::from(cwd);
-                    if verbose {
-                        let _ = std::io::stdout().flush();
-                        let _ = std::io::stderr().flush();
-                        eprintln!(
-                            "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
-                            tool,
-                            argv,
-                            pwd.display()
-                        );
-                    }
-                    // If selected sidecar isn't running and no alternative was available, return a helpful error
-                    if !container_exists(&name) {
-                        let msg = format!(
-                            "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
-                            tool
-                        );
-                        let header = format!(
-                            "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            msg.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(msg.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    let mut full_args: Vec<String>;
-                    if tool == "tsc" {
-                        let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
-                        if nm_tsc.exists() {
-                            full_args = vec!["./node_modules/.bin/tsc".to_string()];
-                            full_args.extend(argv.clone());
-                        } else {
-                            full_args = vec!["npx".to_string(), "tsc".to_string()];
-                            full_args.extend(argv.clone());
-                        }
-                    } else {
-                        full_args = vec![tool.clone()];
-                        full_args.extend(argv.clone());
-                    }
-                    let exec_preview_args = build_sidecar_exec_preview(
-                        &name,
-                        if cfg!(unix) { Some((uid, gid)) } else { None },
-                        &pwd,
-                        kind,
-                        &full_args,
-                    );
-                    if verbose {
-                        let _ = std::io::stdout().flush();
-                        let _ = std::io::stderr().flush();
-                        eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
-                        eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
-                    }
-                    // If client requested streaming (protocol v2), stream chunked output with exit code as trailer
-                    if proto_present && proto_ok && proto_ver == 2 {
-                        let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
-                        let _ = stream.write_all(hdr);
-                        let _ = stream.flush();
-                        if verbose {
-                            let _ = std::io::stdout().flush();
-                            let _ = std::io::stderr().flush();
-                            eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
-                        }
-                        let started = std::time::Instant::now();
-
-                        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
-                        let runtime_cl = runtime.clone();
-                        // Rebuild args to wrap user command in 'sh -lc "<cmd> 2>&1"' to preserve output ordering
-                        let mut spawn_args: Vec<String> = Vec::new();
-                        let mut idx = None;
-                        for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
-                            if a == &name {
-                                idx = Some(i);
-                                break;
-                            }
-                        }
-                        let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
-                        // Up to and including container name
-                        spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-                        // Allocate a TTY for streaming to improve interactive flushing
-                        spawn_args.insert(1, "-t".to_string());
-                        // User command slice after container name
-                        let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
-                        let script = {
-                            let s = shell_join(&user_slice);
-                            format!("{} 2>&1", s)
-                        };
-                        spawn_args.push("sh".to_string());
-                        spawn_args.push("-c".to_string());
-                        spawn_args.push(script);
-
-                        if verbose {
-                            let _ = std::io::stdout().flush();
-                            let _ = std::io::stderr().flush();
-                            eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
-                            eprintln!("\r");
-                        }
-
-                        let mut cmd = Command::new(&runtime_cl);
-                        for a in &spawn_args {
-                            cmd.arg(a);
-                        }
-                        cmd.stdout(Stdio::piped());
-                        cmd.stderr(Stdio::piped());
-                        let mut child = match cmd.spawn() {
-                            Ok(c) => c,
-                            Err(e) => {
-                                let _ = write!(stream, "0\r\nX-Exit-Code: 1\r\n\r\n");
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                eprintln!("aifo-coder: proxy spawn error: {}", e);
-                                continue;
-                            }
-                        };
-
-                        // Drain docker exec stderr to prevent pipe backpressure from stalling long outputs
-                        if let Some(mut se) = child.stderr.take() {
-                            std::thread::spawn(move || {
-                                let mut buf = [0u8; 8192];
-                                loop {
-                                    match se.read(&mut buf) {
-                                        Ok(0) => break,
-                                        Ok(_n) => {}
-                                        Err(_) => break,
-                                    }
-                                }
-                            });
-                        }
-
-                        if let Some(mut so) = child.stdout.take() {
-                            let txo = tx.clone();
-                            std::thread::spawn(move || {
-                                let mut buf = [0u8; 8192];
-                                loop {
-                                    match so.read(&mut buf) {
-                                        Ok(0) => break,
-                                        Ok(n) => {
-                                            let _ = txo.send(buf[..n].to_vec());
-                                        }
-                                        Err(_) => break,
-                                    }
-                                }
-                            });
-                        }
-                        // stderr merged into stdout via '2>&1'; no separate reader
-
-                        // Drain chunks and forward to client
-                        drop(tx);
-                        while let Ok(chunk) = rx.recv() {
-                            if !chunk.is_empty() {
-                                let _ = write!(stream, "{:X}\r\n", chunk.len());
-                                let _ = stream.write_all(&chunk);
-                                let _ = stream.write_all(b"\r\n");
-                                let _ = stream.flush();
-                            }
-                        }
-
-                        let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
-                        let dur_ms = started.elapsed().as_millis();
-                        eprintln!("\r");
-                        if verbose {
-                            let _ = std::io::stdout().flush();
-                            let _ = std::io::stderr().flush();
-                            eprintln!(
-                                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r",
-                                tool, kind, code, dur_ms
-                            );
-                            eprintln!("\r");
-                        }
-                        // Final chunk + trailer with exit code
-                        let _ = stream.write_all(b"0\r\n");
-                        let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
-                        let _ = stream.write_all(trailer.as_bytes());
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-
-                    if verbose {
-                        let _ = std::io::stdout().flush();
-                        let _ = std::io::stderr().flush();
-                        eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v1 (buffered)");
-                    }
-                    let started = std::time::Instant::now();
-                    let (status_code, body_out) = {
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        let runtime_cl = runtime.clone();
-                        let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
-                        std::thread::spawn(move || {
-                            let mut cmd = Command::new(&runtime_cl);
-                            for a in &args_clone {
-                                cmd.arg(a);
-                            }
-                            let out = cmd.output();
-                            let _ = tx.send(out);
-                        });
-                        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
-                            Ok(Ok(o)) => {
-                                let code = o.status.code().unwrap_or(1);
-                                let mut b = o.stdout;
-                                if !o.stderr.is_empty() {
-                                    b.extend_from_slice(&o.stderr);
-                                }
-                                (code, b)
-                            }
-                            Ok(Err(e)) => {
-                                let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
-                                b.push(b'\n');
-                                (1, b)
-                            }
-                            Err(_timeout) => {
-                                let msg = b"aifo-coder proxy timeout\n";
-                                let header = format!(
-                                    "HTTP/1.1 504 Gateway Timeout\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 124\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                                    msg.len()
-                                );
-                                let _ = stream.write_all(header.as_bytes());
-                                let _ = stream.write_all(msg);
-                                let _ = stream.flush();
-                                let _ = stream.shutdown(Shutdown::Both);
-                                continue;
-                            }
-                        }
-                    };
-                    let dur_ms = started.elapsed().as_millis();
-                    eprintln!("\r");
-                    if verbose {
-                        let _ = std::io::stdout().flush();
-                        let _ = std::io::stderr().flush();
-                        eprintln!(
-                            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                            tool, kind, status_code, dur_ms
-                        );
-                        eprintln!("\r");
-                    }
-                    let mut body_bytes = body_out;
-                    if verbose {
-                        if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
-                            let mut pref = Vec::with_capacity(body_bytes.len() + 1);
-                            pref.push(b'\n');
-                            pref.extend_from_slice(&body_bytes);
-                            body_bytes = pref;
-                        }
-                        if !body_bytes.ends_with(b"\n") && !body_bytes.ends_with(b"\r") {
-                            body_bytes.push(b'\n');
-                        }
-                    }
-                    let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        status_code,
-                        body_bytes.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(&body_bytes);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
+                    handle_connection(&ctx, &mut stream, &mut tool_cache);
+                }
+                if verbose {
+                    eprintln!("aifo-coder: toolexec proxy stopped");
                 }
             });
             let url = "unix:///run/aifo/toolexec.sock".to_string();
@@ -2360,8 +1768,8 @@ pub fn toolexec_start_proxy(
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
             }
-            let mut stream = match listener.accept() {
-                Ok((s, _addr)) => s,
+            let (mut stream, _addr) = match listener.accept() {
+                Ok(pair) => pair,
                 Err(e) => {
                     if e.kind() == io::ErrorKind::WouldBlock {
                         std::thread::sleep(Duration::from_millis(50));
@@ -2373,655 +1781,16 @@ pub fn toolexec_start_proxy(
             };
             let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
             let _ = stream.set_write_timeout(None);
-            // Read request (simple HTTP)
-            let mut buf = Vec::new();
-            let mut hdr = Vec::new();
-            let mut tmp = [0u8; 1024];
-            // Read until end of headers
-            let mut header_end = None;
-            while header_end.is_none() {
-                match stream.read(&mut tmp) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        buf.extend_from_slice(&tmp[..n]);
-                        if let Some(end) = find_header_end(&buf) {
-                            header_end = Some(end);
-                        } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
-                            // Be tolerant to LF-only header termination used by some simple clients/tests
-                            header_end = Some(pos);
-                        }
-                        // avoid overly large header
-                        if buf.len() > 64 * 1024 {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-            let hend = if let Some(h) = header_end {
-                h
-            } else if !buf.is_empty() {
-                // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
-                buf.len()
-            } else {
-                let body = b"unauthorized\n";
-                let header = format!(
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(body);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
+
+            let ctx = ProxyCtx {
+                runtime: runtime.clone(),
+                token: token_for_thread.clone(),
+                session: session.clone(),
+                timeout_secs,
+                verbose,
+                uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
             };
-            hdr.extend_from_slice(&buf[..hend]);
-            let header_str = String::from_utf8_lossy(&hdr);
-            let mut auth_ok = false;
-            let mut content_len: usize = 0;
-            let mut proto_ok = false;
-            let mut proto_present = false;
-            let mut proto_ver: u8 = 0;
-            let mut saw_auth = false;
-            let mut saw_proxy_auth = false;
-            let mut saw_x_token = false;
-            for line in header_str.lines() {
-                let l = line.trim();
-                let lower = l.to_ascii_lowercase();
-                if lower.starts_with("authorization:")
-                    || lower.starts_with("proxy-authorization:")
-                    || lower.starts_with("x-aifo-token:")
-                {
-                    if lower.starts_with("authorization:") {
-                        saw_auth = true;
-                    } else if lower.starts_with("proxy-authorization:") {
-                        saw_proxy_auth = true;
-                    } else if lower.starts_with("x-aifo-token:") {
-                        saw_x_token = true;
-                    }
-                    if let Some((_, v)) = l.split_once(':') {
-                        let value = v.trim();
-                        // Be permissive: accept if header value contains token anywhere (after trimming common punctuation/quotes)
-                        let value_lax = value
-                            .trim_matches(|c: char| c == ',' || c == ';' || c == '"' || c == '\'');
-                        if value_lax.contains(&token_for_thread) || value == token_for_thread {
-                            auth_ok = true;
-                        } else {
-                            // Legacy fallback: split and compare last token
-                            let parts: Vec<&str> = value
-                                .split(|c: char| c.is_whitespace() || c == '=')
-                                .collect();
-                            if let Some(last) = parts.last() {
-                                let last_clean = last.trim_matches(|c: char| {
-                                    c == ',' || c == ';' || c == '"' || c == '\''
-                                });
-                                if last_clean == token_for_thread {
-                                    auth_ok = true;
-                                }
-                            }
-                        }
-                    }
-                } else if lower.starts_with("content-length:") {
-                    if let Some((_, v)) = l.split_once(':') {
-                        content_len = v.trim().parse().unwrap_or(0);
-                    }
-                } else if lower.starts_with("x-aifo-proto:") {
-                    if let Some((_, v)) = l.split_once(':') {
-                        proto_present = true;
-                        let vt = v.trim();
-                        if vt == "1" || vt == "2" {
-                            proto_ok = true;
-                            proto_ver = if vt == "2" { 2 } else { 1 };
-                        }
-                    }
-                }
-            }
-            if verbose {
-                eprintln!(
-                    "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} proxy_auth_seen={} x_token_seen={} auth_ok={} proto_v={}",
-                    saw_auth, saw_proxy_auth, saw_x_token, auth_ok, if proto_present { proto_ver as i32 } else { 0 }
-                );
-            }
-            // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
-            let mut query_pairs: Vec<(String, String)> = Vec::new();
-            let mut request_path_lc = String::new();
-            if let Some(first_line) = header_str.lines().next() {
-                let mut parts = first_line.split_whitespace();
-                let _method = parts.next();
-                if let Some(target) = parts.next() {
-                    let path_only = target.split('?').next().unwrap_or(target);
-                    request_path_lc = path_only.to_ascii_lowercase();
-                    if let Some(idx) = target.find('?') {
-                        let q = &target[idx + 1..];
-                        query_pairs.extend(crate::toolchain::parse_form_urlencoded(q));
-                    }
-                }
-            }
-            // Read body (skip header terminator if present)
-            let mut body_start = hend;
-            if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
-                body_start = hend + 4;
-            } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
-                body_start = hend + 2;
-            }
-            let mut body = buf[body_start..].to_vec();
-            while body.len() < content_len {
-                match stream.read(&mut tmp) {
-                    Ok(0) => break,
-                    Ok(n) => body.extend_from_slice(&tmp[..n]),
-                    Err(_) => break,
-                }
-            }
-            let form = String::from_utf8_lossy(&body).to_string();
-            let mut tool = String::new();
-            let mut cwd = "/workspace".to_string();
-            let mut argv: Vec<String> = Vec::new();
-            for (k, v) in query_pairs
-                .into_iter()
-                .chain(crate::toolchain::parse_form_urlencoded(&form).into_iter())
-            {
-                let kl = k.to_ascii_lowercase();
-                match kl.as_str() {
-                    "tool" => tool = v,
-                    "cwd" => cwd = v,
-                    "arg" => argv.push(v),
-                    _ => {}
-                }
-            }
-            if tool.is_empty() {
-                let rp = request_path_lc.as_str();
-                if rp.ends_with("/notifications")
-                    || rp.ends_with("/notifications-cmd")
-                    || rp.ends_with("/notify")
-                    || rp.contains("/notifications")
-                    || rp.contains("/notifications-cmd")
-                    || rp.contains("/notify")
-                {
-                    tool = "notifications-cmd".to_string();
-                }
-            }
-            // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
-            // This helps when clients don't send a body or Content-Length is missing.
-            if tool.is_empty() {
-                if let Some(first_line) = header_str.lines().next() {
-                    if let Some(idx) = first_line.find("?tool=") {
-                        let rest = &first_line[idx + 6..];
-                        let end = rest
-                            .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
-                            .unwrap_or(rest.len());
-                        let val = &rest[..end];
-                        tool = url_decode(val);
-                    }
-                }
-            }
-            // Notifications endpoint: require Authorization and valid protocol, then enforce exact-args
-            if tool.eq_ignore_ascii_case("notifications-cmd")
-                || form.contains("tool=notifications-cmd")
-                || request_path_lc.contains("/notifications")
-                || request_path_lc.contains("/notifications-cmd")
-                || request_path_lc.contains("/notify")
-            {
-                if !auth_ok {
-                    let body = b"unauthorized\n";
-                    let header = format!(
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(body);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                }
-                if !proto_present || !proto_ok {
-                    let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                    let header = format!(
-                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        msg.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(msg);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                }
-                match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
-                    Ok((status_code, body_out)) => {
-                        let header = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            status_code,
-                            body_out.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(&body_out);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    Err(reason) => {
-                        let mut body = reason.into_bytes();
-                        body.push(b'\n');
-                        let header = format!(
-                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            body.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(&body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                }
-            }
-            // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
-            if !tool.is_empty()
-                && !{
-                    let tl = tool.to_ascii_lowercase();
-                    ["rust", "node", "python", "c-cpp", "go"]
-                        .iter()
-                        .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
-                }
-            {
-                let body = b"forbidden\n";
-                let header = format!("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(body);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            if tool.is_empty() {
-                // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
-                if auth_ok && (!proto_present || !proto_ok) {
-                    let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                    let header = format!(
-                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        msg.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(msg);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                } else if !auth_ok {
-                    let body = b"unauthorized\n";
-                    let header = format!(
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(body);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                } else {
-                    let body = b"bad request\n";
-                    let header = format!(
-                        "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(body);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                }
-            }
-            if tool.eq_ignore_ascii_case("notifications-cmd")
-                || form.contains("tool=notifications-cmd")
-            {
-                if !auth_ok {
-                    let body = b"unauthorized\n";
-                    let header = format!(
-                        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(body);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                }
-                if !proto_present || !proto_ok {
-                    let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                    let header = format!(
-                        "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        msg.len()
-                    );
-                    let _ = stream.write_all(header.as_bytes());
-                    let _ = stream.write_all(msg);
-                    let _ = stream.flush();
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue;
-                }
-                match crate::toolchain::notifications_handle_request(&argv, verbose, timeout_secs) {
-                    Ok((status_code, body_out)) => {
-                        let header = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            status_code,
-                            body_out.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(&body_out);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                    Err(reason) => {
-                        let mut body = reason.into_bytes();
-                        body.push(b'\n');
-                        let header = format!(
-                            "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            body.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(&body);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                }
-            }
-            let selected_kind =
-                select_kind_for_tool(&session, &tool, timeout_secs, &mut tool_cache);
-            let kind = selected_kind.as_str();
-            let allow = sidecar_allowlist(kind);
-            if !allow.contains(&tool.as_str()) {
-                let body = b"forbidden\n";
-                let header = format!(
-                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(body);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
-            if auth_ok && (!proto_present || !proto_ok) {
-                let msg = b"Unsupported shim protocol; expected 1 or 2\n";
-                let header = format!(
-                    "HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    msg.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(msg);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            if !auth_ok {
-                let body = b"unauthorized\n";
-                let header = format!(
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(body);
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            let name = sidecar_container_name(kind, &session);
-            // If selected sidecar isn't running and no alternative was available, return a helpful error
-            if !container_exists(&name) {
-                let msg = format!(
-                    "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
-                    tool
-                );
-                let header = format!(
-                    "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 86\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    msg.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(msg.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-            let pwd = PathBuf::from(cwd);
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!(
-                    "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
-                    tool,
-                    argv,
-                    pwd.display()
-                );
-            }
-            let mut full_args: Vec<String>;
-            if tool == "tsc" {
-                let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
-                if nm_tsc.exists() {
-                    full_args = vec!["./node_modules/.bin/tsc".to_string()];
-                    full_args.extend(argv.clone());
-                } else {
-                    full_args = vec!["npx".to_string(), "tsc".to_string()];
-                    full_args.extend(argv.clone());
-                }
-            } else {
-                full_args = vec![tool.clone()];
-                full_args.extend(argv.clone());
-            }
-
-            let exec_preview_args = build_sidecar_exec_preview(
-                &name,
-                if cfg!(unix) { Some((uid, gid)) } else { None },
-                &pwd,
-                kind,
-                &full_args,
-            );
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
-                eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
-            }
-            // If client requested streaming (protocol v2), stream chunked output with exit code as trailer
-            if proto_present && proto_ok && proto_ver == 2 {
-                let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
-                let _ = stream.write_all(hdr);
-                let _ = stream.flush();
-                if verbose {
-                    let _ = std::io::stdout().flush();
-                    let _ = std::io::stderr().flush();
-                    eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
-                }
-                let started = std::time::Instant::now();
-
-                let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
-                let runtime_cl = runtime.clone();
-                // Rebuild args to wrap user command in 'sh -lc "<cmd> 2>&1"' to preserve output ordering
-                let mut spawn_args: Vec<String> = Vec::new();
-                let mut idx = None;
-                for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
-                    if a == &name {
-                        idx = Some(i);
-                        break;
-                    }
-                }
-                let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
-                // Up to and including container name
-                spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-                // Allocate a TTY for streaming to improve interactive flushing
-                spawn_args.insert(1, "-t".to_string());
-                // User command slice after container name
-                let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
-                let script = {
-                    let s = shell_join(&user_slice);
-                    format!("{} 2>&1", s)
-                };
-                spawn_args.push("sh".to_string());
-                spawn_args.push("-c".to_string());
-                spawn_args.push(script);
-
-                if verbose {
-                    let _ = std::io::stdout().flush();
-                    let _ = std::io::stderr().flush();
-                    eprintln!("\r\x1b[2Kaifo-coder: proxy exec: using sh -c (non-login)");
-                    eprintln!("\r");
-                }
-
-                let mut cmd = Command::new(&runtime_cl);
-                for a in &spawn_args {
-                    cmd.arg(a);
-                }
-                cmd.stdout(Stdio::piped());
-                cmd.stderr(Stdio::piped());
-                let mut child = match cmd.spawn() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let _ = write!(stream, "0\r\nX-Exit-Code: 1\r\n\r\n");
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        eprintln!("aifo-coder: proxy spawn error: {}", e);
-                        continue;
-                    }
-                };
-
-                // Drain docker exec stderr to prevent pipe backpressure from stalling long outputs
-                if let Some(mut se) = child.stderr.take() {
-                    std::thread::spawn(move || {
-                        let mut buf = [0u8; 8192];
-                        loop {
-                            match se.read(&mut buf) {
-                                Ok(0) => break,
-                                Ok(_n) => {}
-                                Err(_) => break,
-                            }
-                        }
-                    });
-                }
-
-                if let Some(mut so) = child.stdout.take() {
-                    let txo = tx.clone();
-                    std::thread::spawn(move || {
-                        let mut buf = [0u8; 8192];
-                        loop {
-                            match so.read(&mut buf) {
-                                Ok(0) => break,
-                                Ok(n) => {
-                                    let _ = txo.send(buf[..n].to_vec());
-                                }
-                                Err(_) => break,
-                            }
-                        }
-                    });
-                }
-                // stderr merged into stdout via '2>&1'; no separate reader
-
-                // Drain chunks and forward to client
-                drop(tx);
-                while let Ok(chunk) = rx.recv() {
-                    if !chunk.is_empty() {
-                        let _ = write!(stream, "{:X}\r\n", chunk.len());
-                        let _ = stream.write_all(&chunk);
-                        let _ = stream.write_all(b"\r\n");
-                        let _ = stream.flush();
-                    }
-                }
-
-                let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
-                let dur_ms = started.elapsed().as_millis();
-                eprintln!("\r");
-                if verbose {
-                    let _ = std::io::stdout().flush();
-                    let _ = std::io::stderr().flush();
-                    eprintln!(
-                        "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                        tool, kind, code, dur_ms
-                    );
-                    eprintln!("\r");
-                }
-                // Final chunk + trailer with exit code
-                let _ = stream.write_all(b"0\r\n");
-                let trailer = format!("X-Exit-Code: {}\r\n\r\n", code);
-                let _ = stream.write_all(trailer.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(Shutdown::Both);
-                continue;
-            }
-
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v1 (buffered)");
-            }
-            let started = std::time::Instant::now();
-            let (status_code, body_out) = {
-                let (tx, rx) = std::sync::mpsc::channel();
-                let runtime_cl = runtime.clone();
-                let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
-                std::thread::spawn(move || {
-                    let mut cmd = Command::new(&runtime_cl);
-                    for a in &args_clone {
-                        cmd.arg(a);
-                    }
-                    let out = cmd.output();
-                    let _ = tx.send(out);
-                });
-                match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
-                    Ok(Ok(o)) => {
-                        let code = o.status.code().unwrap_or(1);
-                        let mut b = o.stdout;
-                        if !o.stderr.is_empty() {
-                            b.extend_from_slice(&o.stderr);
-                        }
-                        (code, b)
-                    }
-                    Ok(Err(e)) => {
-                        let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
-                        b.push(b'\n');
-                        (1, b)
-                    }
-                    Err(_timeout) => {
-                        let msg = b"aifo-coder proxy timeout\n";
-                        let header = format!(
-                            "HTTP/1.1 504 Gateway Timeout\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: 124\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                            msg.len()
-                        );
-                        let _ = stream.write_all(header.as_bytes());
-                        let _ = stream.write_all(msg);
-                        let _ = stream.flush();
-                        let _ = stream.shutdown(Shutdown::Both);
-                        continue;
-                    }
-                }
-            };
-            let dur_ms = started.elapsed().as_millis();
-            eprintln!("\r");
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!(
-                    "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                    tool, kind, status_code, dur_ms
-                );
-                eprintln!("\r");
-            }
-            let mut body_bytes = body_out;
-            if verbose {
-                if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
-                    let mut pref = Vec::with_capacity(body_bytes.len() + 1);
-                    pref.push(b'\n');
-                    pref.extend_from_slice(&body_bytes);
-                    body_bytes = pref;
-                }
-                if !body_bytes.ends_with(b"\n") && !body_bytes.ends_with(b"\r") {
-                    body_bytes.push(b'\n');
-                }
-            }
-            let header = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                status_code,
-                body_bytes.len()
-            );
-            let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&body_bytes);
-            let _ = stream.flush();
-            let _ = stream.shutdown(Shutdown::Both);
+            handle_connection(&ctx, &mut stream, &mut tool_cache);
         }
         if verbose {
             eprintln!("aifo-coder: toolexec proxy stopped");
@@ -3030,6 +1799,504 @@ pub fn toolexec_start_proxy(
     // On macOS/Windows, host.docker.internal resolves; on Linux we add host-gateway and still use host.docker.internal
     let url = format!("http://host.docker.internal:{}/exec", port);
     Ok((url, token, running, handle))
+}
+
+/// Handle a single proxy connection: parse request, route, exec, and respond.
+fn handle_connection<S: Read + Write>(
+    ctx: &ProxyCtx,
+    stream: &mut S,
+    tool_cache: &mut HashMap<(String, String), bool>,
+) {
+    let runtime: &Path = &ctx.runtime;
+    let token: &str = &ctx.token;
+    let session: &str = &ctx.session;
+    let timeout_secs: u64 = ctx.timeout_secs;
+    let verbose: bool = ctx.verbose;
+    let uidgid = ctx.uidgid;
+    // Read request (simple HTTP)
+    let mut buf = Vec::new();
+    let mut hdr = Vec::new();
+    let mut tmp = [0u8; 1024];
+    // Read until end of headers
+    let mut header_end = None;
+    while header_end.is_none() {
+        match stream.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(end) = find_header_end(&buf) {
+                    header_end = Some(end);
+                } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
+                    // Be tolerant to LF-only header termination used by some simple clients/tests
+                    header_end = Some(pos);
+                }
+                // avoid overly large header
+                if buf.len() > 64 * 1024 {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let hend = if let Some(h) = header_end {
+        h
+    } else if !buf.is_empty() {
+        // Tolerate missing CRLFCRLF for simple clients: treat entire buffer as headers
+        buf.len()
+    } else {
+        let body = b"unauthorized\n";
+        respond_plain(stream, "401 Unauthorized", 86, body);
+        let _ = stream.flush();
+        return;
+    };
+    hdr.extend_from_slice(&buf[..hend]);
+    let header_str = String::from_utf8_lossy(&hdr);
+    let mut auth_ok = false;
+    let mut content_len: usize = 0;
+    let mut proto_ok = false;
+    let mut proto_present = false;
+    let mut proto_ver: u8 = 0;
+    let mut saw_auth = false;
+    for line in header_str.lines() {
+        let l = line.trim();
+        let lower = l.to_ascii_lowercase();
+        if lower.starts_with("authorization:") {
+            saw_auth = true;
+            if let Some((_, v)) = l.split_once(':') {
+                if authorization_value_matches(v, token) {
+                    auth_ok = true;
+                }
+            }
+        } else if lower.starts_with("content-length:") {
+            if let Some((_, v)) = l.split_once(':') {
+                content_len = v.trim().parse().unwrap_or(0);
+            }
+        } else if lower.starts_with("x-aifo-proto:") {
+            if let Some((_, v)) = l.split_once(':') {
+                proto_present = true;
+                let vt = v.trim();
+                if vt == "1" || vt == "2" {
+                    proto_ok = true;
+                    proto_ver = if vt == "2" { 2 } else { 1 };
+                }
+            }
+        }
+    }
+    if verbose {
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy headers: auth_seen={} auth_ok={} proto_v={}",
+            saw_auth,
+            auth_ok,
+            if proto_present { proto_ver as i32 } else { 0 }
+        );
+    }
+    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+    let mut query_pairs: Vec<(String, String)> = Vec::new();
+    let mut request_path_lc = String::new();
+    if let Some(first_line) = header_str.lines().next() {
+        let mut parts = first_line.split_whitespace();
+        let _method = parts.next();
+        if let Some(target) = parts.next() {
+            let path_only = target.split('?').next().unwrap_or(target);
+            request_path_lc = path_only.to_ascii_lowercase();
+            if let Some(idx) = target.find('?') {
+                let q = &target[idx + 1..];
+                query_pairs.extend(parse_form_urlencoded(q));
+            }
+        }
+    }
+    // Read body (skip header terminator if present)
+    let mut body_start = hend;
+    if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
+        body_start = hend + 4;
+    } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
+        body_start = hend + 2;
+    }
+    let mut body = buf[body_start..].to_vec();
+    while body.len() < content_len {
+        match stream.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => body.extend_from_slice(&tmp[..n]),
+            Err(_) => break,
+        }
+    }
+    let form = String::from_utf8_lossy(&body).to_string();
+    let mut tool = String::new();
+    let mut cwd = "/workspace".to_string();
+    let mut argv: Vec<String> = Vec::new();
+    for (k, v) in query_pairs
+        .into_iter()
+        .chain(parse_form_urlencoded(&form).into_iter())
+    {
+        let kl = k.to_ascii_lowercase();
+        match kl.as_str() {
+            "tool" => tool = v,
+            "cwd" => cwd = v,
+            "arg" => argv.push(v),
+            _ => {}
+        }
+    }
+    if tool.is_empty() {
+        let rp = request_path_lc.as_str();
+        if rp.ends_with("/notifications")
+            || rp.ends_with("/notifications-cmd")
+            || rp.ends_with("/notify")
+            || rp.contains("/notifications")
+            || rp.contains("/notifications-cmd")
+            || rp.contains("/notify")
+        {
+            tool = "notifications-cmd".to_string();
+        }
+    }
+    // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
+    // This helps when clients don't send a body or Content-Length is missing.
+    if tool.is_empty() {
+        if let Some(first_line) = header_str.lines().next() {
+            if let Some(idx) = first_line.find("?tool=") {
+                let rest = &first_line[idx + 6..];
+                let end = rest
+                    .find(|c: char| c == '&' || c.is_ascii_whitespace() || c == '\r')
+                    .unwrap_or(rest.len());
+                let val = &rest[..end];
+                tool = url_decode(val);
+            }
+        }
+    }
+    // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
+    // If Authorization is valid, still require protocol header (1 or 2).
+    if (tool.eq_ignore_ascii_case("notifications-cmd")
+        || form.contains("tool=notifications-cmd")
+        || request_path_lc.contains("/notifications")
+        || request_path_lc.contains("/notifications-cmd")
+        || request_path_lc.contains("/notify"))
+        && auth_ok
+    {
+        if !proto_present || !proto_ok {
+            respond_plain(
+                stream,
+                "426 Upgrade Required",
+                86,
+                b"Unsupported shim protocol; expected 1 or 2\n",
+            );
+            let _ = stream.flush();
+            return;
+        }
+        match notifications_handle_request(&argv, verbose, timeout_secs) {
+            Ok((status_code, body_out)) => {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    status_code,
+                    body_out.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body_out);
+                let _ = stream.flush();
+                return;
+            }
+            Err(reason) => {
+                let mut body = reason.into_bytes();
+                body.push(b'\n');
+                respond_plain(stream, "403 Forbidden", 86, &body);
+                let _ = stream.flush();
+                return;
+            }
+        }
+    }
+    // If not authorized, fall through to the no-auth bypass block below.
+    // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
+    if !tool.is_empty() && !is_tool_allowed_any_sidecar(&tool) {
+        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        let _ = stream.flush();
+        return;
+    }
+    if tool.is_empty() {
+        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
+        if auth_ok && (!proto_present || !proto_ok) {
+            respond_plain(
+                stream,
+                "426 Upgrade Required",
+                86,
+                b"Unsupported shim protocol; expected 1 or 2\n",
+            );
+            let _ = stream.flush();
+            return;
+        } else if !auth_ok {
+            respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+            let _ = stream.flush();
+            return;
+        } else {
+            respond_plain(stream, "400 Bad Request", 86, b"bad request\n");
+            let _ = stream.flush();
+            return;
+        }
+    }
+    // Secondary notifications block for no-auth bypass (special case)
+    if !auth_ok
+        && (tool.eq_ignore_ascii_case("notifications-cmd")
+            || form.contains("tool=notifications-cmd")
+            || request_path_lc.contains("/notifications")
+            || request_path_lc.contains("/notifications-cmd")
+            || request_path_lc.contains("/notify"))
+    {
+        match notifications_handle_request(&argv, verbose, timeout_secs) {
+            Ok((status_code, body_out)) => {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    status_code,
+                    body_out.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body_out);
+                let _ = stream.flush();
+                return;
+            }
+            Err(reason) => {
+                let mut body = reason.into_bytes();
+                body.push(b'\n');
+                respond_plain(stream, "403 Forbidden", 86, &body);
+                let _ = stream.flush();
+                return;
+            }
+        }
+    }
+    let selected_kind = select_kind_for_tool(session, &tool, timeout_secs, tool_cache);
+    let kind = selected_kind.as_str();
+    let allow = sidecar_allowlist(kind);
+    if !allow.contains(&tool.as_str()) {
+        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        let _ = stream.flush();
+        return;
+    }
+    // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
+    if auth_ok && (!proto_present || !proto_ok) {
+        respond_plain(
+            stream,
+            "426 Upgrade Required",
+            86,
+            b"Unsupported shim protocol; expected 1 or 2\n",
+        );
+        let _ = stream.flush();
+        return;
+    }
+    if !auth_ok {
+        respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+        let _ = stream.flush();
+        return;
+    }
+
+    let name = sidecar_container_name(kind, session);
+    // If selected sidecar isn't running and no alternative was available, return a helpful error
+    if !container_exists(&name) {
+        let msg = format!(
+            "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
+            tool
+        );
+        respond_plain(stream, "409 Conflict", 86, msg.as_bytes());
+        let _ = stream.flush();
+        return;
+    }
+
+    let pwd = PathBuf::from(cwd);
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
+            tool,
+            argv,
+            pwd.display()
+        );
+    }
+
+    let mut full_args: Vec<String>;
+    if tool == "tsc" {
+        let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
+        if nm_tsc.exists() {
+            full_args = vec!["./node_modules/.bin/tsc".to_string()];
+            full_args.extend(argv.clone());
+        } else {
+            full_args = vec!["npx".to_string(), "tsc".to_string()];
+            full_args.extend(argv.clone());
+        }
+    } else {
+        full_args = vec![tool.clone()];
+        full_args.extend(argv.clone());
+    }
+
+    let exec_preview_args = build_sidecar_exec_preview(
+        &name,
+        if cfg!(unix) { uidgid } else { None },
+        &pwd,
+        kind,
+        &full_args,
+    );
+
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!("\r\x1b[2Kaifo-coder: proxy docker:");
+        eprintln!("\r\x1b[2K  {}", shell_join(&exec_preview_args));
+    }
+
+    // If client requested streaming (protocol v2), stream chunked output with exit code as trailer
+    if proto_present && proto_ok && proto_ver == 2 {
+        respond_chunked_prelude(stream);
+        if verbose {
+            let _ = std::io::stdout().flush();
+            let _ = std::io::stderr().flush();
+            eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v2 (streaming)");
+        }
+        eprintln!("\r");
+        let started = std::time::Instant::now();
+
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        let runtime_cl = runtime.to_path_buf();
+
+        let spawn_args = build_streaming_exec_args(&name, &exec_preview_args);
+
+        let mut cmd = Command::new(&runtime_cl);
+        for a in &spawn_args {
+            cmd.arg(a);
+        }
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                respond_chunked_trailer(stream, 1);
+                eprintln!("aifo-coder: proxy spawn error: {}", e);
+                return;
+            }
+        };
+
+        // Drain docker exec stderr to prevent pipe backpressure from stalling long outputs
+        if let Some(mut se) = child.stderr.take() {
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                loop {
+                    match se.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(_n) => {}
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+
+        if let Some(mut so) = child.stdout.take() {
+            let txo = tx.clone();
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                loop {
+                    match so.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            let _ = txo.send(buf[..n].to_vec());
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+        // stderr merged into stdout via '2>&1'; no separate reader
+
+        // Drain chunks and forward to client
+        drop(tx);
+        while let Ok(chunk) = rx.recv() {
+            respond_chunked_write_chunk(stream, &chunk);
+        }
+
+        let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+        let dur_ms = started.elapsed().as_millis();
+        eprintln!("\r");
+        if verbose {
+            let _ = std::io::stdout().flush();
+            let _ = std::io::stderr().flush();
+            eprintln!(
+                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                tool, kind, code, dur_ms
+            );
+            eprintln!("\r");
+        }
+        // Final chunk + trailer with exit code
+        respond_chunked_trailer(stream, code);
+        return;
+    }
+
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!("\r\x1b[2Kaifo-coder: proxy exec: proto=v1 (buffered)");
+    }
+    let started = std::time::Instant::now();
+    let (status_code, mut body_bytes) = {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let runtime_cl = runtime.to_path_buf();
+        let args_clone: Vec<String> = exec_preview_args[1..].to_vec();
+        std::thread::spawn(move || {
+            let mut cmd = Command::new(&runtime_cl);
+            for a in &args_clone {
+                cmd.arg(a);
+            }
+            let out = cmd.output();
+            let _ = tx.send(out);
+        });
+        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            Ok(Ok(o)) => {
+                let code = o.status.code().unwrap_or(1);
+                let mut b = o.stdout;
+                if !o.stderr.is_empty() {
+                    b.extend_from_slice(&o.stderr);
+                }
+                (code, b)
+            }
+            Ok(Err(e)) => {
+                let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
+                b.push(b'\n');
+                (1, b)
+            }
+            Err(_timeout) => {
+                respond_plain(
+                    stream,
+                    "504 Gateway Timeout",
+                    124,
+                    b"aifo-coder proxy timeout\n",
+                );
+                let _ = stream.flush();
+                return;
+            }
+        }
+    };
+    let dur_ms = started.elapsed().as_millis();
+    eprintln!("\r");
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+            tool, kind, status_code, dur_ms
+        );
+        eprintln!("\r");
+    }
+    if verbose {
+        if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
+            let mut pref = Vec::with_capacity(body_bytes.len() + 1);
+            pref.push(b'\n');
+            pref.extend_from_slice(&body_bytes);
+            body_bytes = pref;
+        }
+        if !body_bytes.ends_with(b"\n") && !body_bytes.ends_with(b"\r") {
+            body_bytes.push(b'\n');
+        }
+    }
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        status_code,
+        body_bytes.len()
+    );
+    let _ = stream.write_all(header.as_bytes());
+    let _ = stream.write_all(&body_bytes);
+    let _ = stream.flush();
 }
 
 /// Cleanup sidecars and network for a session id (best-effort).
@@ -3142,4 +2409,35 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     }
     let _ = cmd.status();
     Ok(())
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::authorization_value_matches;
+
+    #[test]
+    fn auth_bearer_basic() {
+        assert!(authorization_value_matches("Bearer tok", "tok"));
+    }
+    #[test]
+    fn auth_bearer_case_whitespace() {
+        assert!(authorization_value_matches("bearer    tok", "tok"));
+        assert!(authorization_value_matches("BEARER tok", "tok"));
+    }
+    #[test]
+    fn auth_bearer_punct_rejected() {
+        assert!(!authorization_value_matches("Bearer \"tok\"", "tok"));
+        assert!(!authorization_value_matches("Bearer tok,", "tok"));
+        assert!(!authorization_value_matches("'Bearer tok';", "tok"));
+    }
+    #[test]
+    fn auth_bare_token_rejected() {
+        assert!(!authorization_value_matches("tok", "tok"));
+    }
+    #[test]
+    fn auth_wrong() {
+        assert!(!authorization_value_matches("Bearer nope", "tok"));
+        assert!(!authorization_value_matches("Basic tok", "tok"));
+        assert!(!authorization_value_matches("nearlytok", "tok"));
+    }
 }

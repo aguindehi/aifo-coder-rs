@@ -1,12 +1,9 @@
 use std::env;
-use std::io::{Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
-#[cfg(unix)]
-use std::os::unix::net::UnixStream;
+use std::fs;
 use std::path::PathBuf;
-use std::process;
+use std::process::{self, Command, Stdio};
 
-const PROTO_VERSION: &str = "1";
+const PROTO_VERSION: &str = "2";
 
 fn encode_www_form(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
@@ -19,21 +16,6 @@ fn encode_www_form(s: &str) -> String {
         }
     }
     out
-}
-
-fn parse_http_url(u: &str) -> Option<(String, u16, String)> {
-    // Very simple parser for http://host:port/path
-    let s = u.trim();
-    let after = s.strip_prefix("http://")?;
-    let mut parts = after.splitn(2, '/');
-    let hostport = parts.next().unwrap_or_default();
-    let path_rest = parts.next().unwrap_or_default();
-    let mut hp = hostport.rsplitn(2, ':');
-    let port_str = hp.next().unwrap_or("80");
-    let host_part = hp.next().unwrap_or(hostport);
-    let port = port_str.parse::<u16>().ok()?;
-    let path = format!("/{}", path_rest);
-    Some((host_part.to_string(), port, path))
 }
 
 fn main() {
@@ -51,6 +33,7 @@ fn main() {
             process::exit(86);
         }
     };
+    let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
 
     let tool = std::env::args_os()
         .next()
@@ -64,197 +47,94 @@ fn main() {
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| ".".to_string());
 
-    let mut body = String::new();
-    body.push_str("tool=");
-    body.push_str(&encode_www_form(&tool));
-    body.push('&');
-    body.push_str("cwd=");
-    body.push_str(&encode_www_form(&cwd));
+    if verbose {
+        eprintln!("aifo-shim: tool={} cwd={}", tool, cwd);
+        eprintln!(
+            "aifo-shim: preparing request to {} (proto={})",
+            url, PROTO_VERSION
+        );
+    }
+
+    // Form parts as -d key=value entries (curl does urlencoding)
+    let mut form_parts: Vec<(String, String)> = Vec::new();
+    form_parts.push(("tool".to_string(), tool.clone()));
+    form_parts.push(("cwd".to_string(), cwd.clone()));
     for a in std::env::args().skip(1) {
-        body.push('&');
-        body.push_str("arg=");
-        body.push_str(&encode_www_form(&a));
+        form_parts.push(("arg".to_string(), a));
     }
 
-    // Support unix:/// socket URLs on Unix systems
+    // Prepare temp directory for header dump
+    let tmp_base = env::var("TMPDIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/tmp".to_string());
+    let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
+    let _ = fs::create_dir_all(&tmp_dir);
+    let header_path = format!("{}/h", tmp_dir);
+
+    // Build curl command
+    let mut args: Vec<String> = Vec::new();
+    args.push("-sS".to_string());
+    args.push("--no-buffer".to_string());
+    args.push("-D".to_string());
+    args.push(header_path.clone());
+    args.push("-X".to_string());
+    args.push("POST".to_string());
+    args.push("-H".to_string());
+    args.push(format!("Authorization: Bearer {}", token));
+    args.push("-H".to_string());
+    args.push(format!("X-Aifo-Proto: {}", PROTO_VERSION));
+    args.push("-H".to_string());
+    args.push("TE: trailers".to_string());
+    args.push("-H".to_string());
+    args.push("Content-Type: application/x-www-form-urlencoded".to_string());
+
+    for (k, v) in &form_parts {
+        args.push("-d".to_string());
+        args.push(format!("{}={}", k, encode_www_form(v)));
+    }
+
+    let mut final_url = url.clone();
     if url.starts_with("unix://") {
-        #[cfg(unix)]
-        {
-            let sock_path = url.trim_start_matches("unix://").to_string();
-            let mut stream = match UnixStream::connect(&sock_path) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!(
-                        "aifo-shim: failed to connect to unix socket {}: {}",
-                        sock_path, e
-                    );
-                    process::exit(86);
-                }
-            };
-            // Always POST to /exec for unix transport
-            let req = format!(
-                "POST {} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                "/exec",
-                token,
-                PROTO_VERSION,
-                body.len(),
-                body
-            );
-            if let Err(e) = stream.write_all(req.as_bytes()) {
-                eprintln!("aifo-shim: write failed: {}", e);
-                process::exit(86);
-            }
-            // Read response headers
-            let mut buf = Vec::new();
-            let mut tmp = [0u8; 1024];
-            let header_end = loop {
-                match stream.read(&mut tmp) {
-                    Ok(0) => break None,
-                    Ok(n) => {
-                        buf.extend_from_slice(&tmp[..n]);
-                        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                            break Some(pos + 4);
-                        }
-                        if buf.len() > 64 * 1024 {
-                            break None;
-                        }
-                    }
-                    Err(_) => break None,
-                }
-            };
-            let hend = header_end.unwrap_or(buf.len());
-            let header = String::from_utf8_lossy(&buf[..hend]).to_string();
-            let mut content_len: usize = 0;
-            let mut exit_code: i32 = 1;
-            for line in header.lines() {
-                if let Some(v) = line.strip_prefix("Content-Length: ") {
-                    content_len = v.trim().parse::<usize>().unwrap_or(0);
-                } else if let Some(v) = line.strip_prefix("X-Exit-Code: ") {
-                    exit_code = v.trim().parse::<i32>().unwrap_or(1);
-                }
-            }
-            let mut body_bytes = buf[hend..].to_vec();
-            while body_bytes.len() < content_len {
-                match stream.read(&mut tmp) {
-                    Ok(0) => break,
-                    Ok(n) => body_bytes.extend_from_slice(&tmp[..n]),
-                    Err(_) => break,
-                }
-            }
-            let _ = std::io::stdout().write_all(&body_bytes);
-            let _ = std::io::stdout().flush();
-            if exit_code == 0 {
-                process::exit(0);
-            } else {
-                process::exit(exit_code);
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            eprintln!("aifo-shim: unix:// transport not supported on this platform.");
-            process::exit(86);
-        }
+        // unix socket mode
+        let sock_path = url.trim_start_matches("unix://").to_string();
+        args.push("--unix-socket".to_string());
+        args.push(sock_path);
+        final_url = "http://localhost/exec".to_string();
     }
-    let (host, port, path) = match parse_http_url(&url) {
-        Some(v) => v,
-        None => {
-            eprintln!("aifo-shim: unsupported URL: {}", url);
+    args.push(final_url);
+
+    let mut cmd = Command::new("curl");
+    cmd.args(&args);
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
+
+    let status = match cmd.status() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("aifo-shim: failed to spawn curl: {}", e);
+            let _ = fs::remove_dir_all(&tmp_dir);
             process::exit(86);
         }
     };
 
-    // Connect
-    let addr_iter = (host.as_str(), port)
-        .to_socket_addrs()
-        .expect("failed to resolve proxy host");
-    let mut last_err = None;
-    let mut stream_opt = None;
-    for addr in addr_iter {
-        match TcpStream::connect(addr) {
-            Ok(s) => {
-                stream_opt = Some(s);
-                break;
-            }
-            Err(e) => last_err = Some(e),
-        }
-    }
-    let mut stream = match stream_opt {
-        Some(s) => s,
-        None => {
-            eprintln!(
-                "aifo-shim: failed to connect to proxy at {}:{} ({:?})",
-                host, port, last_err
-            );
-            process::exit(86);
-        }
-    };
-
-    // Write request
-    let req = format!(
-        "POST {} HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        path,
-        host,
-        token,
-        PROTO_VERSION,
-        body.len(),
-        body
-    );
-    if let Err(e) = stream.write_all(req.as_bytes()) {
-        eprintln!("aifo-shim: write failed: {}", e);
-        process::exit(86);
-    }
-
-    // Read response headers
-    let mut buf = Vec::new();
-    let mut tmp = [0u8; 1024];
-    let header_end = loop {
-        match stream.read(&mut tmp) {
-            Ok(0) => break None,
-            Ok(n) => {
-                buf.extend_from_slice(&tmp[..n]);
-                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                    break Some(pos + 4);
-                }
-                if buf.len() > 64 * 1024 {
-                    break None;
-                }
-            }
-            Err(_) => break None,
-        }
-    };
-    let hend = header_end.unwrap_or(buf.len());
-    let header = String::from_utf8_lossy(&buf[..hend]).to_string();
-
-    // Extract status code hint and Content-Length and X-Exit-Code
-    let mut content_len: usize = 0;
+    // Parse X-Exit-Code from headers/trailers
     let mut exit_code: i32 = 1;
-    for line in header.lines() {
-        if let Some(v) = line.strip_prefix("Content-Length: ") {
-            content_len = v.trim().parse::<usize>().unwrap_or(0);
-        } else if let Some(v) = line.strip_prefix("X-Exit-Code: ") {
-            exit_code = v.trim().parse::<i32>().unwrap_or(1);
+    if let Ok(hdr) = fs::read_to_string(&header_path) {
+        for line in hdr.lines() {
+            if let Some(v) = line.strip_prefix("X-Exit-Code:") {
+                if let Ok(code) = v.trim().parse::<i32>() {
+                    exit_code = code;
+                }
+            }
         }
+    } else if status.success() {
+        // If curl succeeded but header file missing, assume success
+        exit_code = 0;
     }
 
-    // Read body: may already have some bytes buffered beyond headers
-    let mut body_bytes = buf[hend..].to_vec();
-    while body_bytes.len() < content_len {
-        match stream.read(&mut tmp) {
-            Ok(0) => break,
-            Ok(n) => body_bytes.extend_from_slice(&tmp[..n]),
-            Err(_) => break,
-        }
-    }
-
-    let _ = std::io::stdout().write_all(&body_bytes);
-    let _ = std::io::stdout().flush();
-
-    // Fallback exit code if header missing
-    if exit_code == 0 {
-        process::exit(0);
-    } else {
-        process::exit(exit_code);
-    }
+    let _ = fs::remove_dir_all(&tmp_dir);
+    process::exit(exit_code);
 }
 
 #[cfg(test)]
@@ -267,18 +147,5 @@ mod tests {
         assert_eq!(encode_www_form("a b"), "a+b");
         assert_eq!(encode_www_form("O'Reilly"), "O%27Reilly");
         assert_eq!(encode_www_form("A&B=C"), "A%26B%3DC");
-    }
-
-    #[test]
-    fn test_parse_http_url_ok_and_bad() {
-        let u = "http://host.docker.internal:12345/exec";
-        let parsed = parse_http_url(u).expect("parse_http_url failed");
-        assert_eq!(parsed.0, "host.docker.internal");
-        assert_eq!(parsed.1, 12345);
-        assert_eq!(parsed.2, "/exec");
-
-        assert!(parse_http_url("unix:///run/aifo/toolexec.sock").is_none());
-        assert!(parse_http_url("https://example.com").is_none());
-        assert!(parse_http_url("http://noport").is_none());
     }
 }

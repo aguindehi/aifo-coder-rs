@@ -24,7 +24,7 @@ fn test_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
     ));
 
     assert!(
-        with_bootstrap.contains(" sh -lc ")
+        with_bootstrap.contains(" sh -c ")
             && with_bootstrap.contains("cargo nextest -V")
             && with_bootstrap.contains("rustup component add clippy rustfmt"),
         "expected bootstrap wrapper for official rust images; got:\n{}",
@@ -42,7 +42,7 @@ fn test_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
         &["cargo".to_string(), "--version".to_string()],
     ));
     assert!(
-        !without_bootstrap.contains(" sh -lc ")
+        !without_bootstrap.contains(" sh -c ")
             && !without_bootstrap.contains("cargo nextest -V")
             && !without_bootstrap.contains("rustup component add clippy rustfmt"),
         "expected no bootstrap wrapper for non-official images; got:\n{}",

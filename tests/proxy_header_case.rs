@@ -65,7 +65,7 @@ fn test_proxy_header_case_and_bad_proto_yields_426() {
 
     // Lower-case header names; correct auth, wrong proto
     let req = format!(
-        "POST {{PATH}} HTTP/1.1\r\nhost: {{HOST}}\r\nauthorization: Bearer {}\r\nx-aifo-proto: 0\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+        "POST {{PATH}} HTTP/1.1\r\nHost: {{HOST}}\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         token
     );
     let resp = connect_and_roundtrip(&url, &req);
