@@ -2230,14 +2230,15 @@ pub fn toolexec_start_proxy(
 
                         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
                         let dur_ms = started.elapsed().as_millis();
+                        eprintln!("\r");
                         if verbose {
                             let _ = std::io::stdout().flush();
                             let _ = std::io::stderr().flush();
-                            eprintln!("\r");
                             eprintln!(
-                                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r",
                                 tool, kind, code, dur_ms
                             );
+                            eprintln!("\r");
                         }
                         // Final chunk + trailer with exit code
                         let _ = stream.write_all(b"0\r\n");
@@ -2295,6 +2296,7 @@ pub fn toolexec_start_proxy(
                         }
                     };
                     let dur_ms = started.elapsed().as_millis();
+                    eprintln!("\r");
                     if verbose {
                         let _ = std::io::stdout().flush();
                         let _ = std::io::stderr().flush();
@@ -2302,6 +2304,7 @@ pub fn toolexec_start_proxy(
                             "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                             tool, kind, status_code, dur_ms
                         );
+                        eprintln!("\r");
                     }
                     let mut body_bytes = body_out;
                     if verbose {
@@ -2922,14 +2925,15 @@ pub fn toolexec_start_proxy(
 
                 let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
                 let dur_ms = started.elapsed().as_millis();
+                eprintln!("\r");
                 if verbose {
                     let _ = std::io::stdout().flush();
                     let _ = std::io::stderr().flush();
-                    eprintln!("\r");
                     eprintln!(
                         "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                         tool, kind, code, dur_ms
                     );
+                    eprintln!("\r");
                 }
                 // Final chunk + trailer with exit code
                 let _ = stream.write_all(b"0\r\n");
@@ -2987,6 +2991,7 @@ pub fn toolexec_start_proxy(
                 }
             };
             let dur_ms = started.elapsed().as_millis();
+            eprintln!("\r");
             if verbose {
                 let _ = std::io::stdout().flush();
                 let _ = std::io::stderr().flush();
@@ -2994,6 +2999,7 @@ pub fn toolexec_start_proxy(
                     "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
                     tool, kind, status_code, dur_ms
                 );
+                eprintln!("\r");
             }
             let mut body_bytes = body_out;
             if verbose {
