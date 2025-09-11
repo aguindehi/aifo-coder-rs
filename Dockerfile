@@ -124,7 +124,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
-    apt-get remove --purge -y apt; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -147,7 +147,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
-    apt-get remove --purge -y apt; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -194,7 +194,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
         apt-get clean; \
-        apt-get remove --purge -y apt || true; \
+        apt-get remove --purge -y --allow-remove-essential apt || true; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -223,7 +223,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
         apt-get clean; \
-        apt-get remove --purge -y apt || true; \
+        apt-get remove --purge -y --allow-remove-essential apt || true; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -332,7 +332,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
-    apt-get remove --purge -y apt; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -354,7 +354,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
-    apt-get remove --purge -y apt; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
     npm prune -g --omit=dev; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
@@ -401,7 +401,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
         apt-get clean; \
-        apt-get remove --purge -y apt; \
+        apt-get remove --purge -y --allow-remove-essential apt || true; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
@@ -430,7 +430,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
         apt-get clean; \
-        apt-get remove --purge -y apt; \
+        apt-get remove --purge -y --allow-remove-essential apt || true; \
         npm prune -g --omit=dev; \
         npm cache clean --force; \
         rm -rf /root/.npm /root/.cache; \
