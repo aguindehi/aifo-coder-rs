@@ -7,6 +7,7 @@ The crate root re-exports these symbols with `pub use toolchain::*;`.
 
 use std::collections::HashMap;
 use std::env as std_env;
+#[cfg(target_os = "linux")]
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -21,8 +22,7 @@ use std::time::{Duration, SystemTime};
 use nix::unistd::{getgid, getuid};
 
 use crate::{
-    container_runtime_path, create_session_id, find_header_end, shell_join, shell_like_split_args,
-    strip_outer_quotes, url_decode,
+    container_runtime_path, create_session_id, find_header_end, shell_join, url_decode,
 };
 
 mod images;
@@ -100,11 +100,6 @@ fn log_request_result(
     }
 }
 
-/// Return true when an Authorization header value authorizes the given token
-/// using the standard Bearer scheme (RFC 6750).
-/// Accepts:
-/// - "Bearer <token>" (scheme case-insensitive; at least one ASCII whitespace
-///   separating scheme and credentials)
 
 fn random_token() -> String {
     // Cross-platform secure RNG using getrandom
@@ -146,7 +141,6 @@ fn random_token() -> String {
     }
 }
 
-/// Parse minimal application/x-www-form-urlencoded body; supports repeated keys.
 
 const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
 const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
@@ -154,6 +148,23 @@ const ERR_BAD_REQUEST: &[u8] = b"bad request\n";
 const ERR_METHOD_NOT_ALLOWED: &[u8] = b"method not allowed\n";
 const ERR_NOT_FOUND: &[u8] = b"not found\n";
 const ERR_UNSUPPORTED_PROTO: &[u8] = b"Unsupported shim protocol; expected 1 or 2\n";
+
+// Back-compat public wrappers to preserve crate-level API for tests and callers.
+pub fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
+    http::parse_form_urlencoded(body)
+}
+
+pub fn parse_notifications_command_config() -> Result<Vec<String>, String> {
+    notifications::parse_notifications_command_config()
+}
+
+pub fn notifications_handle_request(
+    argv: &[String],
+    verbose: bool,
+    timeout_secs: u64,
+) -> Result<(i32, Vec<u8>), String> {
+    notifications::notifications_handle_request(argv, verbose, timeout_secs)
+}
 
 /// Response helpers (common).
 fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {

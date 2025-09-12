@@ -7,7 +7,6 @@ proxy notifications endpoint.
 */
 
 use std::fs;
-use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;

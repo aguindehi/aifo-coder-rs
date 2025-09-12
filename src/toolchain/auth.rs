@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 /// Supported shim protocol versions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum Proto {
     V1,
     V2,
@@ -48,6 +49,7 @@ mod tests {
 
 /// Result of validating Authorization and X-Aifo-Proto
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum AuthResult {
     Authorized { proto: Proto },
     MissingOrInvalidAuth,
@@ -74,6 +76,7 @@ pub(crate) fn authorization_value_matches(value: &str, token: &str) -> bool {
 
 /// Validate Authorization and X-Aifo-Proto against expectations,
 /// returning a tri-state indicating whether we are authorized and which proto applies.
+#[allow(dead_code)]
 pub(crate) fn validate_auth_and_proto(
     headers: &HashMap<String, String>,
     token: &str,
