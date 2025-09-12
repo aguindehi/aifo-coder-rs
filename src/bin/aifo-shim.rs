@@ -5,7 +5,6 @@ use std::process::{self, Command, Stdio};
 
 const PROTO_VERSION: &str = "2";
 
-
 fn main() {
     let url = match env::var("AIFO_TOOLEEXEC_URL") {
         Ok(v) if !v.trim().is_empty() => v,
@@ -43,7 +42,7 @@ fn main() {
         );
     }
 
-    // Form parts as -d key=value entries (curl does urlencoding)
+    // Form parts to be encoded with --data-urlencode
     let mut form_parts: Vec<(String, String)> = Vec::new();
     form_parts.push(("tool".to_string(), tool.clone()));
     form_parts.push(("cwd".to_string(), cwd.clone()));
@@ -124,4 +123,3 @@ fn main() {
     let _ = fs::remove_dir_all(&tmp_dir);
     process::exit(exit_code);
 }
-
