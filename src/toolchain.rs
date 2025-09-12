@@ -144,7 +144,7 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     if let Some(idx) = v.find(|c: char| c.is_ascii_whitespace()) {
         let (scheme, rest) = v.split_at(idx);
         if scheme.eq_ignore_ascii_case("bearer") {
-            let cred = rest.trim_start();
+            let cred = rest.trim();
             return !cred.is_empty() && cred == token;
         }
     }
@@ -627,17 +627,23 @@ pub fn build_sidecar_run_preview(
             if !no_cache {
                 push_mount(&mut args, "aifo-npm-cache:/home/coder/.npm");
             }
+            // Pass-through proxies for node sidecar
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "python" => {
             if !no_cache {
                 push_mount(&mut args, "aifo-pip-cache:/home/coder/.cache/pip");
             }
+            // Pass-through proxies for python sidecar
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "c-cpp" => {
             if !no_cache {
                 push_mount(&mut args, "aifo-ccache:/home/coder/.cache/ccache");
             }
             push_env(&mut args, "CCACHE_DIR", "/home/coder/.cache/ccache");
+            // Pass-through proxies for c/c++ sidecar
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "go" => {
             if !no_cache {
@@ -646,8 +652,13 @@ pub fn build_sidecar_run_preview(
             push_env(&mut args, "GOPATH", "/go");
             push_env(&mut args, "GOMODCACHE", "/go/pkg/mod");
             push_env(&mut args, "GOCACHE", "/go/build-cache");
+            // Pass-through proxies for go sidecar
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
-        _ => {}
+        _ => {
+            // Pass-through proxies for other toolchains (e.g., node) during exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
+        }
     }
 
     // base env and workdir
@@ -727,6 +738,10 @@ pub fn build_sidecar_exec_preview(
             // Pass-through proxies and cargo networking envs for exec as well
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
+        "node" => {
+            // Pass-through proxies for node exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
+        }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
             if venv_bin.exists() {
@@ -737,14 +752,20 @@ pub fn build_sidecar_exec_preview(
                     "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
                 );
             }
+            // Pass-through proxies for python exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "c-cpp" => {
             push_env(&mut args, "CCACHE_DIR", "/home/coder/.cache/ccache");
+            // Pass-through proxies for c/c++ exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "go" => {
             push_env(&mut args, "GOPATH", "/go");
             push_env(&mut args, "GOMODCACHE", "/go/pkg/mod");
             push_env(&mut args, "GOCACHE", "/go/build-cache");
+            // Pass-through proxies for go exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         _ => {}
     }
@@ -1168,6 +1189,51 @@ pub fn toolchain_run(
 }
 
 fn random_token() -> String {
+    // Prefer strong randomness on Unix via /dev/urandom
+    #[cfg(target_family = "unix")]
+    {
+        use std::io::Read;
+        if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+            let mut buf = [0u8; 16];
+            if f.read_exact(&mut buf).is_ok() {
+                let mut s = String::with_capacity(buf.len() * 2);
+                for b in buf {
+                    use std::fmt::Write as _;
+                    let _ = write!(&mut s, "{:02x}", b);
+                }
+                return s;
+            }
+        }
+    }
+    // Prefer strong randomness on Windows via PowerShell .NET RNG
+    #[cfg(target_os = "windows")]
+    {
+        let script = "[byte[]]$b=New-Object byte[] 16; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [System.BitConverter]::ToString($b).Replace('-', '').ToLower()";
+        if let Ok(out) = Command::new("powershell.exe")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if s.len() >= 32 {
+                    return s;
+                }
+            }
+        }
+        // Try pwsh as an alternative
+        if let Ok(out) = Command::new("pwsh")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if s.len() >= 32 {
+                    return s;
+                }
+            }
+        }
+    }
+    // Fallback: time^pid base36 (sufficient for short-lived local dev)
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1822,6 +1888,27 @@ pub fn toolexec_start_proxy(
     Ok((url, token, running, handle))
 }
 
+fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(String, String)>) {
+    let mut method_up = String::new();
+    let mut request_path_lc = String::new();
+    let mut query_pairs: Vec<(String, String)> = Vec::new();
+    if let Some(first_line) = header_str.lines().next() {
+        let mut parts = first_line.split_whitespace();
+        if let Some(m) = parts.next() {
+            method_up = m.to_ascii_uppercase();
+        }
+        if let Some(target) = parts.next() {
+            let path_only = target.split('?').next().unwrap_or(target);
+            request_path_lc = path_only.to_ascii_lowercase();
+            if let Some(idx) = target.find('?') {
+                let q = &target[idx + 1..];
+                query_pairs.extend(parse_form_urlencoded(q));
+            }
+        }
+    }
+    (method_up, request_path_lc, query_pairs)
+}
+
 /// Handle a single proxy connection: parse request, route, exec, and respond.
 fn handle_connection<S: Read + Write>(
     ctx: &ProxyCtx,
@@ -1912,23 +1999,7 @@ fn handle_connection<S: Read + Write>(
         );
     }
     // Extract query parameters and validate method/target early
-    let mut query_pairs: Vec<(String, String)> = Vec::new();
-    let mut request_path_lc = String::new();
-    let mut method_up = String::new();
-    if let Some(first_line) = header_str.lines().next() {
-        let mut parts = first_line.split_whitespace();
-        if let Some(m) = parts.next() {
-            method_up = m.to_ascii_uppercase();
-        }
-        if let Some(target) = parts.next() {
-            let path_only = target.split('?').next().unwrap_or(target);
-            request_path_lc = path_only.to_ascii_lowercase();
-            if let Some(idx) = target.find('?') {
-                let q = &target[idx + 1..];
-                query_pairs.extend(parse_form_urlencoded(q));
-            }
-        }
-    }
+    let (method_up, request_path_lc, query_pairs) = parse_request_line_and_query(&header_str);
     // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
     let is_notifications_path_hint = request_path_lc.contains("/notifications")
         || request_path_lc.contains("/notifications-cmd")
@@ -2139,9 +2210,21 @@ fn handle_connection<S: Read + Write>(
         if nm_tsc.exists() {
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: tsc via local node_modules");
+                eprintln!("\r");
+            }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: tsc via npx");
+                eprintln!("\r");
+            }
         }
     } else {
         full_args = vec![tool.clone()];
@@ -2225,10 +2308,50 @@ fn handle_connection<S: Read + Write>(
         }
         // stderr merged into stdout via '2>&1'; no separate reader
 
-        // Drain chunks and forward to client
+        // Drain chunks and forward to client with timeout support
+        let (tox, tor) = std::sync::mpsc::channel::<()>();
+        let timeout_secs_cl = timeout_secs;
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(timeout_secs_cl));
+            let _ = tox.send(());
+        });
         drop(tx);
-        while let Ok(chunk) = rx.recv() {
-            respond_chunked_write_chunk(stream, &chunk);
+        let mut timed_out = false;
+        loop {
+            // Check timeout signal
+            if tor.try_recv().is_ok() {
+                let _ = child.kill();
+                timed_out = true;
+                break;
+            }
+            match rx.recv_timeout(Duration::from_millis(200)) {
+                Ok(chunk) => {
+                    respond_chunked_write_chunk(stream, &chunk);
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    continue;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        if timed_out {
+            let _ = child.wait();
+            respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!(
+                    "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+                    tool,
+                    kind,
+                    124,
+                    started.elapsed().as_millis()
+                );
+                eprintln!("\r");
+            }
+            respond_chunked_trailer(stream, 124);
+            return;
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);

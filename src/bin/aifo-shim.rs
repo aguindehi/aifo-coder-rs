@@ -5,18 +5,6 @@ use std::process::{self, Command, Stdio};
 
 const PROTO_VERSION: &str = "2";
 
-fn encode_www_form(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3);
-    for b in s.as_bytes() {
-        let c = *b as char;
-        match c {
-            ' ' => out.push('+'),
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(c),
-            _ => out.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    out
-}
 
 fn main() {
     let url = match env::var("AIFO_TOOLEEXEC_URL") {
@@ -90,8 +78,8 @@ fn main() {
     args.push("Content-Type: application/x-www-form-urlencoded".to_string());
 
     for (k, v) in &form_parts {
-        args.push("-d".to_string());
-        args.push(format!("{}={}", k, encode_www_form(v)));
+        args.push("--data-urlencode".to_string());
+        args.push(format!("{}={}", k, v));
     }
 
     let mut final_url = url.clone();
@@ -137,15 +125,3 @@ fn main() {
     process::exit(exit_code);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_encode_www_form_basic() {
-        assert_eq!(encode_www_form("abcXYZ-_.~"), "abcXYZ-_.~");
-        assert_eq!(encode_www_form("a b"), "a+b");
-        assert_eq!(encode_www_form("O'Reilly"), "O%27Reilly");
-        assert_eq!(encode_www_form("A&B=C"), "A%26B%3DC");
-    }
-}
