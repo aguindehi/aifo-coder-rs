@@ -10,6 +10,7 @@ Phase 1 (v3 spec) status:
   notifications logic moved to toolchain::notifications.
 - Unified form decoding (+ and %XX) implemented in http::parse_form_urlencoded.
 - 1 MiB form body cap enforced; oversized requests map to 400 Bad Request.
+- Phase 1 complete.
 */
 use std::io;
 use std::sync::atomic::AtomicBool;
