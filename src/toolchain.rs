@@ -39,8 +39,8 @@ pub use routing::{
 mod env;
 mod mounts;
 
-mod http;
 mod auth;
+mod http;
 mod notifications;
 
 mod sidecar;
@@ -147,8 +147,6 @@ fn random_token() -> String {
 }
 
 /// Parse minimal application/x-www-form-urlencoded body; supports repeated keys.
-
-
 
 const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
 const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
@@ -908,4 +906,3 @@ fn handle_connection<S: Read + Write>(
     let _ = stream.write_all(&body_bytes);
     let _ = stream.flush();
 }
-

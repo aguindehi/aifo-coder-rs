@@ -74,7 +74,10 @@ pub(crate) fn authorization_value_matches(value: &str, token: &str) -> bool {
 
 /// Validate Authorization and X-Aifo-Proto against expectations,
 /// returning a tri-state indicating whether we are authorized and which proto applies.
-pub(crate) fn validate_auth_and_proto(headers: &HashMap<String, String>, token: &str) -> AuthResult {
+pub(crate) fn validate_auth_and_proto(
+    headers: &HashMap<String, String>,
+    token: &str,
+) -> AuthResult {
     let mut auth_ok = false;
     if let Some(v) = headers.get("authorization") {
         if authorization_value_matches(v, token) {

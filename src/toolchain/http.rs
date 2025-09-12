@@ -145,7 +145,11 @@ fn parse_request_line_and_query(request_line: &str) -> (Method, String, Vec<(Str
         other => Method::Other(other.to_string()),
     };
     let target = parts.next().unwrap_or("/");
-    let path_only = target.split('?').next().unwrap_or(target).to_ascii_lowercase();
+    let path_only = target
+        .split('?')
+        .next()
+        .unwrap_or(target)
+        .to_ascii_lowercase();
     let mut query = Vec::new();
     if let Some(idx) = target.find('?') {
         let q = &target[idx + 1..];
