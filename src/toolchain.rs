@@ -613,15 +613,7 @@ fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(Strin
 }
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
-            tool, argv, cwd
-        );
-        eprintln!("\r");
-    }
+    log_parsed_request(verbose, &tool, &argv, &cwd);
 }
 
 /// Handle a single proxy connection: parse request, route, exec, and respond.
