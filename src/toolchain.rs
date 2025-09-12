@@ -859,8 +859,9 @@ fn handle_connection<S: Read + Write>(
         return;
     }
     if tool.is_empty() {
-        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
-        if auth_ok && (!proto_present || !proto_ok) {
+        // If Authorization header is present but protocol is missing/invalid => 426 (align with tests expecting 426 on bad proto).
+        // Otherwise, 401 for missing/invalid auth; else 400 for malformed body.
+        if saw_auth && (!proto_present || !proto_ok) {
             respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
@@ -1008,6 +1009,8 @@ fn handle_connection<S: Read + Write>(
             Err(e) => {
                 // Emit a small diagnostic chunk before the trailer to aid UX
                 respond_chunked_write_chunk(stream, b"aifo-coder proxy spawn error\n");
+                // Log the failure for observability
+                log_request_result(verbose, &tool, kind, 1, &started);
                 respond_chunked_trailer(stream, 1);
                 eprintln!("aifo-coder: proxy spawn error: {}", e);
                 return;
@@ -1123,6 +1126,8 @@ fn handle_connection<S: Read + Write>(
                 (1, b)
             }
             Err(_timeout) => {
+                // Log timeout consistently with streaming path
+                log_request_result(verbose, &tool, kind, 124, &started);
                 respond_plain(
                     stream,
                     "504 Gateway Timeout",
