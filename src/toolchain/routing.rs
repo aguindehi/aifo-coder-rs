@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use crate::container_runtime_path;
 use super::sidecar_container_name;
+use crate::container_runtime_path;
 
 /// Common DEV tools shared across allowlists and shims (used to widen routing preferences).
 const DEV_TOOLS: &[&str] = &[
