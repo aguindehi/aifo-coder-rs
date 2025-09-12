@@ -21,9 +21,7 @@ use std::time::{Duration, SystemTime};
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
-use crate::{
-    container_runtime_path, create_session_id, find_header_end, shell_join, url_decode,
-};
+use crate::{container_runtime_path, create_session_id, find_header_end, shell_join, url_decode};
 
 mod images;
 pub use images::{
@@ -100,7 +98,6 @@ fn log_request_result(
     }
 }
 
-
 fn random_token() -> String {
     // Cross-platform secure RNG using getrandom
     let mut buf = [0u8; 16]; // 128-bit token
@@ -140,7 +137,6 @@ fn random_token() -> String {
         }
     }
 }
-
 
 const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
 const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
