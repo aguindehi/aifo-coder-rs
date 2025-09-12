@@ -630,10 +630,6 @@ pub fn build_sidecar_run_preview(
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
-        "node" => {
-            // Pass-through proxies for node exec
-            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
-        }
         "python" => {
             if !no_cache {
                 push_mount(&mut args, "aifo-pip-cache:/home/coder/.cache/pip");
@@ -740,6 +736,10 @@ pub fn build_sidecar_exec_preview(
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
             apply_rust_linker_flags_if_set(&mut args);
             // Pass-through proxies and cargo networking envs for exec as well
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
+        }
+        "node" => {
+            // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "python" => {
@@ -2177,9 +2177,21 @@ fn handle_connection<S: Read + Write>(
         if nm_tsc.exists() {
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: tsc via local node_modules");
+                eprintln!("\r");
+            }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
+            if verbose {
+                let _ = std::io::stdout().flush();
+                let _ = std::io::stderr().flush();
+                eprintln!("\r\x1b[2Kaifo-coder: proxy exec: tsc via npx");
+                eprintln!("\r");
+            }
         }
     } else {
         full_args = vec![tool.clone()];
