@@ -39,6 +39,10 @@ pub use routing::{
 mod env;
 mod mounts;
 
+mod http;
+mod auth;
+mod notifications;
+
 mod sidecar;
 pub use sidecar::{
     build_sidecar_exec_preview, build_sidecar_run_preview, toolchain_bootstrap_typescript_global,
@@ -101,18 +105,6 @@ fn log_request_result(
 /// Accepts:
 /// - "Bearer <token>" (scheme case-insensitive; at least one ASCII whitespace
 ///   separating scheme and credentials)
-fn authorization_value_matches(value: &str, token: &str) -> bool {
-    let v = value.trim();
-    // Split at the first ASCII whitespace to separate scheme and credentials
-    if let Some(idx) = v.find(|c: char| c.is_ascii_whitespace()) {
-        let (scheme, rest) = v.split_at(idx);
-        if scheme.eq_ignore_ascii_case("bearer") {
-            let cred = rest.trim();
-            return !cred.is_empty() && cred == token;
-        }
-    }
-    false
-}
 
 fn random_token() -> String {
     // Cross-platform secure RNG using getrandom
@@ -155,19 +147,6 @@ fn random_token() -> String {
 }
 
 /// Parse minimal application/x-www-form-urlencoded body; supports repeated keys.
-pub fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
-    let mut res = Vec::new();
-    for pair in body.split('&') {
-        if pair.is_empty() {
-            continue;
-        }
-        let mut it = pair.splitn(2, '=');
-        let k = it.next().unwrap_or_default();
-        let v = it.next().unwrap_or_default();
-        res.push((url_decode(k), url_decode(v)));
-    }
-    res
-}
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 pub fn parse_notifications_command_config() -> Result<Vec<String>, String> {
@@ -641,7 +620,7 @@ fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(Strin
             request_path_lc = path_only.to_ascii_lowercase();
             if let Some(idx) = target.find('?') {
                 let q = &target[idx + 1..];
-                query_pairs.extend(parse_form_urlencoded(q));
+                query_pairs.extend(http::parse_form_urlencoded(q));
             }
         }
     }
@@ -710,7 +689,7 @@ fn handle_connection<S: Read + Write>(
         if lower.starts_with("authorization:") {
             saw_auth = true;
             if let Some((_, v)) = l.split_once(':') {
-                if authorization_value_matches(v, token) {
+                if auth::authorization_value_matches(v, token) {
                     auth_ok = true;
                 }
             }
@@ -739,17 +718,15 @@ fn handle_connection<S: Read + Write>(
     }
     // Extract query parameters and validate method/target early
     let (method_up, request_path_lc, query_pairs) = parse_request_line_and_query(&header_str);
-    // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
-    let is_notifications_path_hint = request_path_lc.contains("/notifications")
-        || request_path_lc.contains("/notifications-cmd")
-        || request_path_lc.contains("/notify");
-    if !is_notifications_path_hint {
+    // Use endpoint classification to gate method/path handling.
+    let endpoint = http::classify_endpoint(&request_path_lc);
+    if !matches!(endpoint, Some(http::Endpoint::Notifications)) {
         if method_up != "POST" {
             respond_plain(stream, "405 Method Not Allowed", 86, ERR_METHOD_NOT_ALLOWED);
             let _ = stream.flush();
             return;
         }
-        if !request_path_lc.ends_with("/exec") {
+        if !matches!(endpoint, Some(http::Endpoint::Exec)) {
             respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
             let _ = stream.flush();
             return;
@@ -776,7 +753,7 @@ fn handle_connection<S: Read + Write>(
     let mut argv: Vec<String> = Vec::new();
     for (k, v) in query_pairs
         .into_iter()
-        .chain(parse_form_urlencoded(&form).into_iter())
+        .chain(http::parse_form_urlencoded(&form).into_iter())
     {
         let kl = k.to_ascii_lowercase();
         match kl.as_str() {
@@ -784,18 +761,6 @@ fn handle_connection<S: Read + Write>(
             "cwd" => cwd = v,
             "arg" => argv.push(v),
             _ => {}
-        }
-    }
-    if tool.is_empty() {
-        let rp = request_path_lc.as_str();
-        if rp.ends_with("/notifications")
-            || rp.ends_with("/notifications-cmd")
-            || rp.ends_with("/notify")
-            || rp.contains("/notifications")
-            || rp.contains("/notifications-cmd")
-            || rp.contains("/notify")
-        {
-            tool = "notifications-cmd".to_string();
         }
     }
     // Fallback: if tool is still empty, attempt to parse from Request-Target query (?tool=...)
@@ -818,19 +783,13 @@ fn handle_connection<S: Read + Write>(
 
     // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
     // If Authorization is valid, still require protocol header (1 or 2).
-    if (tool.eq_ignore_ascii_case("notifications-cmd")
-        || form.contains("tool=notifications-cmd")
-        || request_path_lc.contains("/notifications")
-        || request_path_lc.contains("/notifications-cmd")
-        || request_path_lc.contains("/notify"))
-        && auth_ok
-    {
+    if matches!(endpoint, Some(http::Endpoint::Notifications)) && auth_ok {
         if !proto_present || !proto_ok {
             respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
         }
-        match notifications_handle_request(&argv, verbose, timeout_secs) {
+        match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
             Ok((status_code, body_out)) => {
                 let header = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -876,14 +835,8 @@ fn handle_connection<S: Read + Write>(
         }
     }
     // Secondary notifications block for no-auth bypass (special case)
-    if !auth_ok
-        && (tool.eq_ignore_ascii_case("notifications-cmd")
-            || form.contains("tool=notifications-cmd")
-            || request_path_lc.contains("/notifications")
-            || request_path_lc.contains("/notifications-cmd")
-            || request_path_lc.contains("/notify"))
-    {
-        match notifications_handle_request(&argv, verbose, timeout_secs) {
+    if !auth_ok && matches!(endpoint, Some(http::Endpoint::Notifications)) {
+        match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
             Ok((status_code, body_out)) => {
                 let header = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1160,33 +1113,3 @@ fn handle_connection<S: Read + Write>(
     let _ = stream.flush();
 }
 
-#[cfg(test)]
-mod auth_tests {
-    use super::authorization_value_matches;
-
-    #[test]
-    fn auth_bearer_basic() {
-        assert!(authorization_value_matches("Bearer tok", "tok"));
-    }
-    #[test]
-    fn auth_bearer_case_whitespace() {
-        assert!(authorization_value_matches("bearer    tok", "tok"));
-        assert!(authorization_value_matches("BEARER tok", "tok"));
-    }
-    #[test]
-    fn auth_bearer_punct_rejected() {
-        assert!(!authorization_value_matches("Bearer \"tok\"", "tok"));
-        assert!(!authorization_value_matches("Bearer tok,", "tok"));
-        assert!(!authorization_value_matches("'Bearer tok';", "tok"));
-    }
-    #[test]
-    fn auth_bare_token_rejected() {
-        assert!(!authorization_value_matches("tok", "tok"));
-    }
-    #[test]
-    fn auth_wrong() {
-        assert!(!authorization_value_matches("Bearer nope", "tok"));
-        assert!(!authorization_value_matches("Basic tok", "tok"));
-        assert!(!authorization_value_matches("nearlytok", "tok"));
-    }
-}

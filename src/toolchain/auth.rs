@@ -11,6 +11,41 @@ pub(crate) enum Proto {
     V2,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::authorization_value_matches;
+
+    #[test]
+    fn auth_bearer_basic() {
+        assert!(authorization_value_matches("Bearer tok", "tok"));
+    }
+
+    #[test]
+    fn auth_bearer_case_whitespace() {
+        assert!(authorization_value_matches("bearer    tok", "tok"));
+        assert!(authorization_value_matches("BEARER tok", "tok"));
+    }
+
+    #[test]
+    fn auth_bearer_punct_rejected() {
+        assert!(!authorization_value_matches("Bearer \"tok\"", "tok"));
+        assert!(!authorization_value_matches("Bearer tok,", "tok"));
+        assert!(!authorization_value_matches("'Bearer tok';", "tok"));
+    }
+
+    #[test]
+    fn auth_bare_token_rejected() {
+        assert!(!authorization_value_matches("tok", "tok"));
+    }
+
+    #[test]
+    fn auth_wrong() {
+        assert!(!authorization_value_matches("Bearer nope", "tok"));
+        assert!(!authorization_value_matches("Basic tok", "tok"));
+        assert!(!authorization_value_matches("nearlytok", "tok"));
+    }
+}
+
 /// Result of validating Authorization and X-Aifo-Proto
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AuthResult {

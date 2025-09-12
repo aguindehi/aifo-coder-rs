@@ -42,6 +42,7 @@ pub(crate) struct HttpRequest {
 /// based on Content-Length if present; otherwise returns whatever is available.
 pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpRequest> {
     const HDR_CAP: usize = 64 * 1024;
+    const BODY_CAP: usize = 1024 * 1024; // 1 MiB soft cap for forms
     let mut buf = Vec::new();
     let mut tmp = [0u8; 1024];
     let mut header_end: Option<usize> = None;
@@ -86,10 +87,25 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
     if let Some(v) = headers.get("content-length") {
         content_len = v.trim().parse().unwrap_or(0);
     }
+    // Enforce body cap: callers may map this to HTTP 400 "bad request\n"
+    if content_len > BODY_CAP {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "form body too large",
+        ));
+    }
     if body.len() < content_len {
         let remaining = content_len - body.len();
         let mut rem_buf = vec![0u8; remaining];
         let got = reader.read(&mut rem_buf).unwrap_or(0);
+        // Best-effort: do not exceed BODY_CAP even if Content-Length lied
+        let new_len = body.len().saturating_add(got);
+        if new_len > BODY_CAP {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "form body too large",
+            ));
+        }
         body.extend_from_slice(&rem_buf[..got]);
     }
 
@@ -106,7 +122,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
 pub(crate) fn classify_endpoint(path_lc: &str) -> Option<Endpoint> {
     match path_lc {
         "/exec" => Some(Endpoint::Exec),
-        "/notifications" | "/notifications-cmd" | "/notify" => Some(Endpoint::Notifications),
+        "/notify" => Some(Endpoint::Notifications),
         _ => None,
     }
 }
@@ -138,17 +154,55 @@ fn parse_request_line_and_query(request_line: &str) -> (Method, String, Vec<(Str
     (method, path_only, query)
 }
 
-/// Minimal form-urlencoded parser (no percent-decoding here; callers may decode later)
+/*
+Unified application/x-www-form-urlencoded parser with decoding:
+- '+' → space
+- %XX → byte decode; invalid sequences preserved literally (best-effort)
+*/
 pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
+    fn decode_component(input: &str) -> String {
+        let bytes = input.as_bytes();
+        let mut out = String::with_capacity(input.len());
+        let mut i = 0usize;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'+' => {
+                    out.push(' ');
+                    i += 1;
+                }
+                b'%' if i + 2 < bytes.len() => {
+                    let h1 = bytes[i + 1];
+                    let h2 = bytes[i + 2];
+                    let v1 = (h1 as char).to_digit(16);
+                    let v2 = (h2 as char).to_digit(16);
+                    if let (Some(a), Some(b)) = (v1, v2) {
+                        let byte = ((a as u8) << 4) | (b as u8);
+                        out.push(byte as char);
+                        i += 3;
+                    } else {
+                        // Best-effort: leave as literal '%'
+                        out.push('%');
+                        i += 1;
+                    }
+                }
+                c => {
+                    out.push(c as char);
+                    i += 1;
+                }
+            }
+        }
+        out
+    }
+
     let mut out = Vec::new();
     for pair in s.split('&') {
         if pair.is_empty() {
             continue;
         }
         let mut it = pair.splitn(2, '=');
-        let k = it.next().unwrap_or_default().to_string();
-        let v = it.next().unwrap_or_default().to_string();
-        out.push((k, v));
+        let k = it.next().unwrap_or_default();
+        let v = it.next().unwrap_or_default();
+        out.push((decode_component(k), decode_component(v)));
     }
     out
 }
