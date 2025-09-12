@@ -805,6 +805,15 @@ fn handle_connection<S: Read + Write>(
             }
         }
     }
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
+            tool, argv, cwd
+        );
+        eprintln!("\r");
+    }
     // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
     // If Authorization is valid, still require protocol header (1 or 2).
     if (tool.eq_ignore_ascii_case("notifications-cmd")
@@ -1003,6 +1012,8 @@ fn handle_connection<S: Read + Write>(
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
+                // Emit a small diagnostic chunk before the trailer to aid UX
+                respond_chunked_write_chunk(stream, b"aifo-coder proxy spawn error\n");
                 respond_chunked_trailer(stream, 1);
                 eprintln!("aifo-coder: proxy spawn error: {}", e);
                 return;
