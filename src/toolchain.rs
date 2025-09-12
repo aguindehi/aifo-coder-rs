@@ -75,6 +75,21 @@ fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     }
 }
 
+fn log_request_result(verbose: bool, tool: &str, kind: &str, code: i32, dur_ms: &u128) {
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+            tool,
+            kind,
+            124,
+            dur_ms.elapsed().as_millis()
+        );
+        eprintln!("\r");
+    }
+}
+
 /// Return true when an Authorization header value authorizes the given token
 /// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
@@ -788,15 +803,10 @@ fn handle_connection<S: Read + Write>(
             }
         }
     }
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
-            tool, argv, cwd
-        );
-        eprintln!("\r");
-    }
+
+    // Log the request
+    log_parsed_request(verbose, &tool, &argv, &cwd);
+
     // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
     // If Authorization is valid, still require protocol header (1 or 2).
     if (tool.eq_ignore_ascii_case("notifications-cmd")
@@ -916,17 +926,9 @@ fn handle_connection<S: Read + Write>(
         return;
     }
 
+    // Log the request
     let pwd = PathBuf::from(cwd);
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
-            tool,
-            argv,
-            pwd.display()
-        );
-    }
+    log_parsed_request(verbose, &tool, &argv, &pwd.display().to_string());
 
     let mut full_args: Vec<String>;
     if tool == "tsc" {
@@ -1064,18 +1066,8 @@ fn handle_connection<S: Read + Write>(
         if timed_out {
             let _ = child.wait();
             respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!(
-                    "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                    tool,
-                    kind,
-                    124,
-                    started.elapsed().as_millis()
-                );
-                eprintln!("\r");
-            }
+
+            log_request_result(verbose, &tool, &kind, 124, &started);
             respond_chunked_trailer(stream, 124);
             return;
         }
@@ -1083,15 +1075,8 @@ fn handle_connection<S: Read + Write>(
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
         let dur_ms = started.elapsed().as_millis();
         eprintln!("\r");
-        if verbose {
-            let _ = std::io::stdout().flush();
-            let _ = std::io::stderr().flush();
-            eprintln!(
-                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                tool, kind, code, dur_ms
-            );
-            eprintln!("\r");
-        }
+        log_request_result(verbose, &tool, &kind, code, &dur_ms);
+
         // Final chunk + trailer with exit code
         respond_chunked_trailer(stream, code);
         return;
@@ -1143,15 +1128,8 @@ fn handle_connection<S: Read + Write>(
     };
     let dur_ms = started.elapsed().as_millis();
     eprintln!("\r");
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-            tool, kind, status_code, dur_ms
-        );
-        eprintln!("\r");
-    }
+    log_request_result(verbose, &tool, &kind, status_code, &dur_ms);
+
     if verbose {
         if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
             let mut pref = Vec::with_capacity(body_bytes.len() + 1);
