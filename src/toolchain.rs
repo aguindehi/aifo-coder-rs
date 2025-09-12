@@ -2270,7 +2270,7 @@ fn handle_connection<S: Read + Write>(
         let mut timed_out = false;
         loop {
             // Check timeout signal
-            if let Ok(_) = tor.try_recv() {
+            if tor.try_recv().is_ok() {
                 let _ = child.kill();
                 timed_out = true;
                 break;
