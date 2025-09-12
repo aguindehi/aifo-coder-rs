@@ -630,6 +630,10 @@ pub fn build_sidecar_run_preview(
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
+        "node" => {
+            // Pass-through proxies for node exec
+            apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
+        }
         "python" => {
             if !no_cache {
                 push_mount(&mut args, "aifo-pip-cache:/home/coder/.cache/pip");
@@ -2287,6 +2291,7 @@ fn handle_connection<S: Read + Write>(
         }
 
         if timed_out {
+            let _ = child.wait();
             respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
             if verbose {
                 let _ = std::io::stdout().flush();
