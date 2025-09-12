@@ -63,6 +63,18 @@ const PROXY_ENV_NAMES: &[&str] = &[
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
 ];
 
+fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
+            tool, argv, cwd
+        );
+        eprintln!("\r");
+    }
+}
+
 /// Return true when an Authorization header value authorizes the given token
 /// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
@@ -610,18 +622,6 @@ fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(Strin
         }
     }
     (method_up, request_path_lc, query_pairs)
-}
-
-fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
-            tool, argv, cwd
-        );
-        eprintln!("\r");
-    }
 }
 
 /// Handle a single proxy connection: parse request, route, exec, and respond.
