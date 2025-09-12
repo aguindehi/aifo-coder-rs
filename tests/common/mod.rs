@@ -5,6 +5,7 @@ pub fn contains_env(preview: &str, key: &str) -> bool {
         || preview.contains(&format!(" {}=", key)) // tolerate raw KEY= forms in some previews
 }
 
+#[allow(dead_code)]
 pub fn assert_preview_path_includes(preview: &str, components: &[&str]) {
     assert!(
         contains_env(preview, "PATH") || preview.contains(" PATH="),
@@ -33,5 +34,15 @@ pub fn assert_preview_path_has_any(preview: &str, components: &[&str]) {
         ok,
         "PATH lacks any of {:?}; preview: {}",
         components, preview
+    );
+}
+
+#[allow(dead_code)]
+pub fn assert_preview_no_path_export(preview: &str) {
+    let has_path = contains_env(preview, "PATH") || preview.contains(" PATH=");
+    assert!(
+        !has_path,
+        "PATH should not be exported at runtime for Rust sidecars (image sets PATH); preview: {}",
+        preview
     );
 }

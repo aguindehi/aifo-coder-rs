@@ -40,9 +40,6 @@ const DEV_TOOLS: &[&str] = &[
     "c++",
 ];
 
-/// Rust normative PATH (static; no $PATH expansion).
-const RUST_PATH: &str = "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-
 /// Proxy/cargo-related environment variables to pass through to sidecars.
 const PROXY_ENV_NAMES: &[&str] = &[
     "HTTP_PROXY",
@@ -197,8 +194,8 @@ fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 }
 
 fn apply_rust_common_env(args: &mut Vec<String>) {
+    // Normative env for rust sidecars; rely on image PATH (do not override via -e)
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
-    push_env(args, "PATH", RUST_PATH);
     push_env(args, "CC", "gcc");
     push_env(args, "CXX", "g++");
     let rb = env::var("RUST_BACKTRACE").ok();
@@ -666,7 +663,8 @@ pub fn build_sidecar_run_preview(
         }
     }
 
-    // Linux connectivity (host proxy via host-gateway) for sidecars as well
+    // Linux connectivity for sidecars (optional; typically only the agent needs host-gateway).
+    // Enable via AIFO_TOOLEEXEC_ADD_HOST=1 for troubleshooting if required.
     #[cfg(target_os = "linux")]
     {
         if std::env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
@@ -712,6 +710,18 @@ pub fn build_sidecar_exec_preview(
     match kind {
         "rust" => {
             apply_rust_common_env(&mut args);
+            // When bootstrapping official rust images, ensure $CARGO_HOME/bin is on PATH at exec time.
+            if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                push_env(
+                    &mut args,
+                    "PATH",
+                    "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                );
+            }
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
             apply_rust_linker_flags_if_set(&mut args);
             // Pass-through proxies and cargo networking envs for exec as well
@@ -1431,10 +1441,10 @@ tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 # Build curl form payload (-d key=value supports urlencoding)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
-cmd+=(-d "tool=$tool" -d "cwd=$cwd")
+cmd+=(--data-urlencode "tool=$tool" --data-urlencode "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
-  cmd+=(-d "arg=$a")
+  cmd+=(--data-urlencode "arg=$a")
 done
 # Detect optional unix socket URL (Linux unix transport)
 if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
@@ -1572,6 +1582,13 @@ pub fn toolchain_start_session(
     Ok(session_id)
 }
 
+const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
+const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
+const ERR_BAD_REQUEST: &[u8] = b"bad request\n";
+const ERR_METHOD_NOT_ALLOWED: &[u8] = b"method not allowed\n";
+const ERR_NOT_FOUND: &[u8] = b"not found\n";
+const ERR_UNSUPPORTED_PROTO: &[u8] = b"Unsupported shim protocol; expected 1 or 2\n";
+
 /// Response helpers (common).
 fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
     let header = format!(
@@ -1618,8 +1635,12 @@ fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String])
     let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
     // Up to and including container name
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-    // Allocate a TTY for streaming to improve interactive flushing
-    spawn_args.insert(1, "-t".to_string());
+    // Allocate a TTY for streaming to improve interactive flushing.
+    // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
+    let use_tty = env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+    if use_tty {
+        spawn_args.insert(1, "-t".to_string());
+    }
     // User command slice after container name
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
     let script = {
@@ -1737,7 +1758,7 @@ pub fn toolexec_start_proxy(
                     eprintln!("aifo-coder: toolexec proxy stopped");
                 }
             });
-            let url = "unix:///run/aifo/toolexec.sock".to_string();
+            let url = format!("unix://{}/toolexec.sock", host_dir);
             return Ok((url, token, running, handle));
         }
     }
@@ -1890,12 +1911,15 @@ fn handle_connection<S: Read + Write>(
             if proto_present { proto_ver as i32 } else { 0 }
         );
     }
-    // Extract query parameters from Request-Line (e.g., GET /exec?tool=...&arg=...)
+    // Extract query parameters and validate method/target early
     let mut query_pairs: Vec<(String, String)> = Vec::new();
     let mut request_path_lc = String::new();
+    let mut method_up = String::new();
     if let Some(first_line) = header_str.lines().next() {
         let mut parts = first_line.split_whitespace();
-        let _method = parts.next();
+        if let Some(m) = parts.next() {
+            method_up = m.to_ascii_uppercase();
+        }
         if let Some(target) = parts.next() {
             let path_only = target.split('?').next().unwrap_or(target);
             request_path_lc = path_only.to_ascii_lowercase();
@@ -1903,6 +1927,22 @@ fn handle_connection<S: Read + Write>(
                 let q = &target[idx + 1..];
                 query_pairs.extend(parse_form_urlencoded(q));
             }
+        }
+    }
+    // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
+    let is_notifications_path_hint = request_path_lc.contains("/notifications")
+        || request_path_lc.contains("/notifications-cmd")
+        || request_path_lc.contains("/notify");
+    if !is_notifications_path_hint {
+        if method_up != "POST" {
+            respond_plain(stream, "405 Method Not Allowed", 86, ERR_METHOD_NOT_ALLOWED);
+            let _ = stream.flush();
+            return;
+        }
+        if !request_path_lc.ends_with("/exec") {
+            respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
+            let _ = stream.flush();
+            return;
         }
     }
     // Read body (skip header terminator if present)
@@ -1972,12 +2012,7 @@ fn handle_connection<S: Read + Write>(
         && auth_ok
     {
         if !proto_present || !proto_ok {
-            respond_plain(
-                stream,
-                "426 Upgrade Required",
-                86,
-                b"Unsupported shim protocol; expected 1 or 2\n",
-            );
+            respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
         }
@@ -2005,27 +2040,22 @@ fn handle_connection<S: Read + Write>(
     // If not authorized, fall through to the no-auth bypass block below.
     // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
     if !tool.is_empty() && !is_tool_allowed_any_sidecar(&tool) {
-        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
         return;
     }
     if tool.is_empty() {
         // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
         if auth_ok && (!proto_present || !proto_ok) {
-            respond_plain(
-                stream,
-                "426 Upgrade Required",
-                86,
-                b"Unsupported shim protocol; expected 1 or 2\n",
-            );
+            respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
         } else if !auth_ok {
-            respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+            respond_plain(stream, "401 Unauthorized", 86, ERR_UNAUTHORIZED);
             let _ = stream.flush();
             return;
         } else {
-            respond_plain(stream, "400 Bad Request", 86, b"bad request\n");
+            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
             let _ = stream.flush();
             return;
         }
@@ -2063,23 +2093,18 @@ fn handle_connection<S: Read + Write>(
     let kind = selected_kind.as_str();
     let allow = sidecar_allowlist(kind);
     if !allow.contains(&tool.as_str()) {
-        respond_plain(stream, "403 Forbidden", 86, b"forbidden\n");
+        respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
         return;
     }
     // When Authorization is valid, require X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 when missing/invalid auth.
     if auth_ok && (!proto_present || !proto_ok) {
-        respond_plain(
-            stream,
-            "426 Upgrade Required",
-            86,
-            b"Unsupported shim protocol; expected 1 or 2\n",
-        );
+        respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
         let _ = stream.flush();
         return;
     }
     if !auth_ok {
-        respond_plain(stream, "401 Unauthorized", 86, b"unauthorized\n");
+        respond_plain(stream, "401 Unauthorized", 86, ERR_UNAUTHORIZED);
         let _ = stream.flush();
         return;
     }

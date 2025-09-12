@@ -60,10 +60,8 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_HOME missing in run preview: {}",
         run_preview
     );
-    common::assert_preview_path_includes(
-        &run_preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
-    );
+    // Rust v7: image sets PATH; do not override at runtime
+    common::assert_preview_no_path_export(&run_preview);
     assert!(
         run_preview.contains("-e RUST_BACKTRACE=1"),
         "RUST_BACKTRACE default missing in run preview: {}",
@@ -103,10 +101,8 @@ fn test_rust_envs_in_run_and_exec_previews() {
         "CARGO_HOME missing in exec preview: {}",
         exec_preview
     );
-    common::assert_preview_path_includes(
-        &exec_preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
-    );
+    // Rust v7: image sets PATH; do not override at runtime
+    common::assert_preview_no_path_export(&exec_preview);
     assert!(
         exec_preview.contains("-e RUST_BACKTRACE=1"),
         "RUST_BACKTRACE default missing in exec preview: {}",

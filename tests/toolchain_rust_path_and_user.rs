@@ -45,10 +45,8 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
             "CARGO_HOME missing in run preview: {}",
             run_preview
         );
-        common::assert_preview_path_includes(
-            &run_preview,
-            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
-        );
+        // Rust v7: image sets PATH; do not override at runtime
+        common::assert_preview_no_path_export(&run_preview);
 
         // Exec preview: expect -u and PATH/CARGO_HOME envs
         let exec_args = aifo_coder::build_sidecar_exec_preview(
@@ -69,9 +67,7 @@ fn test_rust_run_and_exec_include_user_flags_and_path_env() {
             "CARGO_HOME missing in exec preview: {}",
             exec_preview
         );
-        common::assert_preview_path_includes(
-            &exec_preview,
-            &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
-        );
+        // Rust v7: image sets PATH; do not override at runtime
+        common::assert_preview_no_path_export(&exec_preview);
     }
 }

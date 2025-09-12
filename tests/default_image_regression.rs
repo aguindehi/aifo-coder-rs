@@ -89,10 +89,25 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
         "CARGO_HOME missing in default run preview: {}",
         preview
     );
-    common::assert_preview_path_includes(
-        &preview,
-        &["/home/coder/.cargo/bin", "/usr/local/cargo/bin"],
+    // Rust v7: do not override PATH at runtime; image sets PATH.
+    // Ensure key envs are present and PATH is not exported.
+    assert!(
+        common::contains_env(&preview, "CC") && preview.contains("CC=gcc"),
+        "CC=gcc missing in run preview: {}",
+        preview
     );
+    assert!(
+        common::contains_env(&preview, "CXX")
+            && (preview.contains("CXX=g++") || preview.contains("'CXX=g++'")),
+        "CXX=g++ missing in run preview: {}",
+        preview
+    );
+    assert!(
+        common::contains_env(&preview, "RUST_BACKTRACE") && preview.contains("RUST_BACKTRACE=1"),
+        "RUST_BACKTRACE=1 missing in run preview: {}",
+        preview
+    );
+    common::assert_preview_no_path_export(&preview);
 }
 
 #[test]
