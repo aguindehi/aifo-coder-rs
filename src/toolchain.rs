@@ -936,10 +936,7 @@ fn handle_connection<S: Read + Write>(
         return;
     }
 
-    // Log the request
     let pwd = PathBuf::from(cwd);
-    log_parsed_request(verbose, &tool, &argv, &pwd.display().to_string());
-
     let mut full_args: Vec<String>;
     if tool == "tsc" {
         let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
