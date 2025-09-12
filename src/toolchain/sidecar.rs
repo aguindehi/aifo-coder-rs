@@ -11,14 +11,14 @@ use nix::unistd::{getgid, getuid};
 use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
 use crate::{container_runtime_path, shell_join};
 
-use super::{
-    default_toolchain_image, is_official_rust_image, normalize_toolchain_kind, PROXY_ENV_NAMES,
-};
 use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
 };
 use super::mounts::{init_rust_named_volumes_if_needed, push_mount};
 use super::routing::container_exists;
+use super::{
+    default_toolchain_image, is_official_rust_image, normalize_toolchain_kind, PROXY_ENV_NAMES,
+};
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
     format!("aifo-tc-{kind}-{id}")

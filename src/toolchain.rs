@@ -109,15 +109,6 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     false
 }
 
-
-
-
-
-
-
-
-
-
 fn random_token() -> String {
     // Prefer strong randomness on Unix via /dev/urandom
     #[cfg(target_family = "unix")]
@@ -479,7 +470,6 @@ exit "$ec"
     }
     Ok(())
 }
-
 
 const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
 const ERR_FORBIDDEN: &[u8] = b"forbidden\n";
@@ -1279,9 +1269,6 @@ fn handle_connection<S: Read + Write>(
     let _ = stream.write_all(&body_bytes);
     let _ = stream.flush();
 }
-
-
-
 
 #[cfg(test)]
 mod auth_tests {
