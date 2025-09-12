@@ -548,7 +548,10 @@ fn choose_session_network(
 /// Mark/unmark the bootstrap env for official rust images.
 fn mark_official_rust_bootstrap(kind: &str, image: &str) {
     if kind == "rust"
-        && (std_env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+        && (std_env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+            .ok()
+            .as_deref()
+            == Some("1")
             || is_official_rust_image(image))
     {
         std_env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
