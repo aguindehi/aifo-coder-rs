@@ -45,6 +45,9 @@ pub use sidecar::{
     toolchain_cleanup_session, toolchain_purge_caches, toolchain_run, toolchain_start_session,
 };
 
+mod proxy;
+pub use proxy::toolexec_start_proxy;
+
 /// Proxy/cargo-related environment variables to pass through to sidecars.
 const PROXY_ENV_NAMES: &[&str] = &[
     "HTTP_PROXY",
@@ -553,7 +556,7 @@ struct ProxyCtx {
 
 /// Start a minimal proxy to execute tools via shims inside sidecars.
 /// Returns (url, token, running_flag, thread_handle).
-pub fn toolexec_start_proxy(
+pub(crate) fn toolexec_start_proxy_impl(
     session_id: &str,
     verbose: bool,
 ) -> io::Result<(
