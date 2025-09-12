@@ -1189,7 +1189,7 @@ pub fn toolchain_run(
 }
 
 fn random_token() -> String {
-    // Prefer strong randomness when available (Unix /dev/urandom)
+    // Prefer strong randomness on Unix via /dev/urandom
     #[cfg(target_family = "unix")]
     {
         use std::io::Read;
@@ -1202,6 +1202,34 @@ fn random_token() -> String {
                     let _ = write!(&mut s, "{:02x}", b);
                 }
                 return s;
+            }
+        }
+    }
+    // Prefer strong randomness on Windows via PowerShell .NET RNG
+    #[cfg(target_os = "windows")]
+    {
+        let script = "[byte[]]$b=New-Object byte[] 16; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [System.BitConverter]::ToString($b).Replace('-', '').ToLower()";
+        if let Ok(out) = Command::new("powershell.exe")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if s.len() >= 32 {
+                    return s;
+                }
+            }
+        }
+        // Try pwsh as an alternative
+        if let Ok(out) = Command::new("pwsh")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if s.len() >= 32 {
+                    return s;
+                }
             }
         }
     }
@@ -1860,6 +1888,27 @@ pub fn toolexec_start_proxy(
     Ok((url, token, running, handle))
 }
 
+fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(String, String)>) {
+    let mut method_up = String::new();
+    let mut request_path_lc = String::new();
+    let mut query_pairs: Vec<(String, String)> = Vec::new();
+    if let Some(first_line) = header_str.lines().next() {
+        let mut parts = first_line.split_whitespace();
+        if let Some(m) = parts.next() {
+            method_up = m.to_ascii_uppercase();
+        }
+        if let Some(target) = parts.next() {
+            let path_only = target.split('?').next().unwrap_or(target);
+            request_path_lc = path_only.to_ascii_lowercase();
+            if let Some(idx) = target.find('?') {
+                let q = &target[idx + 1..];
+                query_pairs.extend(parse_form_urlencoded(q));
+            }
+        }
+    }
+    (method_up, request_path_lc, query_pairs)
+}
+
 /// Handle a single proxy connection: parse request, route, exec, and respond.
 fn handle_connection<S: Read + Write>(
     ctx: &ProxyCtx,
@@ -1950,23 +1999,7 @@ fn handle_connection<S: Read + Write>(
         );
     }
     // Extract query parameters and validate method/target early
-    let mut query_pairs: Vec<(String, String)> = Vec::new();
-    let mut request_path_lc = String::new();
-    let mut method_up = String::new();
-    if let Some(first_line) = header_str.lines().next() {
-        let mut parts = first_line.split_whitespace();
-        if let Some(m) = parts.next() {
-            method_up = m.to_ascii_uppercase();
-        }
-        if let Some(target) = parts.next() {
-            let path_only = target.split('?').next().unwrap_or(target);
-            request_path_lc = path_only.to_ascii_lowercase();
-            if let Some(idx) = target.find('?') {
-                let q = &target[idx + 1..];
-                query_pairs.extend(parse_form_urlencoded(q));
-            }
-        }
-    }
+    let (method_up, request_path_lc, mut query_pairs) = parse_request_line_and_query(&header_str);
     // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
     let is_notifications_path_hint = request_path_lc.contains("/notifications")
         || request_path_lc.contains("/notifications-cmd")
