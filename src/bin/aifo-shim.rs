@@ -42,7 +42,7 @@ fn main() {
         );
     }
 
-    // Form parts as -d key=value entries (curl does urlencoding)
+    // Form parts to be encoded with --data-urlencode
     let mut form_parts: Vec<(String, String)> = Vec::new();
     form_parts.push(("tool".to_string(), tool.clone()));
     form_parts.push(("cwd".to_string(), cwd.clone()));
