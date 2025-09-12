@@ -1,3 +1,10 @@
+/*!
+Sidecar lifecycle and previews.
+
+- build_sidecar_run_preview / build_sidecar_exec_preview
+- choose_session_network, ensure/remove network
+- toolchain_run, toolchain_start_session/cleanup/purge/bootstrap
+*/
 use std::env as std_env;
 use std::fs;
 use std::io;

@@ -1,3 +1,13 @@
+/*!
+Shim writer module: emits aifo-shim (curl-based v2 client) and tool symlinks.
+
+The generated shim sends:
+- Authorization: Bearer <token>
+- X-Aifo-Proto: 2
+- TE: trailers
+
+It uses --data-urlencode for correct form encoding and supports Linux unix sockets.
+*/
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -47,7 +57,7 @@ if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
 fi
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
-# Build curl form payload (-d key=value supports urlencoding)
+# Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded")
 cmd+=(--data-urlencode "tool=$tool" --data-urlencode "cwd=$cwd")
 # Append args preserving order

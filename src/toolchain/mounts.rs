@@ -1,3 +1,9 @@
+/*!
+Mounts and ownership initialization for sidecars.
+
+- push_mount: add -v mounts
+- init_rust_named_volumes_if_needed: one-shot chown for rust named volumes (registry/git)
+*/
 use std::path::Path;
 use std::process::{Command, Stdio};
 

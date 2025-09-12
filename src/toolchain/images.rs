@@ -1,3 +1,11 @@
+/*!
+Toolchain kind normalization and image selection.
+
+- normalize_toolchain_kind: apply canonical aliases
+- default_toolchain_image: choose default image with overrides and official fallback
+- default_toolchain_image_for_version: versioned image selectors
+- is_official_rust_image / official_rust_image_for_version: helpers for rust
+*/
 use std::env;
 
 /// Structured mappings for toolchain normalization and default images

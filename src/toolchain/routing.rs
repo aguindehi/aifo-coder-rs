@@ -1,3 +1,10 @@
+/*!
+Routing and allowlists: map tools to sidecar kinds, allow/deny, and probe availability.
+
+- route_tool_to_sidecar: primary mapping
+- sidecar_allowlist: per-kind allowlist
+- select_kind_for_tool: dynamic selection based on running sidecars and availability
+*/
 use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::time::Duration;
