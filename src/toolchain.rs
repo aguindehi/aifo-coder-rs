@@ -85,7 +85,6 @@ const SHIM_TOOLS: &[&str] = &[
     "notifications-cmd",
 ];
 
-
 /// Return true when an Authorization header value authorizes the given token
 /// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
@@ -156,10 +155,6 @@ fn apply_rust_common_env(args: &mut Vec<String>) {
         push_env(args, "RUST_BACKTRACE", "1");
     }
 }
-
-
-
-
 
 /// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
 /// Runs a short helper container as root that ensures target dir exists, chowns to uid:gid,
