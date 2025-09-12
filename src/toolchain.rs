@@ -39,7 +39,9 @@ pub use routing::{
 
 mod env;
 mod mounts;
-use env::{apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env};
+use env::{
+    apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
+};
 use mounts::{init_rust_named_volumes_if_needed, push_mount};
 
 /// Proxy/cargo-related environment variables to pass through to sidecars.
@@ -98,13 +100,6 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     }
     false
 }
-
-
-
-
-
-
-
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
     format!("aifo-tc-{kind}-{id}")
