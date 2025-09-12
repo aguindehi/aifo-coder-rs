@@ -641,6 +641,10 @@ fn parse_request_line_and_query(header_str: &str) -> (String, String, Vec<(Strin
     (method_up, request_path_lc, query_pairs)
 }
 
+fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
+    log_parsed_request(verbose, &tool, &argv, &cwd);
+}
+
 /// Handle a single proxy connection: parse request, route, exec, and respond.
 fn handle_connection<S: Read + Write>(
     ctx: &ProxyCtx,
