@@ -1999,7 +1999,7 @@ fn handle_connection<S: Read + Write>(
         );
     }
     // Extract query parameters and validate method/target early
-    let (method_up, request_path_lc, mut query_pairs) = parse_request_line_and_query(&header_str);
+    let (method_up, request_path_lc, query_pairs) = parse_request_line_and_query(&header_str);
     // Tighten: Only allow POST to /exec for normal exec requests; notifications paths are exempt.
     let is_notifications_path_hint = request_path_lc.contains("/notifications")
         || request_path_lc.contains("/notifications-cmd")
