@@ -128,7 +128,10 @@ fn random_token() -> String {
         }
         Err(e) => {
             // Very rare fallback: deterministic-ish token with warning
-            eprintln!("aifo-coder: warning: secure RNG failed ({}); falling back to time^pid", e);
+            eprintln!(
+                "aifo-coder: warning: secure RNG failed ({}); falling back to time^pid",
+                e
+            );
             let now = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))
@@ -1073,14 +1076,14 @@ fn handle_connection<S: Read + Write>(
             let _ = child.wait();
             respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
 
-            log_request_result(verbose, &tool, &kind, 124, &started);
+            log_request_result(verbose, &tool, kind, 124, &started);
             respond_chunked_trailer(stream, 124);
             return;
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
         eprintln!("\r");
-        log_request_result(verbose, &tool, &kind, code, &started);
+        log_request_result(verbose, &tool, kind, code, &started);
 
         // Final chunk + trailer with exit code
         respond_chunked_trailer(stream, code);
@@ -1132,7 +1135,7 @@ fn handle_connection<S: Read + Write>(
         }
     };
     eprintln!("\r");
-    log_request_result(verbose, &tool, &kind, status_code, &started);
+    log_request_result(verbose, &tool, kind, status_code, &started);
 
     if verbose {
         if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
