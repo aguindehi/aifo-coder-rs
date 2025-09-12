@@ -37,7 +37,6 @@ pub use routing::{
     container_exists, route_tool_to_sidecar, select_kind_for_tool, sidecar_allowlist,
 };
 
-
 /// Proxy/cargo-related environment variables to pass through to sidecars.
 const PROXY_ENV_NAMES: &[&str] = &[
     "HTTP_PROXY",
@@ -666,7 +665,6 @@ pub fn build_sidecar_exec_preview(
     let _ = pwd;
     args
 }
-
 
 /// Choose/create the session network and return its name (or None to omit --network).
 fn choose_session_network(
