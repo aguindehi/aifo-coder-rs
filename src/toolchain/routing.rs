@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use super::sidecar_container_name;
+use super::sidecar::sidecar_container_name;
 use crate::container_runtime_path;
 
 /// Common DEV tools shared across allowlists and shims (used to widen routing preferences).

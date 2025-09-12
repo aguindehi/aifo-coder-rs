@@ -996,7 +996,7 @@ fn handle_connection<S: Read + Write>(
         return;
     }
 
-    let name = sidecar_container_name(kind, session);
+    let name = sidecar::sidecar_container_name(kind, session);
     // If selected sidecar isn't running and no alternative was available, return a helpful error
     if !container_exists(&name) {
         let msg = format!(
