@@ -27,9 +27,7 @@ fn test_proxy_allowlist_rejects_disallowed_tool() {
     use std::io::{Read, Write};
     use std::net::TcpStream;
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-    let req = format!(
-        "POST /exec?tool=bash&cwd=. HTTP/1.1\r\nHost: localhost\r\nX-Aifo-Proto: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-    );
+    let req = "POST /exec?tool=bash&cwd=. HTTP/1.1\r\nHost: localhost\r\nX-Aifo-Proto: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string();
     stream.write_all(req.as_bytes()).expect("write failed");
     let mut resp = Vec::new();
     stream.read_to_end(&mut resp).ok();
