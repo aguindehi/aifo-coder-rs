@@ -81,73 +81,41 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     false
 }
 
-//// TODO(security): Switch to a cross-platform secure RNG (e.g., getrandom/OsRng)
-//// when adding dependencies is possible. Current implementation uses /dev/urandom on
-//// Unix and PowerShell .NET RNG on Windows, with a time^pid fallback otherwise.
 fn random_token() -> String {
-    // Prefer strong randomness on Unix via /dev/urandom
-    #[cfg(target_family = "unix")]
-    {
-        use std::io::Read;
-        if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
-            let mut buf = [0u8; 16];
-            if f.read_exact(&mut buf).is_ok() {
-                let mut s = String::with_capacity(buf.len() * 2);
-                for b in buf {
-                    use std::fmt::Write as _;
-                    let _ = write!(&mut s, "{:02x}", b);
-                }
-                return s;
+    // Cross-platform secure RNG using getrandom
+    let mut buf = [0u8; 16]; // 128-bit token
+    match getrandom::getrandom(&mut buf) {
+        Ok(_) => {
+            let mut s = String::with_capacity(buf.len() * 2);
+            for b in buf {
+                use std::fmt::Write as _;
+                let _ = write!(&mut s, "{:02x}", b);
             }
+            s
         }
-    }
-    // Prefer strong randomness on Windows via PowerShell .NET RNG
-    #[cfg(target_os = "windows")]
-    {
-        let script = "[byte[]]$b=New-Object byte[] 16; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [System.BitConverter]::ToString($b).Replace('-', '').ToLower()";
-        if let Ok(out) = Command::new("powershell.exe")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
-            .output()
-        {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.len() >= 32 {
-                    return s;
-                }
-            }
-        }
-        // Try pwsh as an alternative
-        if let Ok(out) = Command::new("pwsh")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
-            .output()
-        {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.len() >= 32 {
-                    return s;
+        Err(e) => {
+            // Very rare fallback: deterministic-ish token with warning
+            eprintln!("aifo-coder: warning: secure RNG failed ({}); falling back to time^pid", e);
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_nanos();
+            let pid = std::process::id() as u128;
+            let v = now ^ pid;
+            let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
+            let mut n = v;
+            let mut s = String::new();
+            if n == 0 {
+                s.push('0');
+            } else {
+                while n > 0 {
+                    s.push(alphabet[(n % 36) as usize] as char);
+                    n /= 36;
                 }
             }
+            s.chars().rev().collect()
         }
     }
-    // Fallback: time^pid base36 (sufficient for short-lived local dev)
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_nanos();
-    let pid = std::process::id() as u128;
-    let v = now ^ pid;
-    let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    let mut n = v;
-    let mut s = String::new();
-    if n == 0 {
-        s.push('0');
-    } else {
-        while n > 0 {
-            s.push(alphabet[(n % 36) as usize] as char);
-            n /= 36;
-        }
-    }
-    s.chars().rev().collect()
 }
 
 /// Parse minimal application/x-www-form-urlencoded body; supports repeated keys.
