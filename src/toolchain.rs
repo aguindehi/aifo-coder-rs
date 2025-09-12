@@ -81,6 +81,9 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     false
 }
 
+//// TODO(security): Switch to a cross-platform secure RNG (e.g., getrandom/OsRng)
+//// when adding dependencies is possible. Current implementation uses /dev/urandom on
+//// Unix and PowerShell .NET RNG on Windows, with a time^pid fallback otherwise.
 fn random_token() -> String {
     // Prefer strong randomness on Unix via /dev/urandom
     #[cfg(target_family = "unix")]
