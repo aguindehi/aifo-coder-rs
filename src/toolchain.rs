@@ -63,6 +63,39 @@ const PROXY_ENV_NAMES: &[&str] = &[
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
 ];
 
+fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
+            tool, argv, cwd
+        );
+        eprintln!("\r");
+    }
+}
+
+fn log_request_result(
+    verbose: bool,
+    tool: &str,
+    kind: &str,
+    code: i32,
+    started: &std::time::Instant,
+) {
+    if verbose {
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        eprintln!(
+            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+            tool,
+            kind,
+            code,
+            started.elapsed().as_millis()
+        );
+        eprintln!("\r");
+    }
+}
+
 /// Return true when an Authorization header value authorizes the given token
 /// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
@@ -82,69 +115,43 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
 }
 
 fn random_token() -> String {
-    // Prefer strong randomness on Unix via /dev/urandom
-    #[cfg(target_family = "unix")]
-    {
-        use std::io::Read;
-        if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
-            let mut buf = [0u8; 16];
-            if f.read_exact(&mut buf).is_ok() {
-                let mut s = String::with_capacity(buf.len() * 2);
-                for b in buf {
-                    use std::fmt::Write as _;
-                    let _ = write!(&mut s, "{:02x}", b);
-                }
-                return s;
+    // Cross-platform secure RNG using getrandom
+    let mut buf = [0u8; 16]; // 128-bit token
+    match getrandom::getrandom(&mut buf) {
+        Ok(_) => {
+            let mut s = String::with_capacity(buf.len() * 2);
+            for b in buf {
+                use std::fmt::Write as _;
+                let _ = write!(&mut s, "{:02x}", b);
             }
+            s
         }
-    }
-    // Prefer strong randomness on Windows via PowerShell .NET RNG
-    #[cfg(target_os = "windows")]
-    {
-        let script = "[byte[]]$b=New-Object byte[] 16; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [System.BitConverter]::ToString($b).Replace('-', '').ToLower()";
-        if let Ok(out) = Command::new("powershell.exe")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
-            .output()
-        {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.len() >= 32 {
-                    return s;
-                }
-            }
-        }
-        // Try pwsh as an alternative
-        if let Ok(out) = Command::new("pwsh")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
-            .output()
-        {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.len() >= 32 {
-                    return s;
+        Err(e) => {
+            // Very rare fallback: deterministic-ish token with warning
+            eprintln!(
+                "aifo-coder: warning: secure RNG failed ({}); falling back to time^pid",
+                e
+            );
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+                .as_nanos();
+            let pid = std::process::id() as u128;
+            let v = now ^ pid;
+            let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
+            let mut n = v;
+            let mut s = String::new();
+            if n == 0 {
+                s.push('0');
+            } else {
+                while n > 0 {
+                    s.push(alphabet[(n % 36) as usize] as char);
+                    n /= 36;
                 }
             }
+            s.chars().rev().collect()
         }
     }
-    // Fallback: time^pid base36 (sufficient for short-lived local dev)
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_nanos();
-    let pid = std::process::id() as u128;
-    let v = now ^ pid;
-    let alphabet = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    let mut n = v;
-    let mut s = String::new();
-    if n == 0 {
-        s.push('0');
-    } else {
-        while n > 0 {
-            s.push(alphabet[(n % 36) as usize] as char);
-            n /= 36;
-        }
-    }
-    s.chars().rev().collect()
 }
 
 /// Parse minimal application/x-www-form-urlencoded body; supports repeated keys.
@@ -805,6 +812,10 @@ fn handle_connection<S: Read + Write>(
             }
         }
     }
+
+    // Log the request
+    log_parsed_request(verbose, &tool, &argv, &cwd);
+
     // Notifications endpoint: allow Authorization-bypass with strict exact-args guard.
     // If Authorization is valid, still require protocol header (1 or 2).
     if (tool.eq_ignore_ascii_case("notifications-cmd")
@@ -848,8 +859,9 @@ fn handle_connection<S: Read + Write>(
         return;
     }
     if tool.is_empty() {
-        // If Authorization is valid, require protocol header X-Aifo-Proto: 1 (426 on missing or wrong). Otherwise, 401 for missing/invalid auth; else 400 for malformed body
-        if auth_ok && (!proto_present || !proto_ok) {
+        // If Authorization header is present but protocol is missing/invalid => 426 (align with tests expecting 426 on bad proto).
+        // Otherwise, 401 for missing/invalid auth; else 400 for malformed body.
+        if saw_auth && (!proto_present || !proto_ok) {
             respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
             let _ = stream.flush();
             return;
@@ -925,17 +937,6 @@ fn handle_connection<S: Read + Write>(
     }
 
     let pwd = PathBuf::from(cwd);
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy exec: tool={} args={:?} cwd={}",
-            tool,
-            argv,
-            pwd.display()
-        );
-    }
-
     let mut full_args: Vec<String>;
     if tool == "tsc" {
         let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
@@ -1003,6 +1004,10 @@ fn handle_connection<S: Read + Write>(
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
+                // Emit a small diagnostic chunk before the trailer to aid UX
+                respond_chunked_write_chunk(stream, b"aifo-coder proxy spawn error\n");
+                // Log the failure for observability
+                log_request_result(verbose, &tool, kind, 1, &started);
                 respond_chunked_trailer(stream, 1);
                 eprintln!("aifo-coder: proxy spawn error: {}", e);
                 return;
@@ -1070,34 +1075,16 @@ fn handle_connection<S: Read + Write>(
         if timed_out {
             let _ = child.wait();
             respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
-            if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
-                eprintln!(
-                    "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                    tool,
-                    kind,
-                    124,
-                    started.elapsed().as_millis()
-                );
-                eprintln!("\r");
-            }
+
+            log_request_result(verbose, &tool, kind, 124, &started);
             respond_chunked_trailer(stream, 124);
             return;
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
-        let dur_ms = started.elapsed().as_millis();
         eprintln!("\r");
-        if verbose {
-            let _ = std::io::stdout().flush();
-            let _ = std::io::stderr().flush();
-            eprintln!(
-                "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-                tool, kind, code, dur_ms
-            );
-            eprintln!("\r");
-        }
+        log_request_result(verbose, &tool, kind, code, &started);
+
         // Final chunk + trailer with exit code
         respond_chunked_trailer(stream, code);
         return;
@@ -1136,6 +1123,8 @@ fn handle_connection<S: Read + Write>(
                 (1, b)
             }
             Err(_timeout) => {
+                // Log timeout consistently with streaming path
+                log_request_result(verbose, &tool, kind, 124, &started);
                 respond_plain(
                     stream,
                     "504 Gateway Timeout",
@@ -1147,17 +1136,9 @@ fn handle_connection<S: Read + Write>(
             }
         }
     };
-    let dur_ms = started.elapsed().as_millis();
     eprintln!("\r");
-    if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
-            tool, kind, status_code, dur_ms
-        );
-        eprintln!("\r");
-    }
+    log_request_result(verbose, &tool, kind, status_code, &started);
+
     if verbose {
         if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
             let mut pref = Vec::with_capacity(body_bytes.len() + 1);
