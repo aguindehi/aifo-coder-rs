@@ -6,7 +6,7 @@ The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
 use std::collections::HashMap;
-use std::env;
+use std::env as std_env;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -233,7 +233,7 @@ pub fn build_sidecar_run_preview(
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
-                    || env::var("AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES")
+                    || std_env::var("AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES")
                         .ok()
                         .as_deref()
                         == Some("1");
@@ -247,7 +247,7 @@ pub fn build_sidecar_run_preview(
                 } else {
                     let mut mounted_registry = false;
                     let mut mounted_git = false;
-                    let hd_opt = env::var("HOME")
+                    let hd_opt = std_env::var("HOME")
                         .ok()
                         .filter(|s| !s.trim().is_empty())
                         .map(PathBuf::from)
@@ -289,12 +289,12 @@ pub fn build_sidecar_run_preview(
                 }
             }
             // Optional: host cargo config (read-only)
-            if env::var("AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG")
+            if std_env::var("AIFO_TOOLCHAIN_RUST_USE_HOST_CONFIG")
                 .ok()
                 .as_deref()
                 == Some("1")
             {
-                let hd_opt = env::var("HOME")
+                let hd_opt = std_env::var("HOME")
                     .ok()
                     .filter(|s| !s.trim().is_empty())
                     .map(PathBuf::from)
@@ -319,8 +319,8 @@ pub fn build_sidecar_run_preview(
                 }
             }
             // Optional: SSH agent forwarding
-            if env::var("AIFO_TOOLCHAIN_SSH_FORWARD").ok().as_deref() == Some("1") {
-                if let Ok(sock) = env::var("SSH_AUTH_SOCK") {
+            if std_env::var("AIFO_TOOLCHAIN_SSH_FORWARD").ok().as_deref() == Some("1") {
+                if let Ok(sock) = std_env::var("SSH_AUTH_SOCK") {
                     if !sock.trim().is_empty() {
                         push_mount(&mut args, &format!("{0}:{0}", sock));
                         push_env(&mut args, "SSH_AUTH_SOCK", &sock);
@@ -328,9 +328,9 @@ pub fn build_sidecar_run_preview(
                 }
             }
             // Optional: sccache
-            if env::var("AIFO_RUST_SCCACHE").ok().as_deref() == Some("1") {
+            if std_env::var("AIFO_RUST_SCCACHE").ok().as_deref() == Some("1") {
                 let target = "/home/coder/.cache/sccache";
-                if let Ok(dir) = env::var("AIFO_RUST_SCCACHE_DIR") {
+                if let Ok(dir) = std_env::var("AIFO_RUST_SCCACHE_DIR") {
                     if !dir.trim().is_empty() {
                         push_mount(&mut args, &format!("{dir}:{target}"));
                     } else {
@@ -548,12 +548,12 @@ fn choose_session_network(
 /// Mark/unmark the bootstrap env for official rust images.
 fn mark_official_rust_bootstrap(kind: &str, image: &str) {
     if kind == "rust"
-        && (env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
+        && (std_env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1")
             || is_official_rust_image(image))
     {
-        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
+        std_env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
     } else {
-        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+        std_env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
     }
 }
 
@@ -569,7 +569,7 @@ pub fn toolchain_run(
 ) -> io::Result<i32> {
     let runtime = container_runtime_path()?;
     let pwd = {
-        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         fs::canonicalize(&p).unwrap_or(p)
     };
 
@@ -588,7 +588,7 @@ pub fn toolchain_run(
     };
     mark_official_rust_bootstrap(sidecar_kind.as_str(), &image);
 
-    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+    let session_id = std_env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(create_session_id);
@@ -703,7 +703,7 @@ pub fn toolchain_run(
         exit_code = status.code().unwrap_or(1);
     }
     // Clear bootstrap marker from environment (best-effort)
-    env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    std_env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
 
     // Cleanup: stop sidecar and remove network (best-effort)
     if !dry_run {
@@ -806,7 +806,7 @@ pub fn parse_form_urlencoded(body: &str) -> Vec<(String, String)> {
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 pub fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     // Allow tests (and power users) to override config path explicitly
-    let path = if let Ok(p) = env::var("AIFO_NOTIFICATIONS_CONFIG") {
+    let path = if let Ok(p) = std_env::var("AIFO_NOTIFICATIONS_CONFIG") {
         let p = p.trim().to_string();
         if !p.is_empty() {
             PathBuf::from(p)
@@ -1093,7 +1093,7 @@ pub fn toolchain_start_session(
 ) -> io::Result<String> {
     let runtime = container_runtime_path()?;
     let pwd = {
-        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         fs::canonicalize(&p).unwrap_or(p)
     };
 
@@ -1104,7 +1104,7 @@ pub fn toolchain_start_session(
     #[cfg(not(unix))]
     let (_uid, _gid) = (0u32, 0u32);
 
-    let session_id = env::var("AIFO_CODER_FORK_SESSION")
+    let session_id = std_env::var("AIFO_CODER_FORK_SESSION")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(create_session_id);
@@ -1237,7 +1237,7 @@ fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String])
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
     // Allocate a TTY for streaming to improve interactive flushing.
     // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
-    let use_tty = env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+    let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
     if use_tty {
         spawn_args.insert(1, "-t".to_string());
     }
@@ -1293,7 +1293,7 @@ pub fn toolexec_start_proxy(
     let token = random_token();
     let token_for_thread = token.clone();
     // Per-request timeout (seconds); default 60
-    let timeout_secs: u64 = env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS")
+    let timeout_secs: u64 = std_env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .filter(|&v| v > 0)
@@ -1303,7 +1303,7 @@ pub fn toolexec_start_proxy(
 
     // Optional unix socket transport on Linux, gated by AIFO_TOOLEEXEC_USE_UNIX=1
     let use_unix = cfg!(target_os = "linux")
-        && env::var("AIFO_TOOLEEXEC_USE_UNIX").ok().as_deref() == Some("1");
+        && std_env::var("AIFO_TOOLEEXEC_USE_UNIX").ok().as_deref() == Some("1");
     if use_unix {
         #[cfg(target_os = "linux")]
         {
@@ -1318,7 +1318,7 @@ pub fn toolexec_start_proxy(
                 .map_err(|e| io::Error::new(e.kind(), format!("proxy unix bind failed: {e}")))?;
             let _ = listener.set_nonblocking(true);
             // Expose directory for agent mount
-            env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
+            std_env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
             let running_cl2 = running.clone();
             let token_for_thread2 = token_for_thread.clone();
             let handle = std::thread::spawn(move || {
@@ -2017,7 +2017,7 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     remove_network(&runtime, &net, verbose);
 
     // Best-effort cleanup of unix socket directory (Linux, unix transport)
-    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
+    if let Ok(dir) = std_env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
         if !dir.trim().is_empty() {
             let p = PathBuf::from(dir);
             let _ = fs::remove_file(p.join("toolexec.sock"));
