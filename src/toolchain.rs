@@ -63,7 +63,6 @@ const PROXY_ENV_NAMES: &[&str] = &[
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
 ];
 
-
 /// Return true when an Authorization header value authorizes the given token
 /// using the standard Bearer scheme (RFC 6750).
 /// Accepts:
@@ -380,7 +379,6 @@ pub fn notifications_handle_request(
         Err(_timeout) => Err("host 'say' execution timed out".to_string()),
     }
 }
-
 
 const ERR_UNAUTHORIZED: &[u8] = b"unauthorized\n";
 const ERR_FORBIDDEN: &[u8] = b"forbidden\n";

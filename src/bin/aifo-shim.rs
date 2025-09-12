@@ -5,7 +5,6 @@ use std::process::{self, Command, Stdio};
 
 const PROTO_VERSION: &str = "2";
 
-
 fn main() {
     let url = match env::var("AIFO_TOOLEEXEC_URL") {
         Ok(v) if !v.trim().is_empty() => v,
@@ -124,4 +123,3 @@ fn main() {
     let _ = fs::remove_dir_all(&tmp_dir);
     process::exit(exit_code);
 }
-
