@@ -600,8 +600,37 @@ fn handle_connection<S: Read + Write>(
             }
         }
     }
-    // If not authorized, fall through to the no-auth bypass block below.
-    // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early
+    // Notifications: default require Authorization; optional unauth bypass via AIFO_NOTIFICATIONS_NOAUTH=1.
+    if !auth_ok && matches!(endpoint, Some(http::Endpoint::Notifications)) {
+        let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
+        if !noauth {
+            respond_plain(stream, "401 Unauthorized", 86, ERR_UNAUTHORIZED);
+            let _ = stream.flush();
+            return;
+        }
+        match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
+            Ok((status_code, body_out)) => {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    status_code,
+                    body_out.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body_out);
+                let _ = stream.flush();
+                return;
+            }
+            Err(reason) => {
+                let mut body = reason.into_bytes();
+                body.push(b'\n');
+                respond_plain(stream, "403 Forbidden", 86, &body);
+                let _ = stream.flush();
+                return;
+            }
+        }
+    }
+
+    // Fast-path: if tool provided and not permitted by any sidecar allowlist, reject early (exec path only)
     if !tool.is_empty() && !is_tool_allowed_any_sidecar(&tool) {
         respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
@@ -622,29 +651,6 @@ fn handle_connection<S: Read + Write>(
             respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
             let _ = stream.flush();
             return;
-        }
-    }
-    // Secondary notifications block for no-auth bypass (special case)
-    if !auth_ok && matches!(endpoint, Some(http::Endpoint::Notifications)) {
-        match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
-            Ok((status_code, body_out)) => {
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    status_code,
-                    body_out.len()
-                );
-                let _ = stream.write_all(header.as_bytes());
-                let _ = stream.write_all(&body_out);
-                let _ = stream.flush();
-                return;
-            }
-            Err(reason) => {
-                let mut body = reason.into_bytes();
-                body.push(b'\n');
-                respond_plain(stream, "403 Forbidden", 86, &body);
-                let _ = stream.flush();
-                return;
-            }
         }
     }
     let selected_kind = select_kind_for_tool(session, &tool, timeout_secs, tool_cache);
