@@ -144,7 +144,7 @@ fn authorization_value_matches(value: &str, token: &str) -> bool {
     if let Some(idx) = v.find(|c: char| c.is_ascii_whitespace()) {
         let (scheme, rest) = v.split_at(idx);
         if scheme.eq_ignore_ascii_case("bearer") {
-            let cred = rest.trim_start();
+            let cred = rest.trim();
             return !cred.is_empty() && cred == token;
         }
     }
