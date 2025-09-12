@@ -75,7 +75,13 @@ fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     }
 }
 
-fn log_request_result(verbose: bool, tool: &str, kind: &str, code: i32, dur_ms: &u128) {
+fn log_request_result(
+    verbose: bool,
+    tool: &str,
+    kind: &str,
+    code: i32,
+    started: &std::time::Instant,
+) {
     if verbose {
         let _ = std::io::stdout().flush();
         let _ = std::io::stderr().flush();
@@ -83,8 +89,8 @@ fn log_request_result(verbose: bool, tool: &str, kind: &str, code: i32, dur_ms: 
             "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
             tool,
             kind,
-            124,
-            dur_ms.elapsed().as_millis()
+            code,
+            started.elapsed().as_millis()
         );
         eprintln!("\r");
     }
@@ -1073,9 +1079,8 @@ fn handle_connection<S: Read + Write>(
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
-        let dur_ms = started.elapsed().as_millis();
         eprintln!("\r");
-        log_request_result(verbose, &tool, &kind, code, &dur_ms);
+        log_request_result(verbose, &tool, &kind, code, &started);
 
         // Final chunk + trailer with exit code
         respond_chunked_trailer(stream, code);
@@ -1126,9 +1131,8 @@ fn handle_connection<S: Read + Write>(
             }
         }
     };
-    let dur_ms = started.elapsed().as_millis();
     eprintln!("\r");
-    log_request_result(verbose, &tool, &kind, status_code, &dur_ms);
+    log_request_result(verbose, &tool, &kind, status_code, &started);
 
     if verbose {
         if !body_bytes.starts_with(b"\n") && !body_bytes.starts_with(b"\r") {
