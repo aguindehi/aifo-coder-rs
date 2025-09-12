@@ -15,7 +15,6 @@ use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
 };
 use super::mounts::{init_rust_named_volumes_if_needed, push_mount};
-use super::routing::container_exists;
 use super::{
     default_toolchain_image, is_official_rust_image, normalize_toolchain_kind, PROXY_ENV_NAMES,
 };

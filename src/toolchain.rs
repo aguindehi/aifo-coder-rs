@@ -20,7 +20,6 @@ use std::time::{Duration, SystemTime};
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
-use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
 use crate::{
     container_runtime_path, create_session_id, find_header_end, shell_join, shell_like_split_args,
     strip_outer_quotes, url_decode,
@@ -39,17 +38,11 @@ pub use routing::{
 
 mod env;
 mod mounts;
-use env::{
-    apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
-};
-use mounts::{init_rust_named_volumes_if_needed, push_mount};
 
 mod sidecar;
 pub use sidecar::{
-    build_sidecar_exec_preview, build_sidecar_run_preview, choose_session_network,
-    ensure_network_exists, mark_official_rust_bootstrap, remove_network, sidecar_container_name,
-    sidecar_network_name, toolchain_bootstrap_typescript_global, toolchain_cleanup_session,
-    toolchain_purge_caches, toolchain_run, toolchain_start_session,
+    build_sidecar_exec_preview, build_sidecar_run_preview, toolchain_bootstrap_typescript_global,
+    toolchain_cleanup_session, toolchain_purge_caches, toolchain_run, toolchain_start_session,
 };
 
 /// Proxy/cargo-related environment variables to pass through to sidecars.
