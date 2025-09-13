@@ -471,13 +471,13 @@ fn handle_connection<S: Read + Write>(
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("aifo-coder: proxy exec: tsc via local node_modules");
+                eprintln!("aifo-coder: proxy exec: tsc via local node_modules\r");
             }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("aifo-coder: proxy exec: tsc via npx");
+                eprintln!("aifo-coder: proxy exec: tsc via npx\r\n\r");
             }
         }
     } else {
@@ -495,7 +495,7 @@ fn handle_connection<S: Read + Write>(
 
     if verbose {
         eprintln!(
-            "aifo-coder: proxy docker: {}",
+            "aifo-coder: proxy docker: {}\r",
             shell_join(&exec_preview_args)
         );
     }
@@ -503,7 +503,7 @@ fn handle_connection<S: Read + Write>(
     if proto_v2 {
         // Streaming (v2)
         if verbose {
-            eprintln!("aifo-coder: proxy exec: proto=v2 (streaming)");
+            eprintln!("aifo-coder: proxy exec: proto=v2 (streaming)\r\n\r");
         }
         let started = std::time::Instant::now();
 
@@ -602,7 +602,7 @@ fn handle_connection<S: Read + Write>(
 
     // Buffered (v1)
     if verbose {
-        eprintln!("aifo-coder: proxy exec: proto=v1 (buffered)");
+        eprintln!("aifo-coder: proxy exec: proto=v1 (buffered)\r\n\r");
     }
     let started = std::time::Instant::now();
 
