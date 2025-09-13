@@ -917,16 +917,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .arg("-Command")
                         .arg(&inner);
                     if cli.verbose {
-                        let preview = vec![
-                            "wt".to_string(),
-                            "new-tab".to_string(),
-                            "-d".to_string(),
-                            pane1_dir.display().to_string(),
-                            psbin.display().to_string(),
-                            "-NoExit".to_string(),
-                            "-Command".to_string(),
-                            inner.clone(),
-                        ];
+                        let preview =
+                            aifo_coder::wt_build_new_tab_args(&psbin, pane1_dir.as_path(), &inner);
                         eprintln!(
                             "aifo-coder: windows-terminal: {}",
                             aifo_coder::shell_join(&preview)
@@ -1059,17 +1051,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .arg("-Command")
                         .arg(&inner);
                     if cli.verbose {
-                        let preview = vec![
-                            "wt".to_string(),
-                            "split-pane".to_string(),
-                            orient.to_string(),
-                            "-d".to_string(),
-                            pane_dir.display().to_string(),
-                            psbin.display().to_string(),
-                            "-NoExit".to_string(),
-                            "-Command".to_string(),
-                            inner.clone(),
-                        ];
+                        let preview = aifo_coder::wt_build_split_args(
+                            orient,
+                            &psbin,
+                            pane_dir.as_path(),
+                            &inner,
+                        );
                         eprintln!(
                             "aifo-coder: windows-terminal: {}",
                             aifo_coder::shell_join(&preview)
@@ -1605,16 +1592,11 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .arg("-Command")
                             .arg(&inner);
                         if cli.verbose {
-                            let preview = vec![
-                                "wt".to_string(),
-                                "new-tab".to_string(),
-                                "-d".to_string(),
-                                pane1_dir.display().to_string(),
-                                psbin.display().to_string(),
-                                "-NoExit".to_string(),
-                                "-Command".to_string(),
-                                inner.clone(),
-                            ];
+                            let preview = aifo_coder::wt_build_new_tab_args(
+                                &psbin,
+                                pane1_dir.as_path(),
+                                &inner,
+                            );
                             eprintln!(
                                 "aifo-coder: windows-terminal: {}",
                                 aifo_coder::shell_join(&preview)
@@ -1640,17 +1622,12 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .arg("-Command")
                             .arg(&inner);
                         if cli.verbose {
-                            let preview = vec![
-                                "wt".to_string(),
-                                "split-pane".to_string(),
-                                orient.to_string(),
-                                "-d".to_string(),
-                                pane_dir.display().to_string(),
-                                psbin.display().to_string(),
-                                "-NoExit".to_string(),
-                                "-Command".to_string(),
-                                inner.clone(),
-                            ];
+                            let preview = aifo_coder::wt_build_split_args(
+                                orient,
+                                &psbin,
+                                pane_dir.as_path(),
+                                &inner,
+                            );
                             eprintln!(
                                 "aifo-coder: windows-terminal: {}",
                                 aifo_coder::shell_join(&preview)
