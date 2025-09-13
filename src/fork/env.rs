@@ -29,3 +29,66 @@ pub fn pane_container_name(agent: &str, sid: &str, index: usize) -> String {
 pub fn pane_state_dir(state_base: &PathBuf, sid: &str, index: usize) -> PathBuf {
     state_base.join(sid).join(format!("pane-{}", index))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_session_and_pane() -> (ForkSession, Pane) {
+        let session = ForkSession {
+            sid: "sid-ut".to_string(),
+            session_name: "sess".to_string(),
+            base_label: "main".to_string(),
+            base_ref_or_sha: "main".to_string(),
+            base_commit_sha: "deadbeef".to_string(),
+            created_at: 0,
+            layout: "tiled".to_string(),
+            agent: "aider".to_string(),
+            session_dir: PathBuf::from("."),
+        };
+        let pane = Pane {
+            index: 2,
+            dir: PathBuf::from("."),
+            branch: "feature/x".to_string(),
+            state_dir: PathBuf::from("./state/p2"),
+            container_name: "aifo-coder-aider-sid-ut-2".to_string(),
+        };
+        (session, pane)
+    }
+
+    #[test]
+    fn test_fork_env_contains_expected_keys() {
+        let (session, pane) = make_session_and_pane();
+        let envs = fork_env_for_pane(&session, &pane);
+
+        let get = |k: &str| -> Option<String> {
+            envs.iter()
+                .find(|(kk, _)| kk == k)
+                .map(|(_, v)| v.clone())
+        };
+
+        assert_eq!(
+            get("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING").as_deref(),
+            Some("1")
+        );
+        assert_eq!(get("AIFO_CODER_SKIP_LOCK").as_deref(), Some("1"));
+        assert_eq!(
+            get("AIFO_CODER_CONTAINER_NAME"),
+            Some(pane.container_name.clone())
+        );
+        assert_eq!(
+            get("AIFO_CODER_HOSTNAME"),
+            Some(pane.container_name.clone())
+        );
+        assert_eq!(get("AIFO_CODER_FORK_SESSION"), Some(session.sid.clone()));
+        assert_eq!(
+            get("AIFO_CODER_FORK_INDEX").as_deref(),
+            Some(pane.index.to_string().as_str())
+        );
+        assert_eq!(
+            get("AIFO_CODER_FORK_STATE_DIR").as_deref(),
+            Some(pane.state_dir.display().to_string().as_str())
+        );
+    }
+}

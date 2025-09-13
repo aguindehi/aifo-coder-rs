@@ -156,6 +156,282 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate as aifo_coder;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+            .as_secs()
+    }
+
+    #[test]
+    fn test_write_initial_meta_uses_snapshot_and_preserves_key_order() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        let sid = "sid-meta";
+        let created_at = now_secs();
+
+        let m = SessionMeta {
+            created_at,
+            base_label: "main",
+            base_ref_or_sha: "main",
+            base_commit_sha: String::new(),
+            panes: 2,
+            pane_dirs: vec![root.join("p1"), root.join("p2")],
+            branches: vec!["b1".to_string(), "b2".to_string()],
+            layout: "tiled",
+            snapshot_sha: Some("abc123"),
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read meta");
+        // Keys must appear in this order
+        let keys = [
+            "\"created_at\":",
+            "\"base_label\":",
+            "\"base_ref_or_sha\":",
+            "\"base_commit_sha\":",
+            "\"panes\":",
+            "\"pane_dirs\":",
+            "\"branches\":",
+            "\"layout\":",
+            "\"snapshot_sha\":",
+        ];
+        let mut pos = 0usize;
+        for k in keys {
+            if let Some(p) = txt[pos..].find(k) {
+                pos += p + k.len();
+            } else {
+                panic!("missing key or wrong order: {} in {}", k, txt);
+            }
+        }
+        // base_commit_sha should be the snapshot sha since provided
+        assert!(
+            txt.contains("\"base_commit_sha\": \"abc123\""),
+            "expected base_commit_sha to use snapshot sha, got: {}",
+            txt
+        );
+    }
+
+    #[test]
+    fn test_update_panes_created_updates_counts_and_preserves_fields() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        let sid = "sid-update";
+        let created_at = now_secs();
+
+        // initial meta with snapshot to avoid git calls
+        let m = SessionMeta {
+            created_at,
+            base_label: "main",
+            base_ref_or_sha: "main",
+            base_commit_sha: String::new(),
+            panes: 3,
+            pane_dirs: vec![root.join("x1"), root.join("x2"), root.join("x3")],
+            branches: vec!["b1".to_string(), "b2".to_string(), "b3".to_string()],
+            layout: "tiled",
+            snapshot_sha: Some("cafebabe"),
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        // Only one pane exists on disk
+        let p1 = root.join("x1");
+        std::fs::create_dir_all(&p1).unwrap();
+        let existing = vec![(p1.clone(), "b1".to_string())];
+
+        update_panes_created(&root, sid, existing.len(), &existing, Some("cafebabe"), "tiled")
+            .expect("update");
+
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read updated meta");
+
+        assert!(
+            txt.contains("\"panes_created\": 1"),
+            "expected panes_created=1, got: {}",
+            txt
+        );
+        assert!(
+            txt.contains("\"snapshot_sha\": \"cafebabe\""),
+            "expected snapshot_sha preserved, got: {}",
+            txt
+        );
+        // base fields must remain present
+        for k in [
+            "\"created_at\":",
+            "\"base_label\":",
+            "\"base_ref_or_sha\":",
+            "\"base_commit_sha\":",
+            "\"panes\":",
+            "\"pane_dirs\":",
+            "\"branches\":",
+            "\"layout\":",
+        ] {
+            assert!(txt.contains(k), "missing key after update: {} in {}", k, txt);
+        }
+    }
+
+    #[test]
+    fn test_write_initial_meta_uses_rev_parse_when_no_snapshot() {
+        // Skip if git is not available on this host
+        let git_ok = std::process::Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !git_ok {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        // Initialize a git repo with a single commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&root)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&root)
+            .status();
+        std::fs::write(root.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+
+        // Resolve HEAD sha for comparison
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        let head_sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert!(!head_sha.is_empty(), "HEAD sha must be non-empty");
+
+        // Write initial meta without snapshot; base_ref_or_sha points to HEAD
+        let sid = "sid-rev-parse";
+        let m = SessionMeta {
+            created_at: 0,
+            base_label: "main",
+            base_ref_or_sha: "HEAD",
+            base_commit_sha: String::new(),
+            panes: 1,
+            pane_dirs: vec![root.join("p1")],
+            branches: vec!["b1".to_string()],
+            layout: "tiled",
+            snapshot_sha: None,
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        // Verify base_commit_sha equals HEAD sha
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read meta");
+        assert!(
+            txt.contains(&format!("\"base_commit_sha\": \"{}\"", head_sha)),
+            "expected base_commit_sha to match HEAD sha, got: {}",
+            txt
+        );
+    }
+
+    #[test]
+    fn test_write_initial_meta_falls_back_to_head_when_rev_parse_fails() {
+        // Skip if git is not available on this host
+        let git_ok = std::process::Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !git_ok {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        // Initialize a git repo with a single commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&root)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&root)
+            .status();
+        std::fs::write(root.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+
+        // Obtain HEAD via fork_base_info (the fallback)
+        let (_label, _base, head_sha) =
+            aifo_coder::fork_base_info(&root).expect("fork_base_info head");
+
+        // Write initial meta with a non-existent ref to trigger fallback
+        let sid = "sid-fallback-head";
+        let m = SessionMeta {
+            created_at: 0,
+            base_label: "main",
+            base_ref_or_sha: "does-not-exist",
+            base_commit_sha: String::new(),
+            panes: 1,
+            pane_dirs: vec![root.join("p1")],
+            branches: vec!["b1".to_string()],
+            layout: "tiled",
+            snapshot_sha: None,
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        // Verify base_commit_sha equals fallback HEAD sha
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read meta");
+        assert!(
+            txt.contains(&format!("\"base_commit_sha\": \"{}\"", head_sha)),
+            "expected base_commit_sha to fall back to HEAD sha, got: {}",
+            txt
+        );
+    }
+}
+
 fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
     let needle = format!("\"{}\":", key);
     let pos = text.find(&needle)?;

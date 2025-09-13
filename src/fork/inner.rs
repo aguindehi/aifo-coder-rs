@@ -32,6 +32,43 @@ pub fn build_inner_powershell(
     }
 }
 
+#[cfg(windows)]
+#[test]
+fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
+    use std::path::PathBuf;
+    let session = ForkSession {
+        sid: "sid123".to_string(),
+        session_name: "sess".to_string(),
+        base_label: "main".to_string(),
+        base_ref_or_sha: "main".to_string(),
+        base_commit_sha: "deadbeef".to_string(),
+        created_at: 0,
+        layout: "tiled".to_string(),
+        agent: "aider".to_string(),
+        session_dir: PathBuf::from("."),
+    };
+    let pane = Pane {
+        index: 1,
+        dir: PathBuf::from("."),
+        branch: "branch".to_string(),
+        state_dir: PathBuf::from("./state"),
+        container_name: "aifo-coder-aider-sid123-1".to_string(),
+    };
+    let child = vec!["aider".to_string(), "--help".to_string()];
+    // exec_shell_tail=true -> keep "; exec bash"
+    let s = build_inner_gitbash(&session, &pane, &child, true);
+    assert!(
+        s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
+        "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",
+        s
+    );
+    assert!(
+        s.ends_with("; exec bash"),
+        "Git Bash inner should keep '; exec bash' when exec_shell_tail=true, got: {}",
+        s
+    );
+}
+
 /// Build a Git Bash inner command string using the library helper,
 /// then inject export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; before the agent command.
 /// When exec_shell_tail=false, trim the trailing "; exec bash" from the inner string.
