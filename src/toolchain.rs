@@ -698,8 +698,8 @@ fn handle_connection<S: Read + Write>(
             Err(e) => {
                 let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
                 b.push(b'\n');
-                log_request_result(verbose, &tool, kind, 1, &started);
-                respond_plain(stream, "500 Internal Server Error", 1, &b);
+                log_request_result(verbose, &tool, kind, 86, &started);
+                respond_plain(stream, "500 Internal Server Error", 86, &b);
                 let _ = stream.flush();
                 return;
             }
@@ -796,8 +796,8 @@ fn handle_connection<S: Read + Write>(
         Err(e) => {
             let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
             b.push(b'\n');
-            log_request_result(verbose, &tool, kind, 1, &started);
-            respond_plain(stream, "500 Internal Server Error", 1, &b);
+            log_request_result(verbose, &tool, kind, 86, &started);
+            respond_plain(stream, "500 Internal Server Error", 86, &b);
             let _ = stream.flush();
             return;
         }
