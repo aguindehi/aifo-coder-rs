@@ -1672,7 +1672,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     false,
                     true,
                 );
-                ExitCode::from(0)
+                ExitCode::from(0);
             }
         }
 
