@@ -154,6 +154,22 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
     }
 }
 
+fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
+    let needle = format!("\"{}\":", key);
+    let pos = text.find(&needle)?;
+    let rest = &text[pos + needle.len()..];
+    let rest = rest.trim_start();
+    let mut num = String::new();
+    for ch in rest.chars() {
+        if ch.is_ascii_digit() {
+            num.push(ch);
+        } else {
+            break;
+        }
+    }
+    num.parse::<u64>().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,18 +457,3 @@ mod tests {
     }
 }
 
-fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
-    let needle = format!("\"{}\":", key);
-    let pos = text.find(&needle)?;
-    let rest = &text[pos + needle.len()..];
-    let rest = rest.trim_start();
-    let mut num = String::new();
-    for ch in rest.chars() {
-        if ch.is_ascii_digit() {
-            num.push(ch);
-        } else {
-            break;
-        }
-    }
-    num.parse::<u64>().ok()
-}
