@@ -4,6 +4,7 @@ use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Cli, ToolchainKind};
 use crate::warnings::warn_if_tmp_workspace;
+use crate::doctor::run_doctor;
 
 pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let _ = cli; // silence unused for future extensions
@@ -141,4 +142,11 @@ pub fn run_toolchain(
         }
     };
     std::process::ExitCode::from((code & 0xff) as u8)
+}
+
+pub fn run_doctor_command(cli: &Cli) -> std::process::ExitCode {
+    print_startup_banner();
+    let _ = warn_if_tmp_workspace(false);
+    run_doctor(cli.verbose);
+    std::process::ExitCode::from(0)
 }

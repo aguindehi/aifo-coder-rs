@@ -2538,10 +2538,7 @@ fn main() -> ExitCode {
 
     // Doctor subcommand runs diagnostics without acquiring a lock
     if let Agent::Doctor = &cli.command {
-        print_startup_banner();
-        let _ = warn_if_tmp_workspace(false);
-        run_doctor(cli.verbose);
-        return ExitCode::from(0);
+        return crate::commands::run_doctor_command(&cli);
     } else if let Agent::Images = &cli.command {
         return crate::commands::run_images(&cli);
     } else if let Agent::CacheClear = &cli.command {
