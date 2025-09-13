@@ -23,6 +23,10 @@ mod fork {
     pub mod orchestrators;
     pub mod post_merge;
     pub mod types;
+    pub mod cleanup;
+    pub mod session;
+    pub mod summary;
+    pub mod preflight;
 }
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
@@ -218,51 +222,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
     // Summary header
     let use_color_out = atty::is(atty::Stream::Stdout);
-    if use_color_out {
-        println!(
-            "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m on base \x1b[34;1m{}\x1b[0m (\x1b[34m{}\x1b[0m)",
-            sid, base_label, base_ref_or_sha
-        );
-    } else {
-        println!(
-            "aifo-coder: fork session {} on base {} ({})",
-            sid, base_label, base_ref_or_sha
-        );
-    }
-    println!();
-    if use_color_out {
-        println!(
-            "created \x1b[36;1m{}\x1b[0m clones under \x1b[34;1m{}\x1b[0m",
-            panes,
-            session_dir.display()
-        );
-    } else {
-        println!("created {} clones under {}", panes, session_dir.display());
-    }
-    if let Some(ref snap) = snapshot_sha {
-        if use_color_out {
-            println!(
-                "\x1b[32mincluded dirty working tree via snapshot {}\x1b[0m",
-                snap
-            );
-        } else {
-            println!("included dirty working tree via snapshot {}", snap);
-        }
-    } else if cli.fork_include_dirty {
-        if use_color_out {
-            println!("\x1b[33mwarning:\x1b[0m requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
-        } else {
-            println!("warning: requested --fork-include-dirty, but snapshot failed; dirty changes not included.");
-        }
-    }
-    if !dissoc {
-        if use_color_out {
-            println!("\x1b[90mnote: clones reference the base repo’s object store; avoid pruning base objects until done.\x1b[0m");
-        } else {
-            println!("note: clones reference the base repo’s object store; avoid pruning base objects until done.");
-        }
-    }
-    println!();
+    crate::fork::summary::print_header(
+        &sid,
+        &base_label,
+        &base_ref_or_sha,
+        &session_dir,
+        panes,
+        snapshot_sha.as_deref(),
+        cli.fork_include_dirty,
+        !dissoc,
+        use_color_out,
+    );
 
     // Per-pane run
     let child_args = fork_build_child_args(cli);
@@ -327,31 +297,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     let _ = crate::fork::meta::write_initial_meta(&repo_root, &sid, &meta_obj);
 
     // Print per-pane info lines
-    for (idx, (pane_dir, branch)) in clones.iter().enumerate() {
-        let i = idx + 1;
-        let cname = crate::fork::env::pane_container_name(agent, &sid, i);
-        let state_dir = crate::fork::env::pane_state_dir(&state_base, &sid, i);
-        let _ = fs::create_dir_all(state_dir.join(".aider"));
-        let _ = fs::create_dir_all(state_dir.join(".codex"));
-        let _ = fs::create_dir_all(state_dir.join(".crush"));
-        if use_color_out {
-            println!(
-                "[\x1b[36;1m{}\x1b[0m] folder=\x1b[34m{}\x1b[0m",
-                i,
-                pane_dir.display()
-            );
-            println!("    branch=\x1b[32m{}\x1b[0m", branch);
-            println!("    state=\x1b[90m{}\x1b[0m", state_dir.display());
-            println!("    container=\x1b[35m{}\x1b[0m", cname);
-            println!();
-        } else {
-            println!("[{}] folder={}", i, pane_dir.display());
-            println!("    branch={}", branch);
-            println!("    state={}", state_dir.display());
-            println!("    container={}", cname);
-            println!();
-        }
-    }
+    crate::fork::summary::print_per_pane_blocks(agent, &sid, &state_base, &clones, use_color_out);
 
     // Orchestrate panes (Windows uses Windows Terminal or PowerShell; Unix-like uses tmux)
     if cfg!(target_os = "windows") {
@@ -1805,32 +1751,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .filter(|(p, _)| p.exists())
                 .map(|(p, b)| (p.clone(), b.clone()))
                 .collect();
-            let panes_created = existing.len();
-            let pane_dirs_vec: Vec<String> = existing
-                .iter()
-                .map(|(p, _)| p.display().to_string())
-                .collect();
-            let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-            let mut meta2 = format!(
-                "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                created_at,
-                aifo_coder::json_escape(&base_label),
-                aifo_coder::json_escape(&base_ref_or_sha),
-                aifo_coder::json_escape(&base_commit_sha),
-                panes,
-                panes_created,
-                pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                aifo_coder::json_escape(&layout)
+            let _ = crate::fork::meta::update_panes_created(
+                &repo_root,
+                &sid,
+                existing.len(),
+                &existing,
+                snapshot_sha.as_deref(),
+                &layout,
             );
-            if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(
-                    ", \"snapshot_sha\": {}",
-                    aifo_coder::json_escape(snap)
-                ));
-            }
-            meta2.push_str(" }");
-            let _ = fs::write(session_dir.join(".meta.json"), meta2);
             return ExitCode::from(1);
         }
 
@@ -2125,32 +2053,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     .filter(|(p, _)| p.exists())
                     .map(|(p, b)| (p.clone(), b.clone()))
                     .collect();
-                let panes_created = existing.len();
-                let pane_dirs_vec: Vec<String> = existing
-                    .iter()
-                    .map(|(p, _)| p.display().to_string())
-                    .collect();
-                let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-                let mut meta2 = format!(
-                    "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                    created_at,
-                    aifo_coder::json_escape(&base_label),
-                    aifo_coder::json_escape(&base_ref_or_sha),
-                    aifo_coder::json_escape(&base_commit_sha),
-                    panes,
-                    panes_created,
-                    pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                    aifo_coder::json_escape(&layout)
+                let _ = crate::fork::meta::update_panes_created(
+                    &repo_root,
+                    &sid,
+                    existing.len(),
+                    &existing,
+                    snapshot_sha.as_deref(),
+                    &layout,
                 );
-                if let Some(ref snap) = snapshot_sha {
-                    meta2.push_str(&format!(
-                        ", \"snapshot_sha\": {}",
-                        aifo_coder::json_escape(snap)
-                    ));
-                }
-                meta2.push_str(" }");
-                let _ = fs::write(session_dir.join(".meta.json"), meta2);
                 return ExitCode::from(1);
             }
         }
