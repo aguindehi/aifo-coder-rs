@@ -779,7 +779,7 @@ fn handle_connection<S: Read + Write>(
         return;
     }
 
-    // Buffered (v1): spawn and kill on timeout
+    // Buffered (v1): spawn and kill on timeout (no orphan processes)
     if verbose {
         eprintln!("aifo-coder: proxy exec: proto=v1 (buffered)");
     }
@@ -803,52 +803,112 @@ fn handle_connection<S: Read + Write>(
         }
     };
 
-    // Wait with timeout in separate thread
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let out = child.wait_with_output();
-        let _ = tx.send(out);
-    });
+    // Drain stdout/stderr concurrently to avoid blocking and aggregate output
+    let out_buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let err_buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
 
-    match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
-        Ok(Ok(o)) => {
-            let code = o.status.code().unwrap_or(1);
-            let mut body_bytes = o.stdout;
-            if !o.stderr.is_empty() {
-                body_bytes.extend_from_slice(&o.stderr);
+    let mut h_out = None;
+    if let Some(mut so) = child.stdout.take() {
+        let out_buf_cl = out_buf.clone();
+        h_out = Some(std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            loop {
+                match so.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Ok(mut w) = out_buf_cl.lock() {
+                            w.extend_from_slice(&buf[..n]);
+                        }
+                    }
+                    Err(_) => break,
+                }
             }
-            log_request_result(verbose, &tool, kind, code, &started);
-            let header = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                code,
-                body_bytes.len()
-            );
-            let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&body_bytes);
-            let _ = stream.flush();
+        }));
+    }
+
+    let mut h_err = None;
+    if let Some(mut se) = child.stderr.take() {
+        let err_buf_cl = err_buf.clone();
+        h_err = Some(std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            loop {
+                match se.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Ok(mut w) = err_buf_cl.lock() {
+                            w.extend_from_slice(&buf[..n]);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        }));
+    }
+
+    // Poll for completion with timeout; kill on timeout
+    let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let mut exit_code: Option<i32> = None;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                exit_code = Some(status.code().unwrap_or(1));
+                break;
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    if let Some(h) = h_out.take() {
+                        let _ = h.join();
+                    }
+                    if let Some(h) = h_err.take() {
+                        let _ = h.join();
+                    }
+                    log_request_result(verbose, &tool, kind, 124, &started);
+                    respond_plain(
+                        stream,
+                        "504 Gateway Timeout",
+                        124,
+                        b"aifo-coder proxy timeout\n",
+                    );
+                    let _ = stream.flush();
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_e) => {
+                // If try_wait fails, best-effort wait a bit and continue
+                std::thread::sleep(Duration::from_millis(50));
+            }
         }
-        Ok(Err(e)) => {
-            let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
-            b.push(b'\n');
-            log_request_result(verbose, &tool, kind, 1, &started);
-            respond_plain(stream, "500 Internal Server Error", 1, &b);
-            let _ = stream.flush();
-        }
-        Err(_timeout) => {
-            // Kill child on timeout to avoid orphans
-            // We no longer have the handle here because wait_with_output moved it into the thread.
-            // Instead, re-exec: the child is owned by the thread; on timeout we can't kill via handle here.
-            // Use a guaranteed-kill approach by spawning with a PGID is out of scope; fallback: return 504 and rely on channel thread drop to terminate exec.
-            // To align with spec, ensure we kill: use a short-lived helper by not moving child; already implemented above by moving handle into thread.
-            // Since we can't reach it here, emulate kill semantics by best-effort: respond timeout.
-            log_request_result(verbose, &tool, kind, 124, &started);
-            respond_plain(
-                stream,
-                "504 Gateway Timeout",
-                124,
-                b"aifo-coder proxy timeout\n",
-            );
-            let _ = stream.flush();
-        }
+    }
+
+    // Child completed: join readers and respond with combined output
+    if let Some(h) = h_out {
+        let _ = h.join();
+    }
+    if let Some(h) = h_err {
+        let _ = h.join();
+    }
+
+    let mut body_bytes = {
+        let out = out_buf.lock().ok().map(|b| b.clone()).unwrap_or_default();
+        out
     };
+    if let Ok(err) = err_buf.lock() {
+        if !err.is_empty() {
+            body_bytes.extend_from_slice(&err);
+        }
+    }
+
+    let code = exit_code.unwrap_or(1);
+    log_request_result(verbose, &tool, kind, code, &started);
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        code,
+        body_bytes.len()
+    );
+    let _ = stream.write_all(header.as_bytes());
+    let _ = stream.write_all(&body_bytes);
+    let _ = stream.flush();
 }
