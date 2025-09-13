@@ -41,17 +41,6 @@ pub use proxy::toolexec_start_proxy;
 mod shim;
 pub use shim::toolchain_write_shims;
 
-/// Proxy/cargo-related environment variables to pass through to sidecars.
-const PROXY_ENV_NAMES: &[&str] = &[
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "NO_PROXY",
-    "http_proxy",
-    "https_proxy",
-    "no_proxy",
-    "CARGO_NET_GIT_FETCH_WITH_CLI",
-    "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
-];
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     if verbose {

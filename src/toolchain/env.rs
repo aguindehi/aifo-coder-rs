@@ -1,5 +1,17 @@
 use std::env;
 
+/// Environment variables to pass through into sidecars (proxy/cargo/networking).
+pub(crate) const PROXY_ENV_NAMES: &[&str] = &[
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "CARGO_NET_GIT_FETCH_WITH_CLI",
+    "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+];
+
 /// Push an environment variable (-e KEY=VAL) into docker args.
 pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
     args.push("-e".to_string());
