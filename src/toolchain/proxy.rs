@@ -612,7 +612,7 @@ fn handle_connection<S: Read + Write>(
 
     // Timeout and exit aggregation
     let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
-    let mut final_code: i32 = 1;
+    let final_code: i32;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {

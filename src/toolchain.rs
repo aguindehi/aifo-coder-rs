@@ -215,9 +215,3 @@ fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String])
     spawn_args
 }
 
-fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
-    let tl = tool.to_ascii_lowercase();
-    ["rust", "node", "python", "c-cpp", "go"]
-        .iter()
-        .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
-}
