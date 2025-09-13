@@ -291,4 +291,84 @@ mod tests {
             assert!(txt.contains(k), "missing key after update: {} in {}", k, txt);
         }
     }
+
+    #[test]
+    fn test_write_initial_meta_uses_rev_parse_when_no_snapshot() {
+        // Skip if git is not available on this host
+        let git_ok = std::process::Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !git_ok {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        // Initialize a git repo with a single commit
+        assert!(std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&root)
+            .status();
+        let _ = std::process::Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&root)
+            .status();
+        std::fs::write(root.join("file.txt"), "x\n").unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+
+        // Resolve HEAD sha for comparison
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        let head_sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert!(!head_sha.is_empty(), "HEAD sha must be non-empty");
+
+        // Write initial meta without snapshot; base_ref_or_sha points to HEAD
+        let sid = "sid-rev-parse";
+        let m = SessionMeta {
+            created_at: 0,
+            base_label: "main",
+            base_ref_or_sha: "HEAD",
+            base_commit_sha: String::new(),
+            panes: 1,
+            pane_dirs: vec![root.join("p1")],
+            branches: vec!["b1".to_string()],
+            layout: "tiled",
+            snapshot_sha: None,
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        // Verify base_commit_sha equals HEAD sha
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read meta");
+        assert!(
+            txt.contains(&format!("\"base_commit_sha\": \"{}\"", head_sha)),
+            "expected base_commit_sha to match HEAD sha, got: {}",
+            txt
+        );
+    }
 }
