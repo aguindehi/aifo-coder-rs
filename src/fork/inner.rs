@@ -26,7 +26,11 @@ pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[
 }
 
 #[cfg(not(windows))]
-pub fn build_inner_powershell(_session: &ForkSession, _pane: &Pane, _child_args: &[String]) -> String {
+pub fn build_inner_powershell(
+    _session: &ForkSession,
+    _pane: &Pane,
+    _child_args: &[String],
+) -> String {
     String::new()
 }
 

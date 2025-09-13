@@ -870,8 +870,11 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     if cli.verbose {
                         #[cfg(windows)]
                         {
-                            let preview =
-                                aifo_coder::wt_build_new_tab_args(&psbin, pane1_dir.as_path(), &inner);
+                            let preview = aifo_coder::wt_build_new_tab_args(
+                                &psbin,
+                                pane1_dir.as_path(),
+                                &inner,
+                            );
                             eprintln!(
                                 "aifo-coder: windows-terminal: {}",
                                 aifo_coder::shell_join(&preview)
