@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 /// Remove or keep created pane directories and update .meta.json with panes_created.
 /// When print_recovery_example is true, also print the fixed "Example recovery:" guidance block.
+#[allow(clippy::too_many_arguments)]
 pub fn cleanup_and_update_meta(
     repo_root: &Path,
     sid: &str,

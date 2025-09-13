@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 /// Print the fork session header, created clones line, optional snapshot or warning,
 /// optional dissociate note, and a trailing blank line. Text and colorization matches main.rs exactly.
+#[allow(clippy::too_many_arguments)]
 pub fn print_header(
     sid: &str,
     base_label: &str,

@@ -715,9 +715,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     );
                 }
             } else {
-                if clones.is_empty() {
-                    eprintln!("aifo-coder: no panes to create.");
-                    return ExitCode::from(1);
+                if let Err(code) = crate::fork::preflight::guard_no_panes(clones.len()) {
+                    return code;
                 }
                 let psbin = which("pwsh")
                     .or_else(|_| which("powershell"))
@@ -1287,9 +1286,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 // Fallback: launch Windows Terminal even though we cannot wait; print manual-merge advice
                 let wt2 = which("wt").or_else(|_| which("wt.exe"));
                 if let Ok(wtbin2) = wt2 {
-                    if clones.is_empty() {
-                        eprintln!("aifo-coder: no panes to create.");
-                        return ExitCode::from(1);
+                    if let Err(code) = crate::fork::preflight::guard_no_panes(clones.len()) {
+                        return code;
                     }
                     let psbin = which("pwsh")
                         .or_else(|_| which("powershell"))
@@ -1703,9 +1701,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     } else {
         // Build and run tmux session
         let tmux = which("tmux").expect("tmux not found");
-        if clones.is_empty() {
-            eprintln!("aifo-coder: no panes to create.");
-            return ExitCode::from(1);
+        if let Err(code) = crate::fork::preflight::guard_no_panes(clones.len()) {
+            return code;
         }
 
         // Prepare launcher and child command for tmux launch script builder

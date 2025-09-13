@@ -1,7 +1,8 @@
 use crate::fork::types::{ForkSession, Pane};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Build a ForkSession from the common fields used throughout fork orchestration.
+#[allow(clippy::too_many_arguments)]
 pub fn make_session(
     sid: &str,
     session_name: &str,
