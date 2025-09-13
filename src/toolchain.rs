@@ -150,4 +150,3 @@ pub fn notifications_handle_request(
 pub fn authorization_value_matches(v: &str, token: &str) -> bool {
     auth::authorization_value_matches(v, token)
 }
-
