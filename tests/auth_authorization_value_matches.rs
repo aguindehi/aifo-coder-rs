@@ -15,8 +15,8 @@ fn test_whitespace_tolerance_common_patterns() {
     assert!(authorization_value_matches("  Bearer t0k3n  ", tok));
     // Canonical single space
     assert!(authorization_value_matches("Bearer t0k3n", tok));
-    // Multiple spaces not guaranteed to be supported; assert false conservatively
-    assert!(!authorization_value_matches("Bearer    t0k3n", tok));
+    // Multiple spaces should be tolerated by the parser
+    assert!(authorization_value_matches("Bearer    t0k3n", tok));
 }
 
 #[test]

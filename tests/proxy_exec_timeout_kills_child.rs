@@ -12,8 +12,31 @@ fn test_streaming_timeout_kills_child_and_trailers_exit_124() {
     std::env::set_var("AIFO_TOOLEEXEC_TIMEOUT_SECS", "1");
 
     // Start python sidecar (for a sleep command) and the proxy
+    let rt = match aifo_coder::container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: docker not found in PATH");
+            return;
+        }
+    };
+    let python_image = std::env::var("AIFO_CODER_TEST_PYTHON_IMAGE")
+        .unwrap_or_else(|_| "python:3.12-slim".to_string());
+    let img_ok = std::process::Command::new(&rt)
+        .args(["image", "inspect", &python_image])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !img_ok {
+        eprintln!(
+            "skipping: python image '{}' not present locally",
+            python_image
+        );
+        return;
+    }
     let kinds = vec!["python".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let overrides: Vec<(String, String)> = vec![("python".to_string(), python_image)];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("failed to start sidecar session");
     let (url, token, flag, handle) =
