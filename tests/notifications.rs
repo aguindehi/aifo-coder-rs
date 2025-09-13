@@ -66,9 +66,9 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     {
         use std::net::TcpStream;
         let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-        let body = "tool=notifications-cmd&cwd=.&arg=--title&arg=AIFO";
+        let body = "arg=--title&arg=AIFO";
         let req = format!(
-            "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write");
@@ -92,9 +92,9 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     {
         use std::net::TcpStream;
         let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect2");
-        let body = "tool=notifications-cmd&cwd=.&arg=--oops";
+        let body = "arg=--oops";
         let req = format!(
-            "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write2");
