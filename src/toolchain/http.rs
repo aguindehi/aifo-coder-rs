@@ -95,10 +95,18 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             "form body too large",
         ));
     }
-    if body.len() < content_len {
-        let remaining = content_len - body.len();
-        let mut rem_buf = vec![0u8; remaining];
-        let got = reader.read(&mut rem_buf).unwrap_or(0);
+    let mut remaining = content_len.saturating_sub(body.len());
+    while remaining > 0 {
+        let chunk = remaining.min(8 * 1024);
+        let mut rem_buf = vec![0u8; chunk];
+        let got = match reader.read(&mut rem_buf) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+        if got == 0 {
+            // EOF or peer closed; best-effort stop
+            break;
+        }
         // Best-effort: do not exceed BODY_CAP even if Content-Length lied
         let new_len = body.len().saturating_add(got);
         if new_len > BODY_CAP {
@@ -108,6 +116,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             ));
         }
         body.extend_from_slice(&rem_buf[..got]);
+        remaining -= got;
     }
 
     Ok(HttpRequest {
