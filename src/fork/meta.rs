@@ -32,12 +32,46 @@ pub fn write_initial_meta(
         .collect();
     let branches_vec: Vec<String> = m.branches.clone();
 
+    // Compute base_commit_sha per current main.rs rules when not provided:
+    // - Use snapshot sha when present
+    // - Else: rev-parse --verify base_ref_or_sha
+    // - Else: fallback to HEAD sha from fork_base_info()
+    let base_commit_sha = if !m.base_commit_sha.is_empty() {
+        m.base_commit_sha.clone()
+    } else if let Some(snap) = m.snapshot_sha {
+        snap.to_string()
+    } else {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo_root)
+            .arg("rev-parse")
+            .arg("--verify")
+            .arg(m.base_ref_or_sha)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok();
+        if let Some(o) = out {
+            if o.status.success() {
+                String::from_utf8_lossy(&o.stdout).trim().to_string()
+            } else {
+                aifo_coder::fork_base_info(repo_root)
+                    .map(|(_, _, head)| head)
+                    .unwrap_or_default()
+            }
+        } else {
+            aifo_coder::fork_base_info(repo_root)
+                .map(|(_, _, head)| head)
+                .unwrap_or_default()
+        }
+    };
+
     let mut s = format!(
         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
         m.created_at,
         aifo_coder::json_escape(m.base_label),
         aifo_coder::json_escape(m.base_ref_or_sha),
-        aifo_coder::json_escape(&m.base_commit_sha),
+        aifo_coder::json_escape(&base_commit_sha),
         m.panes,
         pane_dirs_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
         branches_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),

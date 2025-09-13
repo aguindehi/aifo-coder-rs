@@ -70,8 +70,10 @@ pub fn build_inner_gitbash(
 
 /// Build the tmux launch script content with the same "press 's' to open a shell" logic.
 pub fn build_tmux_launch_script(
+    session: &ForkSession,
     pane: &Pane,
     child_args_joined: &str,
+    _launcher_path: &str,
 ) -> String {
     let mut exports: Vec<String> = Vec::new();
     for (k, v) in [
@@ -79,7 +81,7 @@ pub fn build_tmux_launch_script(
         ("AIFO_CODER_SKIP_LOCK".to_string(), "1".to_string()),
         ("AIFO_CODER_CONTAINER_NAME".to_string(), pane.container_name.clone()),
         ("AIFO_CODER_HOSTNAME".to_string(), pane.container_name.clone()),
-        ("AIFO_CODER_FORK_SESSION".to_string(), pane.index.to_string()),
+        ("AIFO_CODER_FORK_SESSION".to_string(), session.sid.clone()),
         ("AIFO_CODER_FORK_INDEX".to_string(), pane.index.to_string()),
         (
             "AIFO_CODER_FORK_STATE_DIR".to_string(),
