@@ -99,10 +99,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
     while remaining > 0 {
         let chunk = remaining.min(8 * 1024);
         let mut rem_buf = vec![0u8; chunk];
-        let got = match reader.read(&mut rem_buf) {
-            Ok(n) => n,
-            Err(_) => 0,
-        };
+        let got: usize = reader.read(&mut rem_buf).unwrap_or_default();
         if got == 0 {
             // EOF or peer closed; best-effort stop
             break;
