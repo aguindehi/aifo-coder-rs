@@ -301,31 +301,19 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     };
     // Shadow base_commit_sha so existing metadata builders pick the correct SHA
     let base_commit_sha = base_commit_sha_for_meta.clone();
-    let pane_dirs_vec: Vec<String> = clones
-        .iter()
-        .map(|(p, _b)| p.display().to_string())
-        .collect();
-    let branches_vec: Vec<String> = clones.iter().map(|(_p, b)| b.clone()).collect();
-    let mut meta = format!(
-        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+    // Write initial session metadata using helper
+    let meta_obj = crate::fork::meta::SessionMeta {
         created_at,
-        aifo_coder::json_escape(&base_label),
-        aifo_coder::json_escape(&base_ref_or_sha),
-        aifo_coder::json_escape(&base_commit_sha),
+        base_label: &base_label,
+        base_ref_or_sha: &base_ref_or_sha,
+        base_commit_sha: String::new(),
         panes,
-        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-        aifo_coder::json_escape(&layout)
-    );
-    if let Some(ref snap) = snapshot_sha {
-        meta.push_str(&format!(
-            ", \"snapshot_sha\": {}",
-            aifo_coder::json_escape(snap)
-        ));
-    }
-    meta.push_str(" }");
-    let _ = fs::create_dir_all(&session_dir);
-    let _ = fs::write(session_dir.join(".meta.json"), meta);
+        pane_dirs: clones.iter().map(|(p, _)| p.clone()).collect(),
+        branches: clones.iter().map(|(_, b)| b.clone()).collect(),
+        layout: &layout,
+        snapshot_sha: snapshot_sha.as_deref(),
+    };
+    let _ = crate::fork::meta::write_initial_meta(&repo_root, &sid, &meta_obj);
 
     // Print per-pane info lines
     for (idx, (pane_dir, branch)) in clones.iter().enumerate() {
@@ -476,33 +464,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::json_escape(&base_label),
-                        aifo_coder::json_escape(&base_ref_or_sha),
-                        aifo_coder::json_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        aifo_coder::json_escape(&layout)
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
                     );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
                     return ExitCode::from(1);
                 }
 
@@ -692,33 +661,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::json_escape(&base_label),
-                        aifo_coder::json_escape(&base_ref_or_sha),
-                        aifo_coder::json_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        aifo_coder::json_escape(&layout)
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
                     );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
                     return ExitCode::from(1);
                 }
 
@@ -948,33 +898,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 .filter(|(p, _)| p.exists())
                                 .map(|(p, b)| (p.clone(), b.clone()))
                                 .collect();
-                            let panes_created = existing.len();
-                            let pane_dirs_vec: Vec<String> = existing
-                                .iter()
-                                .map(|(p, _)| p.display().to_string())
-                                .collect();
-                            let branches_vec: Vec<String> =
-                                existing.iter().map(|(_, b)| b.clone()).collect();
-                            let mut meta2 = format!(
-                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                            created_at,
-                            aifo_coder::json_escape(&base_label),
-                            aifo_coder::json_escape(&base_ref_or_sha),
-                            aifo_coder::json_escape(&base_commit_sha),
-                            panes,
-                            panes_created,
-                            pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                            aifo_coder::json_escape(&layout)
-                        );
-                            if let Some(ref snap) = snapshot_sha {
-                                meta2.push_str(&format!(
-                                    ", \"snapshot_sha\": {}",
-                                    aifo_coder::json_escape(snap)
-                                ));
-                            }
-                            meta2.push_str(" }");
-                            let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                            let _ = crate::fork::meta::update_panes_created(
+                                &repo_root,
+                                &sid,
+                                existing.len(),
+                                &existing,
+                                snapshot_sha.as_deref(),
+                                &layout,
+                            );
                             return ExitCode::from(1);
                         }
                         Err(e) => {
@@ -1002,33 +933,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 .filter(|(p, _)| p.exists())
                                 .map(|(p, b)| (p.clone(), b.clone()))
                                 .collect();
-                            let panes_created = existing.len();
-                            let pane_dirs_vec: Vec<String> = existing
-                                .iter()
-                                .map(|(p, _)| p.display().to_string())
-                                .collect();
-                            let branches_vec: Vec<String> =
-                                existing.iter().map(|(_, b)| b.clone()).collect();
-                            let mut meta2 = format!(
-                            "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                            created_at,
-                            aifo_coder::json_escape(&base_label),
-                            aifo_coder::json_escape(&base_ref_or_sha),
-                            aifo_coder::json_escape(&base_commit_sha),
-                            panes,
-                            panes_created,
-                            pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                            aifo_coder::json_escape(&layout)
-                        );
-                            if let Some(ref snap) = snapshot_sha {
-                                meta2.push_str(&format!(
-                                    ", \"snapshot_sha\": {}",
-                                    aifo_coder::json_escape(snap)
-                                ));
-                            }
-                            meta2.push_str(" }");
-                            let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                            let _ = crate::fork::meta::update_panes_created(
+                                &repo_root,
+                                &sid,
+                                existing.len(),
+                                &existing,
+                                snapshot_sha.as_deref(),
+                                &layout,
+                            );
                             return ExitCode::from(1);
                         }
                     }
@@ -1114,33 +1026,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                    "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                    created_at,
-                    aifo_coder::json_escape(&base_label),
-                    aifo_coder::json_escape(&base_ref_or_sha),
-                    aifo_coder::json_escape(&base_commit_sha),
-                    panes,
-                    panes_created,
-                    pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                    aifo_coder::json_escape(&layout)
-                );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
+                    );
                     return ExitCode::from(1);
                 }
 
@@ -1216,33 +1109,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::json_escape(&base_label),
-                        aifo_coder::json_escape(&base_ref_or_sha),
-                        aifo_coder::json_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        aifo_coder::json_escape(&layout)
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
                     );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
                     return ExitCode::from(1);
                 }
 
@@ -1422,33 +1296,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::json_escape(&base_label),
-                        aifo_coder::json_escape(&base_ref_or_sha),
-                        aifo_coder::json_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        aifo_coder::json_escape(&layout)
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
                     );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
                     return ExitCode::from(1);
                 }
 
@@ -2076,33 +1931,14 @@ fi
                         .filter(|(p, _)| p.exists())
                         .map(|(p, b)| (p.clone(), b.clone()))
                         .collect();
-                    let panes_created = existing.len();
-                    let pane_dirs_vec: Vec<String> = existing
-                        .iter()
-                        .map(|(p, _)| p.display().to_string())
-                        .collect();
-                    let branches_vec: Vec<String> =
-                        existing.iter().map(|(_, b)| b.clone()).collect();
-                    let mut meta2 = format!(
-                        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                        created_at,
-                        aifo_coder::json_escape(&base_label),
-                        aifo_coder::json_escape(&base_ref_or_sha),
-                        aifo_coder::json_escape(&base_commit_sha),
-                        panes,
-                        panes_created,
-                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                        aifo_coder::json_escape(&layout)
+                    let _ = crate::fork::meta::update_panes_created(
+                        &repo_root,
+                        &sid,
+                        existing.len(),
+                        &existing,
+                        snapshot_sha.as_deref(),
+                        &layout,
                     );
-                    if let Some(ref snap) = snapshot_sha {
-                        meta2.push_str(&format!(
-                            ", \"snapshot_sha\": {}",
-                            aifo_coder::json_escape(snap)
-                        ));
-                    }
-                    meta2.push_str(" }");
-                    let _ = fs::write(session_dir.join(".meta.json"), meta2);
                     return ExitCode::from(1);
                 }
             };
@@ -2250,32 +2086,14 @@ fi
                 .filter(|(p, _)| p.exists())
                 .map(|(p, b)| (p.clone(), b.clone()))
                 .collect();
-            let panes_created = existing.len();
-            let pane_dirs_vec: Vec<String> = existing
-                .iter()
-                .map(|(p, _)| p.display().to_string())
-                .collect();
-            let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
-            let mut meta2 = format!(
-                "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
-                created_at,
-                aifo_coder::json_escape(&base_label),
-                aifo_coder::json_escape(&base_ref_or_sha),
-                aifo_coder::json_escape(&base_commit_sha),
-                panes,
-                panes_created,
-                pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
-                aifo_coder::json_escape(&layout)
+            let _ = crate::fork::meta::update_panes_created(
+                &repo_root,
+                &sid,
+                existing.len(),
+                &existing,
+                snapshot_sha.as_deref(),
+                &layout,
             );
-            if let Some(ref snap) = snapshot_sha {
-                meta2.push_str(&format!(
-                    ", \"snapshot_sha\": {}",
-                    aifo_coder::json_escape(snap)
-                ));
-            }
-            meta2.push_str(" }");
-            let _ = fs::write(session_dir.join(".meta.json"), meta2);
             return ExitCode::from(1);
         }
 
