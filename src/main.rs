@@ -16,6 +16,14 @@ mod fork_args;
 mod guidance;
 mod toolchain_session;
 mod warnings;
+mod fork {
+    pub mod types;
+    pub mod env;
+    pub mod inner;
+    pub mod meta;
+    pub mod orchestrators;
+    pub mod post_merge;
+}
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
