@@ -41,7 +41,6 @@ use super::{
     ERR_UNSUPPORTED_PROTO,
 };
 
-
 struct ProxyCtx {
     runtime: PathBuf,
     token: String,
@@ -495,7 +494,10 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+        eprintln!(
+            "aifo-coder: proxy docker: {}",
+            shell_join(&exec_preview_args)
+        );
     }
 
     if proto_v2 {

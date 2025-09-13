@@ -5,7 +5,6 @@ This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
-use std::env as std_env;
 use std::time::{Duration, SystemTime};
 
 pub(crate) use crate::create_session_id;
@@ -40,7 +39,6 @@ pub use proxy::toolexec_start_proxy;
 
 mod shim;
 pub use shim::toolchain_write_shims;
-
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     if verbose {

@@ -86,7 +86,10 @@ fn test_streaming_spawn_fail_plain_500() {
 
     // If preconditions didn't hold, some environments may return 409 (container not found)
     if text.contains("409 Conflict") {
-        eprintln!("preconditions unmet: container not found; response:\n{}", text);
+        eprintln!(
+            "preconditions unmet: container not found; response:\n{}",
+            text
+        );
         // Cleanup and early return
         flag.store(false, std::sync::atomic::Ordering::SeqCst);
         let _ = handle.join();

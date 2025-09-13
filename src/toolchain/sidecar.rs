@@ -23,9 +23,7 @@ use super::env::{
     PROXY_ENV_NAMES,
 };
 use super::mounts::{init_rust_named_volumes_if_needed, push_mount};
-use super::{
-    default_toolchain_image, is_official_rust_image, normalize_toolchain_kind,
-};
+use super::{default_toolchain_image, is_official_rust_image, normalize_toolchain_kind};
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
     format!("aifo-tc-{kind}-{id}")
