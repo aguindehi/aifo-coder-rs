@@ -225,4 +225,25 @@ mod args_tests {
             "expected parsing of --fork-merge-strategy octopus"
         );
     }
+
+    #[test]
+    fn test_non_agent_subcommands_default_to_aider_in_child_args() {
+        // Images subcommand should result in aider child args
+        let cli = crate::cli::Cli::parse_from(["aifo-coder", "images"]);
+        let args = fork_build_child_args(&cli);
+        assert!(
+            args.iter().any(|s| s == "aider"),
+            "expected aider in child args for non-agent subcommand, got: {:?}",
+            args
+        );
+
+        // Doctor subcommand should also default to aider in child args
+        let cli2 = crate::cli::Cli::parse_from(["aifo-coder", "doctor"]);
+        let args2 = fork_build_child_args(&cli2);
+        assert!(
+            args2.iter().any(|s| s == "aider"),
+            "expected aider in child args for doctor subcommand, got: {:?}",
+            args2
+        );
+    }
 }
