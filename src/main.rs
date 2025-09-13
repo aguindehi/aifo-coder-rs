@@ -1672,7 +1672,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     false,
                     true,
                 );
-                ExitCode::from(0)
+                let _ = ExitCode::from(0);
             }
         }
 
@@ -2455,7 +2455,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             false,
             true,
         );
-        ExitCode::from(0);
+        ExitCode::from(0)
     } else {
         // Build and run tmux session
         let tmux = which("tmux").expect("tmux not found");
