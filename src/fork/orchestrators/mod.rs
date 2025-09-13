@@ -152,6 +152,30 @@ mod tests {
     }
 
     #[test]
+    fn test_select_orchestrator_gitbash_pref_but_not_found_returns_gitbash_variant() {
+        reset_env();
+        std::env::set_var("AIFO_CODER_FORK_ORCH", "gitbash");
+        // Explicitly mark Git Bash/mintty not present
+        for (k, v) in [
+            ("AIFO_TEST_HAVE_GIT_BASH_EXE", "0"),
+            ("AIFO_TEST_HAVE_BASH_EXE", "0"),
+            ("AIFO_TEST_HAVE_MINTTY_EXE", "0"),
+        ] {
+            std::env::set_var(k, v);
+        }
+        let cli = make_cli(&["aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::GitBashMintty { .. } => {}
+            other => panic!(
+                "expected GitBashMintty variant even when not found (caller prints error), got {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
+        reset_env();
+    }
+
+    #[test]
     fn test_select_orchestrator_prefers_wt_when_no_merge_requested() {
         reset_env();
         std::env::set_var("AIFO_TEST_HAVE_WT", "1");

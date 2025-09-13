@@ -226,4 +226,34 @@ mod tests {
             s
         );
     }
+
+    #[test]
+    fn test_tmux_launch_script_contains_expected_exports_and_prompt() {
+        let (session, mut pane) = make_session_and_pane();
+        // Ensure container name and state_dir are set deterministically
+        pane.container_name = "aifo-coder-aider-sid123-1".to_string();
+        pane.state_dir = PathBuf::from("./state");
+        let script = build_tmux_launch_script(&session, &pane, "echo hi", "/launcher");
+        // Must contain env exports
+        assert!(
+            script.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1"),
+            "tmux script should export SUPPRESS var: {}",
+            script
+        );
+        assert!(
+            script.contains("export AIFO_CODER_FORK_SESSION=sid123"),
+            "tmux script should export fork session id: {}",
+            script
+        );
+        assert!(
+            script.contains("Press 's' to open a shell"),
+            "tmux script should include press 's' prompt: {}",
+            script
+        );
+        assert!(
+            script.contains("echo hi"),
+            "tmux script should include child args payload: {}",
+            script
+        );
+    }
 }
