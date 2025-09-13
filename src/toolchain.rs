@@ -151,6 +151,11 @@ pub fn notifications_handle_request(
     notifications::notifications_handle_request(argv, verbose, timeout_secs)
 }
 
+/// Expose auth::authorization_value_matches for unit tests.
+pub fn authorization_value_matches(v: &str, token: &str) -> bool {
+    auth::authorization_value_matches(v, token)
+}
+
 /// Response helpers (common).
 fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
     let header = format!(
