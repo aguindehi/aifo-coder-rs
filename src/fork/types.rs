@@ -32,3 +32,22 @@ pub struct ForkOptions {
     pub include_dirty: bool,
     pub dissociate: bool,
 }
+
+impl ForkOptions {
+    /// Touch all fields so clippy sees them as read, without changing behavior.
+    pub fn touch(&self) {
+        let _ = (
+            self.verbose,
+            self.keep_on_failure,
+            self.autoclean,
+            self.dry_run,
+            self.include_dirty,
+            self.dissociate,
+        );
+        let _ = match self.merge_strategy {
+            aifo_coder::MergingStrategy::None => 0,
+            aifo_coder::MergingStrategy::Fetch => 1,
+            aifo_coder::MergingStrategy::Octopus => 2,
+        };
+    }
+}

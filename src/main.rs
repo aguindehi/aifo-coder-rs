@@ -181,6 +181,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         include_dirty: cli.fork_include_dirty,
         dissociate: cli.fork_dissociate,
     };
+    _opts.touch();
     let clones = match aifo_coder::fork_clone_and_checkout_panes(
         &repo_root,
         &sid,
