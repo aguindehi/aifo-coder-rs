@@ -1,4 +1,3 @@
-use aifo_coder::{acquire_lock, build_docker_cmd};
 use clap::Parser;
 use std::env;
 use std::fs;
@@ -2035,7 +2034,7 @@ fn main() -> ExitCode {
     println!();
 
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
-    match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
+    match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
             if cli.verbose {
                 eprintln!(
@@ -2066,7 +2065,7 @@ fn main() -> ExitCode {
             let maybe_lock = if skip_lock {
                 None
             } else {
-                match acquire_lock() {
+                match aifo_coder::acquire_lock() {
                     Ok(f) => Some(f),
                     Err(e) => {
                         eprintln!("{e}");
