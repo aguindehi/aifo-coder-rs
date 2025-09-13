@@ -10,6 +10,7 @@ use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 use crate::shell_join;
+pub(crate) use crate::create_session_id;
 
 mod images;
 pub use images::{

@@ -18,7 +18,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -219,7 +219,6 @@ fn handle_connection<S: Read + Write>(
     stream: &mut S,
     tool_cache: &mut HashMap<(String, String), bool>,
 ) {
-    let runtime: &Path = &ctx.runtime;
     let token: &str = &ctx.token;
     let session: &str = &ctx.session;
     let timeout_secs: u64 = ctx.timeout_secs;
@@ -613,11 +612,11 @@ fn handle_connection<S: Read + Write>(
 
     // Timeout and exit aggregation
     let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
-    let mut exit_code: Option<i32> = None;
+    let mut final_code: i32 = 1;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                exit_code = Some(status.code().unwrap_or(1));
+                final_code = status.code().unwrap_or(1);
                 break;
             }
             Ok(None) => {
@@ -665,7 +664,7 @@ fn handle_connection<S: Read + Write>(
         }
     }
 
-    let code = exit_code.unwrap_or(1);
+    let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
     let header = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
