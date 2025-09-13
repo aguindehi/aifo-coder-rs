@@ -1,6 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 //! CLI warnings and interactive prompts (tmp workspace, missing toolchains).
 
+#[allow(unused_imports)]
 use std::io::{Read, Write};
 
 pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {

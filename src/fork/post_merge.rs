@@ -102,7 +102,7 @@ pub fn apply_post_merge(
                     &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
                 )
             );
-            Err(e)
+            Err(e.to_string())
         }
     }
 }

@@ -868,12 +868,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .arg("-Command")
                         .arg(&inner);
                     if cli.verbose {
-                        let preview =
-                            aifo_coder::wt_build_new_tab_args(&psbin, pane1_dir.as_path(), &inner);
-                        eprintln!(
-                            "aifo-coder: windows-terminal: {}",
-                            aifo_coder::shell_join(&preview)
-                        );
+                        #[cfg(windows)]
+                        {
+                            let preview =
+                                aifo_coder::wt_build_new_tab_args(&psbin, pane1_dir.as_path(), &inner);
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
                     }
                     match cmd.status() {
                         Ok(s) if s.success() => {}
@@ -964,16 +967,19 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         .arg("-Command")
                         .arg(&inner);
                     if cli.verbose {
-                        let preview = aifo_coder::wt_build_split_args(
-                            orient,
-                            &psbin,
-                            pane_dir.as_path(),
-                            &inner,
-                        );
-                        eprintln!(
-                            "aifo-coder: windows-terminal: {}",
-                            aifo_coder::shell_join(&preview)
-                        );
+                        #[cfg(windows)]
+                        {
+                            let preview = aifo_coder::wt_build_split_args(
+                                orient,
+                                &psbin,
+                                pane_dir.as_path(),
+                                &inner,
+                            );
+                            eprintln!(
+                                "aifo-coder: windows-terminal: {}",
+                                aifo_coder::shell_join(&preview)
+                            );
+                        }
                     }
                     match cmd.status() {
                         Ok(s) if s.success() => {}
@@ -1448,15 +1454,18 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .arg("-Command")
                             .arg(&inner);
                         if cli.verbose {
-                            let preview = aifo_coder::wt_build_new_tab_args(
-                                &psbin,
-                                pane1_dir.as_path(),
-                                &inner,
-                            );
-                            eprintln!(
-                                "aifo-coder: windows-terminal: {}",
-                                aifo_coder::shell_join(&preview)
-                            );
+                            #[cfg(windows)]
+                            {
+                                let preview = aifo_coder::wt_build_new_tab_args(
+                                    &psbin,
+                                    pane1_dir.as_path(),
+                                    &inner,
+                                );
+                                eprintln!(
+                                    "aifo-coder: windows-terminal: {}",
+                                    aifo_coder::shell_join(&preview)
+                                );
+                            }
                         }
                         let _ = cmd.status();
                     }
@@ -1478,16 +1487,19 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             .arg("-Command")
                             .arg(&inner);
                         if cli.verbose {
-                            let preview = aifo_coder::wt_build_split_args(
-                                orient,
-                                &psbin,
-                                pane_dir.as_path(),
-                                &inner,
-                            );
-                            eprintln!(
-                                "aifo-coder: windows-terminal: {}",
-                                aifo_coder::shell_join(&preview)
-                            );
+                            #[cfg(windows)]
+                            {
+                                let preview = aifo_coder::wt_build_split_args(
+                                    orient,
+                                    &psbin,
+                                    pane_dir.as_path(),
+                                    &inner,
+                                );
+                                eprintln!(
+                                    "aifo-coder: windows-terminal: {}",
+                                    aifo_coder::shell_join(&preview)
+                                );
+                            }
                         }
                         match cmd.status() {
                             Ok(s) if s.success() => {}

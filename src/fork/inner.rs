@@ -1,5 +1,6 @@
 use super::types::{ForkSession, Pane};
 
+#[cfg(windows)]
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
 pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[String]) -> String {
@@ -22,6 +23,11 @@ pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[
         // Fallback: append at start of assignments
         format!("{}; $env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';", s)
     }
+}
+
+#[cfg(not(windows))]
+pub fn build_inner_powershell(_session: &ForkSession, _pane: &Pane, _child_args: &[String]) -> String {
+    String::new()
 }
 
 #[cfg(windows)]
@@ -61,6 +67,7 @@ fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
     );
 }
 
+#[cfg(windows)]
 /// Build a Git Bash inner command string using the library helper,
 /// then inject export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; before the agent command.
 /// When exec_shell_tail=false, trim the trailing "; exec bash" from the inner string.
@@ -94,6 +101,16 @@ pub fn build_inner_gitbash(
         s.truncate(cut);
     }
     s
+}
+
+#[cfg(not(windows))]
+pub fn build_inner_gitbash(
+    _session: &ForkSession,
+    _pane: &Pane,
+    _child_args: &[String],
+    _exec_shell_tail: bool,
+) -> String {
+    String::new()
 }
 
 /// Build the tmux launch script content with the same "press 's' to open a shell" logic.

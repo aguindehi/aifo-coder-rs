@@ -56,6 +56,7 @@ fn have_any<I: IntoIterator<Item = &'static str>>(bins: I) -> bool {
 pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
     #[cfg(not(windows))]
     {
+        let _ = cli;
         Selected::Tmux {
             reason: "non-Windows host, using tmux".to_string(),
         }

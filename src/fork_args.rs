@@ -1,5 +1,5 @@
 pub(crate) fn fork_build_child_args(cli: &crate::cli::Cli) -> Vec<String> {
-    use crate::cli::{Agent, Flavor, ToolchainKind};
+    use crate::cli::{Agent, Flavor};
 
     let mut args: Vec<String> = Vec::new();
 

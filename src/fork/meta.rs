@@ -161,7 +161,6 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate as aifo_coder;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn now_secs() -> u64 {
