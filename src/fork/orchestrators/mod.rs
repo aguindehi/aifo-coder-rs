@@ -178,4 +178,52 @@ mod tests {
         }
         reset_env();
     }
+
+    #[test]
+    fn test_select_orchestrator_none_found_path() {
+        reset_env();
+        // Explicitly mark all as absent
+        for (k, v) in [
+            ("AIFO_TEST_HAVE_WT", "0"),
+            ("AIFO_TEST_HAVE_WT_EXE", "0"),
+            ("AIFO_TEST_HAVE_PWSH", "0"),
+            ("AIFO_TEST_HAVE_POWERSHELL", "0"),
+            ("AIFO_TEST_HAVE_POWERSHELL_EXE", "0"),
+            ("AIFO_TEST_HAVE_GIT_BASH_EXE", "0"),
+            ("AIFO_TEST_HAVE_BASH_EXE", "0"),
+            ("AIFO_TEST_HAVE_MINTTY_EXE", "0"),
+        ] {
+            std::env::set_var(k, v);
+        }
+        let cli = make_cli(&["aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::WindowsTerminal { .. } => {} // "none found" sentinel variant
+            other => panic!("expected WindowsTerminal 'none found' selection, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
+    }
+
+    #[test]
+    fn test_select_orchestrator_wt_merge_requested_without_pwsh_stays_wt() {
+        reset_env();
+        // WT present, merge requested, but no PowerShell available -> keep WT (non-waitable)
+        std::env::set_var("AIFO_TEST_HAVE_WT", "1");
+        std::env::set_var("AIFO_TEST_HAVE_WT_EXE", "1");
+        // Ensure PowerShell env flags are absent/false
+        for (k, v) in [
+            ("AIFO_TEST_HAVE_PWSH", "0"),
+            ("AIFO_TEST_HAVE_POWERSHELL", "0"),
+            ("AIFO_TEST_HAVE_POWERSHELL_EXE", "0"),
+        ] {
+            std::env::set_var(k, v);
+        }
+        let cli = make_cli(&["--fork-merge-strategy", "fetch", "aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::WindowsTerminal { .. } => {}
+            other => panic!("expected WindowsTerminal selection when pwsh unavailable, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
+    }
 }
