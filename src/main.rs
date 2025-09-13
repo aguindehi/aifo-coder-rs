@@ -15,6 +15,7 @@ mod cli;
 mod banner;
 mod agent_images;
 mod fork_args;
+mod toolchain_session;
 use crate::doctor::run_doctor;
 use crate::guidance::print_inspect_merge_guidance;
 use crate::warnings::{
@@ -2927,44 +2928,26 @@ fn main() -> ExitCode {
                 drop(lock);
             }
 
-            // Phase 2 cleanup (if toolchain shims/proxy were attached)
-            if let Some(flag) = tc_proxy_flag.take() {
-                flag.store(false, std::sync::atomic::Ordering::SeqCst);
-            }
-            if let Some(h) = tc_proxy_handle.take() {
-                let _ = h.join();
-            }
-            if let Some(ref sid) = tc_session_id {
-                // In fork panes, sidecars may be shared across panes; defer cleanup to user (fork clean)
-                if std::env::var("AIFO_CODER_FORK_SESSION")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .is_none()
-                {
-                    aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
-                }
+            // Toolchain session cleanup (RAII)
+            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_some();
+            if let Some(ts) = toolchain_session.take() {
+                ts.cleanup(cli.verbose, in_fork_pane);
             }
 
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
             eprintln!("{e}");
-            // Phase 2 cleanup on error
-            if let Some(flag) = tc_proxy_flag.take() {
-                flag.store(false, std::sync::atomic::Ordering::SeqCst);
-            }
-            if let Some(h) = tc_proxy_handle.take() {
-                let _ = h.join();
-            }
-            if let Some(ref sid) = tc_session_id {
-                // In fork panes, sidecars may be shared across panes; defer cleanup to user (fork clean)
-                if std::env::var("AIFO_CODER_FORK_SESSION")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .is_none()
-                {
-                    aifo_coder::toolchain_cleanup_session(sid, cli.verbose);
-                }
+            // Toolchain session cleanup on error (RAII)
+            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_some();
+            if let Some(ts) = toolchain_session.take() {
+                ts.cleanup(cli.verbose, in_fork_pane);
             }
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
