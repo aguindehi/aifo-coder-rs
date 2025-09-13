@@ -18,8 +18,7 @@ mod warnings;
 mod commands;
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
-use crate::cli::{Agent, Cli, Flavor, ForkCmd, ToolchainKind};
-use crate::doctor::run_doctor;
+use crate::cli::{Agent, Cli, Flavor, ForkCmd};
 use crate::fork_args::fork_build_child_args;
 use crate::guidance::print_inspect_merge_guidance;
 use crate::warnings::{
