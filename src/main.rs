@@ -1,3 +1,4 @@
+use clap::Parser;
 use std::env;
 use std::fs;
 use std::io;
@@ -1662,15 +1663,16 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         )
                     );
                 }
-            let _ = crate::fork::post_merge::apply_post_merge(
-                &repo_root,
-                &sid,
-                cli.fork_merging_strategy,
-                cli.fork_merging_autoclean,
-                cli.dry_run,
-                cli.verbose,
-                false,
-            );
+                let _ = crate::fork::post_merge::apply_post_merge(
+                    &repo_root,
+                    &sid,
+                    cli.fork_merging_strategy,
+                    cli.fork_merging_autoclean,
+                    cli.dry_run,
+                    cli.verbose,
+                    false,
+                );
+            }
             ExitCode::from(0)
         }
     }
