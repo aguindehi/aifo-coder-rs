@@ -1,39 +1,30 @@
 #![allow(clippy::needless_return)]
-use aifo_coder::{
-    acquire_lock, build_docker_cmd, desired_apparmor_profile,
-};
+use aifo_coder::{acquire_lock, build_docker_cmd, desired_apparmor_profile};
+use clap::Parser;
 use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use which::which;
-use clap::Parser;
-mod doctor;
-mod guidance;
-mod warnings;
-mod cli;
-mod banner;
 mod agent_images;
+mod banner;
+mod cli;
+mod doctor;
 mod fork_args;
+mod guidance;
 mod toolchain_session;
+mod warnings;
+use crate::agent_images::default_image_for;
+use crate::banner::print_startup_banner;
+use crate::cli::{Agent, Cli, Flavor, ForkCmd, ToolchainKind};
 use crate::doctor::run_doctor;
+use crate::fork_args::fork_build_child_args;
 use crate::guidance::print_inspect_merge_guidance;
 use crate::warnings::{
     maybe_warn_missing_toolchain_agent, maybe_warn_missing_toolchain_for_fork,
     warn_if_tmp_workspace,
 };
-use crate::cli::{Cli, Agent, ForkCmd, Flavor, ToolchainKind};
-use crate::banner::print_startup_banner;
-use crate::fork_args::fork_build_child_args;
-use crate::agent_images::default_image_for;
-
-
-
-
-
-
-
 
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
@@ -2339,8 +2330,6 @@ fi
     }
 }
 
-
-
 struct OutputNewlineGuard;
 
 impl Drop for OutputNewlineGuard {
@@ -2888,4 +2877,3 @@ fn main() -> ExitCode {
         }
     }
 }
-
