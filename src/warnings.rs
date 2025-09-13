@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 //! CLI warnings and interactive prompts (tmp workspace, missing toolchains).
 
-use std::io::Write;
+use std::io::{Read, Write};
 
 pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
     if std::env::var("AIFO_CODER_SUPPRESS_TMP_WARNING")
