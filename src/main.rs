@@ -2715,20 +2715,17 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
-    // Phase 2: if toolchains were requested, prepare shims, start sidecars and proxy
-    let mut tc_session_id: Option<String> = None;
-    let mut tc_proxy_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>> = None;
-    let mut tc_proxy_handle: Option<std::thread::JoinHandle<()>> = None;
+    // Phase 3: Toolchain session RAII
+    let mut toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
-        // kinds as strings (from enum flag)
+        // Reconstruct kinds and overrides (for dry-run previews)
         let mut kinds: Vec<String> = cli
             .toolchain
             .iter()
             .map(|k| k.as_str().to_string())
             .collect();
 
-        // Parse spec strings kind[@version]
         fn parse_spec(s: &str) -> (String, Option<String>) {
             let t = s.trim();
             if let Some((k, v)) = t.split_once('@') {
@@ -2737,6 +2734,7 @@ fn main() -> ExitCode {
                 (t.to_string(), None)
             }
         }
+
         let mut spec_versions: Vec<(String, String)> = Vec::new();
         for s in &cli.toolchain_spec {
             let (k, v) = parse_spec(s);
@@ -2747,7 +2745,6 @@ fn main() -> ExitCode {
                 }
             }
         }
-        // Normalize kinds and dedup
         use std::collections::BTreeSet;
         let mut set = BTreeSet::new();
         let mut kinds_norm: Vec<String> = Vec::new();
@@ -2759,7 +2756,6 @@ fn main() -> ExitCode {
         }
         let kinds = kinds_norm;
 
-        // parse overrides kind=image
         let mut overrides: Vec<(String, String)> = Vec::new();
         for s in &cli.toolchain_image {
             if let Some((k, v)) = s.split_once('=') {
@@ -2771,7 +2767,6 @@ fn main() -> ExitCode {
                 }
             }
         }
-        // Add overrides derived from versions unless already overridden
         for (k, ver) in spec_versions {
             let kind = aifo_coder::normalize_toolchain_kind(&k);
             if !overrides.iter().any(|(kk, _)| kk == &kind) {
@@ -2798,78 +2793,14 @@ fn main() -> ExitCode {
                 eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
             }
         } else {
-            // Phase 3: use embedded shims in the agent image; host override via AIFO_SHIM_DIR still supported
-            if cli.verbose {
-                eprintln!("aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)");
-            }
-            // Optional: switch to unix socket transport for proxy on Linux
-            #[cfg(target_os = "linux")]
-            if cli.toolchain_unix_socket {
-                std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
-            }
-
-            // Start sidecars
-            match aifo_coder::toolchain_start_session(
-                &kinds,
-                &overrides,
-                cli.no_toolchain_cache,
-                cli.verbose,
-            ) {
-                Ok(sid) => {
-                    // Set network env for agent container to join
-                    let net = format!("aifo-net-{}", sid);
-                    std::env::set_var("AIFO_SESSION_NETWORK", &net);
-                    #[cfg(target_os = "linux")]
-                    {
-                        // Ensure agent can reach host proxy when using TCP; not needed for unix socket transport
-                        if !cli.toolchain_unix_socket {
-                            std::env::set_var("AIFO_TOOLEEXEC_ADD_HOST", "1");
-                        }
-                    }
-                    tc_session_id = Some(sid);
+            match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
+                Ok(Some(ts)) => {
+                    toolchain_session = Some(ts);
                 }
-                Err(e) => {
-                    eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
+                Ok(None) => { /* no-op */ }
+                Err(_) => {
+                    // Errors are already printed inside start_if_requested() with exact strings
                     return ExitCode::from(1);
-                }
-            }
-
-            // Bootstrap (e.g., typescript=global) before starting proxy
-            if let Some(ref sid) = tc_session_id {
-                if !cli.toolchain_bootstrap.is_empty() {
-                    let want_ts_global = cli.toolchain_bootstrap.iter().any(|b| {
-                        let t = b.trim().to_ascii_lowercase();
-                        t == "typescript=global" || t == "ts=global"
-                    });
-                    if want_ts_global && kinds.iter().any(|k| k == "node") {
-                        if let Err(e) =
-                            aifo_coder::toolchain_bootstrap_typescript_global(sid, cli.verbose)
-                        {
-                            eprintln!("aifo-coder: typescript bootstrap failed: {}", e);
-                        }
-                    }
-                }
-            }
-
-            // Start proxy
-            if let Some(ref sid) = tc_session_id {
-                match aifo_coder::toolexec_start_proxy(sid, cli.verbose) {
-                    Ok((url, token, flag, handle)) => {
-                        std::env::set_var("AIFO_TOOLEEXEC_URL", &url);
-                        std::env::set_var("AIFO_TOOLEEXEC_TOKEN", &token);
-                        if cli.verbose {
-                            std::env::set_var("AIFO_TOOLCHAIN_VERBOSE", "1");
-                        }
-                        tc_proxy_flag = Some(flag);
-                        tc_proxy_handle = Some(handle);
-                    }
-                    Err(e) => {
-                        eprintln!("aifo-coder: failed to start toolexec proxy: {}", e);
-                        if let Some(s) = tc_session_id.as_deref() {
-                            aifo_coder::toolchain_cleanup_session(s, cli.verbose);
-                        }
-                        return ExitCode::from(1);
-                    }
                 }
             }
         }
