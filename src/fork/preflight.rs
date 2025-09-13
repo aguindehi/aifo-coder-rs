@@ -8,7 +8,9 @@ pub fn ensure_git_and_orchestrator_present_on_platform() -> Result<(), ExitCode>
         return Err(ExitCode::from(1));
     }
     if cfg!(target_os = "windows") {
-        let wt_ok = which::which("wt").or_else(|_| which::which("wt.exe")).is_ok();
+        let wt_ok = which::which("wt")
+            .or_else(|_| which::which("wt.exe"))
+            .is_ok();
         let ps_ok = which::which("pwsh")
             .or_else(|_| which::which("powershell"))
             .or_else(|_| which::which("powershell.exe"))
