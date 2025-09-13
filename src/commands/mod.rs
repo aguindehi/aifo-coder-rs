@@ -3,8 +3,8 @@ use std::io;
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Cli, ToolchainKind};
-use crate::warnings::warn_if_tmp_workspace;
 use crate::doctor::run_doctor;
+use crate::warnings::warn_if_tmp_workspace;
 
 pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let _ = cli; // silence unused for future extensions
@@ -113,14 +113,8 @@ pub fn run_toolchain(
         }
     }
     if cli.dry_run {
-        let _ = aifo_coder::toolchain_run(
-            kind.as_str(),
-            &args,
-            image.as_deref(),
-            no_cache,
-            true,
-            true,
-        );
+        let _ =
+            aifo_coder::toolchain_run(kind.as_str(), &args, image.as_deref(), no_cache, true, true);
         return std::process::ExitCode::from(0);
     }
     let code = match aifo_coder::toolchain_run(
