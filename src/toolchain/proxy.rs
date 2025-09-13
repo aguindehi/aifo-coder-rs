@@ -508,7 +508,7 @@ fn handle_connection<S: Read + Write>(
         drop(tx);
 
         // Timeout watcher
-        let (tox, tor) = std::sync::mpsc::channel::<()> > ();
+        let (tox, tor) = std::sync::mpsc::channel::<()>();
         let timeout_secs_cl = timeout_secs;
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(timeout_secs_cl));

@@ -5,23 +5,11 @@ This module owns the toolchain sidecars, proxy, shims and notification helpers.
 The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
-use std::collections::HashMap;
 use std::env as std_env;
-#[cfg(target_os = "linux")]
-use std::fs;
-use std::io;
-use std::io::{Read, Write};
-use std::net::TcpListener;
-#[cfg(target_os = "linux")]
-use std::os::unix::net::UnixListener;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::io::Write;
 use std::time::{Duration, SystemTime};
 
-#[cfg(unix)]
-use nix::unistd::{getgid, getuid};
-
-use crate::{container_runtime_path, create_session_id, find_header_end, shell_join, url_decode};
+use crate::shell_join;
 
 mod images;
 pub use images::{
