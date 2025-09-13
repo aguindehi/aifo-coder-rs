@@ -8,6 +8,7 @@ use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use which::which;
+use clap::Parser;
 mod doctor;
 mod guidance;
 mod warnings;
