@@ -36,14 +36,11 @@ use super::{auth, http, notifications};
 use super::{container_exists, select_kind_for_tool, sidecar_allowlist};
 
 use super::{
-    build_sidecar_exec_preview, build_streaming_exec_args, log_parsed_request, log_request_result,
-    random_token, ERR_BAD_REQUEST, ERR_FORBIDDEN, ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND,
-    ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
+    build_sidecar_exec_preview, log_parsed_request, log_request_result, random_token,
+    ERR_BAD_REQUEST, ERR_FORBIDDEN, ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED,
+    ERR_UNSUPPORTED_PROTO,
 };
 
-use super::{
-    respond_chunked_prelude, respond_chunked_trailer, respond_chunked_write_chunk, respond_plain,
-};
 
 struct ProxyCtx {
     runtime: PathBuf,
@@ -52,6 +49,70 @@ struct ProxyCtx {
     timeout_secs: u64,
     verbose: bool,
     uidgid: Option<(u32, u32)>,
+}
+
+// Response helpers (moved from toolchain.rs)
+fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
+    let header = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {exit_code}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = w.write_all(header.as_bytes());
+    let _ = w.write_all(body);
+    let _ = w.flush();
+}
+
+fn respond_chunked_prelude<W: Write>(w: &mut W) {
+    let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
+    let _ = w.write_all(hdr);
+    let _ = w.flush();
+}
+
+fn respond_chunked_write_chunk<W: Write>(w: &mut W, chunk: &[u8]) {
+    if !chunk.is_empty() {
+        let _ = write!(w, "{:X}\r\n", chunk.len());
+        let _ = w.write_all(chunk);
+        let _ = w.write_all(b"\r\n");
+        let _ = w.flush();
+    }
+}
+
+fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
+    let _ = w.write_all(b"0\r\n");
+    let trailer = format!("X-Exit-Code: {code}\r\n\r\n");
+    let _ = w.write_all(trailer.as_bytes());
+    let _ = w.flush();
+}
+
+/// Build streaming docker exec spawn args: add -t and wrap with sh -c "... 2>&1".
+fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String]) -> Vec<String> {
+    let mut spawn_args: Vec<String> = Vec::new();
+    let mut idx = None;
+    for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
+        if a == container_name {
+            idx = Some(i);
+            break;
+        }
+    }
+    let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
+    // Up to and including container name
+    spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+    // Allocate a TTY for streaming to improve interactive flushing.
+    // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
+    let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+    if use_tty {
+        spawn_args.insert(1, "-t".to_string());
+    }
+    // User command slice after container name
+    let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
+    let script = {
+        let s = shell_join(&user_slice);
+        format!("{} 2>&1", s)
+    };
+    spawn_args.push("sh".to_string());
+    spawn_args.push("-c".to_string());
+    spawn_args.push(script);
+    spawn_args
 }
 
 pub fn toolexec_start_proxy(
@@ -411,16 +472,12 @@ fn handle_connection<S: Read + Write>(
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
                 eprintln!("aifo-coder: proxy exec: tsc via local node_modules");
             }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                let _ = std::io::stdout().flush();
-                let _ = std::io::stderr().flush();
                 eprintln!("aifo-coder: proxy exec: tsc via npx");
             }
         }
@@ -438,10 +495,7 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        eprintln!("aifo-coder: proxy docker:");
-        eprintln!("  {}", shell_join(&exec_preview_args));
+        eprintln!("aifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
     }
 
     if proto_v2 {

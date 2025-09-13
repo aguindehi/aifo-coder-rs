@@ -6,7 +6,6 @@ The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
 use std::env as std_env;
-use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 pub(crate) use crate::create_session_id;
@@ -56,13 +55,12 @@ const PROXY_ENV_NAMES: &[&str] = &[
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
         eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy parsed: tool={} argv={:?} cwd={}",
-            tool, argv, cwd
+            "aifo-coder: proxy parsed tool={} argv={} cwd={}",
+            tool,
+            shell_join(argv),
+            cwd
         );
-        eprintln!("\r");
     }
 }
 
@@ -74,16 +72,13 @@ fn log_request_result(
     started: &std::time::Instant,
 ) {
     if verbose {
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
         eprintln!(
-            "\r\x1b[2Kaifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+            "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
             tool,
             kind,
             code,
             started.elapsed().as_millis()
         );
-        eprintln!("\r");
     }
 }
 
@@ -156,66 +151,3 @@ pub fn authorization_value_matches(v: &str, token: &str) -> bool {
     auth::authorization_value_matches(v, token)
 }
 
-/// Response helpers (common).
-fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8]) {
-    let header = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {exit_code}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    let _ = w.write_all(header.as_bytes());
-    let _ = w.write_all(body);
-    let _ = w.flush();
-}
-
-fn respond_chunked_prelude<W: Write>(w: &mut W) {
-    let hdr = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n\r\n";
-    let _ = w.write_all(hdr);
-    let _ = w.flush();
-}
-
-fn respond_chunked_write_chunk<W: Write>(w: &mut W, chunk: &[u8]) {
-    if !chunk.is_empty() {
-        let _ = write!(w, "{:X}\r\n", chunk.len());
-        let _ = w.write_all(chunk);
-        let _ = w.write_all(b"\r\n");
-        let _ = w.flush();
-    }
-}
-
-fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
-    let _ = w.write_all(b"0\r\n");
-    let trailer = format!("X-Exit-Code: {code}\r\n\r\n");
-    let _ = w.write_all(trailer.as_bytes());
-    let _ = w.flush();
-}
-
-/// Build streaming docker exec spawn args: add -t and wrap with sh -c "... 2>&1".
-fn build_streaming_exec_args(container_name: &str, exec_preview_args: &[String]) -> Vec<String> {
-    let mut spawn_args: Vec<String> = Vec::new();
-    let mut idx = None;
-    for (i, a) in exec_preview_args.iter().enumerate().skip(1) {
-        if a == container_name {
-            idx = Some(i);
-            break;
-        }
-    }
-    let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
-    // Up to and including container name
-    spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-    // Allocate a TTY for streaming to improve interactive flushing.
-    // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
-    let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
-    if use_tty {
-        spawn_args.insert(1, "-t".to_string());
-    }
-    // User command slice after container name
-    let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
-    let script = {
-        let s = shell_join(&user_slice);
-        format!("{} 2>&1", s)
-    };
-    spawn_args.push("sh".to_string());
-    spawn_args.push("-c".to_string());
-    spawn_args.push(script);
-    spawn_args
-}
