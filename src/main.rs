@@ -17,16 +17,16 @@ mod guidance;
 mod toolchain_session;
 mod warnings;
 mod fork {
+    pub mod cleanup;
     pub mod env;
     pub mod inner;
     pub mod meta;
     pub mod orchestrators;
     pub mod post_merge;
-    pub mod types;
-    pub mod cleanup;
+    pub mod preflight;
     pub mod session;
     pub mod summary;
-    pub mod preflight;
+    pub mod types;
 }
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
@@ -1505,8 +1505,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 &pane_state_dir,
                 &container_name,
             );
-            let inner =
-                crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
+            let inner = crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
 
             // Launch a new PowerShell window using Start-Process and capture its PID
             let script = {
