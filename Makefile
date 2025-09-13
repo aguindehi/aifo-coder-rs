@@ -617,18 +617,62 @@ lint:
 	     esac ;; \
 	esac; \
 	if command -v rustup >/dev/null 2>&1; then \
-	  echo "Running cargo fmt --check and cargo clippy (rustup stable) ..."; \
+	  echo "Running cargo fmt --check ..."; \
 	  rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; \
 	  rustup run stable cargo fmt -- --check; \
+	  echo "Running cargo clippy (rustup stable) ..."; \
 	  rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings; \
 	elif command -v cargo >/dev/null 2>&1; then \
-	  echo "Running cargo fmt --check and cargo clippy (local cargo) ..."; \
+	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
 	    cargo fmt -- --check; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
+	  echo "Running cargo clippy (local cargo) ..."; \
 	  cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" \
+	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	    -v "$$PWD/target:/workspace/target" \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
+	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
+	      cargo clippy --workspace --all-targets --all-features -- -D warnings'; \
+	else \
+	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
+	  exit 1; \
+	fi
+
+lint-ultra:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  echo "Running cargo fmt --check ..."; \
+	  rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; \
+	  rustup run stable cargo fmt -- --check; \
+	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
+	  rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "Running cargo fmt --check ..."; \
+	  if cargo fmt --version >/dev/null 2>&1; then \
+	    cargo fmt -- --check; \
+	  else \
+	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
+	  fi; \
+	  echo "Running cargo clippy (local cargo, excessive) ..."; \
+	  cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -662,7 +706,7 @@ test:
 	if command -v rustup >/dev/null 2>&1; then \
 	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice rustup run stable cargo nextest run $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -670,7 +714,7 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'nice cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not found locally and docker unavailable; falling back to 'cargo test' via rustup ..."; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo test $(ARGS); \

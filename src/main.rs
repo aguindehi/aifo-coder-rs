@@ -1,4 +1,4 @@
-#![allow(clippy::needless_return, clippy::useless_format)]
+#![allow(clippy::needless_return)]
 use aifo_coder::{
     acquire_lock, build_docker_cmd, desired_apparmor_profile, preferred_registry_prefix,
 };
@@ -24,13 +24,11 @@ fn print_startup_banner() {
     println!();
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
     println!(
-        " 🚀  Welcome to the Migros AI Foundation Coder - AIFO Coder v{}  🚀 ",
+        " 🚀  Welcome to the Migros AI Foundation Coder - AIFO Coder v{}                     🚀 ",
         version
     );
     println!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    println!(
-        " 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO"
-    );
+    println!(" 🔒 Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO");
     println!();
 
     // Host/platform info
@@ -815,8 +813,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         aifo_coder::json_escape(&base_ref_or_sha),
         aifo_coder::json_escape(&base_commit_sha),
         panes,
-        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
         aifo_coder::json_escape(&layout)
     );
     if let Some(ref snap) = snapshot_sha {
@@ -993,8 +991,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
@@ -1209,8 +1207,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
@@ -1473,8 +1471,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::json_escape(&base_commit_sha),
                             panes,
                             panes_created,
-                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                             aifo_coder::json_escape(&layout)
                         );
                             if let Some(ref snap) = snapshot_sha {
@@ -1527,8 +1525,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             aifo_coder::json_escape(&base_commit_sha),
                             panes,
                             panes_created,
-                            pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                            branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                            pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                            branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                             aifo_coder::json_escape(&layout)
                         );
                             if let Some(ref snap) = snapshot_sha {
@@ -1644,8 +1642,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     aifo_coder::json_escape(&base_commit_sha),
                     panes,
                     panes_created,
-                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                     aifo_coder::json_escape(&layout)
                 );
                     if let Some(ref snap) = snapshot_sha {
@@ -1746,8 +1744,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
@@ -1952,8 +1950,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
@@ -2305,8 +2303,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 aifo_coder::json_escape(&base_commit_sha),
                 panes,
                 panes_created,
-                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                 aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
@@ -2616,8 +2614,8 @@ fi
                         aifo_coder::json_escape(&base_commit_sha),
                         panes,
                         panes_created,
-                        pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                        branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                        pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                        branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                         aifo_coder::json_escape(&layout)
                     );
                     if let Some(ref snap) = snapshot_sha {
@@ -2674,8 +2672,8 @@ fi
                     aifo_coder::json_escape(&base_commit_sha),
                     panes,
                     panes_created,
-                    pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                    branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                    pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                    branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                     aifo_coder::json_escape(&layout)
                 );
                 if let Some(ref snap) = snapshot_sha {
@@ -2789,8 +2787,8 @@ fi
                 aifo_coder::json_escape(&base_commit_sha),
                 panes,
                 panes_created,
-                pane_dirs_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
-                branches_vec.iter().map(|s| format!("{}", aifo_coder::json_escape(s))).collect::<Vec<_>>().join(", "),
+                pane_dirs_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
+                branches_vec.iter().map(|s| aifo_coder::json_escape(s).to_string()).collect::<Vec<_>>().join(", "),
                 aifo_coder::json_escape(&layout)
             );
             if let Some(ref snap) = snapshot_sha {
