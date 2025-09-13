@@ -41,28 +41,8 @@ use crate::warnings::{
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Preflight
-    if which("git").is_err() {
-        eprintln!("aifo-coder: error: git is required and was not found in PATH.");
-        return ExitCode::from(1);
-    }
-    if cfg!(target_os = "windows") {
-        // Windows preflight: require at least one orchestrator (wt.exe, PowerShell, or Git Bash)
-        let wt_ok = which("wt").or_else(|_| which("wt.exe")).is_ok();
-        let ps_ok = which("pwsh")
-            .or_else(|_| which("powershell"))
-            .or_else(|_| which("powershell.exe"))
-            .is_ok();
-        let gb_ok = which("git-bash.exe")
-            .or_else(|_| which("bash.exe"))
-            .or_else(|_| which("mintty.exe"))
-            .is_ok();
-        if !(wt_ok || ps_ok || gb_ok) {
-            eprintln!("aifo-coder: error: none of Windows Terminal (wt.exe), PowerShell, or Git Bash were found in PATH.");
-            return ExitCode::from(127);
-        }
-    } else if which("tmux").is_err() {
-        eprintln!("aifo-coder: error: tmux not found. Please install tmux to use fork mode.");
-        return ExitCode::from(127);
+    if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
+        return code;
     }
     let repo_root = match aifo_coder::repo_root() {
         Some(p) => p,
@@ -71,14 +51,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    if panes > 8 {
-        let msg = format!(
-            "Launching {} panes may impact disk/memory and I/O performance.",
-            panes
-        );
-        if !aifo_coder::warn_prompt_continue_or_quit(&[&msg]) {
-            return ExitCode::from(1);
-        }
+    if let Err(code) = crate::fork::preflight::guard_panes_count_and_prompt(panes) {
+        return code;
     }
 
     // Identify base
@@ -306,36 +280,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             let esc = s.replace('\'', "''");
             format!("'{}'", esc)
         };
-        // Build inner PowerShell command string setting env per pane, then invoking aifo-coder with args
-        let build_ps_inner =
-            |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
-                let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-                let kv = [
-                    ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-                    ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-                    ("AIFO_CODER_HOSTNAME", cname),
-                    ("AIFO_CODER_FORK_SESSION", sid.clone()),
-                    ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                    (
-                        "AIFO_CODER_FORK_STATE_DIR",
-                        pane_state_dir.display().to_string(),
-                    ),
-                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
-                ];
-                let mut assigns: Vec<String> = Vec::new();
-                for (k, v) in kv {
-                    assigns.push(format!("$env:{}={}", k, ps_quote(&v)));
-                }
-                let mut words: Vec<String> = vec!["aifo-coder".to_string()];
-                words.extend(child_args.clone());
-                let cmd = words
-                    .iter()
-                    .map(|w| ps_quote(w))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let setloc = format!("Set-Location {}", ps_quote(&pane_dir.display().to_string()));
-                format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
-            };
 
         // Orchestrator preference override (optional): AIFO_CODER_FORK_ORCH={gitbash|powershell}
         let orch_pref = env::var("AIFO_CODER_FORK_ORCH")
@@ -395,33 +339,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
                 if any_failed {
                     eprintln!("aifo-coder: failed to launch one or more Git Bash windows.");
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
-                        }
-                        println!(
-                            "Removed all created pane directories under {}.",
-                            session_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Clones remain under {} for recovery.",
-                            session_dir.display()
-                        );
-                    }
-                    // Update metadata with panes_created
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let _ = crate::fork::meta::update_panes_created(
+                    crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
-                        existing.len(),
-                        &existing,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
                         snapshot_sha.as_deref(),
                         &layout,
+                        false,
                     );
                     return ExitCode::from(1);
                 }
@@ -618,33 +544,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
                 if any_failed {
                     eprintln!("aifo-coder: failed to launch one or more mintty windows.");
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
-                        }
-                        println!(
-                            "Removed all created pane directories under {}.",
-                            session_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Clones remain under {} for recovery.",
-                            session_dir.display()
-                        );
-                    }
-                    // Update metadata with panes_created
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let _ = crate::fork::meta::update_panes_created(
+                    crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
-                        existing.len(),
-                        &existing,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
                         snapshot_sha.as_deref(),
                         &layout,
+                        false,
                     );
                     return ExitCode::from(1);
                 }
@@ -881,33 +789,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         Ok(s) if s.success() => {}
                         Ok(_) => {
                             eprintln!("aifo-coder: Windows Terminal failed to start first pane (non-zero exit).");
-                            if !cli.fork_keep_on_failure {
-                                for (dir, _) in &clones {
-                                    let _ = fs::remove_dir_all(dir);
-                                }
-                                println!(
-                                    "Removed all created pane directories under {}.",
-                                    session_dir.display()
-                                );
-                            } else {
-                                println!(
-                                    "Clones remain under {} for recovery.",
-                                    session_dir.display()
-                                );
-                            }
-                            // Update metadata with panes_created
-                            let existing: Vec<(PathBuf, String)> = clones
-                                .iter()
-                                .filter(|(p, _)| p.exists())
-                                .map(|(p, b)| (p.clone(), b.clone()))
-                                .collect();
-                            let _ = crate::fork::meta::update_panes_created(
+                            crate::fork::cleanup::cleanup_and_update_meta(
                                 &repo_root,
                                 &sid,
-                                existing.len(),
-                                &existing,
+                                &clones,
+                                cli.fork_keep_on_failure,
+                                &session_dir,
                                 snapshot_sha.as_deref(),
                                 &layout,
+                                false,
                             );
                             return ExitCode::from(1);
                         }
@@ -916,33 +806,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 "aifo-coder: Windows Terminal failed to start first pane: {}",
                                 e
                             );
-                            if !cli.fork_keep_on_failure {
-                                for (dir, _) in &clones {
-                                    let _ = fs::remove_dir_all(dir);
-                                }
-                                println!(
-                                    "Removed all created pane directories under {}.",
-                                    session_dir.display()
-                                );
-                            } else {
-                                println!(
-                                    "Clones remain under {} for recovery.",
-                                    session_dir.display()
-                                );
-                            }
-                            // Update metadata with panes_created
-                            let existing: Vec<(PathBuf, String)> = clones
-                                .iter()
-                                .filter(|(p, _)| p.exists())
-                                .map(|(p, b)| (p.clone(), b.clone()))
-                                .collect();
-                            let _ = crate::fork::meta::update_panes_created(
+                            crate::fork::cleanup::cleanup_and_update_meta(
                                 &repo_root,
                                 &sid,
-                                existing.len(),
-                                &existing,
+                                &clones,
+                                cli.fork_keep_on_failure,
+                                &session_dir,
                                 snapshot_sha.as_deref(),
                                 &layout,
+                                false,
                             );
                             return ExitCode::from(1);
                         }
@@ -1012,53 +884,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     eprintln!(
                         "aifo-coder: Windows Terminal split-pane failed for one or more panes."
                     );
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
-                        }
-                        println!(
-                            "Removed all created pane directories under {}.",
-                            session_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Clones remain under {} for recovery.",
-                            session_dir.display()
-                        );
-                        if let Some((first_dir, first_branch)) = clones.first() {
-                            println!("Example recovery:");
-                            println!("  git -C \"{}\" status", first_dir.display());
-                            println!(
-                                "  git -C \"{}\" log --oneline --decorate -n 20",
-                                first_dir.display()
-                            );
-                            println!(
-                                "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
-                                repo_root.display(),
-                                sid,
-                                first_dir.display()
-                            );
-                            println!(
-                                "  git -C \"{}\" fetch fork-{}-1 {}",
-                                repo_root.display(),
-                                sid,
-                                first_branch
-                            );
-                        }
-                    }
-                    // Update metadata
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let _ = crate::fork::meta::update_panes_created(
+                    crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
-                        existing.len(),
-                        &existing,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
                         snapshot_sha.as_deref(),
                         &layout,
+                        true,
                     );
                     return ExitCode::from(1);
                 }
@@ -1141,33 +975,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
                 if any_failed {
                     eprintln!("aifo-coder: failed to launch one or more Git Bash windows.");
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
-                        }
-                        println!(
-                            "Removed all created pane directories under {}.",
-                            session_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Clones remain under {} for recovery.",
-                            session_dir.display()
-                        );
-                    }
-                    // Update metadata with panes_created
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let _ = crate::fork::meta::update_panes_created(
+                    crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
-                        existing.len(),
-                        &existing,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
                         snapshot_sha.as_deref(),
                         &layout,
+                        false,
                     );
                     return ExitCode::from(1);
                 }
@@ -1354,33 +1170,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
                 if any_failed {
                     eprintln!("aifo-coder: failed to launch one or more mintty windows.");
-                    if !cli.fork_keep_on_failure {
-                        for (dir, _) in &clones {
-                            let _ = fs::remove_dir_all(dir);
-                        }
-                        println!(
-                            "Removed all created pane directories under {}.",
-                            session_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Clones remain under {} for recovery.",
-                            session_dir.display()
-                        );
-                    }
-                    // Update metadata with panes_created
-                    let existing: Vec<(PathBuf, String)> = clones
-                        .iter()
-                        .filter(|(p, _)| p.exists())
-                        .map(|(p, b)| (p.clone(), b.clone()))
-                        .collect();
-                    let _ = crate::fork::meta::update_panes_created(
+                    crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
-                        existing.len(),
-                        &existing,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
                         snapshot_sha.as_deref(),
                         &layout,
+                        false,
                     );
                     return ExitCode::from(1);
                 }
@@ -1688,7 +1486,27 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-            let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+            let session = crate::fork::session::make_session(
+                &sid,
+                &session_name,
+                &base_label,
+                &base_ref_or_sha,
+                &base_commit_sha,
+                created_at,
+                &layout,
+                agent,
+                &session_dir,
+            );
+            let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+            let pane = crate::fork::session::make_pane(
+                i,
+                pane_dir.as_path(),
+                _b,
+                &pane_state_dir,
+                &container_name,
+            );
+            let inner =
+                crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
 
             // Launch a new PowerShell window using Start-Process and capture its PID
             let script = {
@@ -1731,33 +1549,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
         if any_failed {
             eprintln!("aifo-coder: failed to launch one or more PowerShell windows.");
-            if !cli.fork_keep_on_failure {
-                for (dir, _) in &clones {
-                    let _ = fs::remove_dir_all(dir);
-                }
-                println!(
-                    "Removed all created pane directories under {}.",
-                    session_dir.display()
-                );
-            } else {
-                println!(
-                    "Clones remain under {} for recovery.",
-                    session_dir.display()
-                );
-            }
-            // Update metadata with panes_created
-            let existing: Vec<(PathBuf, String)> = clones
-                .iter()
-                .filter(|(p, _)| p.exists())
-                .map(|(p, b)| (p.clone(), b.clone()))
-                .collect();
-            let _ = crate::fork::meta::update_panes_created(
+            crate::fork::cleanup::cleanup_and_update_meta(
                 &repo_root,
                 &sid,
-                existing.len(),
-                &existing,
+                &clones,
+                cli.fork_keep_on_failure,
+                &session_dir,
                 snapshot_sha.as_deref(),
                 &layout,
+                false,
             );
             return ExitCode::from(1);
         }
@@ -2033,33 +1833,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     .arg("-t")
                     .arg(&session_name)
                     .status();
-                if !cli.fork_keep_on_failure {
-                    for (dir, _) in &clones {
-                        let _ = fs::remove_dir_all(dir);
-                    }
-                    println!(
-                        "Removed all created pane directories under {}.",
-                        session_dir.display()
-                    );
-                } else {
-                    println!(
-                        "Clones remain under {} for recovery.",
-                        session_dir.display()
-                    );
-                }
-                // Update metadata
-                let existing: Vec<(PathBuf, String)> = clones
-                    .iter()
-                    .filter(|(p, _)| p.exists())
-                    .map(|(p, b)| (p.clone(), b.clone()))
-                    .collect();
-                let _ = crate::fork::meta::update_panes_created(
+                crate::fork::cleanup::cleanup_and_update_meta(
                     &repo_root,
                     &sid,
-                    existing.len(),
-                    &existing,
+                    &clones,
+                    cli.fork_keep_on_failure,
+                    &session_dir,
                     snapshot_sha.as_deref(),
                     &layout,
+                    false,
                 );
                 return ExitCode::from(1);
             }
@@ -2110,53 +1892,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 .arg(&session_name)
                 .status();
 
-            if !cli.fork_keep_on_failure {
-                for (dir, _) in &clones {
-                    let _ = fs::remove_dir_all(dir);
-                }
-                println!(
-                    "Removed all created pane directories under {}.",
-                    session_dir.display()
-                );
-            } else {
-                println!(
-                    "Clones remain under {} for recovery.",
-                    session_dir.display()
-                );
-                if let Some((first_dir, first_branch)) = clones.first() {
-                    println!("Example recovery:");
-                    println!("  git -C \"{}\" status", first_dir.display());
-                    println!(
-                        "  git -C \"{}\" log --oneline --decorate -n 20",
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" remote add fork-{}-1 \"{}\"",
-                        repo_root.display(),
-                        sid,
-                        first_dir.display()
-                    );
-                    println!(
-                        "  git -C \"{}\" fetch fork-{}-1 {}",
-                        repo_root.display(),
-                        sid,
-                        first_branch
-                    );
-                }
-            }
-            // Update metadata with panes_created and existing pane dirs
-            let existing: Vec<(PathBuf, String)> = clones
-                .iter()
-                .filter(|(p, _)| p.exists())
-                .map(|(p, b)| (p.clone(), b.clone()))
-                .collect();
-            let _ = crate::fork::meta::update_panes_created(
+            crate::fork::cleanup::cleanup_and_update_meta(
                 &repo_root,
                 &sid,
-                existing.len(),
-                &existing,
+                &clones,
+                cli.fork_keep_on_failure,
+                &session_dir,
                 snapshot_sha.as_deref(),
                 &layout,
+                true,
             );
             return ExitCode::from(1);
         }
