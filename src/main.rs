@@ -1,4 +1,3 @@
-#![allow(clippy::needless_return, clippy::useless_format)]
 use aifo_coder::{
     acquire_lock, build_docker_cmd, desired_apparmor_profile, preferred_registry_prefix,
 };
