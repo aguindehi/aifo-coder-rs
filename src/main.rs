@@ -425,14 +425,30 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+                    let pane = crate::fork::types::Pane {
+                        index: i,
+                        dir: pane_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        agent,
-                        &sid,
-                        i,
-                        pane_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -627,14 +643,30 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+                    let pane = crate::fork::types::Pane {
+                        index: i,
+                        dir: pane_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        agent,
-                        &sid,
-                        i,
-                        pane_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -878,12 +910,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 {
                     let (pane1_dir, _b) = &clones[0];
                     let pane_state_dir = state_base.join(&sid).join("pane-1");
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name =
+                        crate::fork::env::pane_container_name(agent, &sid, 1);
+                    let pane = crate::fork::types::Pane {
+                        index: 1,
+                        dir: pane1_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let inner = crate::fork::inner::build_inner_powershell(
-                        agent,
-                        &sid,
-                        1,
-                        pane1_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                     );
                     let mut cmd = Command::new(&wtbin);
@@ -985,12 +1034,29 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name =
+                        crate::fork::env::pane_container_name(agent, &sid, i);
+                    let pane = crate::fork::types::Pane {
+                        index: i,
+                        dir: pane_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let inner = crate::fork::inner::build_inner_powershell(
-                        agent,
-                        &sid,
-                        i,
-                        pane_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                     );
                     let orient = orient_for_layout(i);
@@ -1115,12 +1181,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+                    let pane = crate::fork::types::Pane {
+                        index: i,
+                        dir: pane_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        agent,
-                        &sid,
-                        i,
-                        pane_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -1307,12 +1389,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let session = crate::fork::types::ForkSession {
+                        sid: sid.clone(),
+                        session_name: session_name.clone(),
+                        base_label: base_label.clone(),
+                        base_ref_or_sha: base_ref_or_sha.clone(),
+                        base_commit_sha: base_commit_sha.clone(),
+                        created_at,
+                        layout: layout.clone(),
+                        agent: agent.to_string(),
+                        session_dir: session_dir.clone(),
+                    };
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+                    let pane = crate::fork::types::Pane {
+                        index: i,
+                        dir: pane_dir.clone(),
+                        branch: _b.clone(),
+                        state_dir: pane_state_dir.clone(),
+                        container_name,
+                    };
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        agent,
-                        &sid,
-                        i,
-                        pane_dir.as_path(),
-                        &pane_state_dir,
+                        &session,
+                        &pane,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -1501,12 +1599,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     {
                         let (pane1_dir, _b) = &clones[0];
                         let pane_state_dir = state_base.join(&sid).join("pane-1");
+                        let session = crate::fork::types::ForkSession {
+                            sid: sid.clone(),
+                            session_name: session_name.clone(),
+                            base_label: base_label.clone(),
+                            base_ref_or_sha: base_ref_or_sha.clone(),
+                            base_commit_sha: base_commit_sha.clone(),
+                            created_at,
+                            layout: layout.clone(),
+                            agent: agent.to_string(),
+                            session_dir: session_dir.clone(),
+                        };
+                        let container_name = crate::fork::env::pane_container_name(agent, &sid, 1);
+                        let pane = crate::fork::types::Pane {
+                            index: 1,
+                            dir: pane1_dir.clone(),
+                            branch: _b.clone(),
+                            state_dir: pane_state_dir.clone(),
+                            container_name,
+                        };
                         let inner = crate::fork::inner::build_inner_powershell(
-                            agent,
-                            &sid,
-                            1,
-                            pane1_dir.as_path(),
-                            &pane_state_dir,
+                            &session,
+                            &pane,
                             &child_args,
                         );
                         let mut cmd = Command::new(&wtbin2);
@@ -1539,12 +1653,28 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
                         let i = idx + 1;
                         let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+                        let session = crate::fork::types::ForkSession {
+                            sid: sid.clone(),
+                            session_name: session_name.clone(),
+                            base_label: base_label.clone(),
+                            base_ref_or_sha: base_ref_or_sha.clone(),
+                            base_commit_sha: base_commit_sha.clone(),
+                            created_at,
+                            layout: layout.clone(),
+                            agent: agent.to_string(),
+                            session_dir: session_dir.clone(),
+                        };
+                        let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+                        let pane = crate::fork::types::Pane {
+                            index: i,
+                            dir: pane_dir.clone(),
+                            branch: _b.clone(),
+                            state_dir: pane_state_dir.clone(),
+                            container_name,
+                        };
                         let inner = crate::fork::inner::build_inner_powershell(
-                            agent,
-                            &sid,
-                            i,
-                            pane_dir.as_path(),
-                            &pane_state_dir,
+                            &session,
+                            &pane,
                             &child_args,
                         );
                         let orient = orient_for_layout(i);

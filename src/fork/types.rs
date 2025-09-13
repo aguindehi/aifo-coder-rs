@@ -1,4 +1,3 @@
-#![cfg(windows)]
 use std::path::PathBuf;
 
 /// High-level fork session information captured at creation time.
