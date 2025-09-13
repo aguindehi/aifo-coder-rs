@@ -171,3 +171,124 @@ fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
     }
     num.parse::<u64>().ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate as aifo_coder;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+            .as_secs()
+    }
+
+    #[test]
+    fn test_write_initial_meta_uses_snapshot_and_preserves_key_order() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        let sid = "sid-meta";
+        let created_at = now_secs();
+
+        let m = SessionMeta {
+            created_at,
+            base_label: "main",
+            base_ref_or_sha: "main",
+            base_commit_sha: String::new(),
+            panes: 2,
+            pane_dirs: vec![root.join("p1"), root.join("p2")],
+            branches: vec!["b1".to_string(), "b2".to_string()],
+            layout: "tiled",
+            snapshot_sha: Some("abc123"),
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read meta");
+        // Keys must appear in this order
+        let keys = [
+            "\"created_at\":",
+            "\"base_label\":",
+            "\"base_ref_or_sha\":",
+            "\"base_commit_sha\":",
+            "\"panes\":",
+            "\"pane_dirs\":",
+            "\"branches\":",
+            "\"layout\":",
+            "\"snapshot_sha\":",
+        ];
+        let mut pos = 0usize;
+        for k in keys {
+            if let Some(p) = txt[pos..].find(k) {
+                pos += p + k.len();
+            } else {
+                panic!("missing key or wrong order: {} in {}", k, txt);
+            }
+        }
+        // base_commit_sha should be the snapshot sha since provided
+        assert!(
+            txt.contains("\"base_commit_sha\": \"abc123\""),
+            "expected base_commit_sha to use snapshot sha, got: {}",
+            txt
+        );
+    }
+
+    #[test]
+    fn test_update_panes_created_updates_counts_and_preserves_fields() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let root = td.path().to_path_buf();
+        let sid = "sid-update";
+        let created_at = now_secs();
+
+        // initial meta with snapshot to avoid git calls
+        let m = SessionMeta {
+            created_at,
+            base_label: "main",
+            base_ref_or_sha: "main",
+            base_commit_sha: String::new(),
+            panes: 3,
+            pane_dirs: vec![root.join("x1"), root.join("x2"), root.join("x3")],
+            branches: vec!["b1".to_string(), "b2".to_string(), "b3".to_string()],
+            layout: "tiled",
+            snapshot_sha: Some("cafebabe"),
+        };
+        write_initial_meta(&root, sid, &m).expect("write meta");
+
+        // Only one pane exists on disk
+        let p1 = root.join("x1");
+        std::fs::create_dir_all(&p1).unwrap();
+        let existing = vec![(p1.clone(), "b1".to_string())];
+
+        update_panes_created(&root, sid, existing.len(), &existing, Some("cafebabe"), "tiled")
+            .expect("update");
+
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
+        let txt = std::fs::read_to_string(&meta_path).expect("read updated meta");
+
+        assert!(
+            txt.contains("\"panes_created\": 1"),
+            "expected panes_created=1, got: {}",
+            txt
+        );
+        assert!(
+            txt.contains("\"snapshot_sha\": \"cafebabe\""),
+            "expected snapshot_sha preserved, got: {}",
+            txt
+        );
+        // base fields must remain present
+        for k in [
+            "\"created_at\":",
+            "\"base_label\":",
+            "\"base_ref_or_sha\":",
+            "\"base_commit_sha\":",
+            "\"panes\":",
+            "\"pane_dirs\":",
+            "\"branches\":",
+            "\"layout\":",
+        ] {
+            assert!(txt.contains(k), "missing key after update: {} in {}", k, txt);
+        }
+    }
+}

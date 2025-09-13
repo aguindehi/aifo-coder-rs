@@ -126,3 +126,67 @@ fi
         child_args_joined
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_session_and_pane() -> (ForkSession, Pane) {
+        let session = ForkSession {
+            sid: "sid123".to_string(),
+            session_name: "sess".to_string(),
+            base_label: "main".to_string(),
+            base_ref_or_sha: "main".to_string(),
+            base_commit_sha: "deadbeef".to_string(),
+            created_at: 0,
+            layout: "tiled".to_string(),
+            agent: "aider".to_string(),
+            session_dir: PathBuf::from("."),
+        };
+        let pane = Pane {
+            index: 1,
+            dir: PathBuf::from("."),
+            branch: "branch".to_string(),
+            state_dir: PathBuf::from("./state"),
+            container_name: "aifo-coder-aider-sid123-1".to_string(),
+        };
+        (session, pane)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_ps_inner_injects_suppress_env() {
+        let (session, pane) = make_session_and_pane();
+        let child = vec!["aider".to_string(), "--help".to_string()];
+        let s = build_inner_powershell(&session, &pane, &child);
+        assert!(
+            s.contains("$env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';"),
+            "PowerShell inner should inject SUPPRESS var, got: {}",
+            s
+        );
+        assert!(
+            s.contains("Set-Location "),
+            "PowerShell inner should include Set-Location prefix"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_gitbash_inner_injects_and_trims_exec_tail_when_post_merge_requested() {
+        let (session, pane) = make_session_and_pane();
+        let child = vec!["aider".to_string(), "--help".to_string()];
+        // exec_shell_tail=false simulates post-merge requested (should trim '; exec bash')
+        let s = build_inner_gitbash(&session, &pane, &child, false);
+        assert!(
+            s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
+            "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",
+            s
+        );
+        assert!(
+            !s.ends_with("; exec bash"),
+            "Git Bash inner should trim '; exec bash' when exec_shell_tail=false, got: {}",
+            s
+        );
+    }
+}
