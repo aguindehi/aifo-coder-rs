@@ -125,27 +125,7 @@ pub fn build_tmux_launch_script(
     _launcher_path: &str,
 ) -> String {
     let mut exports: Vec<String> = Vec::new();
-    for (k, v) in [
-        (
-            "AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING".to_string(),
-            "1".to_string(),
-        ),
-        ("AIFO_CODER_SKIP_LOCK".to_string(), "1".to_string()),
-        (
-            "AIFO_CODER_CONTAINER_NAME".to_string(),
-            pane.container_name.clone(),
-        ),
-        (
-            "AIFO_CODER_HOSTNAME".to_string(),
-            pane.container_name.clone(),
-        ),
-        ("AIFO_CODER_FORK_SESSION".to_string(), session.sid.clone()),
-        ("AIFO_CODER_FORK_INDEX".to_string(), pane.index.to_string()),
-        (
-            "AIFO_CODER_FORK_STATE_DIR".to_string(),
-            pane.state_dir.display().to_string(),
-        ),
-    ] {
+    for (k, v) in super::env::fork_env_for_pane(session, pane) {
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
     format!(

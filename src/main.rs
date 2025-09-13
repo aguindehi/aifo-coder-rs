@@ -172,6 +172,15 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     }
     // Create clones
     let dissoc = cli.fork_dissociate;
+    let _opts = crate::fork::types::ForkOptions {
+        verbose: cli.verbose,
+        keep_on_failure: cli.fork_keep_on_failure,
+        merge_strategy: cli.fork_merging_strategy,
+        autoclean: cli.fork_merging_autoclean,
+        dry_run: cli.dry_run,
+        include_dirty: cli.fork_include_dirty,
+        dissociate: cli.fork_dissociate,
+    };
     let clones = match aifo_coder::fork_clone_and_checkout_panes(
         &repo_root,
         &sid,
@@ -379,38 +388,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     .join(" ");
                 let setloc = format!("Set-Location {}", ps_quote(&pane_dir.display().to_string()));
                 format!("{}; {}; {}", setloc, assigns.join("; "), cmd)
-            };
-        // Build inner Git Bash command string setting env per pane, then invoking aifo-coder with args; keeps shell open
-        let build_bash_inner =
-            |i: usize, pane_dir: &std::path::Path, pane_state_dir: &PathBuf| -> String {
-                let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-                let kv = [
-                    ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-                    ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-                    ("AIFO_CODER_HOSTNAME", cname),
-                    ("AIFO_CODER_FORK_SESSION", sid.clone()),
-                    ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                    (
-                        "AIFO_CODER_FORK_STATE_DIR",
-                        pane_state_dir.display().to_string(),
-                    ),
-                    ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
-                ];
-                let mut exports: Vec<String> = Vec::new();
-                for (k, v) in kv {
-                    exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
-                }
-                let mut words: Vec<String> = vec!["aifo-coder".to_string()];
-                words.extend(child_args.clone());
-                let cmd = aifo_coder::shell_join(&words);
-                let cddir = aifo_coder::shell_escape(&pane_dir.display().to_string());
-                let tail = if matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None)
-                {
-                    " && exec bash"
-                } else {
-                    ""
-                };
-                format!("cd {} && {}; {}{}", cddir, exports.join("; "), cmd, tail)
             };
 
         // Orchestrator preference override (optional): AIFO_CODER_FORK_ORCH={gitbash|powershell}
@@ -2003,72 +1980,42 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             return ExitCode::from(1);
         }
 
-        // Helper to build inner command string with env exports
-        let build_inner = |i: usize, pane_state_dir: &PathBuf| -> String {
-            let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-            let mut exports: Vec<String> = Vec::new();
-            let kv = [
-                ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-                ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-                ("AIFO_CODER_HOSTNAME", cname),
-                ("AIFO_CODER_FORK_SESSION", sid.clone()),
-                ("AIFO_CODER_FORK_INDEX", i.to_string()),
-                (
-                    "AIFO_CODER_FORK_STATE_DIR",
-                    pane_state_dir.display().to_string(),
-                ),
-                ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING", "1".to_string()),
-            ];
-            for (k, v) in kv {
-                exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
-            }
-            let launcher = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.canonicalize().ok())
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| "./aifo-coder".to_string());
-            let mut child_cmd_words = vec![launcher];
-            child_cmd_words.extend(child_args.clone());
-            let child_joined = aifo_coder::shell_join(&child_cmd_words);
-            format!(
-                r#"#!/usr/bin/env bash
-set -e
-{}
-set +e
-{}
-st=$?
-if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then
-  pid="$(tmux display -p '#{{pane_id}}')"
-  secs="${{AIFO_CODER_FORK_SHELL_PROMPT_SECS:-5}}"
-  printf "aifo-coder: agent exited (code %s). Press 's' to open a shell, or wait: " "$st"
-  for ((i=secs; i>=1; i--)); do
-    printf "%s " "$i"
-    if IFS= read -rsn1 -t 1 ch; then
-      echo
-      if [[ -z "$ch" || "$ch" == $'\n' || "$ch" == $'\r' ]]; then
-        tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"
-        exit "$st"
-      elif [[ "$ch" == 's' || "$ch" == 'S' ]]; then
-        exec "${{SHELL:-sh}}"
-      fi
-    fi
-  done
-  echo
-  tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"
-else
-  exit "$st"
-fi
-"#,
-                exports.join("\n"),
-                child_joined
-            )
+        // Prepare launcher and child command for tmux launch script builder
+        let launcher = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.canonicalize().ok())
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "./aifo-coder".to_string());
+        let mut child_cmd_words = vec![launcher.clone()];
+        child_cmd_words.extend(child_args.clone());
+        let child_joined = aifo_coder::shell_join(&child_cmd_words);
+        // Build a session descriptor for tmux helper builders
+        let session = crate::fork::types::ForkSession {
+            sid: sid.clone(),
+            session_name: session_name.clone(),
+            base_label: base_label.clone(),
+            base_ref_or_sha: base_ref_or_sha.clone(),
+            base_commit_sha: base_commit_sha.clone(),
+            created_at,
+            layout: layout.clone(),
+            agent: agent.to_string(),
+            session_dir: session_dir.clone(),
         };
+        // Touch fields so clippy sees them as read on this target too
+        let _ = (
+            &session.base_label,
+            &session.base_ref_or_sha,
+            &session.base_commit_sha,
+            session.created_at,
+            &session.layout,
+            &session.session_name,
+            &session.session_dir,
+            &session.agent,
+        );
 
         // Pane 1
         {
             let (pane1_dir, _b) = &clones[0];
-            let _pane_state_dir = state_base.join(&sid).join("pane-1");
-            let _inner = build_inner(1, &_pane_state_dir);
             let mut cmd = Command::new(&tmux);
             cmd.arg("new-session")
                 .arg("-d")
@@ -2350,7 +2297,22 @@ fi
         for (idx, (_pane_dir, _b)) in clones.iter().enumerate() {
             let i = idx + 1;
             let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-            let inner = build_inner(i, &pane_state_dir);
+            let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+            let pane = crate::fork::types::Pane {
+                index: i,
+                dir: clones[idx].0.clone(),
+                branch: clones[idx].1.clone(),
+                state_dir: pane_state_dir.clone(),
+                container_name,
+            };
+            // Touch fields so clippy sees them as read on this target too
+            let _ = (&pane.dir, &pane.branch);
+            let inner = crate::fork::inner::build_tmux_launch_script(
+                &session,
+                &pane,
+                &child_joined,
+                &launcher,
+            );
             let script_path = pane_state_dir.join("launch.sh");
             let _ = fs::create_dir_all(&pane_state_dir);
             let _ = fs::write(&script_path, inner.as_bytes());
