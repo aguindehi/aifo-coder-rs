@@ -105,11 +105,11 @@ pub fn update_panes_created(
     // Parse a few existing fields (best-effort) to preserve them; fall back to empty/defaults.
     let text = fs::read_to_string(&meta_path).unwrap_or_default();
     let created_at = extract_value_u64(&text, "created_at").unwrap_or(0);
-    let base_label = extract_value_string(&text, "base_label").unwrap_or_else(|| "".to_string());
+    let base_label = extract_value_string(&text, "base_label").unwrap_or_default();
     let base_ref_or_sha =
-        extract_value_string(&text, "base_ref_or_sha").unwrap_or_else(|| "".to_string());
+        extract_value_string(&text, "base_ref_or_sha").unwrap_or_default();
     let base_commit_sha =
-        extract_value_string(&text, "base_commit_sha").unwrap_or_else(|| "".to_string());
+        extract_value_string(&text, "base_commit_sha").unwrap_or_default();
     let panes = extract_value_u64(&text, "panes").unwrap_or(existing.len() as u64) as usize;
     let snapshot_old = extract_value_string(&text, "snapshot_sha");
 
@@ -141,12 +141,10 @@ pub fn update_panes_created(
 fn extract_value_string(text: &str, key: &str) -> Option<String> {
     let needle = format!("\"{}\":", key);
     let pos = text.find(&needle)?;
-    let rest = &text[pos + needle.len()..];
-    let rest = rest.trim_start();
-    if rest.starts_with('"') {
+    let rest = text[pos + needle.len()..].trim_start();
+    if let Some(stripped) = rest.strip_prefix('"') {
         let mut out = String::new();
-        let mut chars = rest[1..].chars();
-        while let Some(ch) = chars.next() {
+        for ch in stripped.chars() {
             if ch == '"' {
                 break;
             }
@@ -157,6 +155,7 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
         None
     }
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::types::{ForkSession, Pane};
 
@@ -26,7 +26,7 @@ pub fn pane_container_name(agent: &str, sid: &str, index: usize) -> String {
 }
 
 /// Compute a pane state directory path under the given base.
-pub fn pane_state_dir(state_base: &PathBuf, sid: &str, index: usize) -> PathBuf {
+pub fn pane_state_dir(state_base: &Path, sid: &str, index: usize) -> PathBuf {
     state_base.join(sid).join(format!("pane-{}", index))
 }
 

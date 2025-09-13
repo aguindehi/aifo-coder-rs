@@ -1,3 +1,4 @@
+#![cfg(windows)]
 use std::path::Path;
 
 pub fn apply_post_merge(

@@ -1,3 +1,4 @@
+#![cfg(windows)]
 #[cfg(windows)]
 use which::which;
 

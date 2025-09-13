@@ -319,8 +319,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Print per-pane info lines
     for (idx, (pane_dir, branch)) in clones.iter().enumerate() {
         let i = idx + 1;
-        let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-        let state_dir = state_base.join(&sid).join(format!("pane-{}", i));
+        let cname = crate::fork::env::pane_container_name(agent, &sid, i);
+        let state_dir = crate::fork::env::pane_state_dir(&state_base, &sid, i);
         let _ = fs::create_dir_all(state_dir.join(".aider"));
         let _ = fs::create_dir_all(state_dir.join(".codex"));
         let _ = fs::create_dir_all(state_dir.join(".crush"));
@@ -425,7 +425,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let exec_shell_tail =
+                        matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let inner = crate::fork::inner::build_inner_gitbash(
+                        agent,
+                        &sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                        exec_shell_tail,
+                    );
 
                     let mut cmd = Command::new(&gb);
                     cmd.arg("-c").arg(&inner);
@@ -617,7 +627,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let exec_shell_tail =
+                        matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let inner = crate::fork::inner::build_inner_gitbash(
+                        agent,
+                        &sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                        exec_shell_tail,
+                    );
 
                     let mut cmd = Command::new(&mt);
                     cmd.arg("-e").arg("bash").arg("-lc").arg(&inner);
@@ -858,7 +878,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 {
                     let (pane1_dir, _b) = &clones[0];
                     let pane_state_dir = state_base.join(&sid).join("pane-1");
-                    let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
+                    let inner = crate::fork::inner::build_inner_powershell(
+                        agent,
+                        &sid,
+                        1,
+                        pane1_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                    );
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("new-tab")
                         .arg("-d")
@@ -958,7 +985,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                    let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let inner = crate::fork::inner::build_inner_powershell(
+                        agent,
+                        &sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                    );
                     let orient = orient_for_layout(i);
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("split-pane")
@@ -1079,7 +1113,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let exec_shell_tail =
+                        matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let inner = crate::fork::inner::build_inner_gitbash(
+                        agent,
+                        &sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                        exec_shell_tail,
+                    );
 
                     let mut cmd = Command::new(&gb);
                     cmd.arg("-c").arg(&inner);
@@ -1261,7 +1305,17 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 for (idx, (pane_dir, _b)) in clones.iter().enumerate() {
                     let i = idx + 1;
                     let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                    let inner = build_bash_inner(i, pane_dir.as_path(), &pane_state_dir);
+                    let exec_shell_tail =
+                        matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+                    let inner = crate::fork::inner::build_inner_gitbash(
+                        agent,
+                        &sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                        exec_shell_tail,
+                    );
 
                     let mut cmd = Command::new(&mt);
                     cmd.arg("-e").arg("bash").arg("-lc").arg(&inner);
@@ -1447,7 +1501,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     {
                         let (pane1_dir, _b) = &clones[0];
                         let pane_state_dir = state_base.join(&sid).join("pane-1");
-                        let inner = build_ps_inner(1, pane1_dir.as_path(), &pane_state_dir);
+                        let inner = crate::fork::inner::build_inner_powershell(
+                            agent,
+                            &sid,
+                            1,
+                            pane1_dir.as_path(),
+                            &pane_state_dir,
+                            &child_args,
+                        );
                         let mut cmd = Command::new(&wtbin2);
                         cmd.arg("new-tab")
                             .arg("-d")
@@ -1478,7 +1539,14 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     for (idx, (pane_dir, _b)) in clones.iter().enumerate().skip(1) {
                         let i = idx + 1;
                         let pane_state_dir = state_base.join(&sid).join(format!("pane-{}", i));
-                        let inner = build_ps_inner(i, pane_dir.as_path(), &pane_state_dir);
+                        let inner = crate::fork::inner::build_inner_powershell(
+                            agent,
+                            &sid,
+                            i,
+                            pane_dir.as_path(),
+                            &pane_state_dir,
+                            &child_args,
+                        );
                         let orient = orient_for_layout(i);
                         let mut cmd = Command::new(&wtbin2);
                         cmd.arg("split-pane")
