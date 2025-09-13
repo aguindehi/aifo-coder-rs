@@ -37,6 +37,7 @@ use crate::warnings::{
 };
 
 // Orchestrate tmux-based fork session (Linux/macOS/WSL)
+#[allow(clippy::needless_return)]
 fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Preflight
     if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
