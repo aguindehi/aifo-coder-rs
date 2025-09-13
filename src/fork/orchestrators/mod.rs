@@ -22,6 +22,23 @@ pub enum Selected {
 
 #[cfg(windows)]
 fn have(bin: &str) -> bool {
+    #[cfg(test)]
+    {
+        // Allow tests to simulate tool presence via env flags:
+        // e.g., AIFO_TEST_HAVE_WT=1, AIFO_TEST_HAVE_PWSH=1, AIFO_TEST_HAVE_GIT_BASH_EXE=1, AIFO_TEST_HAVE_MINTTY_EXE=1
+        let key = format!(
+            "AIFO_TEST_HAVE_{}",
+            bin.replace('.', "_").replace('-', "_").to_ascii_uppercase()
+        );
+        if let Ok(v) = std::env::var(&key) {
+            if v.trim() == "1" {
+                return true;
+            }
+            if v.trim() == "0" {
+                return false;
+            }
+        }
+    }
     which(bin).is_ok()
 }
 
@@ -75,5 +92,90 @@ pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
         }
         // Final fallback — upstream caller prints the exact error message and exits 127.
         Selected::WindowsTerminal { reason: "none found".to_string() }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn reset_env() {
+        for k in [
+            "AIFO_CODER_FORK_ORCH",
+            "AIFO_TEST_HAVE_WT",
+            "AIFO_TEST_HAVE_WT_EXE",
+            "AIFO_TEST_HAVE_PWSH",
+            "AIFO_TEST_HAVE_POWERSHELL",
+            "AIFO_TEST_HAVE_POWERSHELL_EXE",
+            "AIFO_TEST_HAVE_GIT_BASH_EXE",
+            "AIFO_TEST_HAVE_BASH_EXE",
+            "AIFO_TEST_HAVE_MINTTY_EXE",
+        ] {
+            std::env::remove_var(k);
+        }
+    }
+
+    fn make_cli(args: &[&str]) -> crate::cli::Cli {
+        // Minimal parser invocation; command defaults to aider when unspecified
+        let mut v = vec!["aifo-coder"];
+        v.extend(args);
+        crate::cli::Cli::parse_from(v)
+    }
+
+    #[test]
+    fn test_select_orchestrator_pref_powershell_when_available() {
+        reset_env();
+        std::env::set_var("AIFO_CODER_FORK_ORCH", "powershell");
+        std::env::set_var("AIFO_TEST_HAVE_PWSH", "1");
+        let cli = make_cli(&["aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::PowerShell { .. } => {}
+            other => panic!("expected PowerShell selection, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
+    }
+
+    #[test]
+    fn test_select_orchestrator_pref_gitbash_when_available() {
+        reset_env();
+        std::env::set_var("AIFO_CODER_FORK_ORCH", "gitbash");
+        std::env::set_var("AIFO_TEST_HAVE_GIT_BASH_EXE", "1");
+        let cli = make_cli(&["aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::GitBashMintty { .. } => {}
+            other => panic!("expected Git Bash selection, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
+    }
+
+    #[test]
+    fn test_select_orchestrator_prefers_wt_when_no_merge_requested() {
+        reset_env();
+        std::env::set_var("AIFO_TEST_HAVE_WT", "1");
+        let cli = make_cli(&["aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::WindowsTerminal { .. } => {}
+            other => panic!("expected Windows Terminal selection, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
+    }
+
+    #[test]
+    fn test_select_orchestrator_falls_back_to_powershell_when_merge_requested() {
+        reset_env();
+        // wt present, merge requested, and pwsh available -> PowerShell fallback
+        std::env::set_var("AIFO_TEST_HAVE_WT", "1");
+        std::env::set_var("AIFO_TEST_HAVE_PWSH", "1");
+        let cli = make_cli(&["--fork-merge-strategy", "fetch", "aider"]);
+        let sel = select_orchestrator(&cli, "tiled");
+        match sel {
+            Selected::PowerShell { .. } => {}
+            other => panic!("expected PowerShell selection for merge, got {:?}", std::mem::discriminant(&other)),
+        }
+        reset_env();
     }
 }
