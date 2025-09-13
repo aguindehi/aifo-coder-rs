@@ -232,7 +232,3 @@ fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
         .iter()
         .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
 }
-
-
-
-

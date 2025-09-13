@@ -28,12 +28,12 @@ use std::time::Duration;
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
-use crate::shell_join;
 use crate::container_runtime_path;
+use crate::shell_join;
 
+use super::sidecar;
 use super::{auth, http, notifications};
 use super::{container_exists, select_kind_for_tool, sidecar_allowlist};
-use super::sidecar;
 
 use super::{
     build_sidecar_exec_preview, build_streaming_exec_args, log_parsed_request, log_request_result,
@@ -41,7 +41,9 @@ use super::{
     ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
 };
 
-use super::{respond_chunked_prelude, respond_chunked_trailer, respond_chunked_write_chunk, respond_plain};
+use super::{
+    respond_chunked_prelude, respond_chunked_trailer, respond_chunked_write_chunk, respond_plain,
+};
 
 struct ProxyCtx {
     runtime: PathBuf,
@@ -506,7 +508,7 @@ fn handle_connection<S: Read + Write>(
         drop(tx);
 
         // Timeout watcher
-        let (tox, tor) = std::sync::mpsc::channel::<()>>();
+        let (tox, tor) = std::sync::mpsc::channel::<()> > ();
         let timeout_secs_cl = timeout_secs;
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(timeout_secs_cl));
