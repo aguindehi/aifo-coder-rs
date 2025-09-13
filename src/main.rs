@@ -360,7 +360,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     false,
-                ).is_err() {
+                )
+                .is_err()
+                {
                     // errors already logged
                 }
                 println!();
@@ -455,7 +457,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     false,
-                ).is_err() {
+                )
+                .is_err()
+                {
                     // errors already logged
                 }
                 println!();
@@ -970,7 +974,9 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     true,
-                ).is_err() {
+                )
+                .is_err()
+                {
                     // errors already logged
                 }
                 println!();
