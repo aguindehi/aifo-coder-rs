@@ -921,8 +921,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         agent: agent.to_string(),
                         session_dir: session_dir.clone(),
                     };
-                    let container_name =
-                        crate::fork::env::pane_container_name(agent, &sid, 1);
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, 1);
                     let pane = crate::fork::types::Pane {
                         index: 1,
                         dir: pane1_dir.clone(),
@@ -930,11 +929,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         state_dir: pane_state_dir.clone(),
                         container_name,
                     };
-                    let inner = crate::fork::inner::build_inner_powershell(
-                        &session,
-                        &pane,
-                        &child_args,
-                    );
+                    let inner =
+                        crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("new-tab")
                         .arg("-d")
@@ -1045,8 +1041,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         agent: agent.to_string(),
                         session_dir: session_dir.clone(),
                     };
-                    let container_name =
-                        crate::fork::env::pane_container_name(agent, &sid, i);
+                    let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
                     let pane = crate::fork::types::Pane {
                         index: i,
                         dir: pane_dir.clone(),
@@ -1054,11 +1049,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         state_dir: pane_state_dir.clone(),
                         container_name,
                     };
-                    let inner = crate::fork::inner::build_inner_powershell(
-                        &session,
-                        &pane,
-                        &child_args,
-                    );
+                    let inner =
+                        crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
                     let orient = orient_for_layout(i);
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("split-pane")

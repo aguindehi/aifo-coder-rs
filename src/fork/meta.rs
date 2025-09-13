@@ -106,10 +106,8 @@ pub fn update_panes_created(
     let text = fs::read_to_string(&meta_path).unwrap_or_default();
     let created_at = extract_value_u64(&text, "created_at").unwrap_or(0);
     let base_label = extract_value_string(&text, "base_label").unwrap_or_default();
-    let base_ref_or_sha =
-        extract_value_string(&text, "base_ref_or_sha").unwrap_or_default();
-    let base_commit_sha =
-        extract_value_string(&text, "base_commit_sha").unwrap_or_default();
+    let base_ref_or_sha = extract_value_string(&text, "base_ref_or_sha").unwrap_or_default();
+    let base_commit_sha = extract_value_string(&text, "base_commit_sha").unwrap_or_default();
     let panes = extract_value_u64(&text, "panes").unwrap_or(existing.len() as u64) as usize;
     let snapshot_old = extract_value_string(&text, "snapshot_sha");
 
@@ -155,7 +153,6 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
         None
     }
 }
-
 
 #[cfg(test)]
 mod tests {
