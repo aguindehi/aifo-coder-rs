@@ -9,8 +9,8 @@ use std::env as std_env;
 use std::io::Write;
 use std::time::{Duration, SystemTime};
 
-use crate::shell_join;
 pub(crate) use crate::create_session_id;
+use crate::shell_join;
 
 mod images;
 pub use images::{
