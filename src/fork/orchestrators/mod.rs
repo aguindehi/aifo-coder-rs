@@ -31,7 +31,7 @@ fn have_any<I: IntoIterator<Item = &'static str>>(bins: I) -> bool {
 }
 
 /// Select orchestrator with corrected rules from spec (Windows env precedence).
-pub fn select_orchestrator(cli: &Cli, layout_requested: &str) -> Selected {
+pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
     #[cfg(not(windows))]
     {
         Selected::Tmux { reason: "non-Windows host, using tmux".to_string() }
