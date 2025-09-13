@@ -1,0 +1,139 @@
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+/// Session metadata in the on-disk JSON file (order preserved by manual writer).
+pub struct SessionMeta<'a> {
+    pub created_at: u64,
+    pub base_label: &'a str,
+    pub base_ref_or_sha: &'a str,
+    pub base_commit_sha: String, // computed per rules
+    pub panes: usize,
+    pub pane_dirs: Vec<PathBuf>,
+    pub branches: Vec<String>,
+    pub layout: &'a str,
+    pub snapshot_sha: Option<&'a str>,
+}
+
+/// Compute the base_commit_sha per current main.rs rules and write .meta.json (single line).
+pub fn write_initial_meta(
+    repo_root: &Path,
+    sid: &str,
+    m: &SessionMeta<'_>,
+) -> io::Result<()> {
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
+    let _ = fs::create_dir_all(&session_dir);
+
+    // Manual JSON to preserve key order and minimize diffs.
+    let pane_dirs_vec: Vec<String> = m
+        .pane_dirs
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    let branches_vec: Vec<String> = m.branches.clone();
+
+    let mut s = format!(
+        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+        m.created_at,
+        aifo_coder::json_escape(m.base_label),
+        aifo_coder::json_escape(m.base_ref_or_sha),
+        aifo_coder::json_escape(&m.base_commit_sha),
+        m.panes,
+        pane_dirs_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        aifo_coder::json_escape(m.layout)
+    );
+    if let Some(snap) = m.snapshot_sha {
+        s.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+    }
+    s.push_str(" }");
+    fs::write(session_dir.join(".meta.json"), s)
+}
+
+/// Read, minimally update panes_created, pane_dirs, branches, and preserve other fields.
+pub fn update_panes_created(
+    repo_root: &Path,
+    sid: &str,
+    created_count: usize,
+    existing: &[(PathBuf, String)],
+    snapshot_sha: Option<&str>,
+    layout: &str,
+) -> io::Result<()> {
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
+    let meta_path = session_dir.join(".meta.json");
+
+    // Build new arrays from on-disk existing panes
+    let pane_dirs_vec: Vec<String> = existing
+        .iter()
+        .map(|(p, _)| p.display().to_string())
+        .collect();
+    let branches_vec: Vec<String> = existing.iter().map(|(_, b)| b.clone()).collect();
+
+    // Parse a few existing fields (best-effort) to preserve them; fall back to empty/defaults.
+    let text = fs::read_to_string(&meta_path).unwrap_or_default();
+    let created_at = extract_value_u64(&text, "created_at").unwrap_or(0);
+    let base_label = extract_value_string(&text, "base_label").unwrap_or_else(|| "".to_string());
+    let base_ref_or_sha =
+        extract_value_string(&text, "base_ref_or_sha").unwrap_or_else(|| "".to_string());
+    let base_commit_sha =
+        extract_value_string(&text, "base_commit_sha").unwrap_or_else(|| "".to_string());
+    let panes = extract_value_u64(&text, "panes").unwrap_or(existing.len() as u64) as usize;
+    let snapshot_old = extract_value_string(&text, "snapshot_sha");
+
+    // Recompose JSON with fixed key order and updated arrays.
+    let mut s = format!(
+        "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
+        created_at,
+        aifo_coder::json_escape(&base_label),
+        aifo_coder::json_escape(&base_ref_or_sha),
+        aifo_coder::json_escape(&base_commit_sha),
+        panes,
+        created_count,
+        pane_dirs_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        aifo_coder::json_escape(layout)
+    );
+    if let Some(snap) = snapshot_old.as_deref().or(snapshot_sha) {
+        s.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+    }
+    s.push_str(" }");
+
+    fs::write(meta_path, s)
+}
+
+// Minimal JSON string parsers for specific fields
+fn extract_value_string(text: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\":", key);
+    let pos = text.find(&needle)?;
+    let rest = &text[pos + needle.len()..];
+    let rest = rest.trim_start();
+    if rest.starts_with('"') {
+        let mut out = String::new();
+        let mut chars = rest[1..].chars();
+        while let Some(ch) = chars.next() {
+            if ch == '"' {
+                break;
+            }
+            out.push(ch);
+        }
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
+    let needle = format!("\"{}\":", key);
+    let pos = text.find(&needle)?;
+    let rest = &text[pos + needle.len()..];
+    let rest = rest.trim_start();
+    let mut num = String::new();
+    for ch in rest.chars() {
+        if ch.is_ascii_digit() {
+            num.push(ch);
+        } else {
+            break;
+        }
+    }
+    num.parse::<u64>().ok()
+}
