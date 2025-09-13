@@ -157,6 +157,8 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         include_dirty: cli.fork_include_dirty,
         dissociate: cli.fork_dissociate,
     };
+    // Touch fields so clippy considers them read without changing behavior.
+    _opts.touch();
     let clones = match aifo_coder::fork_clone_and_checkout_panes(
         &repo_root,
         &sid,
@@ -350,7 +352,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
 
                 // Apply post-fork merging if requested, then print guidance
-                if let Err(_) = crate::fork::post_merge::apply_post_merge(
+                if crate::fork::post_merge::apply_post_merge(
                     &repo_root,
                     &sid,
                     cli.fork_merging_strategy,
@@ -358,7 +360,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     false,
-                ) {
+                ).is_err() {
                     // errors already logged
                 }
                 println!();
@@ -445,7 +447,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
 
                 // Apply post-fork merging if requested, then print guidance
-                if let Err(_) = crate::fork::post_merge::apply_post_merge(
+                if crate::fork::post_merge::apply_post_merge(
                     &repo_root,
                     &sid,
                     cli.fork_merging_strategy,
@@ -453,7 +455,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     false,
-                ) {
+                ).is_err() {
                     // errors already logged
                 }
                 println!();
@@ -960,7 +962,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 }
 
                 // Apply post-fork merging if requested, then print guidance
-                if let Err(_) = crate::fork::post_merge::apply_post_merge(
+                if crate::fork::post_merge::apply_post_merge(
                     &repo_root,
                     &sid,
                     cli.fork_merging_strategy,
@@ -968,7 +970,7 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     cli.dry_run,
                     cli.verbose,
                     true,
-                ) {
+                ).is_err() {
                     // errors already logged
                 }
                 println!();
