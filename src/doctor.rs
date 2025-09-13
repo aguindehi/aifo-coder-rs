@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::default_image_for_quiet;
+use crate::agent_images::default_image_for_quiet;
 
 pub fn run_doctor(verbose: bool) {
     let version = env!("CARGO_PKG_VERSION");
