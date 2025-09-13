@@ -1,4 +1,3 @@
-#![allow(clippy::needless_return)]
 use aifo_coder::{acquire_lock, build_docker_cmd, desired_apparmor_profile};
 use clap::Parser;
 use std::env;
