@@ -1,4 +1,4 @@
-use aifo_coder::{acquire_lock, build_docker_cmd, desired_apparmor_profile};
+use aifo_coder::{acquire_lock, build_docker_cmd};
 use clap::Parser;
 use std::env;
 use std::fs;
@@ -2034,7 +2034,7 @@ fn main() -> ExitCode {
 
     println!();
 
-    let apparmor_profile = desired_apparmor_profile();
+    let apparmor_profile = aifo_coder::desired_apparmor_profile();
     match build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
             if cli.verbose {
