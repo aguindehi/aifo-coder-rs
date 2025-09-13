@@ -1139,7 +1139,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     true,
                     false,
                 );
-                ExitCode::from(0);
             } else if let Ok(mt) = which("mintty.exe") {
                 // Use mintty as a Git Bash UI launcher
                 let mut any_failed = false;
@@ -1355,7 +1354,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     true,
                     false,
                 );
-                ExitCode::from(0);
             } else {
                 eprintln!("aifo-coder: error: AIFO_CODER_FORK_ORCH=gitbash requested but Git Bash/mintty were not found in PATH.");
                 return ExitCode::from(1);
@@ -1672,7 +1670,6 @@ fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     false,
                     true,
                 );
-                let _ = ExitCode::from(0);
             }
         }
 
