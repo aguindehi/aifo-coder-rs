@@ -63,9 +63,7 @@ mod tests {
         let envs = fork_env_for_pane(&session, &pane);
 
         let get = |k: &str| -> Option<String> {
-            envs.iter()
-                .find(|(kk, _)| kk == k)
-                .map(|(_, v)| v.clone())
+            envs.iter().find(|(kk, _)| kk == k).map(|(_, v)| v.clone())
         };
 
         assert_eq!(

@@ -1,11 +1,16 @@
 #[cfg(windows)]
 use which::which;
 
-use crate::cli::Cli;
 use super::types::{ForkSession, Pane};
+use crate::cli::Cli;
 
 pub trait Orchestrator {
-    fn launch(&self, session: &ForkSession, panes: &[Pane], child_args: &[String]) -> Result<(), String>;
+    fn launch(
+        &self,
+        session: &ForkSession,
+        panes: &[Pane],
+        child_args: &[String],
+    ) -> Result<(), String>;
     fn supports_post_merge(&self) -> bool;
 }
 
@@ -51,24 +56,35 @@ fn have_any<I: IntoIterator<Item = &'static str>>(bins: I) -> bool {
 pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
     #[cfg(not(windows))]
     {
-        Selected::Tmux { reason: "non-Windows host, using tmux".to_string() }
+        Selected::Tmux {
+            reason: "non-Windows host, using tmux".to_string(),
+        }
     }
 
     #[cfg(windows)]
     {
-        let pref = std::env::var("AIFO_CODER_FORK_ORCH").ok().unwrap_or_default().to_ascii_lowercase();
+        let pref = std::env::var("AIFO_CODER_FORK_ORCH")
+            .ok()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
 
         if pref.as_str() == "gitbash" {
             if have_any(["git-bash.exe", "bash.exe"]) || have("mintty.exe") {
-                return Selected::GitBashMintty { reason: "AIFO_CODER_FORK_ORCH=gitbash".to_string() };
+                return Selected::GitBashMintty {
+                    reason: "AIFO_CODER_FORK_ORCH=gitbash".to_string(),
+                };
             } else {
                 // Caller should emit the exact error text; here we still return fallback selection to avoid panics.
-                return Selected::GitBashMintty { reason: "requested gitbash but not found".to_string() };
+                return Selected::GitBashMintty {
+                    reason: "requested gitbash but not found".to_string(),
+                };
             }
         }
         if pref.as_str() == "powershell" {
             if have_any(["pwsh", "powershell", "powershell.exe"]) {
-                return Selected::PowerShell { reason: "AIFO_CODER_FORK_ORCH=powershell".to_string() };
+                return Selected::PowerShell {
+                    reason: "AIFO_CODER_FORK_ORCH=powershell".to_string(),
+                };
             }
             // fallthrough to wt selection below
         }
@@ -77,21 +93,31 @@ pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
                 // Fallback to PowerShell to support waiting
                 if have_any(["pwsh", "powershell", "powershell.exe"]) {
-                    return Selected::PowerShell { reason: "wt present but merge requested; using PowerShell".to_string() };
+                    return Selected::PowerShell {
+                        reason: "wt present but merge requested; using PowerShell".to_string(),
+                    };
                 }
                 // otherwise keep Windows Terminal (non-waitable) and higher-level prints guidance
             }
-            return Selected::WindowsTerminal { reason: "wt present".to_string() };
+            return Selected::WindowsTerminal {
+                reason: "wt present".to_string(),
+            };
         }
 
         if have_any(["pwsh", "powershell", "powershell.exe"]) {
-            return Selected::PowerShell { reason: "PowerShell present".to_string() };
+            return Selected::PowerShell {
+                reason: "PowerShell present".to_string(),
+            };
         }
         if have_any(["git-bash.exe", "bash.exe", "mintty.exe"]) {
-            return Selected::GitBashMintty { reason: "Git Bash/mintty present".to_string() };
+            return Selected::GitBashMintty {
+                reason: "Git Bash/mintty present".to_string(),
+            };
         }
         // Final fallback — upstream caller prints the exact error message and exits 127.
-        Selected::WindowsTerminal { reason: "none found".to_string() }
+        Selected::WindowsTerminal {
+            reason: "none found".to_string(),
+        }
     }
 }
 
@@ -132,7 +158,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::PowerShell { .. } => {}
-            other => panic!("expected PowerShell selection, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected PowerShell selection, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }
@@ -146,7 +175,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::GitBashMintty { .. } => {}
-            other => panic!("expected Git Bash selection, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected Git Bash selection, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }
@@ -183,7 +215,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::WindowsTerminal { .. } => {}
-            other => panic!("expected Windows Terminal selection, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected Windows Terminal selection, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }
@@ -198,7 +233,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::PowerShell { .. } => {}
-            other => panic!("expected PowerShell selection for merge, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected PowerShell selection for merge, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }
@@ -223,7 +261,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::WindowsTerminal { .. } => {} // "none found" sentinel variant
-            other => panic!("expected WindowsTerminal 'none found' selection, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected WindowsTerminal 'none found' selection, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }
@@ -246,7 +287,10 @@ mod tests {
         let sel = select_orchestrator(&cli, "tiled");
         match sel {
             Selected::WindowsTerminal { .. } => {}
-            other => panic!("expected WindowsTerminal selection when pwsh unavailable, got {:?}", std::mem::discriminant(&other)),
+            other => panic!(
+                "expected WindowsTerminal selection when pwsh unavailable, got {:?}",
+                std::mem::discriminant(&other)
+            ),
         }
         reset_env();
     }

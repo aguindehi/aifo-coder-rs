@@ -16,11 +16,7 @@ pub struct SessionMeta<'a> {
 }
 
 /// Compute the base_commit_sha per current main.rs rules and write .meta.json (single line).
-pub fn write_initial_meta(
-    repo_root: &Path,
-    sid: &str,
-    m: &SessionMeta<'_>,
-) -> io::Result<()> {
+pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> io::Result<()> {
     let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
     let _ = fs::create_dir_all(&session_dir);
 
@@ -78,7 +74,10 @@ pub fn write_initial_meta(
         aifo_coder::json_escape(m.layout)
     );
     if let Some(snap) = m.snapshot_sha {
-        s.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+        s.push_str(&format!(
+            ", \"snapshot_sha\": {}",
+            aifo_coder::json_escape(snap)
+        ));
     }
     s.push_str(" }");
     fs::write(session_dir.join(".meta.json"), s)
@@ -128,7 +127,10 @@ pub fn update_panes_created(
         aifo_coder::json_escape(layout)
     );
     if let Some(snap) = snapshot_old.as_deref().or(snapshot_sha) {
-        s.push_str(&format!(", \"snapshot_sha\": {}", aifo_coder::json_escape(snap)));
+        s.push_str(&format!(
+            ", \"snapshot_sha\": {}",
+            aifo_coder::json_escape(snap)
+        ));
     }
     s.push_str(" }");
 
@@ -245,8 +247,15 @@ mod tests {
         std::fs::create_dir_all(&p1).unwrap();
         let existing = vec![(p1.clone(), "b1".to_string())];
 
-        update_panes_created(&root, sid, existing.len(), &existing, Some("cafebabe"), "tiled")
-            .expect("update");
+        update_panes_created(
+            &root,
+            sid,
+            existing.len(),
+            &existing,
+            Some("cafebabe"),
+            "tiled",
+        )
+        .expect("update");
 
         let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
         let txt = std::fs::read_to_string(&meta_path).expect("read updated meta");
@@ -272,7 +281,12 @@ mod tests {
             "\"branches\":",
             "\"layout\":",
         ] {
-            assert!(txt.contains(k), "missing key after update: {} in {}", k, txt);
+            assert!(
+                txt.contains(k),
+                "missing key after update: {} in {}",
+                k,
+                txt
+            );
         }
     }
 
@@ -447,4 +461,3 @@ fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
     }
     num.parse::<u64>().ok()
 }
-

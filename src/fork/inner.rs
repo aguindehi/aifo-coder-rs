@@ -1,13 +1,8 @@
-
 use super::types::{ForkSession, Pane};
 
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
-pub fn build_inner_powershell(
-    session: &ForkSession,
-    pane: &Pane,
-    child_args: &[String],
-) -> String {
+pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[String]) -> String {
     let s = aifo_coder::fork_ps_inner_string(
         &session.agent,
         &session.sid,
@@ -25,10 +20,7 @@ pub fn build_inner_powershell(
         )
     } else {
         // Fallback: append at start of assignments
-        format!(
-            "{}; $env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';",
-            s
-        )
+        format!("{}; $env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';", s)
     }
 }
 
@@ -113,10 +105,19 @@ pub fn build_tmux_launch_script(
 ) -> String {
     let mut exports: Vec<String> = Vec::new();
     for (k, v) in [
-        ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING".to_string(), "1".to_string()),
+        (
+            "AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING".to_string(),
+            "1".to_string(),
+        ),
         ("AIFO_CODER_SKIP_LOCK".to_string(), "1".to_string()),
-        ("AIFO_CODER_CONTAINER_NAME".to_string(), pane.container_name.clone()),
-        ("AIFO_CODER_HOSTNAME".to_string(), pane.container_name.clone()),
+        (
+            "AIFO_CODER_CONTAINER_NAME".to_string(),
+            pane.container_name.clone(),
+        ),
+        (
+            "AIFO_CODER_HOSTNAME".to_string(),
+            pane.container_name.clone(),
+        ),
         ("AIFO_CODER_FORK_SESSION".to_string(), session.sid.clone()),
         ("AIFO_CODER_FORK_INDEX".to_string(), pane.index.to_string()),
         (
@@ -124,11 +125,7 @@ pub fn build_tmux_launch_script(
             pane.state_dir.display().to_string(),
         ),
     ] {
-        exports.push(format!(
-            "export {}={}",
-            k,
-            aifo_coder::shell_escape(&v)
-        ));
+        exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
     format!(
         r#"#!/usr/bin/env bash
