@@ -4,35 +4,28 @@ mod apparmor;
 mod color;
 mod docker;
 mod fork;
+#[cfg(windows)]
+#[path = "fork/windows/helpers.rs"]
+mod fork_windows_helpers;
 mod lock;
 mod registry;
 mod toolchain;
 mod ui;
 mod util;
-#[cfg(windows)]
-#[path = "fork/windows/helpers.rs"]
-mod fork_windows_helpers;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
 pub use fork::*;
-pub use lock::*;
-pub use registry::*;
-pub use toolchain::*;
-pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
-pub use util::*;
 #[cfg(windows)]
 pub use fork_windows_helpers::{
     fork_bash_inner_string, fork_ps_inner_string, ps_wait_process_cmd, wt_build_new_tab_args,
     wt_build_split_args, wt_orient_for_layout,
 };
-
-
-
-
-
-
-
+pub use lock::*;
+pub use registry::*;
+pub use toolchain::*;
+pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
+pub use util::*;
 
 // -------- Color mode and helpers --------
 
