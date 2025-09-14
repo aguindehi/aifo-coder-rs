@@ -1,3 +1,4 @@
+#![cfg(windows)]
 #![allow(clippy::module_name_repetitions)]
 // Windows-only helpers extracted from lib.rs for fork orchestration inner builders and wt helpers.
 
