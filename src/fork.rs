@@ -15,22 +15,21 @@ use crate::{
 
 #[path = "fork_impl/scan.rs"]
 mod fork_impl_scan;
+#[path = "fork_impl/git.rs"]
+mod fork_impl_git;
+#[path = "fork_impl/panecheck.rs"]
+mod fork_impl_panecheck;
+#[path = "fork_impl/notice.rs"]
+mod fork_impl_notice;
 
 /// Try to detect the Git repository root (absolute canonical path).
 /// Returns Some(repo_root) when inside a Git repository; otherwise None.
 pub fn repo_root() -> Option<PathBuf> {
-    // Use `git rev-parse --show-toplevel` to detect the repository top-level
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // Use helper to detect the repository top-level
+    let s = match fork_impl_git::git_stdout_str(None, &["rev-parse", "--show-toplevel"]) {
+        Some(v) => v.trim().to_string(),
+        None => return None,
+    };
     if s.is_empty() {
         return None;
     }
@@ -783,82 +782,11 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
             .and_then(|s| crate::fork_meta::extract_value_string(s, "base_commit_sha"));
         let mut panes_status = Vec::new();
         for p in fork_impl_scan::pane_dirs_for_session(sd) {
-            let mut reasons = Vec::new();
-            // dirty detection
-            let dirty = Command::new("git")
-                .arg("-C")
-                .arg(&p)
-                .arg("status")
-                .arg("--porcelain=v1")
-                .arg("-uall")
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .output()
-                .ok()
-                .map(|o| !o.stdout.is_empty())
-                .unwrap_or(false);
-            if dirty {
-                reasons.push("dirty".to_string());
-            } else {
-                // submodule changes detect
-                if let Ok(o) = Command::new("git")
-                    .arg("-C")
-                    .arg(&p)
-                    .arg("submodule")
-                    .arg("status")
-                    .arg("--recursive")
-                    .output()
-                {
-                    let s = String::from_utf8_lossy(&o.stdout);
-                    if s.lines()
-                        .any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U'))
-                    {
-                        reasons.push("submodules-dirty".to_string());
-                    }
-                }
-            }
-            // ahead detection
-            let mut ahead = false;
-            let mut base_unknown = false;
-            if let Some(ref base_sha) = base_commit {
-                let out = Command::new("git")
-                    .arg("-C")
-                    .arg(&p)
-                    .arg("rev-list")
-                    .arg("--count")
-                    .arg(format!("{}..HEAD", base_sha))
-                    .output()
-                    .ok();
-                if let Some(o) = out {
-                    if o.status.success() {
-                        let c = String::from_utf8_lossy(&o.stdout)
-                            .trim()
-                            .parse::<u64>()
-                            .unwrap_or(0);
-                        if c > 0 {
-                            ahead = true;
-                        }
-                    } else {
-                        base_unknown = true;
-                    }
-                } else {
-                    base_unknown = true;
-                }
-            } else {
-                base_unknown = true;
-            }
-            if ahead {
-                reasons.push("ahead".to_string());
-            }
-            if base_unknown {
-                reasons.push("base-unknown".to_string());
-            }
-
-            let clean = reasons.is_empty();
+            let pc = fork_impl_panecheck::pane_check(&p, base_commit.as_deref());
             panes_status.push(PaneStatus {
                 dir: p,
-                clean,
-                reasons,
+                clean: pc.clean,
+                reasons: pc.reasons,
             });
         }
         plan.push((sd.clone(), panes_status));
@@ -1219,53 +1147,8 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
 
 /// Print a notice about stale fork sessions for the current repository (quiet; best-effort).
 pub fn fork_print_stale_notice() {
-    let repo = match repo_root() {
-        Some(p) => p,
-        None => {
-            // Fallback to current working directory (best-effort), e.g., for doctor runs
-            match env::current_dir() {
-                Ok(p) => p,
-                Err(_) => return,
-            }
-        }
-    };
-    let base = repo.join(".aifo-coder").join("forks");
-    if !base.exists() {
-        return;
-    }
-    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(30);
-    let now = secs_since_epoch(SystemTime::now());
-    let mut count = 0usize;
-    let mut oldest = 0u64;
-    for sd in fork_impl_scan::session_dirs(&base) {
-        let meta = read_file_to_string(&sd.join(".meta.json"));
-        let created_at = meta
-            .as_deref()
-            .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
-            .or_else(|| {
-                fs::metadata(&sd)
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .map(fork_impl_scan::secs_since_epoch)
-            })
-            .unwrap_or(0);
-        if created_at == 0 {
-            continue;
-        }
-        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
-        if age_days >= threshold_days {
-            count += 1;
-            if age_days > oldest {
-                oldest = age_days;
-            }
-        }
-    }
-    if count > 0 {
-        eprintln!("Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}", count, oldest, threshold_days);
-    }
+    // Delegate to private helper module (no behavior change).
+    fork_impl_notice::fork_print_stale_notice_impl();
 }
 
 /// Auto-clean clean fork sessions older than the stale threshold when AIFO_CODER_FORK_AUTOCLEAN=1 is set.
@@ -1273,162 +1156,8 @@ pub fn fork_print_stale_notice() {
 /// - Threshold in days is taken from AIFO_CODER_FORK_STALE_DAYS (default 30).
 /// - Prints a concise summary of deletions and survivors.
 pub fn fork_autoclean_if_enabled() {
-    if env::var("AIFO_CODER_FORK_AUTOCLEAN").ok().as_deref() != Some("1") {
-        return;
-    }
-    let repo = match repo_root() {
-        Some(p) => p,
-        None => return,
-    };
-    let base = repo.join(".aifo-coder").join("forks");
-    if !base.exists() {
-        return;
-    }
-    let threshold_days: u64 = env::var("AIFO_CODER_FORK_STALE_DAYS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(30);
-    let now = secs_since_epoch(SystemTime::now());
-
-    let mut deleted = 0usize;
-    let mut kept = 0usize;
-    let autoclean_verbose = env::var("AIFO_CODER_FORK_AUTOCLEAN_VERBOSE")
-        .ok()
-        .as_deref()
-        == Some("1");
-    let mut deleted_sids: Vec<String> = Vec::new();
-    let mut kept_sids: Vec<String> = Vec::new();
-
-    for sd in fork_impl_scan::session_dirs(&base) {
-        let meta = read_file_to_string(&sd.join(".meta.json"));
-        let created_at = meta
-            .as_deref()
-            .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
-            .or_else(|| {
-                fs::metadata(&sd)
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .map(fork_impl_scan::secs_since_epoch)
-            })
-            .unwrap_or(0);
-        if created_at == 0 {
-            continue;
-        }
-        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
-        if age_days < threshold_days {
-            continue;
-        }
-        // Determine if all panes are clean (safe to delete entire session)
-        let mut all_clean = true;
-        let base_commit = meta
-            .as_deref()
-            .and_then(|s| crate::fork_meta::extract_value_string(s, "base_commit_sha"));
-        let panes = fork_impl_scan::pane_dirs_for_session(&sd);
-        for p in panes {
-            // dirty detection
-            let dirty = Command::new("git")
-                .arg("-C")
-                .arg(&p)
-                .arg("status")
-                .arg("--porcelain=v1")
-                .arg("-uall")
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .output()
-                .ok()
-                .map(|o| !o.stdout.is_empty())
-                .unwrap_or(false);
-            if dirty {
-                all_clean = false;
-                break;
-            }
-            // submodules dirty
-            if let Ok(o) = Command::new("git")
-                .arg("-C")
-                .arg(&p)
-                .arg("submodule")
-                .arg("status")
-                .arg("--recursive")
-                .output()
-            {
-                let s = String::from_utf8_lossy(&o.stdout);
-                if s.lines()
-                    .any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U'))
-                {
-                    all_clean = false;
-                    break;
-                }
-            }
-            // ahead detection requires known base_commit
-            let mut base_unknown = base_commit.is_none();
-            if let Some(ref base_sha) = base_commit {
-                if let Ok(o) = Command::new("git")
-                    .arg("-C")
-                    .arg(&p)
-                    .arg("rev-list")
-                    .arg("--count")
-                    .arg(format!("{}..HEAD", base_sha))
-                    .output()
-                {
-                    if o.status.success() {
-                        let c = String::from_utf8_lossy(&o.stdout)
-                            .trim()
-                            .parse::<u64>()
-                            .unwrap_or(0);
-                        if c > 0 {
-                            all_clean = false;
-                            break;
-                        }
-                    } else {
-                        base_unknown = true;
-                    }
-                } else {
-                    base_unknown = true;
-                }
-            }
-            if base_unknown {
-                all_clean = false;
-                break;
-            }
-        }
-        if all_clean {
-            let _ = fs::remove_dir_all(&sd);
-            let sid = sd
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            if !sid.is_empty() {
-                deleted_sids.push(sid);
-            }
-            deleted += 1;
-        } else {
-            let sid = sd
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            if !sid.is_empty() {
-                kept_sids.push(sid);
-            }
-            kept += 1;
-        }
-    }
-
-    if deleted > 0 {
-        eprintln!(
-            "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
-            deleted, threshold_days, kept
-        );
-        if autoclean_verbose {
-            if !deleted_sids.is_empty() {
-                eprintln!("  deleted sessions: {}", deleted_sids.join(" "));
-            }
-            if !kept_sids.is_empty() {
-                eprintln!("  protected sessions kept: {}", kept_sids.join(" "));
-            }
-        }
-    }
+    // Delegate to private helper module (no behavior change).
+    fork_impl_notice::fork_autoclean_if_enabled_impl();
 }
 
 fn collect_pane_branches(panes: &[(PathBuf, String)]) -> std::io::Result<Vec<(PathBuf, String)>> {

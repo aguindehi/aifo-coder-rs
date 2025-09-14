@@ -1,5 +1,5 @@
-Title: Refactor src/fork.rs into cohesive submodules with stable public API (v3)
-Version: v3
+Title: Refactor src/fork.rs into cohesive submodules with stable public API (v3, implemented)
+Version: v3-implemented
 
 Overview and validation
 - The v1 plan is sound: keep src/fork.rs as the public facade within the library crate, refactor
