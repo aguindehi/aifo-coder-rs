@@ -1,4 +1,4 @@
- //! Execute deletion for fork clean: delete sessions/panes, update metadata; supports dry-run previews.
+//! Execute deletion for fork clean: delete sessions/panes, update metadata; supports dry-run previews.
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
