@@ -6,7 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
-
+#[path = "fork_impl/clean/exec.rs"]
+mod fork_impl_clean_exec;
+#[path = "fork_impl/clean/plan.rs"]
+mod fork_impl_clean_plan;
+#[path = "fork_impl/clean/prompt.rs"]
+mod fork_impl_clean_prompt;
 #[path = "fork_impl/clone.rs"]
 mod fork_impl_clone;
 #[path = "fork_impl/git.rs"]
@@ -23,12 +28,6 @@ mod fork_impl_panecheck;
 mod fork_impl_scan;
 #[path = "fork_impl/snapshot.rs"]
 mod fork_impl_snapshot;
-#[path = "fork_impl/clean/plan.rs"]
-mod fork_impl_clean_plan;
-#[path = "fork_impl/clean/prompt.rs"]
-mod fork_impl_clean_prompt;
-#[path = "fork_impl/clean/exec.rs"]
-mod fork_impl_clean_exec;
 
 /// Try to detect the Git repository root (absolute canonical path).
 /// Returns Some(repo_root) when inside a Git repository; otherwise None.

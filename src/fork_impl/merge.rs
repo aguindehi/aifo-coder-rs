@@ -295,9 +295,7 @@ pub(crate) fn fork_merge_branches_impl(
             .arg(base_ref_or_sha)
             .status()?;
         if !st.success() {
-            return Err(io::Error::other(
-                "failed to checkout merge target branch",
-            ));
+            return Err(io::Error::other("failed to checkout merge target branch"));
         }
     }
 
@@ -475,9 +473,7 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     // Gather pane dirs
     let panes_dirs = super::fork_impl_scan::pane_dirs_for_session(&session_dir);
     if panes_dirs.is_empty() {
-        return Err(io::Error::other(
-            "no pane directories found under session",
-        ));
+        return Err(io::Error::other("no pane directories found under session"));
     }
 
     // Determine base_ref_or_sha from .meta.json if present; otherwise fallback to HEAD
@@ -513,9 +509,7 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     }
 
     if panes.is_empty() {
-        return Err(io::Error::other(
-            "no pane branches found (detached HEAD?)",
-        ));
+        return Err(io::Error::other("no pane branches found (detached HEAD?)"));
     }
 
     super::fork_merge_branches(
