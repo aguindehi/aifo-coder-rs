@@ -146,7 +146,7 @@ mod tests {
         // No base_commit_sha in meta -> base_unknown
         fs::write(session.join(".meta.json"), "{ \"created_at\": 0 }").unwrap();
 
-        let plan = build_plan_for_targets(&[session.clone()]);
+        let plan = build_plan_for_targets(std::slice::from_ref(&session));
         assert_eq!(plan.len(), 1);
         assert_eq!(plan[0].panes.len(), 1);
         let reasons = &plan[0].panes[0].reasons;
@@ -234,7 +234,7 @@ mod tests {
         );
         fs::write(session.join(".meta.json"), meta).unwrap();
 
-        let plan = build_plan_for_targets(&[session.clone()]);
+        let plan = build_plan_for_targets(std::slice::from_ref(&session));
         assert_eq!(plan.len(), 1);
         assert_eq!(plan[0].panes.len(), 1);
         let reasons = &plan[0].panes[0].reasons;
