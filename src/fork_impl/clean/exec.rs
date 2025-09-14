@@ -1,9 +1,10 @@
 //! Execute deletion for fork clean: delete sessions/panes, update metadata; supports dry-run previews.
 use std::fs;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use crate::fork::fork_impl_clean_plan::SessionPlan;
+use crate::fork::fork_impl_git;
 use crate::{color_enabled_stdout, json_escape, paint, toolchain_cleanup_session};
 
 /// Execute deletions (or print in dry-run); returns (deleted_sessions_count, deleted_panes_count).
@@ -98,7 +99,7 @@ pub fn execute(
                     let mut branches: Vec<String> = Vec::new();
                     for p in &remaining {
                         if let Ok(out) = {
-                            let mut cmd = aifo_coder::fork_impl_git::git_cmd(Some(p));
+                            let mut cmd = fork_impl_git::git_cmd(Some(p));
                             cmd.arg("rev-parse")
                                 .arg("--abbrev-ref")
                                 .arg("HEAD")
