@@ -1,5 +1,4 @@
 use clap::ValueEnum;
-use std::io::{Read, Write};
 use std::time::{Duration, SystemTime};
 mod apparmor;
 mod color;
