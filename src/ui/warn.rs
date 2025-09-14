@@ -1,4 +1,6 @@
-use std::io::{Read, Write};
+use std::io::Write;
+#[cfg(unix)]
+use std::io::Read;
 
 /// Print a standardized warning line to stderr (color-aware).
 pub fn warn_print(msg: &str) {
