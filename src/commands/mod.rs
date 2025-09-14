@@ -48,24 +48,29 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let crush_img = default_image_for("crush");
     let aider_img = default_image_for("aider");
     let codex_val = if use_color {
-        format!("\x1b[34;1m{}\x1b[0m", codex_img)
+        format!("\x1b[34;1m{}\x1b[0m", &codex_img)
     } else {
-        codex_img
+        codex_img.clone()
     };
     let crush_val = if use_color {
-        format!("\x1b[34;1m{}\x1b[0m", crush_img)
+        format!("\x1b[34;1m{}\x1b[0m", &crush_img)
     } else {
-        crush_img
+        crush_img.clone()
     };
     let aider_val = if use_color {
-        format!("\x1b[34;1m{}\x1b[0m", aider_img)
+        format!("\x1b[34;1m{}\x1b[0m", &aider_img)
     } else {
-        aider_img
+        aider_img.clone()
     };
     eprintln!("  codex: {}", codex_val);
     eprintln!("  crush: {}", crush_val);
     eprintln!("  aider: {}", aider_val);
     eprintln!();
+
+    // stdout: machine-readable image list (no colors, no banner)
+    println!("codex {}", codex_img);
+    println!("crush {}", crush_img);
+    println!("aider {}", aider_img);
 
     std::process::ExitCode::from(0)
 }

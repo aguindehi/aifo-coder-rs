@@ -31,56 +31,35 @@ use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
 use crate::warnings::{maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace};
 
-struct OutputNewlineGuard;
-
-impl Drop for OutputNewlineGuard {
-    fn drop(&mut self) {
-        // Ensure a trailing blank line on stdout at process end
-        println!();
-    }
-}
-
-fn main() -> ExitCode {
-    // Leading blank line at program start
-    eprintln!();
-    let _aifo_output_newline_guard = OutputNewlineGuard;
-    // Load environment variables from .env if present (no error if missing)
-    dotenvy::dotenv().ok();
-    // Parse command-line arguments into structured CLI options
-    let cli = Cli::parse();
-    // Configure color mode as early as possible (only when explicitly provided on CLI)
+fn apply_cli_globals(cli: &Cli) {
     if let Some(mode) = cli.color {
         aifo_coder::set_color_mode(mode);
     }
-
-    // Optional: invalidate on-disk registry cache before any probes
     if cli.invalidate_registry_cache {
         aifo_coder::invalidate_registry_cache();
     }
-
-    // Apply CLI flavor override by setting the environment variable the launcher uses
     if let Some(flavor) = cli.flavor {
         match flavor {
             Flavor::Full => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "full"),
             Flavor::Slim => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim"),
         }
     }
+}
 
-    // Fork orchestrator: run early if requested
-    if let Some(n) = cli.fork {
-        if n >= 2 {
-            return crate::fork::runner::fork_run(&cli, n);
+fn require_repo_root() -> Result<PathBuf, ExitCode> {
+    match aifo_coder::repo_root() {
+        Some(p) => Ok(p),
+        None => {
+            eprintln!(
+                "aifo-coder: error: fork maintenance commands must be run inside a Git repository."
+            );
+            Err(ExitCode::from(1))
         }
     }
-    // Optional auto-clean of stale fork sessions and stale session notice
-    // Suppress stale notice here when running 'doctor' (doctor prints its own notice).
-    if !matches!(cli.command, Agent::Fork { .. }) && !matches!(cli.command, Agent::Doctor) {
-        aifo_coder::fork_autoclean_if_enabled();
-        // Print suggestions for old fork sessions on normal runs
-        aifo_coder::fork_print_stale_notice();
-    }
+}
 
-    // Fork maintenance subcommands: operate without starting agents or acquiring locks
+fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
+    let use_err_color = aifo_coder::color_enabled_stderr();
     if let Agent::Fork { cmd } = &cli.command {
         match cmd {
             ForkCmd::List {
@@ -88,25 +67,20 @@ fn main() -> ExitCode {
                 all_repos,
                 color,
             } => {
-                // List existing sessions; supports JSON output and optional cross-repo scan
                 if let Some(mode) = color {
                     aifo_coder::set_color_mode(*mode);
                 }
                 if *all_repos {
-                    // In all-repos mode, do not require being inside a Git repo; workspace root is taken from env
                     let dummy = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                     let code = aifo_coder::fork_list(&dummy, *json, true).unwrap_or(1);
-                    return ExitCode::from(code as u8);
+                    return Some(ExitCode::from(code as u8));
                 } else {
-                    let repo_root = match aifo_coder::repo_root() {
-                        Some(p) => p,
-                        None => {
-                            eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
-                            return ExitCode::from(1);
-                        }
+                    let repo_root = match require_repo_root() {
+                        Ok(p) => p,
+                        Err(code) => return Some(code),
                     };
                     let code = aifo_coder::fork_list(&repo_root, *json, false).unwrap_or(1);
-                    return ExitCode::from(code as u8);
+                    return Some(ExitCode::from(code as u8));
                 }
             }
             ForkCmd::Clean {
@@ -119,13 +93,9 @@ fn main() -> ExitCode {
                 keep_dirty,
                 json,
             } => {
-                // Clean fork sessions with safety guards; can print a dry-run plan or JSON summary
-                let repo_root = match aifo_coder::repo_root() {
-                    Some(p) => p,
-                    None => {
-                        eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
-                        return ExitCode::from(1);
-                    }
+                let repo_root = match require_repo_root() {
+                    Ok(p) => p,
+                    Err(code) => return Some(code),
                 };
                 let opts = aifo_coder::ForkCleanOpts {
                     session: session.clone(),
@@ -138,7 +108,7 @@ fn main() -> ExitCode {
                     json: *json,
                 };
                 let code = aifo_coder::fork_clean(&repo_root, &opts).unwrap_or(1);
-                return ExitCode::from(code as u8);
+                return Some(ExitCode::from(code as u8));
             }
             ForkCmd::Merge {
                 session,
@@ -146,13 +116,9 @@ fn main() -> ExitCode {
                 autoclean,
                 dry_run,
             } => {
-                // Merge selected session back to the base repo; supports strategy and optional autoclean
-                let repo_root = match aifo_coder::repo_root() {
-                    Some(p) => p,
-                    None => {
-                        eprintln!("aifo-coder: error: fork maintenance commands must be run inside a Git repository.");
-                        return ExitCode::from(1);
-                    }
+                let repo_root = match require_repo_root() {
+                    Ok(p) => p,
+                    Err(code) => return Some(code),
                 };
                 match aifo_coder::fork_merge_branches_by_session(
                     &repo_root,
@@ -166,11 +132,10 @@ fn main() -> ExitCode {
                             && *autoclean
                             && !*dry_run
                         {
-                            let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
                                 "{}",
                                 aifo_coder::paint(
-                                    use_err,
+                                    use_err_color,
                                     "\x1b[36;1m",
                                     &format!(
                                         "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
@@ -190,11 +155,10 @@ fn main() -> ExitCode {
                             };
                             match aifo_coder::fork_clean(&repo_root, &opts) {
                                 Ok(_) => {
-                                    let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
                                         "{}",
                                         aifo_coder::paint(
-                                            use_err,
+                                            use_err_color,
                                             "\x1b[32;1m",
                                             &format!(
                                                 "aifo-coder: disposed fork session {}.",
@@ -204,11 +168,10 @@ fn main() -> ExitCode {
                                     );
                                 }
                                 Err(e) => {
-                                    let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
                                         "{}",
                                         aifo_coder::paint(
-                                            use_err,
+                                            use_err_color,
                                             "\x1b[33m",
                                             &format!(
                                                 "aifo-coder: warning: failed to dispose fork session {}: {}",
@@ -219,75 +182,124 @@ fn main() -> ExitCode {
                                 }
                             }
                         }
-                        return ExitCode::from(0);
+                        return Some(ExitCode::from(0));
                     }
                     Err(e) => {
-                        {
-                            let use_err = aifo_coder::color_enabled_stderr();
-                            eprintln!(
-                                "{}",
-                                aifo_coder::paint(
-                                    use_err,
-                                    "\x1b[31;1m",
-                                    &format!("aifo-coder: fork merge failed: {}", e)
-                                )
-                            );
-                        }
-                        return ExitCode::from(1);
+                        eprintln!(
+                            "{}",
+                            aifo_coder::paint(
+                                use_err_color,
+                                "\x1b[31;1m",
+                                &format!("aifo-coder: fork merge failed: {}", e)
+                            )
+                        );
+                        return Some(ExitCode::from(1));
                     }
                 }
             }
         }
     }
+    None
+}
 
-    // Doctor subcommand runs diagnostics without acquiring a lock
-    if let Agent::Doctor = &cli.command {
-        return crate::commands::run_doctor_command(&cli);
-    } else if let Agent::Images = &cli.command {
-        return crate::commands::run_images(&cli);
-    } else if let Agent::CacheClear = &cli.command {
-        return crate::commands::run_cache_clear(&cli);
-    } else if let Agent::ToolchainCacheClear = &cli.command {
-        return crate::commands::run_toolchain_cache_clear(&cli);
-    } else if let Agent::Toolchain {
-        kind,
-        image,
-        no_cache,
-        args,
-    } = &cli.command
-    {
-        return crate::commands::run_toolchain(&cli, *kind, image.clone(), *no_cache, args.clone());
+fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
+    match &cli.command {
+        Agent::Doctor => Some(crate::commands::run_doctor_command(cli)),
+        Agent::Images => Some(crate::commands::run_images(cli)),
+        Agent::CacheClear => Some(crate::commands::run_cache_clear(cli)),
+        Agent::ToolchainCacheClear => Some(crate::commands::run_toolchain_cache_clear(cli)),
+        Agent::Toolchain {
+            kind,
+            image,
+            no_cache,
+            args,
+        } => Some(crate::commands::run_toolchain(
+            cli,
+            *kind,
+            image.clone(),
+            *no_cache,
+            args.clone(),
+        )),
+        _ => None,
+    }
+}
+
+fn resolve_agent_and_args(cli: &Cli) -> Option<(&'static str, Vec<String>)> {
+    match &cli.command {
+        Agent::Codex { args } => ("codex", args.clone()).into(),
+        Agent::Crush { args } => ("crush", args.clone()).into(),
+        Agent::Aider { args } => ("aider", args.clone()).into(),
+        _ => None,
+    }
+}
+
+fn print_verbose_run_info(
+    agent: &str,
+    image: &str,
+    apparmor_opt: Option<&str>,
+    preview: &str,
+    cli_verbose: bool,
+    dry_run: bool,
+) {
+    if cli_verbose {
+        eprintln!(
+            "aifo-coder: effective apparmor profile: {}",
+            apparmor_opt.unwrap_or("(disabled)")
+        );
+        // Show chosen registry and source for transparency
+        let rp = aifo_coder::preferred_registry_prefix_quiet();
+        let reg_display = if rp.is_empty() {
+            "Docker Hub".to_string()
+        } else {
+            rp.trim_end_matches('/').to_string()
+        };
+        let reg_src = aifo_coder::preferred_registry_source();
+        eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
+        eprintln!("aifo-coder: image: {image}");
+        eprintln!("aifo-coder: agent: {agent}");
+    }
+    if cli_verbose || dry_run {
+        eprintln!("aifo-coder: docker: {preview}");
+    }
+}
+
+fn main() -> ExitCode {
+    // Leading blank line at program start
+    eprintln!();
+    // Load environment variables from .env if present (no error if missing)
+    dotenvy::dotenv().ok();
+    // Parse command-line arguments into structured CLI options
+    let cli = Cli::parse();
+    apply_cli_globals(&cli);
+
+    // Fork orchestrator: run early if requested
+    if let Some(n) = cli.fork {
+        if n >= 2 {
+            return crate::fork::runner::fork_run(&cli, n);
+        }
+    }
+    // Optional auto-clean of stale fork sessions and stale session notice
+    // Suppress stale notice here when running 'doctor' (doctor prints its own notice).
+    if !matches!(cli.command, Agent::Fork { .. }) && !matches!(cli.command, Agent::Doctor) {
+        aifo_coder::fork_autoclean_if_enabled();
+        // Print suggestions for old fork sessions on normal runs
+        aifo_coder::fork_print_stale_notice();
     }
 
-    // Select the agent subcommand to run and capture its trailing arguments
-    let (agent, args) = match &cli.command {
-        Agent::Codex { args } => ("codex", args.clone()), // Run Codex agent in container with pass-through args
-        Agent::Crush { args } => ("crush", args.clone()), // Run Crush agent in container with pass-through args
-        Agent::Aider { args } => ("aider", args.clone()), // Run Aider agent in container with pass-through args
-        Agent::Doctor => {
-            // Defensive: handled earlier and returns immediately
-            unreachable!("Doctor subcommand is handled earlier and returns immediately")
-        }
-        Agent::Images => {
-            // Defensive: handled earlier and returns immediately
-            unreachable!("Images subcommand is handled earlier and returns immediately")
-        }
-        Agent::CacheClear => {
-            // Defensive: handled earlier and returns immediately
-            unreachable!("CacheClear subcommand is handled earlier and returns immediately")
-        }
-        Agent::ToolchainCacheClear => unreachable!(
-            // Defensive: handled earlier and returns immediately
-            "ToolchainCacheClear subcommand is handled earlier and returns immediately"
-        ),
-        Agent::Toolchain { .. } => {
-            // Defensive: handled earlier and returns immediately
-            unreachable!("Toolchain subcommand is handled earlier and returns immediately")
-        }
-        Agent::Fork { .. } => {
-            // Defensive: handled earlier and returns immediately
-            unreachable!("Fork maintenance subcommands are handled earlier and return immediately")
-        }
+    // Fork maintenance via helper
+    if let Some(code) = handle_fork_maintenance(&cli) {
+        return code;
+    }
+
+    // Misc subcommands via helper
+    if let Some(code) = handle_misc_subcommands(&cli) {
+        return code;
+    }
+
+    // Resolve agent and args for container run
+    let (agent, args) = match resolve_agent_and_args(&cli) {
+        Some(v) => v,
+        None => return ExitCode::from(0),
     };
 
     // Print startup banner before any further diagnostics
@@ -301,68 +313,10 @@ fn main() -> ExitCode {
     }
 
     // Toolchain session RAII
-    let mut toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
+    let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
-        // Reconstruct kinds and overrides (for dry-run previews)
-        let mut kinds: Vec<String> = cli
-            .toolchain
-            .iter()
-            .map(|k| k.as_str().to_string())
-            .collect();
-
-        // Parse "kind@version" items from --toolchain-spec into (kind, optional version)
-        fn parse_spec(s: &str) -> (String, Option<String>) {
-            let t = s.trim();
-            if let Some((k, v)) = t.split_once('@') {
-                (k.trim().to_string(), Some(v.trim().to_string()))
-            } else {
-                (t.to_string(), None)
-            }
-        }
-
-        let mut spec_versions: Vec<(String, String)> = Vec::new();
-        for s in &cli.toolchain_spec {
-            let (k, v) = parse_spec(s);
-            if !k.is_empty() {
-                kinds.push(k.clone());
-                if let Some(ver) = v {
-                    spec_versions.push((k, ver));
-                }
-            }
-        }
-        use std::collections::BTreeSet;
-        // Normalize toolchain kinds and deduplicate while preserving stable order
-        let mut set = BTreeSet::new();
-        let mut kinds_norm: Vec<String> = Vec::new();
-        for k in kinds {
-            let norm = aifo_coder::normalize_toolchain_kind(&k);
-            if set.insert(norm.clone()) {
-                kinds_norm.push(norm);
-            }
-        }
-        let kinds = kinds_norm;
-
-        let mut overrides: Vec<(String, String)> = Vec::new();
-        // Collect explicit image overrides (kind=image) from CLI
-        for s in &cli.toolchain_image {
-            if let Some((k, v)) = s.split_once('=') {
-                if !k.trim().is_empty() && !v.trim().is_empty() {
-                    overrides.push((
-                        aifo_coder::normalize_toolchain_kind(k),
-                        v.trim().to_string(),
-                    ));
-                }
-            }
-        }
-        // Backfill missing image overrides using official images for requested versions
-        for (k, ver) in spec_versions {
-            let kind = aifo_coder::normalize_toolchain_kind(&k);
-            if !overrides.iter().any(|(kk, _)| kk == &kind) {
-                let img = aifo_coder::default_toolchain_image_for_version(&kind, &ver);
-                overrides.push((kind, img));
-            }
-        }
+        let (kinds, overrides) = crate::toolchain_session::plan_from_cli(&cli);
 
         if cli.dry_run {
             // Dry-run: print detailed previews and skip starting sidecars/proxy
@@ -380,13 +334,16 @@ fn main() -> ExitCode {
                 if !cli.toolchain_bootstrap.is_empty() {
                     eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
                 }
-                eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
+                eprintln!(concat!(
+                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
+                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                ));
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
                 Ok(Some(ts)) => {
                     // Toolchain sidecars and proxy started
-                    toolchain_session = Some(ts);
+                    _toolchain_session = Some(ts);
                 }
                 Ok(None) => { /* no-op: no toolchains requested or dry-run */ }
                 Err(_) => {
@@ -404,32 +361,20 @@ fn main() -> ExitCode {
         .unwrap_or_else(|| default_image_for(agent));
 
     // Visual separation before Docker info and previews
-    println!();
+    eprintln!();
 
     // Determine desired AppArmor profile (may be disabled on non-Linux)
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
     match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
-            if cli.verbose {
-                eprintln!(
-                    "aifo-coder: effective apparmor profile: {}",
-                    apparmor_profile.as_deref().unwrap_or("(disabled)")
-                );
-                // Show chosen registry and source for transparency
-                let rp = aifo_coder::preferred_registry_prefix_quiet();
-                let reg_display = if rp.is_empty() {
-                    "Docker Hub".to_string()
-                } else {
-                    rp.trim_end_matches('/').to_string()
-                };
-                let reg_src = aifo_coder::preferred_registry_source();
-                eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
-                eprintln!("aifo-coder: image: {image}");
-                eprintln!("aifo-coder: agent: {agent}");
-            }
-            if cli.verbose || cli.dry_run {
-                eprintln!("aifo-coder: docker: {preview}");
-            }
+            print_verbose_run_info(
+                agent,
+                &image,
+                apparmor_profile.as_deref(),
+                &preview,
+                cli.verbose,
+                cli.dry_run,
+            );
             if cli.dry_run {
                 // Skip actual Docker execution in dry-run mode
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
@@ -455,27 +400,13 @@ fn main() -> ExitCode {
                 drop(lock);
             }
 
-            // Toolchain session cleanup (RAII)
-            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_some();
-            if let Some(ts) = toolchain_session.take() {
-                ts.cleanup(cli.verbose, in_fork_pane);
-            }
+            // Toolchain session cleanup handled by Drop on ToolchainSession
 
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
             eprintln!("{e}");
-            // Toolchain session cleanup on error (RAII)
-            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_some();
-            if let Some(ts) = toolchain_session.take() {
-                ts.cleanup(cli.verbose, in_fork_pane);
-            }
+            // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             // Map docker-not-found to exit status 127 (command not found)
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
