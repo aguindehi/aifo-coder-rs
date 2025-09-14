@@ -49,3 +49,10 @@ Notes
   - Windows Terminal: include_remote_examples=false, extra_spacing_before_wrapper=true.
   - PowerShell: include_remote_examples=false, extra_spacing_before_wrapper=true.
   - Tmux: include_remote_examples=false, extra_spacing_before_wrapper=true; use_color_header based on stdout TTY.
+
+Phase 0 verification notes (documentation-only)
+- Additional strings listed here (“no panes to create”, Windows Terminal split-pane fallback warning) are confirmed present and unchanged.
+- Helper availability cross-check:
+  - Windows-only helpers are cfg-gated; non-Windows builds compile without resolving them.
+  - Notifications helpers and HTTP form parsing remain available via aifo_coder:: toolchain façade wrappers.
+- No discrepancies found between these updates and the main inventory; subsequent phases must preserve these strings verbatim.

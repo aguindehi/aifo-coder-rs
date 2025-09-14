@@ -265,3 +265,17 @@ Implications for Phase 1+
 - For Windows Terminal execution, use wt_* helpers to build preview strings; when executing with Command::new(wt_path), drop the first "wt" element from the args.
 
 This document should be kept alongside the refactor PR to validate that user-visible behavior remains 1:1.
+
+Phase 0 validation status (documentation-only; no code changes)
+- Public façade helpers verified present under aifo_coder:: and gated as documented:
+  - Windows-only: fork_ps_inner_string, fork_bash_inner_string, wt_orient_for_layout, wt_build_new_tab_args, wt_build_split_args, ps_wait_process_cmd are behind cfg(windows).
+  - Cross-platform: MergingStrategy, path_pair, ensure_file_exists, create_session_id, color helpers (color_enabled_* and paint), and fork maintenance helpers (fork_* functions referenced here) are accessible via the crate façade.
+- Behavioral invariants revalidated against current code:
+  - Windows inner-string builders exclude AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING; Git Bash variant ends with “; exec bash”.
+  - wt_* argument previews include "wt" as argv[0]; execution paths drop argv[0] before Command::new(wt_path).
+  - warn_prompt_continue_or_quit emits exactly two trailing newlines and preserves platform-specific input handling on Windows/Unix.
+  - Exit code mapping and stderr/stdout routing for previews, warnings, and errors are unchanged.
+- Environment timing/ordering checks aligned with inventory Section M:
+  - Reads/writes for AIFO_CODER_SKIP_LOCK, AIFO_CODER_FORK_SESSION, AIFO_TOOLEEXEC_*, and color mode occur at the same points in program flow as documented.
+- Scope note:
+  - Phase 0 is a guardrail-only step. No implementation changes were made; later phases will refactor modules without altering any strings, exit codes, or routing captured here.
