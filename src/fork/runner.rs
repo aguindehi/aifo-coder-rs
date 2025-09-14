@@ -284,6 +284,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &pane_state_dir,
                         &container_name,
                     );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
+                    );
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
                     let inner = crate::fork::inner::build_inner_gitbash(
@@ -378,6 +386,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         _b,
                         &pane_state_dir,
                         &container_name,
+                    );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
                     );
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
@@ -522,6 +538,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &pane_state_dir,
                         &container_name,
                     );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
+                    );
                     let inner = crate::fork::inner::build_inner_powershell(
                         &session.agent,
                         &session.sid,
@@ -611,6 +635,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         _b,
                         &pane_state_dir,
                         &container_name,
+                    );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
                     );
                     let inner = crate::fork::inner::build_inner_powershell(
                         &session.agent,
@@ -722,6 +754,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         _b,
                         &pane_state_dir,
                         &container_name,
+                    );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
                     );
                     let inner = crate::fork::inner::build_inner_gitbash(
                         &session.agent,
@@ -916,6 +956,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &pane_state_dir,
                         &container_name,
                     );
+                    // Touch pane fields to mark them as intentionally used
+                    let _ = (
+                        pane.index,
+                        &pane.dir,
+                        &pane.branch,
+                        &pane.state_dir,
+                        &pane.container_name,
+                    );
                     let inner = crate::fork::inner::build_inner_gitbash(
                         &session.agent,
                         &session.sid,
@@ -1037,6 +1085,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             &pane_state_dir,
                             &container_name,
                         );
+                        // Touch pane fields to mark them as intentionally used
+                        let _ = (
+                            pane.index,
+                            &pane.dir,
+                            &pane.branch,
+                            &pane.state_dir,
+                            &pane.container_name,
+                        );
                         let inner = crate::fork::inner::build_inner_powershell(
                             &session.agent,
                             &session.sid,
@@ -1093,6 +1149,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             _b,
                             &pane_state_dir,
                             &container_name,
+                        );
+                        // Touch pane fields to mark them as intentionally used
+                        let _ = (
+                            pane.index,
+                            &pane.dir,
+                            &pane.branch,
+                            &pane.state_dir,
+                            &pane.container_name,
                         );
                         let inner = crate::fork::inner::build_inner_powershell(
                             &session.agent,
@@ -1579,7 +1643,13 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 &container_name,
             );
             // Touch fields so clippy sees them as read on this target too
-            let _ = (&pane.dir, &pane.branch);
+            let _ = (
+                pane.index,
+                &pane.dir,
+                &pane.branch,
+                &pane.state_dir,
+                &pane.container_name,
+            );
             let inner = crate::fork::inner::build_tmux_launch_script(
                 &sid,
                 i,
