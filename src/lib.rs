@@ -1,4 +1,3 @@
-use std::time::{Duration, SystemTime};
 mod apparmor;
 mod color;
 mod docker;
