@@ -382,27 +382,13 @@ fn main() -> ExitCode {
                 drop(lock);
             }
 
-            // Toolchain session cleanup (RAII)
-            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_some();
-            if let Some(ts) = toolchain_session.take() {
-                ts.cleanup(cli.verbose, in_fork_pane);
-            }
+            // Toolchain session cleanup handled by Drop on ToolchainSession
 
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
             eprintln!("{e}");
-            // Toolchain session cleanup on error (RAII)
-            let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_some();
-            if let Some(ts) = toolchain_session.take() {
-                ts.cleanup(cli.verbose, in_fork_pane);
-            }
+            // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             // Map docker-not-found to exit status 127 (command not found)
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);

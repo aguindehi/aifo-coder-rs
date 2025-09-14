@@ -72,6 +72,8 @@ pub struct ToolchainSession {
     sid: String,
     proxy_flag: Option<Arc<AtomicBool>>,
     proxy_handle: Option<std::thread::JoinHandle<()>>,
+    verbose: bool,
+    in_fork_pane: bool,
 }
 
 impl ToolchainSession {
@@ -151,15 +153,21 @@ impl ToolchainSession {
             std::env::set_var("AIFO_TOOLCHAIN_VERBOSE", "1");
         }
 
+        let in_fork_pane = std::env::var("AIFO_CODER_FORK_SESSION")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .is_some();
         Ok(Some(Self {
             sid,
             proxy_flag: Some(flag),
             proxy_handle: Some(handle),
+            verbose: cli.verbose,
+            in_fork_pane,
         }))
     }
 
     /// Stop proxy and sidecars unless running inside a fork pane (shared lifecycle).
-    pub fn cleanup(mut self, verbose: bool, in_fork_pane: bool) {
+    fn cleanup_inner(&mut self, verbose: bool, in_fork_pane: bool) {
         if let Some(flag) = self.proxy_flag.take() {
             flag.store(false, Ordering::SeqCst);
         }
@@ -169,5 +177,17 @@ impl ToolchainSession {
         if !in_fork_pane {
             aifo_coder::toolchain_cleanup_session(&self.sid, verbose);
         }
+    }
+
+    pub fn cleanup(mut self, verbose: bool, in_fork_pane: bool) {
+        self.cleanup_inner(verbose, in_fork_pane);
+    }
+}
+
+impl Drop for ToolchainSession {
+    fn drop(&mut self) {
+        let verbose = self.verbose;
+        let in_fork_pane = self.in_fork_pane;
+        self.cleanup_inner(verbose, in_fork_pane);
     }
 }
