@@ -7,9 +7,9 @@ termination and a 64 KiB header cap (matching existing behavior in spirit).
 */
 #![allow(dead_code)]
 
+use crate::find_crlfcrlf;
 use std::collections::HashMap;
 use std::io::{self, Read};
-use crate::find_crlfcrlf;
 
 /// Supported HTTP methods (minimal)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,4 +217,3 @@ pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
     }
     out
 }
-
