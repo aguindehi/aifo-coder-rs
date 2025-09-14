@@ -3,8 +3,8 @@ mod apparmor;
 mod color;
 mod docker;
 mod fork;
-#[path = "fork/types.rs"]
-mod fork_types;
+#[path = "fork/strategy.rs"]
+mod fork_strategy;
 #[cfg(windows)]
 #[path = "fork/windows/helpers.rs"]
 mod fork_windows_helpers;
@@ -17,7 +17,7 @@ pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
 pub use fork::*;
-pub use fork_types::MergingStrategy;
+pub use fork_strategy::MergingStrategy;
 #[cfg(windows)]
 pub use fork_windows_helpers::{
     fork_bash_inner_string, fork_ps_inner_string, ps_wait_process_cmd, wt_build_new_tab_args,

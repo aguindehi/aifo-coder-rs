@@ -125,7 +125,12 @@ pub fn build_tmux_launch_script(
     _launcher_path: &str,
 ) -> String {
     let mut exports: Vec<String> = Vec::new();
-    for (k, v) in super::env::fork_env_for_pane(session, pane) {
+    for (k, v) in super::env::fork_env_for_pane(
+        &session.sid,
+        pane.index,
+        &pane.container_name,
+        &pane.state_dir,
+    ) {
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
     format!(
