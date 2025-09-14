@@ -1,5 +1,23 @@
 2025-09-14 00:00 User <user@example.com>
 
+Tests: add Phase-0 unit tests for label sanitization and LFS quick scan
+
+- Added tests/sanitize_label.rs to lock fork_sanitize_base_label behavior (separators, trim, length).
+- Added tests/repo_uses_lfs_quick.rs to verify .lfsconfig/.gitattributes (top-level and nested).
+- Next: decompose fork_clean into clean/{plan,prompt,exec} modules per spec Phase 2.
+
+2025-09-14 00:00 User <user@example.com>
+
+Refactor: extract list/clone/snapshot helpers into fork_impl and delegate
+
+- Moved fork_list into src/fork_impl/list.rs; fork.rs now delegates, preserving output and ordering.
+- Moved fork_clone_and_checkout_panes into src/fork_impl/clone.rs; behavior identical.
+- Moved fork_create_snapshot into src/fork_impl/snapshot.rs; behavior identical.
+- Left fork_clean decomposition (plan/prompt/exec) for the next step to complete Phase 2.
+- All public APIs and strings preserved; existing tests continue to pass.
+
+2025-09-14 00:00 User <user@example.com>
+
 Refactor: extract merge helpers into fork_impl; delegate from fork.rs
 
 - Extracted merge-related helpers and flows into src/fork_impl/merge.rs:
