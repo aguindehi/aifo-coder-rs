@@ -7,7 +7,7 @@ termination and a 64 KiB header cap (matching existing behavior in spirit).
 */
 #![allow(dead_code)]
 
-use crate::find_crlfcrlf;
+use crate::find_header_end;
 use std::collections::HashMap;
 use std::io::{self, Read};
 
@@ -56,23 +56,29 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             break;
         }
         buf.extend_from_slice(&tmp[..n]);
-        if let Some(pos) = find_crlfcrlf(&buf) {
-            header_end = Some(pos);
-        } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
-            header_end = Some(pos);
+        if let Some(end_idx) = find_header_end(&buf) {
+            header_end = Some(end_idx);
         }
     }
 
     let hend = header_end.unwrap_or(buf.len());
-    let header_bytes = &buf[..hend];
     let mut body = Vec::new();
-    // Skip terminator if it exists
-    let mut body_start = hend;
-    if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
-        body_start = hend + 4;
-    } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
-        body_start = hend + 2;
-    }
+    // Compute header_bytes and body_start using canonical helper semantics
+    let (header_bytes, body_start) = if let Some(end_idx) = header_end {
+        // Determine which terminator was used by inspecting bytes before end_idx
+        let header_bytes: &[u8] = if end_idx >= 4 && &buf[end_idx - 4..end_idx] == b"\r\n\r\n" {
+            &buf[..end_idx - 4]
+        } else if end_idx >= 2 && &buf[end_idx - 2..end_idx] == b"\n\n" {
+            &buf[..end_idx - 2]
+        } else {
+            // Fallback: treat everything up to end_idx as headers
+            &buf[..end_idx]
+        };
+        (header_bytes, end_idx)
+    } else {
+        // No terminator found; treat entire buffer as headers, no body yet
+        (&buf[..hend], hend)
+    };
     if buf.len() > body_start {
         body.extend_from_slice(&buf[body_start..]);
     }
