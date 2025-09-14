@@ -186,6 +186,7 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     };
+                    let _ = stream.set_nonblocking(false);
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
                     let _ = stream.set_write_timeout(None);
 
@@ -252,6 +253,7 @@ pub fn toolexec_start_proxy(
                     }
                 }
             };
+            let _ = stream.set_nonblocking(false);
             let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
             let _ = stream.set_write_timeout(None);
 

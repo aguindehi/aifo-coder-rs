@@ -1,6 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 //! CLI warnings and interactive prompts (tmp workspace, missing toolchains).
 
+#[allow(unused_imports)]
+use std::io::{Read, Write};
+
 pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
     if std::env::var("AIFO_CODER_SUPPRESS_TMP_WARNING")
         .ok()
@@ -70,7 +73,7 @@ pub fn warn_if_tmp_workspace(interactive_block: bool) -> bool {
 }
 
 // Warn at startup (agent-run path) when no toolchains are requested and no proxy is configured.
-pub fn maybe_warn_missing_toolchain_agent(cli: &crate::Cli, agent: &str) {
+pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
     // Respect explicit suppression
     if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
         .ok()
@@ -142,7 +145,7 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::Cli, agent: &str) {
 }
 
 // Fork orchestrator preflight warning with single continue/abort prompt.
-pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::Cli, agent: &str) -> bool {
+pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str) -> bool {
     // Respect explicit suppression
     if std::env::var("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING")
         .ok()

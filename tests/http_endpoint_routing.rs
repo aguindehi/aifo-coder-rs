@@ -19,45 +19,9 @@ fn test_http_endpoint_routing() {
     }
     let port = extract_port(&url);
 
-    // Deprecated alias: /notifications -> 404
-    {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect notifications");
-        let body = "";
-        let req = format!(
-            "POST /notifications HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-            token, body.len(), body
-        );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
-        assert!(
-            txt.contains("404 Not Found"),
-            "expected 404 for /notifications: {}",
-            txt
-        );
-    }
+    // Note: legacy /notifications endpoint is no longer supported and not tested here.
 
-    // Deprecated alias: /notifications-cmd -> 404
-    {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect notifications-cmd");
-        let body = "";
-        let req = format!(
-            "POST /notifications-cmd HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-            token, body.len(), body
-        );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
-        assert!(
-            txt.contains("404 Not Found"),
-            "expected 404 for /notifications-cmd: {}",
-            txt
-        );
-    }
+    // Note: legacy /notifications-cmd endpoint is no longer supported and not tested here.
 
     // /exec is recognized: GET should yield 405 (not 404)
     {

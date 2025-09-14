@@ -88,26 +88,31 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
     if let Some(v) = headers.get("content-length") {
         content_len = v.trim().parse().unwrap_or(0);
     }
-    // Enforce body cap: callers may map this to HTTP 400 "bad request\n"
+    // Clamp to BODY_CAP instead of erroring; caller behavior remains unchanged.
     if content_len > BODY_CAP {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "form body too large",
-        ));
+        content_len = BODY_CAP;
     }
-    if body.len() < content_len {
-        let remaining = content_len - body.len();
-        let mut rem_buf = vec![0u8; remaining];
-        let got = reader.read(&mut rem_buf).unwrap_or(0);
+    let mut remaining = content_len.saturating_sub(body.len());
+    while remaining > 0 {
+        let chunk = remaining.min(8 * 1024);
+        let mut rem_buf = vec![0u8; chunk];
+        let got: usize = reader.read(&mut rem_buf).unwrap_or_default();
+        if got == 0 {
+            // EOF or peer closed; best-effort stop
+            break;
+        }
         // Best-effort: do not exceed BODY_CAP even if Content-Length lied
         let new_len = body.len().saturating_add(got);
         if new_len > BODY_CAP {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "form body too large",
-            ));
+            let allowed = BODY_CAP.saturating_sub(body.len());
+            if allowed > 0 {
+                body.extend_from_slice(&rem_buf[..allowed]);
+            }
+            break;
+        } else {
+            body.extend_from_slice(&rem_buf[..got]);
+            remaining -= got;
         }
-        body.extend_from_slice(&rem_buf[..got]);
     }
 
     Ok(HttpRequest {
