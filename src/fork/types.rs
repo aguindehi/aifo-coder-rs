@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use aifo_coder::MergingStrategy;
+use std::path::PathBuf;
 
 /// High-level fork session information captured at creation time.
 pub struct ForkSession {

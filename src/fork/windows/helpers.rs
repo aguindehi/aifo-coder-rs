@@ -72,11 +72,7 @@ pub fn wt_orient_for_layout(layout: &str, i: usize) -> &'static str {
 }
 
 // Private helper to build the shared tail for wt argument vectors.
-fn wt_tail(
-    psbin: &std::path::Path,
-    pane_dir: &std::path::Path,
-    inner: &str,
-) -> Vec<String> {
+fn wt_tail(psbin: &std::path::Path, pane_dir: &std::path::Path, inner: &str) -> Vec<String> {
     vec![
         "-d".to_string(),
         pane_dir.display().to_string(),

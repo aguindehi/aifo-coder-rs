@@ -11,7 +11,10 @@ pub fn fork_env_for_pane(
     vec![
         ("AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING".into(), "1".into()),
         ("AIFO_CODER_SKIP_LOCK".into(), "1".into()),
-        ("AIFO_CODER_CONTAINER_NAME".into(), container_name.to_string()),
+        (
+            "AIFO_CODER_CONTAINER_NAME".into(),
+            container_name.to_string(),
+        ),
         ("AIFO_CODER_HOSTNAME".into(), container_name.to_string()),
         ("AIFO_CODER_FORK_SESSION".into(), sid.to_string()),
         ("AIFO_CODER_FORK_INDEX".into(), pane_index.to_string()),
@@ -60,7 +63,6 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-
     #[test]
     fn test_fork_env_contains_expected_keys() {
         let sid = "sid-ut";
@@ -83,10 +85,7 @@ mod tests {
             get("AIFO_CODER_CONTAINER_NAME"),
             Some(container_name.to_string())
         );
-        assert_eq!(
-            get("AIFO_CODER_HOSTNAME"),
-            Some(container_name.to_string())
-        );
+        assert_eq!(get("AIFO_CODER_HOSTNAME"), Some(container_name.to_string()));
         assert_eq!(get("AIFO_CODER_FORK_SESSION"), Some(sid.to_string()));
         assert_eq!(get("AIFO_CODER_FORK_INDEX").as_deref(), Some("2"));
         assert_eq!(
