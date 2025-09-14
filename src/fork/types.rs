@@ -43,7 +43,7 @@ pub struct Pane {
 pub struct ForkOptions {
     pub verbose: bool,
     pub keep_on_failure: bool,
-    pub merge_strategy: aifo_coder::MergingStrategy,
+    pub merge_strategy: crate::MergingStrategy,
     pub autoclean: bool,
     pub dry_run: bool,
     pub include_dirty: bool,
@@ -62,9 +62,9 @@ impl ForkOptions {
             self.dissociate,
         );
         let _ = match self.merge_strategy {
-            aifo_coder::MergingStrategy::None => 0,
-            aifo_coder::MergingStrategy::Fetch => 1,
-            aifo_coder::MergingStrategy::Octopus => 2,
+            crate::MergingStrategy::None => 0,
+            crate::MergingStrategy::Fetch => 1,
+            crate::MergingStrategy::Octopus => 2,
         };
     }
 }
