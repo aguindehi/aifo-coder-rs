@@ -6,6 +6,8 @@ mod fork;
 #[cfg(windows)]
 #[path = "fork/windows/helpers.rs"]
 mod fork_windows_helpers;
+#[path = "fork/types.rs"]
+mod fork_types;
 mod lock;
 mod registry;
 mod toolchain;
@@ -14,7 +16,7 @@ mod util;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
-pub use fork::types::MergingStrategy;
+pub use fork_types::MergingStrategy;
 pub use fork::*;
 #[cfg(windows)]
 pub use fork_windows_helpers::{
