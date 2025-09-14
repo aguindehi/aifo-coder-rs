@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
 use crate::{
-    color_enabled_stderr, color_enabled_stdout, json_escape, paint, shell_join,
+    color_enabled_stderr, color_enabled_stdout, json_escape, paint,
     toolchain_cleanup_session,
 };
 
@@ -1155,21 +1155,6 @@ pub fn fork_autoclean_if_enabled() {
     fork_impl_notice::fork_autoclean_if_enabled_impl();
 }
 
-fn collect_pane_branches(panes: &[(PathBuf, String)]) -> std::io::Result<Vec<(PathBuf, String)>> {
-    fork_impl_merge::collect_pane_branches_impl(panes)
-}
-
-fn preflight_clean_working_tree(repo_root: &Path) -> std::io::Result<()> {
-    fork_impl_merge::preflight_clean_working_tree_impl(repo_root)
-}
-
-fn compose_merge_message(
-    repo_root: &Path,
-    pane_branches: &[(PathBuf, String)],
-    base_ref_or_sha: &str,
-) -> String {
-    fork_impl_merge::compose_merge_message_impl(repo_root, pane_branches, base_ref_or_sha)
-}
 
 /// Merge helper: fetch pane branches and optionally octopus-merge them.
 pub fn fork_merge_branches(
