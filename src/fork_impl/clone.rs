@@ -115,9 +115,9 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
 
         // Best-effort submodules and Git LFS
         if pane_dir.join(".gitmodules").exists() {
-            let _ = Command::new("git")
-                .arg("-c")
-                .arg("protocol.file.allow=always")
+            let mut sm = Command::new("git");
+            super::fork_impl_git::set_file_allow(&mut sm);
+            let _ = sm
                 .arg("-C")
                 .arg(&pane_dir)
                 .arg("submodule")

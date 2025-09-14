@@ -212,27 +212,24 @@ pub(crate) fn fork_merge_branches_impl(
     for (pdir, br) in &pane_branches {
         let pdir_str = pdir.display().to_string();
         let refspec = format!("{b}:refs/heads/{b}", b = br);
-        let args = vec![
+        let mut args = vec![
             "git".to_string(),
             "-C".to_string(),
             repo_root.display().to_string(),
-            "-c".to_string(),
-            "protocol.file.allow=always".to_string(),
-            "fetch".to_string(),
-            "--no-tags".to_string(),
-            pdir_str.clone(),
-            refspec.clone(),
         ];
+        super::fork_impl_git::push_file_allow_args(&mut args);
+        args.push("fetch".to_string());
+        args.push("--no-tags".to_string());
+        args.push(pdir_str.clone());
+        args.push(refspec.clone());
         if verbose || dry_run {
             eprintln!("aifo-coder: git: {}", shell_join(&args));
         }
         if !dry_run {
             let mut cmd = Command::new("git");
-            cmd.arg("-C")
-                .arg(repo_root)
-                .arg("-c")
-                .arg("protocol.file.allow=always")
-                .arg("fetch")
+            cmd.arg("-C").arg(repo_root);
+            super::fork_impl_git::set_file_allow(&mut cmd);
+            cmd.arg("fetch")
                 .arg("--no-tags")
                 .arg(&pdir_str)
                 .arg(&refspec);

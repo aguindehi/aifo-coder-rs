@@ -38,3 +38,14 @@ pub fn git_supports_lfs() -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
+
+/// Append the protocol.file.allow=always flag pair to an args vector (useful for previews).
+pub fn push_file_allow_args(args: &mut Vec<String>) {
+    args.push("-c".to_string());
+    args.push("protocol.file.allow=always".to_string());
+}
+
+/// Configure a git Command to allow file:// protocol (for local path remotes and submodules).
+pub fn set_file_allow(cmd: &mut Command) {
+    cmd.arg("-c").arg("protocol.file.allow=always");
+}

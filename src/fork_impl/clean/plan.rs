@@ -79,3 +79,169 @@ pub fn print_dry_run_json(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) {
     out.push_str("]}");
     println!("{}", out);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::process::Command;
+    use tempfile::tempdir;
+
+    fn have_git() -> bool {
+        Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn test_plan_marks_dirty_and_base_unknown() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // Layout: forks/sid/pane-1 (git repo)
+        let session = repo.join("sid");
+        let pane = session.join("pane-1");
+        fs::create_dir_all(&pane).unwrap();
+
+        // Initialize git repo
+        assert!(Command::new("git")
+            .args(["init"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        let _ = Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&pane)
+            .status();
+        let _ = Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&pane)
+            .status();
+        fs::write(pane.join("a.txt"), "a\n").unwrap();
+        assert!(Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args(["commit", "-m", "c1"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+
+        // dirty change (uncommitted)
+        fs::write(pane.join("b.txt"), "b\n").unwrap();
+
+        // No base_commit_sha in meta -> base_unknown
+        fs::write(session.join(".meta.json"), "{ \"created_at\": 0 }").unwrap();
+
+        let plan = build_plan_for_targets(&[session.clone()]);
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].panes.len(), 1);
+        let reasons = &plan[0].panes[0].reasons;
+        assert!(
+            reasons.iter().any(|r| r == "dirty"),
+            "expected 'dirty' in reasons: {:?}",
+            reasons
+        );
+        assert!(
+            reasons.iter().any(|r| r == "base-unknown"),
+            "expected 'base-unknown' in reasons: {:?}",
+            reasons
+        );
+    }
+
+    #[test]
+    fn test_plan_marks_ahead_when_base_known() {
+        if !have_git() {
+            eprintln!("skipping: git not found in PATH");
+            return;
+        }
+        let td = tempdir().expect("tmpdir");
+        let repo = td.path();
+
+        // Layout: forks/sid/pane-1 (git repo)
+        let session = repo.join("sid2");
+        let pane = session.join("pane-1");
+        fs::create_dir_all(&pane).unwrap();
+
+        // Initialize git repo
+        assert!(Command::new("git")
+            .args(["init"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        let _ = Command::new("git")
+            .args(["config", "user.name", "AIFO Test"])
+            .current_dir(&pane)
+            .status();
+        let _ = Command::new("git")
+            .args(["config", "user.email", "aifo@example.com"])
+            .current_dir(&pane)
+            .status();
+        fs::write(pane.join("a.txt"), "a\n").unwrap();
+        assert!(Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args(["commit", "-m", "c1"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+
+        // Capture initial commit SHA for base
+        let head1 = Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane)
+            .output()
+            .unwrap();
+        let base_sha = String::from_utf8_lossy(&head1.stdout).trim().to_string();
+
+        // New commit to make HEAD ahead of base
+        fs::write(pane.join("b.txt"), "b\n").unwrap();
+        assert!(Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args(["commit", "-m", "c2"])
+            .current_dir(&pane)
+            .status()
+            .unwrap()
+            .success());
+
+        let meta = format!(
+            "{{ \"created_at\": 0, \"base_commit_sha\": \"{}\" }}",
+            base_sha
+        );
+        fs::write(session.join(".meta.json"), meta).unwrap();
+
+        let plan = build_plan_for_targets(&[session.clone()]);
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].panes.len(), 1);
+        let reasons = &plan[0].panes[0].reasons;
+        assert!(
+            reasons.iter().any(|r| r == "ahead"),
+            "expected 'ahead' in reasons: {:?}",
+            reasons
+        );
+    }
+}

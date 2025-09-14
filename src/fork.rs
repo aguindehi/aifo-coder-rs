@@ -20,6 +20,9 @@ mod fork_impl_git;
 mod fork_impl_list;
 #[path = "fork_impl/merge.rs"]
 mod fork_impl_merge;
+#[cfg(test)]
+#[path = "fork_impl/merge_tests.rs"]
+mod fork_impl_merge_tests;
 #[path = "fork_impl/notice.rs"]
 mod fork_impl_notice;
 #[path = "fork_impl/panecheck.rs"]

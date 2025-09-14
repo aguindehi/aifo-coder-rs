@@ -1,10 +1,13 @@
 2025-09-14 00:00 User <user@example.com>
 
-Tests: add Phase-0 unit tests for label sanitization and LFS quick scan
+Tests: add missing Phase-0 coverage; centralize git file:// allow helper
 
-- Added tests/sanitize_label.rs to lock fork_sanitize_base_label behavior (separators, trim, length).
-- Added tests/repo_uses_lfs_quick.rs to verify .lfsconfig/.gitattributes (top-level and nested).
-- Next: decompose fork_clean into clean/{plan,prompt,exec} modules per spec Phase 2.
+- Added unit tests for fork list ordering and stale-flag computation (module tests in fork_impl/list.rs).
+- Added unit tests for fork clean plan classification (dirty, base-unknown, ahead) in fork_impl/clean/plan.rs.
+- Added unit tests for compose_merge_message prefix/truncation (module tests via fork_impl/merge_tests.rs).
+- Introduced helper in fork_impl/git.rs to centralize -c protocol.file.allow=always:
+  push_file_allow_args (for previews) and set_file_allow (for Command).
+- Updated merge/clone internal call sites to use the helper while preserving behavior and logs.
 
 2025-09-14 00:00 User <user@example.com>
 

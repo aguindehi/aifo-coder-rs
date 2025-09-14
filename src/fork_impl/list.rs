@@ -3,6 +3,55 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
+/// Collect list rows for a single repository (internal helper).
+fn collect_rows(
+    repo_root: &Path,
+    list_stale_days: u64,
+) -> Vec<(String, usize, u64, u64, String, bool)> {
+    let mut rows = Vec::new();
+    let base = repo_root.join(".aifo-coder").join("forks");
+    if !base.exists() {
+        return rows;
+    }
+    for sd in super::fork_impl_scan::session_dirs(&base) {
+        let sid = sd
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        if sid.is_empty() {
+            continue;
+        }
+        let meta_path = sd.join(".meta.json");
+        let meta = fs::read_to_string(&meta_path).ok();
+        let created_at = meta
+            .as_deref()
+            .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
+            .or_else(|| {
+                fs::metadata(&sd)
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map(super::fork_impl_scan::secs_since_epoch)
+            })
+            .unwrap_or(0);
+        let base_label = meta
+            .as_deref()
+            .and_then(|s| crate::fork_meta::extract_value_string(s, "base_label"))
+            .unwrap_or_else(|| "(unknown)".to_string());
+        let panes = super::fork_impl_scan::pane_dirs_for_session(&sd).len();
+        let now = super::fork_impl_scan::secs_since_epoch(SystemTime::now());
+        let age_days = if created_at > 0 {
+            now.saturating_sub(created_at) / 86400
+        } else {
+            0
+        };
+        let stale = (age_days as u64) >= list_stale_days;
+        rows.push((sid, panes, created_at, age_days, base_label, stale));
+    }
+    rows.sort_by_key(|r| r.2);
+    rows
+}
+
 pub(crate) fn fork_list_impl(
     repo_root: &Path,
     json: bool,
@@ -14,54 +63,6 @@ pub(crate) fn fork_list_impl(
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(14);
 
-    // Helper to collect rows for a single repo
-    fn collect_rows(
-        repo_root: &Path,
-        list_stale_days: u64,
-    ) -> Vec<(String, usize, u64, u64, String, bool)> {
-        let mut rows = Vec::new();
-        let base = repo_root.join(".aifo-coder").join("forks");
-        if !base.exists() {
-            return rows;
-        }
-        for sd in super::fork_impl_scan::session_dirs(&base) {
-            let sid = sd
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            if sid.is_empty() {
-                continue;
-            }
-            let meta_path = sd.join(".meta.json");
-            let meta = fs::read_to_string(&meta_path).ok();
-            let created_at = meta
-                .as_deref()
-                .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
-                .or_else(|| {
-                    fs::metadata(&sd)
-                        .ok()
-                        .and_then(|m| m.modified().ok())
-                        .map(super::fork_impl_scan::secs_since_epoch)
-                })
-                .unwrap_or(0);
-            let base_label = meta
-                .as_deref()
-                .and_then(|s| crate::fork_meta::extract_value_string(s, "base_label"))
-                .unwrap_or_else(|| "(unknown)".to_string());
-            let panes = super::fork_impl_scan::pane_dirs_for_session(&sd).len();
-            let now = super::fork_impl_scan::secs_since_epoch(SystemTime::now());
-            let age_days = if created_at > 0 {
-                now.saturating_sub(created_at) / 86400
-            } else {
-                0
-            };
-            let stale = (age_days as u64) >= list_stale_days;
-            rows.push((sid, panes, created_at, age_days, base_label, stale));
-        }
-        rows.sort_by_key(|r| r.2);
-        rows
-    }
 
     if all_repos {
         // Optional workspace scan when AIFO_CODER_WORKSPACE_ROOT is set
@@ -221,4 +222,48 @@ pub(crate) fn fork_list_impl(
         }
     }
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_collect_rows_order_and_stale_flag() {
+        let td = tempdir().expect("tmpdir");
+        let repo = td.path();
+        let forks = repo.join(".aifo-coder").join("forks");
+        fs::create_dir_all(&forks).unwrap();
+
+        let now = super::super::fork_impl_scan::secs_since_epoch(SystemTime::now());
+
+        // Session 1: older (stale)
+        let s1 = forks.join("sid-old");
+        fs::create_dir_all(&s1).unwrap();
+        fs::create_dir_all(s1.join("pane-1")).unwrap();
+        let meta1 = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"main\" }}",
+            now.saturating_sub(10 * 86400)
+        );
+        fs::write(s1.join(".meta.json"), meta1).unwrap();
+
+        // Session 2: recent (not stale)
+        let s2 = forks.join("sid-new");
+        fs::create_dir_all(&s2).unwrap();
+        fs::create_dir_all(s2.join("pane-1")).unwrap();
+        let meta2 = format!(
+            "{{ \"created_at\": {}, \"base_label\": \"dev\" }}",
+            now.saturating_sub(2 * 86400)
+        );
+        fs::write(s2.join(".meta.json"), meta2).unwrap();
+
+        let rows = collect_rows(repo, 5);
+        assert_eq!(rows.len(), 2, "expected two sessions");
+        // Sorted by created_at ascending: older first
+        assert_eq!(rows[0].0, "sid-old", "older session should come first");
+        assert!(rows[0].5, "sid-old should be stale (>=5d)");
+        assert!(!rows[1].5, "sid-new should not be stale (<5d)");
+    }
 }
