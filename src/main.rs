@@ -289,65 +289,7 @@ fn main() -> ExitCode {
     let mut toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
-        // Reconstruct kinds and overrides (for dry-run previews)
-        let mut kinds: Vec<String> = cli
-            .toolchain
-            .iter()
-            .map(|k| k.as_str().to_string())
-            .collect();
-
-        // Parse "kind@version" items from --toolchain-spec into (kind, optional version)
-        fn parse_spec(s: &str) -> (String, Option<String>) {
-            let t = s.trim();
-            if let Some((k, v)) = t.split_once('@') {
-                (k.trim().to_string(), Some(v.trim().to_string()))
-            } else {
-                (t.to_string(), None)
-            }
-        }
-
-        let mut spec_versions: Vec<(String, String)> = Vec::new();
-        for s in &cli.toolchain_spec {
-            let (k, v) = parse_spec(s);
-            if !k.is_empty() {
-                kinds.push(k.clone());
-                if let Some(ver) = v {
-                    spec_versions.push((k, ver));
-                }
-            }
-        }
-        use std::collections::BTreeSet;
-        // Normalize toolchain kinds and deduplicate while preserving stable order
-        let mut set = BTreeSet::new();
-        let mut kinds_norm: Vec<String> = Vec::new();
-        for k in kinds {
-            let norm = aifo_coder::normalize_toolchain_kind(&k);
-            if set.insert(norm.clone()) {
-                kinds_norm.push(norm);
-            }
-        }
-        let kinds = kinds_norm;
-
-        let mut overrides: Vec<(String, String)> = Vec::new();
-        // Collect explicit image overrides (kind=image) from CLI
-        for s in &cli.toolchain_image {
-            if let Some((k, v)) = s.split_once('=') {
-                if !k.trim().is_empty() && !v.trim().is_empty() {
-                    overrides.push((
-                        aifo_coder::normalize_toolchain_kind(k),
-                        v.trim().to_string(),
-                    ));
-                }
-            }
-        }
-        // Backfill missing image overrides using official images for requested versions
-        for (k, ver) in spec_versions {
-            let kind = aifo_coder::normalize_toolchain_kind(&k);
-            if !overrides.iter().any(|(kk, _)| kk == &kind) {
-                let img = aifo_coder::default_toolchain_image_for_version(&kind, &ver);
-                overrides.push((kind, img));
-            }
-        }
+        let (kinds, overrides) = crate::toolchain_session::plan_from_cli(&cli);
 
         if cli.dry_run {
             // Dry-run: print detailed previews and skip starting sidecars/proxy
