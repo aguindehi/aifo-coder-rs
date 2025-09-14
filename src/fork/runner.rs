@@ -1280,6 +1280,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 &pane_state_dir,
                 &container_name,
             );
+            // Touch pane fields to mark them as intentionally used
+            let _ = (
+                pane.index,
+                &pane.dir,
+                &pane.branch,
+                &pane.state_dir,
+                &pane.container_name,
+            );
             let inner = crate::fork::inner::build_inner_powershell(
                 &session.agent,
                 &session.sid,
