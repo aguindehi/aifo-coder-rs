@@ -1,6 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 //! Small utilities: shell/json escaping, URL decoding, header parsing, simple tokenization.
 
+pub mod fs;
+pub mod id;
+
 pub fn shell_join(args: &[String]) -> String {
     args.iter()
         .map(|a| shell_escape(a))
