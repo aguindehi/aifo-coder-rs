@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use crate as aifo_coder;
 
 /// Session metadata in the on-disk JSON file (order preserved by manual writer).
 pub struct SessionMeta<'a> {
@@ -17,7 +18,7 @@ pub struct SessionMeta<'a> {
 
 /// Compute the base_commit_sha per current main.rs rules and write .meta.json (single line).
 pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> io::Result<()> {
-    let session_dir = crate::fork_session_dir(repo_root, sid);
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
     let _ = fs::create_dir_all(&session_dir);
 
     // Manual JSON to preserve key order and minimize diffs.
@@ -51,12 +52,12 @@ pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> i
             if o.status.success() {
                 String::from_utf8_lossy(&o.stdout).trim().to_string()
             } else {
-                crate::fork_base_info(repo_root)
+                aifo_coder::fork_base_info(repo_root)
                     .map(|(_, _, head)| head)
                     .unwrap_or_default()
             }
         } else {
-            crate::fork_base_info(repo_root)
+            aifo_coder::fork_base_info(repo_root)
                 .map(|(_, _, head)| head)
                 .unwrap_or_default()
         }
@@ -65,18 +66,18 @@ pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> i
     let mut s = format!(
         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
         m.created_at,
-        crate::json_escape(m.base_label),
-        crate::json_escape(m.base_ref_or_sha),
-        crate::json_escape(&base_commit_sha),
+        aifo_coder::json_escape(m.base_label),
+        aifo_coder::json_escape(m.base_ref_or_sha),
+        aifo_coder::json_escape(&base_commit_sha),
         m.panes,
-        pane_dirs_vec.iter().map(|x| crate::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
-        branches_vec.iter().map(|x| crate::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
-        crate::json_escape(m.layout)
+        pane_dirs_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        aifo_coder::json_escape(m.layout)
     );
     if let Some(snap) = m.snapshot_sha {
         s.push_str(&format!(
             ", \"snapshot_sha\": {}",
-            crate::json_escape(snap)
+            aifo_coder::json_escape(snap)
         ));
     }
     s.push_str(" }");
@@ -92,7 +93,7 @@ pub fn update_panes_created(
     snapshot_sha: Option<&str>,
     layout: &str,
 ) -> io::Result<()> {
-    let session_dir = crate::fork_session_dir(repo_root, sid);
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
     let meta_path = session_dir.join(".meta.json");
 
     // Build new arrays from on-disk existing panes
@@ -115,19 +116,19 @@ pub fn update_panes_created(
     let mut s = format!(
         "{{ \"created_at\": {}, \"base_label\": {}, \"base_ref_or_sha\": {}, \"base_commit_sha\": {}, \"panes\": {}, \"panes_created\": {}, \"pane_dirs\": [{}], \"branches\": [{}], \"layout\": {}",
         created_at,
-        crate::json_escape(&base_label),
-        crate::json_escape(&base_ref_or_sha),
-        crate::json_escape(&base_commit_sha),
+        aifo_coder::json_escape(&base_label),
+        aifo_coder::json_escape(&base_ref_or_sha),
+        aifo_coder::json_escape(&base_commit_sha),
         panes,
         created_count,
-        pane_dirs_vec.iter().map(|x| crate::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
-        branches_vec.iter().map(|x| crate::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
-        crate::json_escape(layout)
+        pane_dirs_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        branches_vec.iter().map(|x| aifo_coder::json_escape(x).to_string()).collect::<Vec<_>>().join(", "),
+        aifo_coder::json_escape(layout)
     );
     if let Some(snap) = snapshot_old.as_deref().or(snapshot_sha) {
         s.push_str(&format!(
             ", \"snapshot_sha\": {}",
-            crate::json_escape(snap)
+            aifo_coder::json_escape(snap)
         ));
     }
     s.push_str(" }");
@@ -136,7 +137,7 @@ pub fn update_panes_created(
 }
 
 pub fn append_fields_compact(repo_root: &Path, sid: &str, fields_kv: &str) -> io::Result<()> {
-    let session_dir = crate::fork_session_dir(repo_root, sid);
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
     let meta_path = session_dir.join(".meta.json");
 
     // Ensure session directory exists (best-effort)
@@ -236,7 +237,7 @@ mod tests {
         };
         write_initial_meta(&root, sid, &m).expect("write meta");
 
-        let meta_path = crate::fork_session_dir(&root, sid).join(".meta.json");
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
         let txt = std::fs::read_to_string(&meta_path).expect("read meta");
         // Keys must appear in this order
         let keys = [
@@ -302,7 +303,7 @@ mod tests {
         )
         .expect("update");
 
-        let meta_path = crate::fork_session_dir(&root, sid).join(".meta.json");
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
         let txt = std::fs::read_to_string(&meta_path).expect("read updated meta");
 
         assert!(
@@ -406,7 +407,7 @@ mod tests {
         write_initial_meta(&root, sid, &m).expect("write meta");
 
         // Verify base_commit_sha equals HEAD sha
-        let meta_path = crate::fork_session_dir(&root, sid).join(".meta.json");
+        let meta_path = aifo_coder::fork_session_dir(&root, sid).join(".meta.json");
         let txt = std::fs::read_to_string(&meta_path).expect("read meta");
         assert!(
             txt.contains(&format!("\"base_commit_sha\": \"{}\"", head_sha)),
@@ -463,7 +464,7 @@ mod tests {
 
         // Obtain HEAD via fork_base_info (the fallback)
         let (_label, _base, head_sha) =
-            crate::fork_base_info(&root).expect("fork_base_info head");
+            aifo_coder::fork_base_info(&root).expect("fork_base_info head");
 
         // Write initial meta with a non-existent ref to trigger fallback
         let sid = "sid-fallback-head";
