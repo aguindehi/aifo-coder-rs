@@ -57,7 +57,6 @@ Phase 0: Safety net tests (no refactor yet)
 Phase 1: Internal helpers and metadata reuse (no behavior change)
 - Add src/fork_impl/git.rs (private):
   - git(repo, args) -> io::Result<Output>
-  - git_ok(repo, args) -> bool
   - git_stdout_str(repo, args) -> Option<String>
   - git_status_porcelain(repo) -> Option<String>
   - git_supports_lfs() -> bool

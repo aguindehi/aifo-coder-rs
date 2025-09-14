@@ -14,10 +14,6 @@ pub fn git(repo: Option<&Path>, args: &[&str]) -> std::io::Result<Output> {
     cmd.output()
 }
 
-/// Run a git command and return true if it exited successfully.
-pub fn git_ok(repo: Option<&Path>, args: &[&str]) -> bool {
-    git(repo, args).map(|o| o.status.success()).unwrap_or(false)
-}
 
 /// Run a git command and capture trimmed stdout as UTF-8 String on success.
 pub fn git_stdout_str(repo: Option<&Path>, args: &[&str]) -> Option<String> {

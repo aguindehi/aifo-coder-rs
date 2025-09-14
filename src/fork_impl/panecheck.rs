@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process::Stdio;
 
 /// Result of checking a pane's cleanliness and protection reasons.
 pub struct PaneCheck {
@@ -13,17 +12,8 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
     let mut reasons: Vec<String> = Vec::new();
 
     // dirty detection
-    let dirty = std::process::Command::new("git")
-        .arg("-C")
-        .arg(pane_dir)
-        .arg("status")
-        .arg("--porcelain=v1")
-        .arg("-uall")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .map(|o| !o.stdout.is_empty())
+    let dirty = super::fork_impl_git::git_status_porcelain(pane_dir)
+        .map(|s| !s.is_empty())
         .unwrap_or(false);
     if dirty {
         reasons.push("dirty".to_string());

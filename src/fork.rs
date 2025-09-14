@@ -427,14 +427,7 @@ pub fn fork_clone_and_checkout_panes(
                 .status();
         }
         // Git LFS: if git lfs is available and repository appears to use LFS, perform install/fetch/checkout
-        let lfs_available = Command::new("git")
-            .arg("lfs")
-            .arg("version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let lfs_available = fork_impl_git::git_supports_lfs();
         if lfs_available {
             let uses_lfs = repo_uses_lfs_quick(&pane_dir);
             if uses_lfs {
