@@ -24,10 +24,13 @@ Status
 - Completed (Phase 4): Centralized verbose diagnostics
   - Added print_verbose_run_info; replaced scattered prints.
   - Landed in commit 0b97d9c.
+- In progress (Phase 5, optional): ergonomics and line-length tidy; see remaining work.
 
 Overview of remaining work
-- Phase 5 (optional): Minor line-length tidy and ergonomics
-  - Wrap any remaining lines >100 chars where practical.
+- Phase 5 (optional, partially complete): Minor line-length tidy and ergonomics
+  - Done: precompute and reuse stderr color flag in main.rs and src/fork/runner.rs.
+  - Done: wrap long banner strings and a long dry-run string in main.rs.
+  - Remaining (optional): wrap a few long literals in src/fork/runner.rs; run cargo clippy.
   - No functional changes.
 
 Phase 5 — Minor ergonomics and line-length tidy (optional)
