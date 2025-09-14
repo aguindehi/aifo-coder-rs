@@ -11,8 +11,12 @@ use crate::{
     color_enabled_stderr, color_enabled_stdout, json_escape, paint, toolchain_cleanup_session,
 };
 
+#[path = "fork_impl/clone.rs"]
+mod fork_impl_clone;
 #[path = "fork_impl/git.rs"]
 mod fork_impl_git;
+#[path = "fork_impl/list.rs"]
+mod fork_impl_list;
 #[path = "fork_impl/merge.rs"]
 mod fork_impl_merge;
 #[path = "fork_impl/notice.rs"]
@@ -21,10 +25,6 @@ mod fork_impl_notice;
 mod fork_impl_panecheck;
 #[path = "fork_impl/scan.rs"]
 mod fork_impl_scan;
-#[path = "fork_impl/list.rs"]
-mod fork_impl_list;
-#[path = "fork_impl/clone.rs"]
-mod fork_impl_clone;
 #[path = "fork_impl/snapshot.rs"]
 mod fork_impl_snapshot;
 
