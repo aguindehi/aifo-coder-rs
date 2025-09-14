@@ -31,7 +31,6 @@ use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
 use crate::warnings::{maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace};
 
-
 fn main() -> ExitCode {
     // Leading blank line at program start
     eprintln!();
