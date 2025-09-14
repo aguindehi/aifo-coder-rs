@@ -42,7 +42,7 @@ impl Drop for OutputNewlineGuard {
 
 fn main() -> ExitCode {
     // Leading blank line at program start
-    println!();
+    eprintln!();
     let _aifo_output_newline_guard = OutputNewlineGuard;
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
