@@ -46,6 +46,7 @@ fn main() -> ExitCode {
     let _aifo_output_newline_guard = OutputNewlineGuard;
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+    // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
     // Configure color mode as early as possible (only when explicitly provided on CLI)
     if let Some(mode) = cli.color {
@@ -255,7 +256,7 @@ fn main() -> ExitCode {
         return crate::commands::run_toolchain(&cli, *kind, image.clone(), *no_cache, args.clone());
     }
 
-    // Build docker command and run it
+    // Select the agent subcommand to run and capture its trailing arguments
     let (agent, args) = match &cli.command {
         Agent::Codex { args } => ("codex", args.clone()),
         Agent::Crush { args } => ("crush", args.clone()),
@@ -282,7 +283,9 @@ fn main() -> ExitCode {
 
     // Print startup banner before any further diagnostics
     print_startup_banner();
+    // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
+    // Abort early when working in a temp directory and the user declines
     if !warn_if_tmp_workspace(true) {
         eprintln!("aborted.");
         return ExitCode::from(1);
@@ -299,6 +302,7 @@ fn main() -> ExitCode {
             .map(|k| k.as_str().to_string())
             .collect();
 
+        // Parse "kind@version" items from --toolchain-spec into (kind, optional version)
         fn parse_spec(s: &str) -> (String, Option<String>) {
             let t = s.trim();
             if let Some((k, v)) = t.split_once('@') {
@@ -319,6 +323,7 @@ fn main() -> ExitCode {
             }
         }
         use std::collections::BTreeSet;
+        // Normalize toolchain kinds and deduplicate while preserving stable order
         let mut set = BTreeSet::new();
         let mut kinds_norm: Vec<String> = Vec::new();
         for k in kinds {
@@ -330,6 +335,7 @@ fn main() -> ExitCode {
         let kinds = kinds_norm;
 
         let mut overrides: Vec<(String, String)> = Vec::new();
+        // Collect explicit image overrides (kind=image) from CLI
         for s in &cli.toolchain_image {
             if let Some((k, v)) = s.split_once('=') {
                 if !k.trim().is_empty() && !v.trim().is_empty() {
@@ -340,6 +346,7 @@ fn main() -> ExitCode {
                 }
             }
         }
+        // Backfill missing image overrides using official images for requested versions
         for (k, ver) in spec_versions {
             let kind = aifo_coder::normalize_toolchain_kind(&k);
             if !overrides.iter().any(|(kk, _)| kk == &kind) {
@@ -349,6 +356,7 @@ fn main() -> ExitCode {
         }
 
         if cli.dry_run {
+            // Dry-run: print detailed previews and skip starting sidecars/proxy
             if cli.verbose {
                 eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
                 if !overrides.is_empty() {
@@ -379,13 +387,16 @@ fn main() -> ExitCode {
         }
     }
 
+    // Resolve effective image reference (CLI override > environment > computed default)
     let image = cli
         .image
         .clone()
         .unwrap_or_else(|| default_image_for(agent));
 
+    // Visual separation before Docker info and previews
     println!();
 
+    // Determine desired AppArmor profile (may be disabled on non-Linux)
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
     match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
@@ -410,6 +421,7 @@ fn main() -> ExitCode {
                 eprintln!("aifo-coder: docker: {preview}");
             }
             if cli.dry_run {
+                // Skip actual Docker execution in dry-run mode
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
                 return ExitCode::from(0);
             }
@@ -426,6 +438,7 @@ fn main() -> ExitCode {
                     }
                 }
             };
+            // Execute Docker and capture its exit status for propagation
             let status = cmd.status().expect("failed to start docker");
             // Release lock before exiting (if held)
             if let Some(lock) = maybe_lock {
@@ -453,6 +466,7 @@ fn main() -> ExitCode {
             if let Some(ts) = toolchain_session.take() {
                 ts.cleanup(cli.verbose, in_fork_pane);
             }
+            // Map docker-not-found to exit status 127 (command not found)
             if e.kind() == io::ErrorKind::NotFound {
                 return ExitCode::from(127);
             }
