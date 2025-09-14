@@ -16,6 +16,8 @@ mod fork_impl_clean_prompt;
 mod fork_impl_clone;
 #[path = "fork_impl/git.rs"]
 mod fork_impl_git;
+#[cfg(test)]
+pub use fork_impl_git;
 #[path = "fork_impl/list.rs"]
 mod fork_impl_list;
 #[path = "fork_impl/merge.rs"]

@@ -1,6 +1,6 @@
 use std::fs;
-use std::io::Read;
-use std::os::fd::{AsRawFd, FromRawFd, RawFd};
+use std::io::{Read, Seek};
+use std::os::fd::{FromRawFd, RawFd};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,7 +17,7 @@ fn have_git() -> bool {
 // Capture stdout for the duration of f, returning the captured UTF-8 string.
 // Unix-only; safe for our CI matrix (macOS/Linux).
 fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen};
+    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
     unsafe {
         // Open a temporary file
         let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout.tmp").unwrap();
@@ -27,7 +27,7 @@ fn capture_stdout<F: FnOnce()>(f: F) -> String {
         let fd: RawFd = fileno(file);
 
         // Duplicate current stdout
-        let stdout_fd = fileno(libc::stdout);
+        let stdout_fd = STDOUT_FILENO;
         let saved = dup(stdout_fd);
         assert!(saved >= 0, "dup(stdout) failed");
 
@@ -38,7 +38,7 @@ fn capture_stdout<F: FnOnce()>(f: F) -> String {
         f();
 
         // Flush and restore stdout
-        fflush(libc::stdout);
+        fflush(std::ptr::null_mut());
         assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
 
         // Read back the file
