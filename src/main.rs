@@ -31,19 +31,10 @@ use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
 use crate::warnings::{maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace};
 
-struct OutputNewlineGuard;
-
-impl Drop for OutputNewlineGuard {
-    fn drop(&mut self) {
-        // Ensure a trailing blank line on stdout at process end
-        println!();
-    }
-}
 
 fn main() -> ExitCode {
     // Leading blank line at program start
     eprintln!();
-    let _aifo_output_newline_guard = OutputNewlineGuard;
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
     // Parse command-line arguments into structured CLI options
@@ -404,7 +395,7 @@ fn main() -> ExitCode {
         .unwrap_or_else(|| default_image_for(agent));
 
     // Visual separation before Docker info and previews
-    println!();
+    eprintln!();
 
     // Determine desired AppArmor profile (may be disabled on non-Linux)
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
