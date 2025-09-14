@@ -9,6 +9,7 @@ termination and a 64 KiB header cap (matching existing behavior in spirit).
 
 use std::collections::HashMap;
 use std::io::{self, Read};
+use crate::find_crlfcrlf;
 
 /// Supported HTTP methods (minimal)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,10 +218,3 @@ pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
     out
 }
 
-// Local helper for CRLFCRLF detection
-fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
-    if buf.len() < 4 {
-        return None;
-    }
-    buf.windows(4).position(|w| w == b"\r\n\r\n")
-}
