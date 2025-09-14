@@ -111,10 +111,25 @@ Phase 4 — Extract Windows fork helpers (cfg-gated; behavior-preserving)
   - Bash inner retains “; exec bash”.
 
 Phase 5 — Move MergingStrategy into fork domain (clarity; low-risk)
-- Prefer existing src/fork/types.rs over introducing a new file:
-  - Move the MergingStrategy enum into src/fork/types.rs (add use clap::ValueEnum).
-- In lib.rs: pub use fork::types::MergingStrategy; (non-gated)
+- Prefer a lib-only module to avoid compiling orchestrator structs into the library:
+  - Place the MergingStrategy enum in src/fork/strategy.rs (add use clap::ValueEnum).
+- In lib.rs: re-export as aifo_coder::MergingStrategy (non-gated). The internal module path is an implementation detail.
 - Acceptance: all call sites (e.g., src/fork/post_merge.rs, src/main.rs) compile and behave identically.
+
+Phase 5a — Decouple lib from orchestrator types (fix clippy without masking)
+- Problem: the lib target compiles src/fork/types.rs (ForkSession, Pane, ForkOptions), which are not constructed in library code, triggering -D dead_code.
+- Solution:
+  - Do not compile src/fork/types.rs in the lib target; keep these structs in the bin module tree only.
+  - Keep the public enum in a lib-only module (src/fork/strategy.rs) and re-export it as aifo_coder::MergingStrategy (see Phase 5).
+  - Change fork_env_for_pane to a parts-based signature so it no longer depends on ForkSession/Pane:
+    - pub fn fork_env_for_pane(sid: &str, pane_index: usize, container_name: &str, pane_state_dir: &Path) -> Vec<(String, String)>
+    - Return exactly the same KVs as before (including AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 and AIFO_CODER_SKIP_LOCK=1).
+  - Update bin call sites to pass these parts (e.g., src/fork/inner.rs build_tmux_launch_script). No change to user-visible behavior.
+  - Keep fork_inner_env_kv (Windows-only) unchanged; it continues to exclude SUPPRESS and is used by inner string builders.
+- Acceptance:
+  - cargo clippy and cargo test pass with -D warnings.
+  - No change to user-visible strings, exit codes, or streams.
+  - Public API commitments remain intact (aifo_coder::MergingStrategy path).
 
 Phase 6 — Extract fs/id helpers (low-risk; clarity)
 - New modules:
@@ -189,7 +204,9 @@ Implementation checklist (quick reference)
 - Phase 4:
   - Add src/fork/windows/helpers.rs; move Windows helpers; add wt_tail(); use fork_inner_env_kv; cfg-gate and re-export in lib.rs.
 - Phase 5:
-  - Move MergingStrategy into src/fork/types.rs; re-export from lib.rs.
+  - Place MergingStrategy in src/fork/strategy.rs (lib-only); re-export from lib.rs.
+- Phase 5a:
+  - Change fork_env_for_pane to parts-based signature; update bin call sites; ensure the lib does not compile src/fork/types.rs.
 - Phase 6:
   - Create src/util/fs.rs and src/util/id.rs; move path_pair, ensure_file_exists, create_session_id; re-export in lib.rs.
 - Phase 7:
