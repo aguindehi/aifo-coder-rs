@@ -192,3 +192,76 @@ pub fn hash_repo_key_hex(s: &str) -> String {
     }
     format!("{:016x}", h)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_candidate_lock_paths_includes_xdg_runtime_dir() {
+        // Use a non-repo temp directory to exercise legacy fallback candidates
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old = std::env::var("XDG_RUNTIME_DIR").ok();
+        let old_cwd = std::env::current_dir().expect("cwd");
+        std::env::set_var("XDG_RUNTIME_DIR", td.path());
+        std::env::set_current_dir(td.path()).expect("chdir");
+
+        let paths = candidate_lock_paths();
+        let expected = td.path().join("aifo-coder.lock");
+        assert!(
+            paths.iter().any(|p| p == &expected),
+            "candidate_lock_paths missing expected XDG_RUNTIME_DIR path: {:?}",
+            expected
+        );
+
+        // Restore env and cwd
+        if let Some(v) = old {
+            std::env::set_var("XDG_RUNTIME_DIR", v);
+        } else {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[test]
+    fn test_candidate_lock_paths_includes_cwd_lock_outside_repo() {
+        // In a non-repo directory, ensure CWD/.aifo-coder.lock appears among legacy candidates
+        let td = tempfile::tempdir().expect("tmpdir");
+        let old_cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(td.path()).expect("chdir");
+        let paths = candidate_lock_paths();
+        let expected = td.path().join(".aifo-coder.lock");
+        // Allow symlink differences by comparing canonicalized parent
+        let expected_dir_canon =
+            std::fs::canonicalize(td.path()).unwrap_or_else(|_| td.path().to_path_buf());
+        let found = paths.iter().any(|p| {
+            p.file_name()
+                .map(|n| n == ".aifo-coder.lock")
+                .unwrap_or(false)
+                && p.parent()
+                    .and_then(|d| std::fs::canonicalize(d).ok())
+                    .map(|d| d == expected_dir_canon)
+                    .unwrap_or(false)
+        });
+        assert!(
+            found,
+            "candidate_lock_paths missing expected CWD lock path: {:?} in {:?}",
+            expected, paths
+        );
+        std::env::set_current_dir(old_cwd).ok();
+    }
+
+    #[test]
+    fn test_should_acquire_lock_env() {
+        // Default: acquire
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+        assert!(should_acquire_lock(), "should acquire lock by default");
+        // Skip when set to "1"
+        std::env::set_var("AIFO_CODER_SKIP_LOCK", "1");
+        assert!(
+            !should_acquire_lock(),
+            "should not acquire lock when AIFO_CODER_SKIP_LOCK=1"
+        );
+        std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+    }
+}

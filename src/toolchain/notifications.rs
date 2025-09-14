@@ -190,6 +190,109 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
 
 /// Validate and, if allowed, execute the host 'say' command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use once_cell::sync::Lazy;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    // Serialize tests that mutate HOME/AIFO_NOTIFICATIONS_CONFIG to avoid env races
+    static NOTIF_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn write_cfg(tmp_home: &PathBuf, content: &str) -> PathBuf {
+        let cfg_path = tmp_home.join(".aider.conf.yml");
+        std::fs::write(&cfg_path, content).expect("write config");
+        cfg_path
+    }
+
+    #[test]
+    fn test_parse_notifications_inline_array() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        let cfg_path = write_cfg(&home, cfg);
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse array");
+        assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_parse_notifications_block_scalar() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: |
+  say --title "AIFO"
+"#;
+        let cfg_path = write_cfg(&home, cfg);
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+        let argv = parse_notifications_command_config().expect("parse block");
+        assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_notifications_args_mismatch_error() {
+        let _g = NOTIF_ENV_GUARD.lock().unwrap();
+        let td = tempfile::tempdir().expect("tmpdir");
+        let home = td.path().to_path_buf();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
+        let cfg_path = write_cfg(&home, cfg);
+        let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
+        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+
+        let res = super::notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
+        assert!(res.is_err(), "expected mismatch error");
+        let msg = res.err().unwrap();
+        assert!(msg.contains("arguments mismatch"));
+
+        if let Some(v) = old_cfg {
+            std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
+        } else {
+            std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
+        }
+        if let Some(v) = old_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+}
+
 pub(crate) fn notifications_handle_request(
     argv: &[String],
     _verbose: bool,

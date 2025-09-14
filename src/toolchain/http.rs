@@ -223,3 +223,28 @@ pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_form_urlencoded_basic_and_repeated() {
+        let pairs = parse_form_urlencoded("arg=a&arg=b&tool=cargo&cwd=.");
+        let expected = vec![
+            ("arg".to_string(), "a".to_string()),
+            ("arg".to_string(), "b".to_string()),
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
+        assert_eq!(pairs, expected);
+    }
+
+    #[test]
+    fn test_parse_form_urlencoded_empty_and_missing_values() {
+        let pairs = parse_form_urlencoded("a=1&b=&c");
+        assert!(pairs.contains(&(String::from("a"), String::from("1"))));
+        assert!(pairs.contains(&(String::from("b"), String::from(""))));
+        assert!(pairs.contains(&(String::from("c"), String::from(""))));
+    }
+}

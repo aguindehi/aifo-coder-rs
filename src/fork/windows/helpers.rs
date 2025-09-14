@@ -114,3 +114,43 @@ pub fn wt_build_split_args(
 pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
     format!("Wait-Process -Id {}", ids.join(","))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_windows_helpers_orient_and_builders() {
+        let agent = "aider";
+        let sid = "sidw";
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let pane_dir = tmp.path().join("p");
+        std::fs::create_dir_all(&pane_dir).unwrap();
+        let state_dir = tmp.path().join("s");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let child = vec!["aider".to_string(), "--help".to_string()];
+
+        let ps = fork_ps_inner_string(agent, sid, 1, &pane_dir, &state_dir, &child);
+        assert!(ps.contains("Set-Location '"), "ps inner should set location: {}", ps);
+        assert!(ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"), "ps inner should set env");
+
+        let bash = fork_bash_inner_string(agent, sid, 2, &pane_dir, &state_dir, &child);
+        assert!(bash.contains("cd "), "bash inner should cd");
+        assert!(bash.contains("export AIFO_CODER_SKIP_LOCK='1'"), "bash inner export env");
+
+        assert_eq!(wt_orient_for_layout("even-h", 3), "-H");
+        assert_eq!(wt_orient_for_layout("even-v", 4), "-V");
+
+        let psbin = std::path::PathBuf::from("powershell.exe");
+        let inner = "cmds";
+        let newtab = wt_build_new_tab_args(&psbin, &pane_dir, inner);
+        assert_eq!(newtab[0], "wt");
+        assert_eq!(newtab[1], "new-tab");
+        let split = wt_build_split_args("-H", &psbin, &pane_dir, inner);
+        assert_eq!(split[1], "split-pane");
+        assert_eq!(split[2], "-H");
+
+        let w = crate::ps_wait_process_cmd(&["101", "202", "303"]);
+        assert_eq!(w, "Wait-Process -Id 101,202,303");
+    }
+}
