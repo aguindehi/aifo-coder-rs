@@ -63,7 +63,6 @@ pub(crate) fn fork_list_impl(
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(14);
 
-
     if all_repos {
         // Optional workspace scan when AIFO_CODER_WORKSPACE_ROOT is set
         if let Ok(ws) = env::var("AIFO_CODER_WORKSPACE_ROOT") {
