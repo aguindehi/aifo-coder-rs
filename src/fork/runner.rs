@@ -489,7 +489,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::paint(
                             use_err_color,
                             "\x1b[33m",
-                            "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merge-strategy)."
+                            concat!(
+                                "aifo-coder: using PowerShell windows to enable post-fork merging ",
+                                "(--fork-merge-strategy)."
+                            )
                         )
                     );
                 }
@@ -1217,7 +1220,13 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 aifo_coder::paint(
                                     use_err_color,
                                     "\x1b[33m",
-                                    &format!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat)
+                                    &format!(
+                                        concat!(
+                                            "aifo-coder: note: no waitable orchestrator found; ",
+                                            "automatic post-fork merging ({}) is unavailable."
+                                        ),
+                                        strat
+                                    )
                                 )
                             );
                             eprintln!(
@@ -1226,8 +1235,13 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                     use_err_color,
                                     "\x1b[33m",
                                     &format!(
-                                        "aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}",
-                                        sid, strat
+                                        concat!(
+                                            "aifo-coder: after you close all panes, run: ",
+                                            "aifo-coder fork merge --session {} ",
+                                            "--strategy {}"
+                                        ),
+                                        sid,
+                                        strat
                                     )
                                 )
                             );
