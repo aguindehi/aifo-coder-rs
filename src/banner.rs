@@ -102,11 +102,17 @@ pub(crate) fn print_startup_banner() {
 
     // Feature overview (Linux, macOS, Windows)
     eprintln!(" ✨ Features:");
-    eprintln!("    - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces.");
+    eprintln!(
+        "    - Linux: Docker containers with AppArmor when available; seccomp "
+        "and cgroup namespaces."
+    );
     eprintln!(
         "    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM."
     );
-    eprintln!("    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration.");
+    eprintln!(
+        "    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/"
+        "Git Bash fork orchestration."
+    );
     eprintln!();
 
     // Dynamic startup summary (terse)
@@ -141,12 +147,16 @@ pub(crate) fn print_startup_banner() {
     eprintln!("    - Seccomp and cgroup namespaces as reported by Docker.");
     eprintln!("    - Per-pane isolated state for forks (.aider/.codex/.crush).");
     eprintln!(
-        "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy."
+        "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) "
+        "via secure proxy."
     );
     eprintln!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     eprintln!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     eprintln!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(" 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB");
+    eprintln!(
+        " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros "
+        "AI Foundation at MGB"
+    );
     eprintln!("─────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!();
 }
