@@ -5,7 +5,6 @@ This module introduces a minimal request model and utilities to parse a single H
 request from a Read stream, with compatibility for both CRLFCRLF and LFLF header
 termination and a 64 KiB header cap (matching existing behavior in spirit).
 */
-#![allow(dead_code)]
 
 use crate::find_header_end;
 use std::collections::HashMap;
