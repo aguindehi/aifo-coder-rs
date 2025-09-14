@@ -15,11 +15,11 @@ mod fork {
     pub mod cleanup;
     pub mod env;
     pub mod inner;
-    pub mod runner;
     pub mod meta;
     pub mod orchestrators;
     pub mod post_merge;
     pub mod preflight;
+    pub mod runner;
     pub mod session;
     pub mod summary;
     pub mod types;
@@ -27,10 +27,7 @@ mod fork {
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
-use crate::warnings::{
-    maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace,
-};
-
+use crate::warnings::{maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace};
 
 struct OutputNewlineGuard;
 
