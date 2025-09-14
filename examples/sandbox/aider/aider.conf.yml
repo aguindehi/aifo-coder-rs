@@ -6,12 +6,18 @@ weak-model: azure/mgb-aifo-model-gpt-5-mini
 
 editor: "emacs -nw"
 
-restore-chat-history: true
-llm-history-file: .aider.llm.history
-cache-keepalive-pings: 3 # 15min
+read: [AGENT.md, CONVENTIONS.md]
+
+no-show-release-notes: true
 
 notifications: true
 notifications-command: "say 'Task complete. What is your next assignment?'"
+
+# restoring chat history leads to $ 3.8188 3,055,042 chat history
+#restore-chat-history: true
+
+llm-history-file: .aider.llm.history
+cache-keepalive-pings: 3 # 15min
 
 multiline: false
 cache-prompts: true

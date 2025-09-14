@@ -25,24 +25,22 @@
   weak_model_name: azure/mgb-aifo-model-gpt-5-mini
   use_repo_map: true
   use_temperature: false
-  accepts_settings:
-  - reasoning_effort
+  accepts_settings: ["reasoning_effort"]
+#  overeager: true
 
 - name: azure/mgb-aifo-model-gpt-5-mini
   edit_format: diff
   weak_model_name: azure/azure/mgb-aifo-model-gpt-5-nano
   use_repo_map: true
   use_temperature: false
-  accepts_settings:
-  - reasoning_effort
+  accepts_settings: ["reasoning_effort"]
 
 - name: azure/mgb-aifo-model-gpt-5-nano
   edit_format: diff
   weak_model_name: azure/mgb-aifo-model-gpt-5-nano
   use_repo_map: true
   use_temperature: false
-  accepts_settings:
-  - reasoning_effort
+  accepts_settings: ["reasoning_effort"]
 
 - name: azure/gpt-4.1
   edit_format: diff
@@ -1064,4 +1062,3 @@
   editor_model_name: vertex_ai/gemini-2.5-flash-preview-04-17
   accepts_settings:
   - thinking_tokens
-
