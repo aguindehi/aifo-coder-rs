@@ -14,7 +14,6 @@ pub fn git(repo: Option<&Path>, args: &[&str]) -> std::io::Result<Output> {
     cmd.output()
 }
 
-
 /// Run a git command and capture trimmed stdout as UTF-8 String on success.
 pub fn git_stdout_str(repo: Option<&Path>, args: &[&str]) -> Option<String> {
     git(repo, args).ok().and_then(|o| {

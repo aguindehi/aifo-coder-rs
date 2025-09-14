@@ -13,14 +13,14 @@ use crate::{
     toolchain_cleanup_session,
 };
 
-#[path = "fork_impl/scan.rs"]
-mod fork_impl_scan;
 #[path = "fork_impl/git.rs"]
 mod fork_impl_git;
-#[path = "fork_impl/panecheck.rs"]
-mod fork_impl_panecheck;
 #[path = "fork_impl/notice.rs"]
 mod fork_impl_notice;
+#[path = "fork_impl/panecheck.rs"]
+mod fork_impl_panecheck;
+#[path = "fork_impl/scan.rs"]
+mod fork_impl_scan;
 
 /// Try to detect the Git repository root (absolute canonical path).
 /// Returns Some(repo_root) when inside a Git repository; otherwise None.

@@ -2,9 +2,9 @@ use std::env;
 use std::fs;
 use std::time::SystemTime;
 
-use crate::fork_meta;
-use super::fork_impl_scan;
 use super::fork_impl_panecheck;
+use super::fork_impl_scan;
+use crate::fork_meta;
 
 /// Print a notice about stale fork sessions for the current repository (quiet; best-effort).
 pub fn fork_print_stale_notice_impl() {

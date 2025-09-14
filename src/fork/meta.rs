@@ -1,7 +1,7 @@
+use crate as aifo_coder;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use crate as aifo_coder;
 
 /// Session metadata in the on-disk JSON file (order preserved by manual writer).
 pub struct SessionMeta<'a> {
