@@ -1,6 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 //! Small utilities: shell/json escaping, URL decoding, header parsing, simple tokenization.
 
+pub mod fs;
+pub mod id;
+
 pub fn shell_join(args: &[String]) -> String {
     args.iter()
         .map(|a| shell_escape(a))
@@ -133,4 +136,66 @@ pub fn shell_like_split_args(s: &str) -> Vec<String> {
         out.push(current);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shell_escape_simple() {
+        assert_eq!(shell_escape("abc-123_./:@"), "abc-123_./:@");
+    }
+
+    #[test]
+    fn test_shell_escape_with_spaces_and_quotes() {
+        assert_eq!(shell_escape("a b c"), "'a b c'");
+        assert_eq!(shell_escape("O'Reilly"), "'O'\"'\"'Reilly'");
+    }
+
+    #[test]
+    fn test_shell_join() {
+        let args = vec!["a".to_string(), "b c".to_string(), "d".to_string()];
+        assert_eq!(shell_join(&args), "a 'b c' d");
+    }
+
+    #[test]
+    fn test_find_crlfcrlf_cases() {
+        assert_eq!(find_crlfcrlf(b"\r\n\r\n"), Some(0));
+        assert_eq!(find_crlfcrlf(b"abc\r\n\r\ndef"), Some(3));
+        assert_eq!(find_crlfcrlf(b"abcdef"), None);
+        assert_eq!(find_crlfcrlf(b"\r\n\r"), None);
+    }
+
+    #[test]
+    fn test_strip_outer_quotes_variants() {
+        assert_eq!(strip_outer_quotes("'abc'"), "abc");
+        assert_eq!(strip_outer_quotes("\"abc\""), "abc");
+        assert_eq!(strip_outer_quotes("'a b'"), "a b");
+        assert_eq!(strip_outer_quotes("noquote"), "noquote");
+        // Only strips if both ends match the same quote type
+        assert_eq!(strip_outer_quotes("'mismatch\""), "'mismatch\"");
+    }
+
+    #[test]
+    fn test_shell_like_split_args_quotes_and_spaces() {
+        let args = shell_like_split_args("'a b' c \"d e\"");
+        assert_eq!(
+            args,
+            vec!["a b".to_string(), "c".to_string(), "d e".to_string()]
+        );
+
+        let args2 = shell_like_split_args("  a   'b c'   d  ");
+        assert_eq!(
+            args2,
+            vec!["a".to_string(), "b c".to_string(), "d".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_url_decode_mixed() {
+        assert_eq!(url_decode("a+b%20c%2F%3F%25"), "a b c/?%");
+        assert_eq!(url_decode("%41%42%43"), "ABC");
+        assert_eq!(url_decode("no-escapes_here~"), "no-escapes_here~");
+    }
 }

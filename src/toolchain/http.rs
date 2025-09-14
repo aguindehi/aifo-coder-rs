@@ -5,8 +5,8 @@ This module introduces a minimal request model and utilities to parse a single H
 request from a Read stream, with compatibility for both CRLFCRLF and LFLF header
 termination and a 64 KiB header cap (matching existing behavior in spirit).
 */
-#![allow(dead_code)]
 
+use crate::find_header_end;
 use std::collections::HashMap;
 use std::io::{self, Read};
 
@@ -55,23 +55,29 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             break;
         }
         buf.extend_from_slice(&tmp[..n]);
-        if let Some(pos) = find_crlfcrlf(&buf) {
-            header_end = Some(pos);
-        } else if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
-            header_end = Some(pos);
+        if let Some(end_idx) = find_header_end(&buf) {
+            header_end = Some(end_idx);
         }
     }
 
     let hend = header_end.unwrap_or(buf.len());
-    let header_bytes = &buf[..hend];
     let mut body = Vec::new();
-    // Skip terminator if it exists
-    let mut body_start = hend;
-    if buf.len() >= hend + 4 && &buf[hend..hend + 4] == b"\r\n\r\n" {
-        body_start = hend + 4;
-    } else if buf.len() >= hend + 2 && &buf[hend..hend + 2] == b"\n\n" {
-        body_start = hend + 2;
-    }
+    // Compute header_bytes and body_start using canonical helper semantics
+    let (header_bytes, body_start) = if let Some(end_idx) = header_end {
+        // Determine which terminator was used by inspecting bytes before end_idx
+        let header_bytes: &[u8] = if end_idx >= 4 && &buf[end_idx - 4..end_idx] == b"\r\n\r\n" {
+            &buf[..end_idx - 4]
+        } else if end_idx >= 2 && &buf[end_idx - 2..end_idx] == b"\n\n" {
+            &buf[..end_idx - 2]
+        } else {
+            // Fallback: treat everything up to end_idx as headers
+            &buf[..end_idx]
+        };
+        (header_bytes, end_idx)
+    } else {
+        // No terminator found; treat entire buffer as headers, no body yet
+        (&buf[..hend], hend)
+    };
     if buf.len() > body_start {
         body.extend_from_slice(&buf[body_start..]);
     }
@@ -170,40 +176,6 @@ Unified application/x-www-form-urlencoded parser with decoding:
 - %XX → byte decode; invalid sequences preserved literally (best-effort)
 */
 pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
-    fn decode_component(input: &str) -> String {
-        let bytes = input.as_bytes();
-        let mut out = String::with_capacity(input.len());
-        let mut i = 0usize;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'+' => {
-                    out.push(' ');
-                    i += 1;
-                }
-                b'%' if i + 2 < bytes.len() => {
-                    let h1 = bytes[i + 1];
-                    let h2 = bytes[i + 2];
-                    let v1 = (h1 as char).to_digit(16);
-                    let v2 = (h2 as char).to_digit(16);
-                    if let (Some(a), Some(b)) = (v1, v2) {
-                        let byte = ((a as u8) << 4) | (b as u8);
-                        out.push(byte as char);
-                        i += 3;
-                    } else {
-                        // Best-effort: leave as literal '%'
-                        out.push('%');
-                        i += 1;
-                    }
-                }
-                c => {
-                    out.push(c as char);
-                    i += 1;
-                }
-            }
-        }
-        out
-    }
-
     let mut out = Vec::new();
     for pair in s.split('&') {
         if pair.is_empty() {
@@ -212,15 +184,32 @@ pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
         let mut it = pair.splitn(2, '=');
         let k = it.next().unwrap_or_default();
         let v = it.next().unwrap_or_default();
-        out.push((decode_component(k), decode_component(v)));
+        out.push((crate::url_decode(k), crate::url_decode(v)));
     }
     out
 }
 
-// Local helper for CRLFCRLF detection
-fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
-    if buf.len() < 4 {
-        return None;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_form_urlencoded_basic_and_repeated() {
+        let pairs = parse_form_urlencoded("arg=a&arg=b&tool=cargo&cwd=.");
+        let expected = vec![
+            ("arg".to_string(), "a".to_string()),
+            ("arg".to_string(), "b".to_string()),
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
+        assert_eq!(pairs, expected);
     }
-    buf.windows(4).position(|w| w == b"\r\n\r\n")
+
+    #[test]
+    fn test_parse_form_urlencoded_empty_and_missing_values() {
+        let pairs = parse_form_urlencoded("a=1&b=&c");
+        assert!(pairs.contains(&(String::from("a"), String::from("1"))));
+        assert!(pairs.contains(&(String::from("b"), String::from(""))));
+        assert!(pairs.contains(&(String::from("c"), String::from(""))));
+    }
 }
