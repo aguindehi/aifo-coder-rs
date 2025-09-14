@@ -23,20 +23,18 @@ pub(crate) fn collect_pane_branches_impl(
     for (pdir, branch_hint) in panes {
         let actual_branch = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pdir));
-            cmd.arg("rev-parse")
-                .arg("--abbrev-ref")
-                .arg("HEAD");
+            cmd.arg("rev-parse").arg("--abbrev-ref").arg("HEAD");
             cmd.output().ok()
         }
-            .and_then(|o| {
-                if o.status.success() {
-                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                } else {
-                    None
-                }
-            })
-            .filter(|s| !s.is_empty() && s.as_str() != "HEAD")
-            .unwrap_or_else(|| branch_hint.clone());
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.is_empty() && s.as_str() != "HEAD")
+        .unwrap_or_else(|| branch_hint.clone());
         if actual_branch.is_empty() || actual_branch == "HEAD" {
             continue;
         }
@@ -478,19 +476,17 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     for p in panes_dirs {
         let branch = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(&p));
-            cmd.arg("rev-parse")
-                .arg("--abbrev-ref")
-                .arg("HEAD");
+            cmd.arg("rev-parse").arg("--abbrev-ref").arg("HEAD");
             cmd.output().ok()
         }
-            .and_then(|o| {
-                if o.status.success() {
-                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_default();
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
         if !branch.is_empty() && branch != "HEAD" {
             panes.push((p, branch));
         }
