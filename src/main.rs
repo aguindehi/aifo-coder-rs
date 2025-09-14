@@ -335,8 +335,10 @@ fn main() -> ExitCode {
                     eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
                 }
                 eprintln!(
-                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set "
-                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                    concat!(
+                        "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
+                        "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                    )
                 );
             }
         } else {
