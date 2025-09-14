@@ -1,5 +1,12 @@
 2025-09-15 00:00 User <user@example.com>
 
+QA: test suite green (223 passed, 24 skipped)
+
+- Verified recommendations implemented; entire test suite green.
+- No code changes in this entry; documentation-only update.
+
+2025-09-15 00:00 User <user@example.com>
+
 Tests: add golden JSON and git helper tests; docs and git_cmd helper
 
 - Added golden-style JSON row formatter test for fork_list and a targeted test suite for git helpers.
