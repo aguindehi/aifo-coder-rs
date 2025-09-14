@@ -29,11 +29,22 @@ fn test_candidate_lock_paths_repo_scoped() {
         .filter(|s| !s.is_empty())
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    second_base.push(format!("aifo-coder.{}.lock", aifo_coder::hash_repo_key_hex(&key)));
+    second_base.push(format!(
+        "aifo-coder.{}.lock",
+        aifo_coder::hash_repo_key_hex(&key)
+    ));
 
     let paths = aifo_coder::candidate_lock_paths();
-    assert_eq!(paths.first(), Some(&first), "first candidate must be in-repo lock path");
-    assert_eq!(paths.get(1), Some(&second_base), "second candidate must be hashed runtime-scoped lock path");
+    assert_eq!(
+        paths.first(),
+        Some(&first),
+        "first candidate must be in-repo lock path"
+    );
+    assert_eq!(
+        paths.get(1),
+        Some(&second_base),
+        "second candidate must be hashed runtime-scoped lock path"
+    );
 
     // Restore env and cwd
     if let Some(v) = old_xdg {

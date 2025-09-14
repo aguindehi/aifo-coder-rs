@@ -131,12 +131,22 @@ mod tests {
         let child = vec!["aider".to_string(), "--help".to_string()];
 
         let ps = fork_ps_inner_string(agent, sid, 1, &pane_dir, &state_dir, &child);
-        assert!(ps.contains("Set-Location '"), "ps inner should set location: {}", ps);
-        assert!(ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"), "ps inner should set env");
+        assert!(
+            ps.contains("Set-Location '"),
+            "ps inner should set location: {}",
+            ps
+        );
+        assert!(
+            ps.contains("$env:AIFO_CODER_SKIP_LOCK='1'"),
+            "ps inner should set env"
+        );
 
         let bash = fork_bash_inner_string(agent, sid, 2, &pane_dir, &state_dir, &child);
         assert!(bash.contains("cd "), "bash inner should cd");
-        assert!(bash.contains("export AIFO_CODER_SKIP_LOCK='1'"), "bash inner export env");
+        assert!(
+            bash.contains("export AIFO_CODER_SKIP_LOCK='1'"),
+            "bash inner export env"
+        );
 
         assert_eq!(wt_orient_for_layout("even-h", 3), "-H");
         assert_eq!(wt_orient_for_layout("even-v", 4), "-V");

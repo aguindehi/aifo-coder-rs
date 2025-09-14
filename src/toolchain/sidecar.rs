@@ -338,7 +338,6 @@ pub fn build_sidecar_run_preview(
     args
 }
 
-
 pub fn build_sidecar_exec_preview(
     name: &str,
     uidgid: Option<(u32, u32)>,

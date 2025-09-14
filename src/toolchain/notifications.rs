@@ -190,7 +190,6 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
 
 /// Validate and, if allowed, execute the host 'say' command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
-
 pub(crate) fn notifications_handle_request(
     argv: &[String],
     _verbose: bool,

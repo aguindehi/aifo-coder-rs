@@ -2,7 +2,10 @@ use aifo_coder as aifo;
 
 #[test]
 fn test_fork_sanitize_base_label_rules() {
-    assert_eq!(aifo::fork_sanitize_base_label("Main Feature"), "main-feature");
+    assert_eq!(
+        aifo::fork_sanitize_base_label("Main Feature"),
+        "main-feature"
+    );
     assert_eq!(
         aifo::fork_sanitize_base_label("Release/2025.09"),
         "release-2025-09"

@@ -16,7 +16,10 @@ fn test_hashed_lock_path_diff_for_two_repos() {
         .status();
     std::env::set_current_dir(&repo_a).unwrap();
     let paths_a = aifo_coder::candidate_lock_paths();
-    assert!(paths_a.len() >= 2, "expected at least two candidates for repo A");
+    assert!(
+        paths_a.len() >= 2,
+        "expected at least two candidates for repo A"
+    );
     let hashed_a = paths_a[1].clone();
 
     // repo B
@@ -28,7 +31,10 @@ fn test_hashed_lock_path_diff_for_two_repos() {
         .status();
     std::env::set_current_dir(&repo_b).unwrap();
     let paths_b = aifo_coder::candidate_lock_paths();
-    assert!(paths_b.len() >= 2, "expected at least two candidates for repo B");
+    assert!(
+        paths_b.len() >= 2,
+        "expected at least two candidates for repo B"
+    );
     let hashed_b = paths_b[1].clone();
 
     assert_ne!(

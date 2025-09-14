@@ -13,11 +13,23 @@ fn have_git() -> bool {
 // Minimal helper to initialize a git repository with one commit
 fn init_repo(dir: &std::path::Path) {
     let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.name", "UT"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.email", "ut@example.com"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["config", "user.name", "UT"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "ut@example.com"])
+        .current_dir(dir)
+        .status();
     let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git").args(["add", "-A"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["commit", "-m", "init"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .status();
 }
 
 #[test]
@@ -37,7 +49,12 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     std::fs::create_dir_all(&pane_old).unwrap();
     init_repo(&pane_old);
     let head_old = String::from_utf8_lossy(
-        &Command::new("git").args(["rev-parse", "--verify", "HEAD"]).current_dir(&pane_old).output().unwrap().stdout,
+        &Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_old)
+            .output()
+            .unwrap()
+            .stdout,
     )
     .trim()
     .to_string();
@@ -60,7 +77,12 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     std::fs::create_dir_all(&pane_new).unwrap();
     init_repo(&pane_new);
     let head_new = String::from_utf8_lossy(
-        &Command::new("git").args(["rev-parse", "--verify", "HEAD"]).current_dir(&pane_new).output().unwrap().stdout,
+        &Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_new)
+            .output()
+            .unwrap()
+            .stdout,
     )
     .trim()
     .to_string();

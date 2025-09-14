@@ -55,15 +55,7 @@ fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
     let state_dir = PathBuf::from("./state");
     let child = vec!["aider".to_string(), "--help".to_string()];
     // exec_shell_tail=true -> keep "; exec bash"
-    let s = build_inner_gitbash(
-        agent,
-        sid,
-        pane_index,
-        &pane_dir,
-        &state_dir,
-        &child,
-        true,
-    );
+    let s = build_inner_gitbash(agent, sid, pane_index, &pane_dir, &state_dir, &child, true);
     assert!(
         s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
         "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",
@@ -180,7 +172,6 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-
     #[cfg(windows)]
     #[test]
     fn test_ps_inner_injects_suppress_env() {
@@ -191,14 +182,7 @@ mod tests {
         let pane_dir = PathBuf::from(".");
         let state_dir = PathBuf::from("./state");
         let child = vec!["aider".to_string(), "--help".to_string()];
-        let s = build_inner_powershell(
-            agent,
-            sid,
-            pane_index,
-            &pane_dir,
-            &state_dir,
-            &child,
-        );
+        let s = build_inner_powershell(agent, sid, pane_index, &pane_dir, &state_dir, &child);
         assert!(
             s.contains("$env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';"),
             "PowerShell inner should inject SUPPRESS var, got: {}",
@@ -221,15 +205,7 @@ mod tests {
         let state_dir = PathBuf::from("./state");
         let child = vec!["aider".to_string(), "--help".to_string()];
         // exec_shell_tail=false simulates post-merge requested (should trim '; exec bash')
-        let s = build_inner_gitbash(
-            agent,
-            sid,
-            pane_index,
-            &pane_dir,
-            &state_dir,
-            &child,
-            false,
-        );
+        let s = build_inner_gitbash(agent, sid, pane_index, &pane_dir, &state_dir, &child, false);
         assert!(
             s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
             "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",

@@ -13,11 +13,23 @@ fn have_git() -> bool {
 // Minimal helper to initialize a git repository with one commit
 fn init_repo(dir: &std::path::Path) {
     let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.name", "UT"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.email", "ut@example.com"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["config", "user.name", "UT"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "ut@example.com"])
+        .current_dir(dir)
+        .status();
     let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git").args(["add", "-A"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["commit", "-m", "init"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .status();
 }
 
 #[test]
@@ -56,7 +68,12 @@ fn test_fork_clean_protects_ahead_and_force_deletes() {
 
     // Create an extra commit in the pane to make it "ahead" of base_commit_sha
     std::fs::write(pane.join("new.txt"), "y\n").unwrap();
-    assert!(Command::new("git").args(["add", "-A"]).current_dir(&pane).status().unwrap().success());
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&pane)
+        .status()
+        .unwrap()
+        .success());
     assert!(Command::new("git")
         .args(["commit", "-m", "advance pane"])
         .current_dir(&pane)
@@ -91,10 +108,16 @@ fn test_fork_clean_protects_ahead_and_force_deletes() {
         json: false,
     };
     let code2 = aifo_coder::fork_clean(&root, &opts_keep).expect("fork_clean keep-dirty");
-    assert_eq!(code2, 0, "keep-dirty should succeed (no deletions if all panes protected)");
+    assert_eq!(
+        code2, 0,
+        "keep-dirty should succeed (no deletions if all panes protected)"
+    );
     assert!(pane.exists(), "ahead pane should remain");
     let meta2 = std::fs::read_to_string(base.join(".meta.json")).expect("read meta2");
-    assert!(meta2.contains("\"panes_remaining\""), "meta should be updated to include panes_remaining");
+    assert!(
+        meta2.contains("\"panes_remaining\""),
+        "meta should be updated to include panes_remaining"
+    );
 
     // force should delete the session
     let opts_force = aifo_coder::ForkCleanOpts {

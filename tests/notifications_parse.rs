@@ -136,10 +136,15 @@ fn test_notifications_args_mismatch_error() {
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
-    let res = aifo_coder::notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
+    let res =
+        aifo_coder::notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
     assert!(res.is_err(), "expected mismatch error, got: {:?}", res);
     let msg = res.err().unwrap();
-    assert!(msg.contains("arguments mismatch"), "unexpected error message: {}", msg);
+    assert!(
+        msg.contains("arguments mismatch"),
+        "unexpected error message: {}",
+        msg
+    );
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
@@ -165,10 +170,15 @@ fn test_notifications_config_rejects_non_say() {
     let cfg_path = write_cfg(&home, cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
-    let res = aifo_coder::notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
+    let res =
+        aifo_coder::notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
     assert!(res.is_err(), "expected error when executable is not 'say'");
     let msg = res.err().unwrap();
-    assert!(msg.contains("only 'say' is allowed"), "unexpected error: {}", msg);
+    assert!(
+        msg.contains("only 'say' is allowed"),
+        "unexpected error: {}",
+        msg
+    );
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);

@@ -14,8 +14,8 @@ fn test_build_docker_cmd_uses_per_pane_state_mounts() {
     std::env::set_var("AIFO_CODER_FORK_STATE_DIR", &state_dir);
 
     let args = vec!["--help".to_string()];
-    let (_cmd, preview) =
-        aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None).expect("build_docker_cmd");
+    let (_cmd, preview) = aifo_coder::build_docker_cmd("aider", &args, "alpine:3.20", None)
+        .expect("build_docker_cmd");
 
     let sd_aider = format!("{}:/home/coder/.aider", state_dir.join(".aider").display());
     let sd_codex = format!("{}:/home/coder/.codex", state_dir.join(".codex").display());

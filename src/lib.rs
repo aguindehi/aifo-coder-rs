@@ -26,6 +26,6 @@ pub use lock::*;
 pub use registry::*;
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
-pub use util::*;
-pub use util::fs::{path_pair, ensure_file_exists};
+pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::id::create_session_id;
+pub use util::*;

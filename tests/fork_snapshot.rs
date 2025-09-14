@@ -19,12 +19,33 @@ fn test_fork_create_snapshot_commit_exists() {
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
 
-    assert!(Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
-    let _ = Command::new("git").args(["config", "user.name", "AIFO Test"]).current_dir(repo).status();
-    let _ = Command::new("git").args(["config", "user.email", "aifo@example.com"]).current_dir(repo).status();
+    assert!(Command::new("git")
+        .args(["init"])
+        .current_dir(repo)
+        .status()
+        .unwrap()
+        .success());
+    let _ = Command::new("git")
+        .args(["config", "user.name", "AIFO Test"])
+        .current_dir(repo)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "aifo@example.com"])
+        .current_dir(repo)
+        .status();
     std::fs::write(repo.join("a.txt"), "a\n").unwrap();
-    assert!(Command::new("git").args(["add", "-A"]).current_dir(repo).status().unwrap().success());
-    assert!(Command::new("git").args(["commit", "-m", "c1"]).current_dir(repo).status().unwrap().success());
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(repo)
+        .status()
+        .unwrap()
+        .success());
+    assert!(Command::new("git")
+        .args(["commit", "-m", "c1"])
+        .current_dir(repo)
+        .status()
+        .unwrap()
+        .success());
 
     // dirty change
     std::fs::write(repo.join("b.txt"), "b\n").unwrap();
@@ -41,7 +62,11 @@ fn test_fork_create_snapshot_commit_exists() {
         .output()
         .expect("git cat-file");
     let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert_eq!(t, "commit", "snapshot object type must be commit, got {}", t);
+    assert_eq!(
+        t, "commit",
+        "snapshot object type must be commit, got {}",
+        t
+    );
 }
 
 #[test]
@@ -52,7 +77,12 @@ fn test_fork_create_snapshot_on_empty_repo() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    assert!(Command::new("git").args(["init"]).current_dir(repo).status().unwrap().success());
+    assert!(Command::new("git")
+        .args(["init"])
+        .current_dir(repo)
+        .status()
+        .unwrap()
+        .success());
     std::fs::write(repo.join("a.txt"), "a\n").unwrap();
     let sid = "empty";
     let snap = aifo_coder::fork_create_snapshot(repo, sid).expect("snapshot on empty repo");

@@ -13,11 +13,23 @@ fn have_git() -> bool {
 // Minimal helper to initialize a git repository with one commit
 fn init_repo(dir: &std::path::Path) {
     let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.name", "UT"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["config", "user.email", "ut@example.com"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["config", "user.name", "UT"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "ut@example.com"])
+        .current_dir(dir)
+        .status();
     let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git").args(["add", "-A"]).current_dir(dir).status();
-    let _ = Command::new("git").args(["commit", "-m", "init"]).current_dir(dir).status();
+    let _ = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status();
+    let _ = Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .status();
 }
 
 #[test]
@@ -37,7 +49,12 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
     std::fs::create_dir_all(&pane_clean).unwrap();
     init_repo(&pane_clean);
     let head_clean = String::from_utf8_lossy(
-        &Command::new("git").args(["rev-parse", "--verify", "HEAD"]).current_dir(&pane_clean).output().unwrap().stdout,
+        &Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_clean)
+            .output()
+            .unwrap()
+            .stdout,
     )
     .trim()
     .to_string();
@@ -60,7 +77,12 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
     std::fs::create_dir_all(&pane_prot).unwrap();
     init_repo(&pane_prot);
     let head_prot = String::from_utf8_lossy(
-        &Command::new("git").args(["rev-parse", "--verify", "HEAD"]).current_dir(&pane_prot).output().unwrap().stdout,
+        &Command::new("git")
+            .args(["rev-parse", "--verify", "HEAD"])
+            .current_dir(&pane_prot)
+            .output()
+            .unwrap()
+            .stdout,
     )
     .trim()
     .to_string();
@@ -72,7 +94,12 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
     std::fs::write(base_prot.join(".meta.json"), meta_prot).unwrap();
     // Make pane ahead of base_commit_sha
     std::fs::write(pane_prot.join("new.txt"), "y\n").unwrap();
-    assert!(Command::new("git").args(["add", "-A"]).current_dir(&pane_prot).status().unwrap().success());
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&pane_prot)
+        .status()
+        .unwrap()
+        .success());
     assert!(Command::new("git")
         .args(["commit", "-m", "advance pane"])
         .current_dir(&pane_prot)
@@ -101,6 +128,12 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
         std::env::remove_var("AIFO_CODER_FORK_STALE_DAYS");
     }
 
-    assert!(!base_clean.exists(), "clean old session should have been deleted by autoclean");
-    assert!(base_prot.exists(), "protected old session should have been kept by autoclean");
+    assert!(
+        !base_clean.exists(),
+        "clean old session should have been deleted by autoclean"
+    );
+    assert!(
+        base_prot.exists(),
+        "protected old session should have been kept by autoclean"
+    );
 }

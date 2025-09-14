@@ -180,10 +180,16 @@ mod tests {
     #[test]
     fn test_shell_like_split_args_quotes_and_spaces() {
         let args = shell_like_split_args("'a b' c \"d e\"");
-        assert_eq!(args, vec!["a b".to_string(), "c".to_string(), "d e".to_string()]);
+        assert_eq!(
+            args,
+            vec!["a b".to_string(), "c".to_string(), "d e".to_string()]
+        );
 
         let args2 = shell_like_split_args("  a   'b c'   d  ");
-        assert_eq!(args2, vec!["a".to_string(), "b c".to_string(), "d".to_string()]);
+        assert_eq!(
+            args2,
+            vec!["a".to_string(), "b c".to_string(), "d".to_string()]
+        );
     }
 
     #[test]
