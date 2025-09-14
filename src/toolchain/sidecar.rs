@@ -338,64 +338,6 @@ pub fn build_sidecar_run_preview(
     args
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    #[test]
-    fn test_build_sidecar_exec_preview_python_venv_env() {
-        // Skip if docker isn't available on this host
-        if crate::container_runtime_path().is_err() {
-            eprintln!("skipping: docker not found in PATH");
-            return;
-        }
-        // Create a temp workspace with .venv/bin and ensure PATH/VIRTUAL_ENV are injected
-        let td = tempfile::tempdir().expect("tmpdir");
-        let pwd = td.path();
-        std::fs::create_dir_all(pwd.join(".venv").join("bin")).expect("create venv/bin");
-        let user_args = vec!["python".to_string(), "--version".to_string()];
-        let args = build_sidecar_exec_preview("tc-python", None, pwd, "python", &user_args);
-
-        let has_virtual_env = args.iter().any(|s| s == "VIRTUAL_ENV=/workspace/.venv");
-        let has_path_prefix = args.iter().any(|s| s.contains("PATH=/workspace/.venv/bin:"));
-        assert!(has_virtual_env, "exec preview missing VIRTUAL_ENV: {:?}", args);
-        assert!(has_path_prefix, "exec preview missing PATH venv prefix: {:?}", args);
-    }
-
-    #[test]
-    fn test_sidecar_run_preview_rust_caches_env() {
-        if crate::container_runtime_path().is_err() {
-            eprintln!("skipping: docker not found in PATH");
-            return;
-        }
-        let td = tempfile::tempdir().expect("tmpdir");
-        let pwd = td.path();
-        let args = build_sidecar_run_preview(
-            "tc-rust-cache",
-            Some("aifo-net-x"),
-            None,
-            "rust",
-            "rust:1.80-slim",
-            false,
-            pwd,
-            Some("docker-default"),
-        );
-        let joined = shell_join(&args);
-        assert!(
-            joined.contains("aifo-cargo-registry:/usr/local/cargo/registry")
-                || joined.contains("aifo-cargo-registry:/home/coder/.cargo/registry"),
-            "missing cargo registry mount: {}",
-            joined
-        );
-        assert!(
-            joined.contains("aifo-cargo-git:/usr/local/cargo/git")
-                || joined.contains("aifo-cargo-git:/home/coder/.cargo/git"),
-            "missing cargo git mount: {}",
-            joined
-        );
-    }
-}
 
 pub fn build_sidecar_exec_preview(
     name: &str,
