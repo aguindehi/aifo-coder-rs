@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use clap::ValueEnum;
+use std::path::PathBuf;
 
 /**
  Merging strategy for post-fork actions.
