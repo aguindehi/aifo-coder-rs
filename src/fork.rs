@@ -341,8 +341,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
     }
 
     // Execute deletions (or print in dry-run); returns counts
-    let (deleted_sessions_count, deleted_panes_count) =
-        fork_impl_clean_exec::execute(&plan, opts)?;
+    let (deleted_sessions_count, deleted_panes_count) = fork_impl_clean_exec::execute(&plan, opts)?;
 
     if opts.json && !opts.dry_run {
         println!(
