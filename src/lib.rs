@@ -35,18 +35,7 @@ pub fn fork_ps_inner_string(
     pane_state_dir: &std::path::Path,
     child_args: &[String],
 ) -> String {
-    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-    let kv = [
-        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-        ("AIFO_CODER_HOSTNAME", cname),
-        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
-        ("AIFO_CODER_FORK_INDEX", i.to_string()),
-        (
-            "AIFO_CODER_FORK_STATE_DIR",
-            pane_state_dir.display().to_string(),
-        ),
-    ];
+    let kv = crate::fork::env::fork_inner_env_kv(agent, sid, i, pane_state_dir);
     let mut assigns: Vec<String> = Vec::new();
     for (k, v) in kv {
         assigns.push(format!("$env:{}={}", k, ps_quote_inner(&v)));
@@ -75,18 +64,7 @@ pub fn fork_bash_inner_string(
     pane_state_dir: &std::path::Path,
     child_args: &[String],
 ) -> String {
-    let cname = format!("aifo-coder-{}-{}-{}", agent, sid, i);
-    let kv = [
-        ("AIFO_CODER_SKIP_LOCK", "1".to_string()),
-        ("AIFO_CODER_CONTAINER_NAME", cname.clone()),
-        ("AIFO_CODER_HOSTNAME", cname),
-        ("AIFO_CODER_FORK_SESSION", sid.to_string()),
-        ("AIFO_CODER_FORK_INDEX", i.to_string()),
-        (
-            "AIFO_CODER_FORK_STATE_DIR",
-            pane_state_dir.display().to_string(),
-        ),
-    ];
+    let kv = crate::fork::env::fork_inner_env_kv(agent, sid, i, pane_state_dir);
     let mut exports: Vec<String> = Vec::new();
     for (k, v) in kv {
         exports.push(format!("export {}={}", k, shell_escape(&v)));
