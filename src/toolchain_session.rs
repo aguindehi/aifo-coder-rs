@@ -178,7 +178,6 @@ impl ToolchainSession {
             aifo_coder::toolchain_cleanup_session(&self.sid, verbose);
         }
     }
-
 }
 
 impl Drop for ToolchainSession {

@@ -334,12 +334,10 @@ fn main() -> ExitCode {
                 if !cli.toolchain_bootstrap.is_empty() {
                     eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
                 }
-                eprintln!(
-                    concat!(
-                        "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
-                        "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
-                    )
-                );
+                eprintln!(concat!(
+                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
+                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                ));
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {

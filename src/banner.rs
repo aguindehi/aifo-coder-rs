@@ -102,21 +102,17 @@ pub(crate) fn print_startup_banner() {
 
     // Feature overview (Linux, macOS, Windows)
     eprintln!(" ✨ Features:");
-    eprintln!(
-        concat!(
-            "    - Linux: Docker containers with AppArmor when available; seccomp ",
-            "and cgroup namespaces."
-        )
-    );
+    eprintln!(concat!(
+        "    - Linux: Docker containers with AppArmor when available; seccomp ",
+        "and cgroup namespaces."
+    ));
     eprintln!(
         "    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM."
     );
-    eprintln!(
-        concat!(
-            "    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/",
-            "Git Bash fork orchestration."
-        )
-    );
+    eprintln!(concat!(
+        "    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/",
+        "Git Bash fork orchestration."
+    ));
     eprintln!();
 
     // Dynamic startup summary (terse)
@@ -147,24 +143,22 @@ pub(crate) fn print_startup_banner() {
     // Safety highlights (concise, current capabilities)
     eprintln!(" 🔧 Building a safer future for coding automation in Migros Group...");
     eprintln!("    - Containerized agents; no privileged mode, no host Docker socket.");
-    eprintln!("    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.");
+    eprintln!(
+        "    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available."
+    );
     eprintln!("    - Seccomp and cgroup namespaces as reported by Docker.");
     eprintln!("    - Per-pane isolated state for forks (.aider/.codex/.crush).");
-    eprintln!(
-        concat!(
-            "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) ",
-            "via secure proxy."
-        )
-    );
+    eprintln!(concat!(
+        "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) ",
+        "via secure proxy."
+    ));
     eprintln!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     eprintln!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     eprintln!("─────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(
-        concat!(
-            " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros ",
-            "AI Foundation at MGB"
-        )
-    );
+    eprintln!(concat!(
+        " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros ",
+        "AI Foundation at MGB"
+    ));
     eprintln!("─────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!();
 }

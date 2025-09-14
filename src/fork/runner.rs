@@ -1240,8 +1240,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                             "aifo-coder fork merge --session {} ",
                                             "--strategy {}"
                                         ),
-                                        sid,
-                                        strat
+                                        sid, strat
                                     )
                                 )
                             );
