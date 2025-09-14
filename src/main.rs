@@ -1,6 +1,4 @@
 use clap::Parser;
-use std::env;
-use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -33,11 +31,6 @@ use crate::warnings::{
     maybe_warn_missing_toolchain_agent, warn_if_tmp_workspace,
 };
 
- // Orchestrate tmux-based fork session (Linux/macOS/WSL)
-#[allow(clippy::needless_return)]
-fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
-    crate::fork::runner::fork_run(cli, panes)
-}
 
 struct OutputNewlineGuard;
 
@@ -76,7 +69,7 @@ fn main() -> ExitCode {
     // Fork orchestrator (Phase 3): run early if requested
     if let Some(n) = cli.fork {
         if n >= 2 {
-            return fork_run(&cli, n);
+            return crate::fork::runner::fork_run(&cli, n);
         }
     }
     // Optional auto-clean of stale fork sessions and stale notice (Phase 6)
