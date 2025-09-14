@@ -30,7 +30,7 @@ pub use util::*;
 pub use util::fs::{path_pair, ensure_file_exists};
 pub use util::id::create_session_id;
 
-// -------- Color mode and helpers --------
+ // -------- Color mode and helpers --------
 
 
 
