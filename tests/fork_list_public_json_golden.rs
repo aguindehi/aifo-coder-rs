@@ -45,6 +45,8 @@ fn test_public_fork_list_json_golden() {
     // Prepare a fake repo layout with forks under it (no git required)
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
+    // Ensure stale threshold matches expected values in this test
+    std::env::set_var("AIFO_CODER_FORK_LIST_STALE_DAYS", "5");
 
     let forks = repo.join(".aifo-coder").join("forks");
     fs::create_dir_all(&forks).unwrap();
