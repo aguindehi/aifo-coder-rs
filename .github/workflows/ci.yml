@@ -59,3 +59,22 @@ jobs:
           name: dist-${{ runner.os }}
           path: dist
           if-no-files-found: warn
+
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-targets
