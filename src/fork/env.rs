@@ -32,6 +32,7 @@ pub fn pane_state_dir(state_base: &Path, sid: &str, index: usize) -> PathBuf {
 
 /// Build environment key/value pairs used by inner string builders (PowerShell/Git Bash).
 /// Excludes AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING by design; orchestrators inject it in the pane env.
+#[cfg(windows)]
 pub(crate) fn fork_inner_env_kv(
     agent: &str,
     sid: &str,
@@ -112,6 +113,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn test_fork_inner_env_kv_excludes_suppress_and_has_expected_keys() {
         let agent = "aider";
