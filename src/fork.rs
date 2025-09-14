@@ -6,7 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use crate::{
     color_enabled_stderr, color_enabled_stdout, json_escape, paint, shell_join,
@@ -732,7 +732,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
             Vec::new()
         }
     } else if let Some(days) = opts.older_than_days {
-        let now = secs_since_epoch(SystemTime::now());
+        let now = fork_impl_scan::secs_since_epoch(SystemTime::now());
         fork_impl_scan::session_dirs(&base)
             .into_iter()
             .filter(|sd| {
@@ -755,7 +755,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
             })
             .collect()
     } else if opts.all {
-        session_dirs(&base)
+        fork_impl_scan::session_dirs(&base)
     } else {
         eprintln!(
             "aifo-coder: please specify one of --session <sid>, --older-than <days>, or --all."
@@ -1547,7 +1547,7 @@ pub fn fork_merge_branches(
         } else {
             String::new()
         };
-        let merged_at = secs_since_epoch(SystemTime::now());
+        let merged_at = fork_impl_scan::secs_since_epoch(SystemTime::now());
         let _ = crate::fork_meta::append_fields_compact(
             repo_root,
             sid,
