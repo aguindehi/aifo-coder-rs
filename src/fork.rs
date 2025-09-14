@@ -9,20 +9,19 @@ use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
 use crate::{
-    color_enabled_stderr, color_enabled_stdout, json_escape, paint,
-    toolchain_cleanup_session,
+    color_enabled_stderr, color_enabled_stdout, json_escape, paint, toolchain_cleanup_session,
 };
 
 #[path = "fork_impl/git.rs"]
 mod fork_impl_git;
+#[path = "fork_impl/merge.rs"]
+mod fork_impl_merge;
 #[path = "fork_impl/notice.rs"]
 mod fork_impl_notice;
 #[path = "fork_impl/panecheck.rs"]
 mod fork_impl_panecheck;
 #[path = "fork_impl/scan.rs"]
 mod fork_impl_scan;
-#[path = "fork_impl/merge.rs"]
-mod fork_impl_merge;
 
 /// Try to detect the Git repository root (absolute canonical path).
 /// Returns Some(repo_root) when inside a Git repository; otherwise None.
@@ -1155,7 +1154,6 @@ pub fn fork_autoclean_if_enabled() {
     fork_impl_notice::fork_autoclean_if_enabled_impl();
 }
 
-
 /// Merge helper: fetch pane branches and optionally octopus-merge them.
 pub fn fork_merge_branches(
     repo_root: &Path,
@@ -1185,7 +1183,5 @@ pub fn fork_merge_branches_by_session(
     verbose: bool,
     dry_run: bool,
 ) -> std::io::Result<()> {
-    fork_impl_merge::fork_merge_branches_by_session_impl(
-        repo_root, sid, strategy, verbose, dry_run,
-    )
+    fork_impl_merge::fork_merge_branches_by_session_impl(repo_root, sid, strategy, verbose, dry_run)
 }
