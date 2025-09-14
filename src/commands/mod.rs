@@ -67,6 +67,11 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     eprintln!("  aider: {}", aider_val);
     eprintln!();
 
+    // stdout: machine-readable image list (no colors, no banner)
+    println!("codex {}", codex_img);
+    println!("crush {}", crush_img);
+    println!("aider {}", aider_img);
+
     std::process::ExitCode::from(0)
 }
 
