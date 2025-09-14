@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::fork::fork_impl_clean_plan::SessionPlan;
@@ -7,7 +7,6 @@ use crate::{color_enabled_stdout, json_escape, paint, toolchain_cleanup_session}
 
 /// Execute deletions (or print in dry-run); returns (deleted_sessions_count, deleted_panes_count).
 pub fn execute(
-    _repo_root: &Path,
     plan: &[SessionPlan],
     opts: &crate::ForkCleanOpts,
 ) -> std::io::Result<(usize, usize)> {
