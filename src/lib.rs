@@ -8,8 +8,8 @@ mod fork;
 mod lock;
 mod registry;
 mod toolchain;
-mod util;
 mod ui;
+mod util;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
@@ -17,8 +17,8 @@ pub use fork::*;
 pub use lock::*;
 pub use registry::*;
 pub use toolchain::*;
-pub use util::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
+pub use util::*;
 
 #[cfg(windows)]
 fn ps_quote_inner(s: &str) -> String {
@@ -162,8 +162,6 @@ pub fn ps_wait_process_cmd(ids: &[&str]) -> String {
 }
 
 // -------- Color mode and helpers --------
-
-
 
 /**
  Merging strategy for post-fork actions.
