@@ -176,40 +176,6 @@ Unified application/x-www-form-urlencoded parser with decoding:
 - %XX → byte decode; invalid sequences preserved literally (best-effort)
 */
 pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
-    fn decode_component(input: &str) -> String {
-        let bytes = input.as_bytes();
-        let mut out = String::with_capacity(input.len());
-        let mut i = 0usize;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'+' => {
-                    out.push(' ');
-                    i += 1;
-                }
-                b'%' if i + 2 < bytes.len() => {
-                    let h1 = bytes[i + 1];
-                    let h2 = bytes[i + 2];
-                    let v1 = (h1 as char).to_digit(16);
-                    let v2 = (h2 as char).to_digit(16);
-                    if let (Some(a), Some(b)) = (v1, v2) {
-                        let byte = ((a as u8) << 4) | (b as u8);
-                        out.push(byte as char);
-                        i += 3;
-                    } else {
-                        // Best-effort: leave as literal '%'
-                        out.push('%');
-                        i += 1;
-                    }
-                }
-                c => {
-                    out.push(c as char);
-                    i += 1;
-                }
-            }
-        }
-        out
-    }
-
     let mut out = Vec::new();
     for pair in s.split('&') {
         if pair.is_empty() {
@@ -218,7 +184,7 @@ pub(crate) fn parse_form_urlencoded(s: &str) -> Vec<(String, String)> {
         let mut it = pair.splitn(2, '=');
         let k = it.next().unwrap_or_default();
         let v = it.next().unwrap_or_default();
-        out.push((decode_component(k), decode_component(v)));
+        out.push((crate::url_decode(k), crate::url_decode(v)));
     }
     out
 }
