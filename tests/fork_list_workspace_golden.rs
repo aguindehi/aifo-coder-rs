@@ -98,7 +98,10 @@ fn test_workspace_fork_list_json_golden_single_repo() {
         aifo_coder::json_escape("dev")
     );
 
-    assert_eq!(got, expected, "workspace fork_list JSON should match exactly");
+    assert_eq!(
+        got, expected,
+        "workspace fork_list JSON should match exactly"
+    );
 }
 
 #[test]
