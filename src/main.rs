@@ -17,7 +17,9 @@ mod fork {
     pub mod cleanup;
     pub mod env;
     pub mod inner;
-    pub mod meta;
+    pub mod meta {
+        pub use aifo_coder::fork_meta::*;
+    }
     pub mod orchestrators;
     pub mod post_merge;
     pub mod preflight;
