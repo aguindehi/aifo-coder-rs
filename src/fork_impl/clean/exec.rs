@@ -7,7 +7,7 @@ use crate::{color_enabled_stdout, json_escape, paint, toolchain_cleanup_session}
 
 /// Execute deletions (or print in dry-run); returns (deleted_sessions_count, deleted_panes_count).
 pub fn execute(
-    repo_root: &Path,
+    _repo_root: &Path,
     plan: &[SessionPlan],
     opts: &crate::ForkCleanOpts,
 ) -> std::io::Result<(usize, usize)> {
