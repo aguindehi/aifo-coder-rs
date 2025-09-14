@@ -236,6 +236,36 @@ fn resolve_agent_and_args(cli: &Cli) -> Option<(&'static str, Vec<String>)> {
     }
 }
 
+fn print_verbose_run_info(
+    agent: &str,
+    image: &str,
+    apparmor_opt: Option<&str>,
+    preview: &str,
+    cli_verbose: bool,
+    dry_run: bool,
+) {
+    if cli_verbose {
+        eprintln!(
+            "aifo-coder: effective apparmor profile: {}",
+            apparmor_opt.unwrap_or("(disabled)")
+        );
+        // Show chosen registry and source for transparency
+        let rp = aifo_coder::preferred_registry_prefix_quiet();
+        let reg_display = if rp.is_empty() {
+            "Docker Hub".to_string()
+        } else {
+            rp.trim_end_matches('/').to_string()
+        };
+        let reg_src = aifo_coder::preferred_registry_source();
+        eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
+        eprintln!("aifo-coder: image: {image}");
+        eprintln!("aifo-coder: agent: {agent}");
+    }
+    if cli_verbose || dry_run {
+        eprintln!("aifo-coder: docker: {preview}");
+    }
+}
+
 fn main() -> ExitCode {
     // Leading blank line at program start
     eprintln!();
@@ -337,26 +367,14 @@ fn main() -> ExitCode {
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
     match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
-            if cli.verbose {
-                eprintln!(
-                    "aifo-coder: effective apparmor profile: {}",
-                    apparmor_profile.as_deref().unwrap_or("(disabled)")
-                );
-                // Show chosen registry and source for transparency
-                let rp = aifo_coder::preferred_registry_prefix_quiet();
-                let reg_display = if rp.is_empty() {
-                    "Docker Hub".to_string()
-                } else {
-                    rp.trim_end_matches('/').to_string()
-                };
-                let reg_src = aifo_coder::preferred_registry_source();
-                eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
-                eprintln!("aifo-coder: image: {image}");
-                eprintln!("aifo-coder: agent: {agent}");
-            }
-            if cli.verbose || cli.dry_run {
-                eprintln!("aifo-coder: docker: {preview}");
-            }
+            print_verbose_run_info(
+                agent,
+                &image,
+                apparmor_profile.as_deref(),
+                &preview,
+                cli.verbose,
+                cli.dry_run,
+            );
             if cli.dry_run {
                 // Skip actual Docker execution in dry-run mode
                 eprintln!("aifo-coder: dry-run requested; not executing Docker.");
