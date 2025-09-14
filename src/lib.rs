@@ -1,4 +1,3 @@
-use clap::ValueEnum;
 use std::time::{Duration, SystemTime};
 mod apparmor;
 mod color;
@@ -16,6 +15,7 @@ pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
 pub use fork::*;
+pub use fork::types::MergingStrategy;
 #[cfg(windows)]
 pub use fork_windows_helpers::{
     fork_bash_inner_string, fork_ps_inner_string, ps_wait_process_cmd, wt_build_new_tab_args,
@@ -29,21 +29,6 @@ pub use util::*;
 
 // -------- Color mode and helpers --------
 
-/**
- Merging strategy for post-fork actions.
- - None: do nothing (default).
- - Fetch: fetch pane branches back into the original repository as local branches.
- - Octopus: fetch branches then attempt an octopus merge into a merge/<sid> branch.
-*/
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
-pub enum MergingStrategy {
-    #[value(name = "none")]
-    None,
-    #[value(name = "fetch")]
-    Fetch,
-    #[value(name = "octopus")]
-    Octopus,
-}
 
 /// Render a docker -v host:container pair.
 pub fn path_pair(host: &std::path::Path, container: &str) -> std::ffi::OsString {
