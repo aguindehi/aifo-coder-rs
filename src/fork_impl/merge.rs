@@ -49,11 +49,12 @@ pub(crate) fn collect_pane_branches_impl(
 }
 
 pub(crate) fn preflight_clean_working_tree_impl(repo_root: &Path) -> io::Result<()> {
-    let dirty = match {
+    let res = {
         let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
         cmd.arg("status").arg("--porcelain=v1").arg("-uall");
         cmd.output()
-    } {
+    };
+    let dirty = match res {
         Ok(o) => {
             if !o.status.success() {
                 true
