@@ -2,6 +2,7 @@ use clap::Parser;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
+ // Internal modules
 mod agent_images;
 mod banner;
 mod cli;
@@ -11,6 +12,7 @@ mod fork_args;
 mod guidance;
 mod toolchain_session;
 mod warnings;
+// Fork orchestration modules
 mod fork {
     pub mod cleanup;
     pub mod env;
@@ -63,21 +65,21 @@ fn main() -> ExitCode {
         }
     }
 
-    // Fork orchestrator (Phase 3): run early if requested
+    // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
         if n >= 2 {
             return crate::fork::runner::fork_run(&cli, n);
         }
     }
-    // Optional auto-clean of stale fork sessions and stale notice (Phase 6)
+    // Optional auto-clean of stale fork sessions and stale session notice
     // Suppress stale notice here when running 'doctor' (doctor prints its own notice).
     if !matches!(cli.command, Agent::Fork { .. }) && !matches!(cli.command, Agent::Doctor) {
         aifo_coder::fork_autoclean_if_enabled();
-        // Stale sessions notice (Phase 6): print suggestions for old fork sessions on normal runs
+        // Print suggestions for old fork sessions on normal runs
         aifo_coder::fork_print_stale_notice();
     }
 
-    // Fork maintenance subcommands (Phase 6): operate without starting agents or acquiring locks
+    // Fork maintenance subcommands: operate without starting agents or acquiring locks
     if let Agent::Fork { cmd } = &cli.command {
         match cmd {
             ForkCmd::List {
@@ -286,7 +288,7 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
-    // Phase 3: Toolchain session RAII
+    // Toolchain session RAII
     let mut toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
