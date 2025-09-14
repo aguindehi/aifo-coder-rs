@@ -1,15 +1,22 @@
-use super::types::{ForkSession, Pane};
+use std::path::Path;
 
 #[cfg(windows)]
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
-pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[String]) -> String {
+pub fn build_inner_powershell(
+    agent: &str,
+    sid: &str,
+    pane_index: usize,
+    pane_dir: &Path,
+    pane_state_dir: &Path,
+    child_args: &[String],
+) -> String {
     let s = aifo_coder::fork_ps_inner_string(
-        &session.agent,
-        &session.sid,
-        pane.index,
-        &pane.dir,
-        &pane.state_dir,
+        agent,
+        sid,
+        pane_index,
+        pane_dir,
+        pane_state_dir,
         child_args,
     );
     // Insert "$env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';" after the first "; "
@@ -27,8 +34,11 @@ pub fn build_inner_powershell(session: &ForkSession, pane: &Pane, child_args: &[
 
 #[cfg(not(windows))]
 pub fn build_inner_powershell(
-    _session: &ForkSession,
-    _pane: &Pane,
+    _agent: &str,
+    _sid: &str,
+    _pane_index: usize,
+    _pane_dir: &Path,
+    _pane_state_dir: &Path,
     _child_args: &[String],
 ) -> String {
     String::new()
@@ -38,27 +48,22 @@ pub fn build_inner_powershell(
 #[test]
 fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
     use std::path::PathBuf;
-    let session = ForkSession {
-        sid: "sid123".to_string(),
-        session_name: "sess".to_string(),
-        base_label: "main".to_string(),
-        base_ref_or_sha: "main".to_string(),
-        base_commit_sha: "deadbeef".to_string(),
-        created_at: 0,
-        layout: "tiled".to_string(),
-        agent: "aider".to_string(),
-        session_dir: PathBuf::from("."),
-    };
-    let pane = Pane {
-        index: 1,
-        dir: PathBuf::from("."),
-        branch: "branch".to_string(),
-        state_dir: PathBuf::from("./state"),
-        container_name: "aifo-coder-aider-sid123-1".to_string(),
-    };
+    let agent = "aider";
+    let sid = "sid123";
+    let pane_index = 1usize;
+    let pane_dir = PathBuf::from(".");
+    let state_dir = PathBuf::from("./state");
     let child = vec!["aider".to_string(), "--help".to_string()];
     // exec_shell_tail=true -> keep "; exec bash"
-    let s = build_inner_gitbash(&session, &pane, &child, true);
+    let s = build_inner_gitbash(
+        agent,
+        sid,
+        pane_index,
+        &pane_dir,
+        &state_dir,
+        &child,
+        true,
+    );
     assert!(
         s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
         "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",
@@ -76,17 +81,20 @@ fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
 /// then inject export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; before the agent command.
 /// When exec_shell_tail=false, trim the trailing "; exec bash" from the inner string.
 pub fn build_inner_gitbash(
-    session: &ForkSession,
-    pane: &Pane,
+    agent: &str,
+    sid: &str,
+    pane_index: usize,
+    pane_dir: &Path,
+    pane_state_dir: &Path,
     child_args: &[String],
     exec_shell_tail: bool,
 ) -> String {
     let mut s = aifo_coder::fork_bash_inner_string(
-        &session.agent,
-        &session.sid,
-        pane.index,
-        &pane.dir,
-        &pane.state_dir,
+        agent,
+        sid,
+        pane_index,
+        pane_dir,
+        pane_state_dir,
         child_args,
     );
     // Inject SUPPRESS just before "aifo-coder" invocation.
@@ -119,18 +127,15 @@ pub fn build_inner_gitbash(
 
 /// Build the tmux launch script content with the same "press 's' to open a shell" logic.
 pub fn build_tmux_launch_script(
-    session: &ForkSession,
-    pane: &Pane,
+    sid: &str,
+    pane_index: usize,
+    container_name: &str,
+    pane_state_dir: &Path,
     child_args_joined: &str,
     _launcher_path: &str,
 ) -> String {
     let mut exports: Vec<String> = Vec::new();
-    for (k, v) in super::env::fork_env_for_pane(
-        &session.sid,
-        pane.index,
-        &pane.container_name,
-        &pane.state_dir,
-    ) {
+    for (k, v) in super::env::fork_env_for_pane(sid, pane_index, container_name, pane_state_dir) {
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
     format!(
@@ -172,34 +177,25 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn make_session_and_pane() -> (ForkSession, Pane) {
-        let session = ForkSession {
-            sid: "sid123".to_string(),
-            session_name: "sess".to_string(),
-            base_label: "main".to_string(),
-            base_ref_or_sha: "main".to_string(),
-            base_commit_sha: "deadbeef".to_string(),
-            created_at: 0,
-            layout: "tiled".to_string(),
-            agent: "aider".to_string(),
-            session_dir: PathBuf::from("."),
-        };
-        let pane = Pane {
-            index: 1,
-            dir: PathBuf::from("."),
-            branch: "branch".to_string(),
-            state_dir: PathBuf::from("./state"),
-            container_name: "aifo-coder-aider-sid123-1".to_string(),
-        };
-        (session, pane)
-    }
 
     #[cfg(windows)]
     #[test]
     fn test_ps_inner_injects_suppress_env() {
-        let (session, pane) = make_session_and_pane();
+        use std::path::PathBuf;
+        let agent = "aider";
+        let sid = "sid123";
+        let pane_index = 1usize;
+        let pane_dir = PathBuf::from(".");
+        let state_dir = PathBuf::from("./state");
         let child = vec!["aider".to_string(), "--help".to_string()];
-        let s = build_inner_powershell(&session, &pane, &child);
+        let s = build_inner_powershell(
+            agent,
+            sid,
+            pane_index,
+            &pane_dir,
+            &state_dir,
+            &child,
+        );
         assert!(
             s.contains("$env:AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING='1';"),
             "PowerShell inner should inject SUPPRESS var, got: {}",
@@ -214,10 +210,23 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn test_gitbash_inner_injects_and_trims_exec_tail_when_post_merge_requested() {
-        let (session, pane) = make_session_and_pane();
+        use std::path::PathBuf;
+        let agent = "aider";
+        let sid = "sid123";
+        let pane_index = 1usize;
+        let pane_dir = PathBuf::from(".");
+        let state_dir = PathBuf::from("./state");
         let child = vec!["aider".to_string(), "--help".to_string()];
         // exec_shell_tail=false simulates post-merge requested (should trim '; exec bash')
-        let s = build_inner_gitbash(&session, &pane, &child, false);
+        let s = build_inner_gitbash(
+            agent,
+            sid,
+            pane_index,
+            &pane_dir,
+            &state_dir,
+            &child,
+            false,
+        );
         assert!(
             s.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; aifo-coder"),
             "Git Bash inner should inject SUPPRESS var before aifo-coder, got: {}",
@@ -232,11 +241,18 @@ mod tests {
 
     #[test]
     fn test_tmux_launch_script_contains_expected_exports_and_prompt() {
-        let (session, mut pane) = make_session_and_pane();
-        // Ensure container name and state_dir are set deterministically
-        pane.container_name = "aifo-coder-aider-sid123-1".to_string();
-        pane.state_dir = PathBuf::from("./state");
-        let script = build_tmux_launch_script(&session, &pane, "echo hi", "/launcher");
+        let sid = "sid123";
+        let pane_index = 1usize;
+        let container_name = "aifo-coder-aider-sid123-1";
+        let state_dir = PathBuf::from("./state");
+        let script = build_tmux_launch_script(
+            sid,
+            pane_index,
+            container_name,
+            &state_dir,
+            "echo hi",
+            "/launcher",
+        );
         // Must contain env exports
         assert!(
             script.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1"),
