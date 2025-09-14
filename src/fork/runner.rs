@@ -1,3 +1,8 @@
+#![allow(clippy::module_name_repetitions)]
+//! Fork orchestrator for launching panes (tmux on Unix; Windows Terminal/PowerShell/Git Bash on Windows).
+//! This is binary-side code that leverages the public library facade (aifo_coder::*) and keeps
+//! user-visible behavior unchanged.
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;

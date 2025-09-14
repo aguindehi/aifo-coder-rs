@@ -1,5 +1,12 @@
 2025-09-15 00:00 User <user@example.com>
 
+Docs: add runner module docs; refine SCORE next steps
+
+- Added module-level docs to src/fork/runner.rs (binary-side orchestrator).
+- Updated src/SCORE.md recommendations to the next iteration (monitor CI, more goldens).
+
+2025-09-15 00:00 User <user@example.com>
+
 QA: test suite green (225 passed, 24 skipped)
 
 - Verified CI and tests across modules; all tests are now green.

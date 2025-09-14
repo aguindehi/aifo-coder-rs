@@ -65,9 +65,11 @@ Overall Grade: A
 
 ## Recommendations / Next Steps
 
-1. Continue migrating any remaining direct git spawns in the binary-side code to consistent patterns, keeping behavior unchanged.
-2. Add CI jobs for macOS and Windows to validate platform-specific helpers and tests.
-3. Extend golden tests to cover workspace (--all-repos) JSON and plain outputs for fork_list.
+1. Monitor CI across macOS, Windows, and Linux and expand test coverage where flaky behavior is observed (e.g., path canonicalization differences).
+2. Add further golden tests:
+   - fork_list plain output under forced color mode (set AIFO_CODER_COLOR=always).
+   - Workspace (--all-repos) with multiple repositories to verify deterministic ordering.
+3. Audit any remaining direct git spawns outside the fork modules and migrate to git_cmd/git_cmd_quiet if present (no behavior change).
 4. Keep module-level docs updated as refactors continue.
 
 Shall I proceed with these next steps?
