@@ -109,10 +109,7 @@ pub fn apply_post_merge(
         }
         Err(e) => {
             if plain {
-                eprintln!(
-                    "aifo-coder: merge strategy '{}' failed: {}",
-                    strat, e
-                );
+                eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
             } else {
                 let use_err = aifo_coder::color_enabled_stderr();
                 eprintln!(

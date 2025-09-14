@@ -1005,8 +1005,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             agent,
                             &session_dir,
                         );
-                        let container_name =
-                            crate::fork::env::pane_container_name(agent, &sid, 1);
+                        let container_name = crate::fork::env::pane_container_name(agent, &sid, 1);
                         let pane = crate::fork::session::make_pane(
                             1,
                             pane1_dir.as_path(),
@@ -1060,8 +1059,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             agent,
                             &session_dir,
                         );
-                        let container_name =
-                            crate::fork::env::pane_container_name(agent, &sid, i);
+                        let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
                         let pane = crate::fork::session::make_pane(
                             i,
                             pane_dir.as_path(),

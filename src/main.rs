@@ -2,7 +2,7 @@ use clap::Parser;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
- // Internal modules
+// Internal modules
 mod agent_images;
 mod banner;
 mod cli;
@@ -264,22 +264,28 @@ fn main() -> ExitCode {
         Agent::Codex { args } => ("codex", args.clone()), // Run Codex agent in container with pass-through args
         Agent::Crush { args } => ("crush", args.clone()), // Run Crush agent in container with pass-through args
         Agent::Aider { args } => ("aider", args.clone()), // Run Aider agent in container with pass-through args
-        Agent::Doctor => { // Defensive: handled earlier and returns immediately
+        Agent::Doctor => {
+            // Defensive: handled earlier and returns immediately
             unreachable!("Doctor subcommand is handled earlier and returns immediately")
         }
-        Agent::Images => { // Defensive: handled earlier and returns immediately
+        Agent::Images => {
+            // Defensive: handled earlier and returns immediately
             unreachable!("Images subcommand is handled earlier and returns immediately")
         }
-        Agent::CacheClear => { // Defensive: handled earlier and returns immediately
+        Agent::CacheClear => {
+            // Defensive: handled earlier and returns immediately
             unreachable!("CacheClear subcommand is handled earlier and returns immediately")
         }
-        Agent::ToolchainCacheClear => unreachable!( // Defensive: handled earlier and returns immediately
+        Agent::ToolchainCacheClear => unreachable!(
+            // Defensive: handled earlier and returns immediately
             "ToolchainCacheClear subcommand is handled earlier and returns immediately"
         ),
-        Agent::Toolchain { .. } => { // Defensive: handled earlier and returns immediately
+        Agent::Toolchain { .. } => {
+            // Defensive: handled earlier and returns immediately
             unreachable!("Toolchain subcommand is handled earlier and returns immediately")
         }
-        Agent::Fork { .. } => { // Defensive: handled earlier and returns immediately
+        Agent::Fork { .. } => {
+            // Defensive: handled earlier and returns immediately
             unreachable!("Fork maintenance subcommands are handled earlier and return immediately")
         }
     };
@@ -378,7 +384,8 @@ fn main() -> ExitCode {
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
-                Ok(Some(ts)) => { // Toolchain sidecars and proxy started
+                Ok(Some(ts)) => {
+                    // Toolchain sidecars and proxy started
                     toolchain_session = Some(ts);
                 }
                 Ok(None) => { /* no-op: no toolchains requested or dry-run */ }
