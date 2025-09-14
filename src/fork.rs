@@ -13,6 +13,9 @@ use crate::{
     toolchain_cleanup_session,
 };
 
+#[path = "fork_impl/scan.rs"]
+mod fork_impl_scan;
+
 /// Try to detect the Git repository root (absolute canonical path).
 /// Returns Some(repo_root) when inside a Git repository; otherwise None.
 pub fn repo_root() -> Option<PathBuf> {
@@ -486,120 +489,16 @@ fn read_file_to_string(p: &Path) -> Option<String> {
     fs::read_to_string(p).ok()
 }
 
-fn meta_extract_value(meta: &str, key: &str) -> Option<String> {
-    // naive key finder supporting single or double quoted or numeric values
-    let needle = format!("\"{}\":", key);
-    if let Some(pos) = meta.find(&needle) {
-        let rest = &meta[pos + needle.len()..];
-        let rest = rest.trim_start();
-        if rest.is_empty() {
-            return None;
-        }
-        let first = rest.as_bytes()[0] as char;
-        if first == '"' || first == '\'' {
-            let quote = first;
-            let mut out = String::new();
-            for ch in rest[1..].chars() {
-                if ch == quote {
-                    return Some(out);
-                } else {
-                    out.push(ch);
-                }
-            }
-            None
-        } else {
-            // numeric token
-            let mut num = String::new();
-            for ch in rest.chars() {
-                if ch.is_ascii_digit() {
-                    num.push(ch);
-                } else {
-                    break;
-                }
-            }
-            if num.is_empty() {
-                None
-            } else {
-                Some(num)
-            }
-        }
-    } else {
-        None
-    }
-}
+/* moved: use crate::fork_meta::extract_value_string / extract_value_u64 */
 
 // Append or upsert merge metadata fields into the session .meta.json
-fn fork_meta_append_fields(repo_root: &Path, sid: &str, fields_kv: &str) -> std::io::Result<()> {
-    let session_dir = fork_session_dir(repo_root, sid);
-    let meta_path = session_dir.join(".meta.json");
+/* moved: use crate::fork_meta::append_fields_compact */
 
-    // Ensure session directory exists (best-effort)
-    let _ = fs::create_dir_all(&session_dir);
+/* moved: use fork_impl_scan::session_dirs */
 
-    match fs::read_to_string(&meta_path) {
-        Ok(s) => {
-            if let Some(idx) = s.rfind('}') {
-                let mut out = String::from(&s[..idx]);
-                if !out.trim_end().ends_with('{') {
-                    out.push_str(", ");
-                }
-                out.push_str(fields_kv);
-                out.push('}');
-                fs::write(&meta_path, out)?;
-            } else {
-                // Malformed existing content; replace with minimal valid JSON
-                let out = format!("{{{}}}", fields_kv);
-                fs::write(&meta_path, out)?;
-            }
-            Ok(())
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // Create a minimal metadata file if it doesn't exist yet
-            let out = format!("{{{}}}", fields_kv);
-            fs::write(&meta_path, out)?;
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
-}
+/* moved: use fork_impl_scan::pane_dirs_for_session */
 
-fn session_dirs(base: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let rd = match fs::read_dir(base) {
-        Ok(d) => d,
-        Err(_) => return out,
-    };
-    for e in rd.flatten() {
-        let p = e.path();
-        if p.is_dir() {
-            out.push(p);
-        }
-    }
-    out
-}
-
-fn pane_dirs_for_session(session_dir: &Path) -> Vec<PathBuf> {
-    let mut v = Vec::new();
-    if let Ok(rd) = fs::read_dir(session_dir) {
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                    if name.starts_with("pane-") {
-                        v.push(p);
-                    }
-                }
-            }
-        }
-    }
-    v
-}
-
-fn secs_since_epoch(t: SystemTime) -> u64 {
-    t.duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_secs()
-}
+/* moved: use fork_impl_scan::secs_since_epoch */
 
 /// List fork sessions under the current repository.
 /// Returns exit code (0 on success).
@@ -620,7 +519,7 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> std::io::Resu
         if !base.exists() {
             return rows;
         }
-        for sd in session_dirs(&base) {
+        for sd in fork_impl_scan::session_dirs(&base) {
             let sid = sd
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -633,21 +532,20 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> std::io::Resu
             let meta = read_file_to_string(&meta_path);
             let created_at = meta
                 .as_deref()
-                .and_then(|s| meta_extract_value(s, "created_at"))
-                .and_then(|s| s.parse::<u64>().ok())
+                .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
                 .or_else(|| {
                     fs::metadata(&sd)
                         .ok()
                         .and_then(|m| m.modified().ok())
-                        .map(secs_since_epoch)
+                        .map(fork_impl_scan::secs_since_epoch)
                 })
                 .unwrap_or(0);
             let base_label = meta
                 .as_deref()
-                .and_then(|s| meta_extract_value(s, "base_label"))
+                .and_then(|s| crate::fork_meta::extract_value_string(s, "base_label"))
                 .unwrap_or_else(|| "(unknown)".to_string());
-            let panes = pane_dirs_for_session(&sd).len();
-            let now = secs_since_epoch(SystemTime::now());
+            let panes = fork_impl_scan::pane_dirs_for_session(&sd).len();
+            let now = fork_impl_scan::secs_since_epoch(SystemTime::now());
             let age_days = if created_at > 0 {
                 now.saturating_sub(created_at) / 86400
             } else {
@@ -836,19 +734,18 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
         }
     } else if let Some(days) = opts.older_than_days {
         let now = secs_since_epoch(SystemTime::now());
-        session_dirs(&base)
+        fork_impl_scan::session_dirs(&base)
             .into_iter()
             .filter(|sd| {
                 let meta = read_file_to_string(&sd.join(".meta.json"));
                 let created_at = meta
                     .as_deref()
-                    .and_then(|s| meta_extract_value(s, "created_at"))
-                    .and_then(|s| s.parse::<u64>().ok())
+                    .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
                     .or_else(|| {
                         fs::metadata(sd)
                             .ok()
                             .and_then(|m| m.modified().ok())
-                            .map(secs_since_epoch)
+                            .map(fork_impl_scan::secs_since_epoch)
                     })
                     .unwrap_or(0);
                 if created_at == 0 {
@@ -883,9 +780,9 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
         let meta = read_file_to_string(&sd.join(".meta.json"));
         let base_commit = meta
             .as_deref()
-            .and_then(|s| meta_extract_value(s, "base_commit_sha"));
+            .and_then(|s| crate::fork_meta::extract_value_string(s, "base_commit_sha"));
         let mut panes_status = Vec::new();
-        for p in pane_dirs_for_session(sd) {
+        for p in fork_impl_scan::pane_dirs_for_session(sd) {
             let mut reasons = Vec::new();
             // dirty detection
             let dirty = Command::new("git")
@@ -1209,24 +1106,23 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
                     let prev = read_file_to_string(&sd.join(".meta.json"));
                     let created_at_num = prev
                         .as_deref()
-                        .and_then(|s| meta_extract_value(s, "created_at"))
-                        .and_then(|s| s.parse::<u64>().ok())
+                        .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
                         .unwrap_or(0);
                     let base_label_prev = prev
                         .as_deref()
-                        .and_then(|s| meta_extract_value(s, "base_label"))
+                        .and_then(|s| crate::fork_meta::extract_value_string(s, "base_label"))
                         .unwrap_or_else(|| "(unknown)".to_string());
                     let base_ref_prev = prev
                         .as_deref()
-                        .and_then(|s| meta_extract_value(s, "base_ref_or_sha"))
+                        .and_then(|s| crate::fork_meta::extract_value_string(s, "base_ref_or_sha"))
                         .unwrap_or_default();
                     let base_commit_prev = prev
                         .as_deref()
-                        .and_then(|s| meta_extract_value(s, "base_commit_sha"))
+                        .and_then(|s| crate::fork_meta::extract_value_string(s, "base_commit_sha"))
                         .unwrap_or_default();
                     let layout_prev = prev
                         .as_deref()
-                        .and_then(|s| meta_extract_value(s, "layout"))
+                        .and_then(|s| crate::fork_meta::extract_value_string(s, "layout"))
                         .unwrap_or_else(|| "tiled".to_string());
 
                     let mut meta_out = String::from("{");
@@ -1344,17 +1240,16 @@ pub fn fork_print_stale_notice() {
     let now = secs_since_epoch(SystemTime::now());
     let mut count = 0usize;
     let mut oldest = 0u64;
-    for sd in session_dirs(&base) {
+    for sd in fork_impl_scan::session_dirs(&base) {
         let meta = read_file_to_string(&sd.join(".meta.json"));
         let created_at = meta
             .as_deref()
-            .and_then(|s| meta_extract_value(s, "created_at"))
-            .and_then(|s| s.parse::<u64>().ok())
+            .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
             .or_else(|| {
                 fs::metadata(&sd)
                     .ok()
                     .and_then(|m| m.modified().ok())
-                    .map(secs_since_epoch)
+                    .map(fork_impl_scan::secs_since_epoch)
             })
             .unwrap_or(0);
         if created_at == 0 {
@@ -1404,17 +1299,16 @@ pub fn fork_autoclean_if_enabled() {
     let mut deleted_sids: Vec<String> = Vec::new();
     let mut kept_sids: Vec<String> = Vec::new();
 
-    for sd in session_dirs(&base) {
+    for sd in fork_impl_scan::session_dirs(&base) {
         let meta = read_file_to_string(&sd.join(".meta.json"));
         let created_at = meta
             .as_deref()
-            .and_then(|s| meta_extract_value(s, "created_at"))
-            .and_then(|s| s.parse::<u64>().ok())
+            .and_then(|s| crate::fork_meta::extract_value_u64(s, "created_at"))
             .or_else(|| {
                 fs::metadata(&sd)
                     .ok()
                     .and_then(|m| m.modified().ok())
-                    .map(secs_since_epoch)
+                    .map(fork_impl_scan::secs_since_epoch)
             })
             .unwrap_or(0);
         if created_at == 0 {
@@ -1428,8 +1322,8 @@ pub fn fork_autoclean_if_enabled() {
         let mut all_clean = true;
         let base_commit = meta
             .as_deref()
-            .and_then(|s| meta_extract_value(s, "base_commit_sha"));
-        let panes = pane_dirs_for_session(&sd);
+            .and_then(|s| crate::fork_meta::extract_value_string(s, "base_commit_sha"));
+        let panes = fork_impl_scan::pane_dirs_for_session(&sd);
         for p in panes {
             // dirty detection
             let dirty = Command::new("git")
@@ -1773,7 +1667,7 @@ pub fn fork_merge_branches(
     if matches!(strategy, crate::MergingStrategy::Fetch) {
         // Update session metadata with fetched branches
         let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
-        let _ = fork_meta_append_fields(
+        let _ = crate::fork_meta::append_fields_compact(
             repo_root,
             sid,
             &format!(
@@ -1882,7 +1776,7 @@ pub fn fork_merge_branches(
             // Record failed octopus merge in metadata
             let fetched_names: Vec<String> =
                 pane_branches.iter().map(|(_p, b)| b.clone()).collect();
-            let _ = fork_meta_append_fields(
+            let _ = crate::fork_meta::append_fields_compact(
                 repo_root,
                 sid,
                 &format!(
@@ -1925,7 +1819,7 @@ pub fn fork_merge_branches(
             String::new()
         };
         let merged_at = secs_since_epoch(SystemTime::now());
-        let _ = fork_meta_append_fields(
+        let _ = crate::fork_meta::append_fields_compact(
             repo_root,
             sid,
             &format!(
@@ -1994,7 +1888,7 @@ pub fn fork_merge_branches_by_session(
     }
 
     // Gather pane dirs
-    let panes_dirs = pane_dirs_for_session(&session_dir);
+    let panes_dirs = fork_impl_scan::pane_dirs_for_session(&session_dir);
     if panes_dirs.is_empty() {
         return Err(std::io::Error::other(
             "no pane directories found under session",
@@ -2006,7 +1900,7 @@ pub fn fork_merge_branches_by_session(
     let meta = read_file_to_string(&meta_path);
     let base_ref_or_sha = meta
         .as_deref()
-        .and_then(|s| meta_extract_value(s, "base_ref_or_sha"))
+        .and_then(|s| crate::fork_meta::extract_value_string(s, "base_ref_or_sha"))
         .unwrap_or_else(|| "HEAD".to_string());
 
     // Determine each pane's current branch

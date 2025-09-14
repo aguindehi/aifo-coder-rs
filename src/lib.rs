@@ -4,6 +4,8 @@ mod docker;
 mod fork;
 #[path = "fork/strategy.rs"]
 mod fork_strategy;
+#[path = "fork/meta.rs"]
+mod fork_meta;
 #[cfg(windows)]
 #[path = "fork/windows/helpers.rs"]
 mod fork_windows_helpers;
