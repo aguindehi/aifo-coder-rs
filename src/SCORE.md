@@ -65,11 +65,9 @@ Overall Grade: A
 
 ## Recommendations / Next Steps
 
-1. Add golden tests for fork_list JSON to lock exact byte-for-byte output across environments.
-2. Add targeted unit tests for fork_impl/git.rs (mocking optional) to cover error branches.
-3. Expand module-level docs in src/fork_impl/* for quick onboarding (what each module owns).
-4. Consider minor internal utilities:
-   - A small wrapper to standardize git -C <repo> spawn patterns with stdout/stderr policy.
-5. Evaluate CI matrix to ensure Windows and macOS coverage for the new module tests.
+1. Adopt the new git_cmd helper across remaining direct Command::new("git") call sites for consistency; consider adding a git_cmd_quiet variant to standardize stdout/stderr policies.
+2. Add a dedicated stdout-capture golden test for fork_list JSON that exercises the public fork_list() printing path (will require a small internal hook for tests or capture harness).
+3. Expand module-level docs further where helpful and keep them updated as refactors continue.
+4. Evaluate CI matrix to ensure Windows and macOS coverage for the new module tests.
 
 Shall I proceed with these next steps?

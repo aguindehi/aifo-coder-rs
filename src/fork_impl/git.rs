@@ -1,3 +1,4 @@
+ //! Git helper utilities for invoking commands consistently from internal modules.
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
@@ -48,4 +49,13 @@ pub fn push_file_allow_args(args: &mut Vec<String>) {
 /// Configure a git Command to allow file:// protocol (for local path remotes and submodules).
 pub fn set_file_allow(cmd: &mut Command) {
     cmd.arg("-c").arg("protocol.file.allow=always");
+}
+
+/// Create a git Command preconfigured with optional -C <repo>.
+pub fn git_cmd(repo: Option<&Path>) -> Command {
+    let mut cmd = Command::new("git");
+    if let Some(r) = repo {
+        cmd.arg("-C").arg(r);
+    }
+    cmd
 }

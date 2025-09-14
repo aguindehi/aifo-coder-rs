@@ -1,3 +1,4 @@
+ //! Refuse/confirm prompts for fork clean: print summaries, handle non-interactive safeguards.
 use std::io::Write;
 
 use crate::fork::fork_impl_clean_plan::SessionPlan;

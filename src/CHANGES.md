@@ -1,3 +1,12 @@
+2025-09-15 00:00 User <user@example.com>
+
+Tests: add golden JSON and git helper tests; docs and git_cmd helper
+
+- Added golden-style JSON row formatter test for fork_list and a targeted test suite for git helpers.
+- Introduced git_cmd builder in fork_impl/git.rs and adopted it in pane checks; added module docs across fork_impl/*.
+- Refactored list JSON building to use a shared formatter to keep byte-for-byte stability.
+- Kept public behavior unchanged; all tests remain green.
+
 2025-09-14 00:00 User <user@example.com>
 
 Tests: add missing Phase-0 coverage; centralize git file:// allow helper

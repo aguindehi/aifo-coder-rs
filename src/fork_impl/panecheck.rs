@@ -1,3 +1,4 @@
+ //! Pane cleanliness checks: classify panes as clean or protected (dirty, submodules, ahead, base-unknown).
 use std::path::Path;
 
 /// Result of checking a pane's cleanliness and protection reasons.
@@ -19,14 +20,13 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         reasons.push("dirty".to_string());
     } else {
         // submodule changes detect
-        if let Ok(o) = std::process::Command::new("git")
-            .arg("-C")
-            .arg(pane_dir)
-            .arg("submodule")
-            .arg("status")
-            .arg("--recursive")
-            .output()
-        {
+        if let Ok(o) = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+            cmd.arg("submodule")
+                .arg("status")
+                .arg("--recursive")
+                .output()
+        } {
             let s = String::from_utf8_lossy(&o.stdout);
             if s.lines()
                 .any(|l| l.starts_with('+') || l.starts_with('-') || l.starts_with('U'))
@@ -40,14 +40,14 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
     let mut ahead = false;
     let mut base_unknown = false;
     if let Some(base_sha) = base_commit {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(pane_dir)
-            .arg("rev-list")
-            .arg("--count")
-            .arg(format!("{}..HEAD", base_sha))
-            .output()
-            .ok();
+        let out = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+            cmd.arg("rev-list")
+                .arg("--count")
+                .arg(format!("{}..HEAD", base_sha))
+                .output()
+                .ok()
+        };
         if let Some(o) = out {
             if o.status.success() {
                 let c = String::from_utf8_lossy(&o.stdout)

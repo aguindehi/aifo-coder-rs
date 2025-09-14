@@ -1,3 +1,4 @@
+ //! Fork list collection and rendering helpers (preserve exact strings and ordering).
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -52,6 +53,28 @@ fn collect_rows(
     rows
 }
 
+/// Format a single JSON row exactly as fork_list_impl emits it.
+fn format_row_json(
+    repo_root: &Path,
+    sid: &str,
+    panes: usize,
+    created_at: u64,
+    age_days: u64,
+    base_label: &str,
+    stale: bool,
+) -> String {
+    format!(
+        "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
+        crate::json_escape(&repo_root.display().to_string()),
+        sid,
+        panes,
+        created_at,
+        age_days,
+        crate::json_escape(base_label),
+        if stale { "true" } else { "false" }
+    )
+}
+
 pub(crate) fn fork_list_impl(
     repo_root: &Path,
     json: bool,
@@ -88,15 +111,14 @@ pub(crate) fn fork_list_impl(
                                     out.push(',');
                                 }
                                 first = false;
-                                out.push_str(&format!(
-                                    "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
-                                    crate::json_escape(&repo.display().to_string()),
-                                    sid,
+                                out.push_str(&format_row_json(
+                                    &repo,
+                                    &sid,
                                     panes,
                                     created_at,
                                     age_days,
-                                    crate::json_escape(&base_label),
-                                    if stale { "true" } else { "false" }
+                                    &base_label,
+                                    stale
                                 ));
                             }
                         }
@@ -188,10 +210,14 @@ pub(crate) fn fork_list_impl(
             if idx > 0 {
                 out.push(',');
             }
-            out.push_str(&format!(
-                "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":{}}}",
-                crate::json_escape(&repo_root.display().to_string()),
-                sid, panes, created_at, age_days, crate::json_escape(base_label), if *stale { "true" } else { "false" }
+            out.push_str(&format_row_json(
+                repo_root,
+                sid,
+                *panes,
+                *created_at,
+                *age_days,
+                base_label,
+                *stale
             ));
         }
         out.push(']');
@@ -264,5 +290,29 @@ mod tests {
         assert_eq!(rows[0].0, "sid-old", "older session should come first");
         assert!(rows[0].5, "sid-old should be stale (>=5d)");
         assert!(!rows[1].5, "sid-new should not be stale (<5d)");
+    }
+
+    #[test]
+    fn test_format_row_json_golden_single_repo() {
+        let td = tempdir().expect("tmpdir");
+        let repo = td.path();
+        let sid = "sid-1";
+        let panes = 3usize;
+        let created_at = 123456789u64;
+        let age_days = 42u64;
+        let base_label = "main";
+        let stale = true;
+
+        let actual = super::format_row_json(repo, sid, panes, created_at, age_days, base_label, stale);
+        let expected = format!(
+            "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":true}}",
+            crate::json_escape(&repo.display().to_string()),
+            sid,
+            panes,
+            created_at,
+            age_days,
+            crate::json_escape(base_label)
+        );
+        assert_eq!(actual, expected, "JSON row format must match exactly");
     }
 }
