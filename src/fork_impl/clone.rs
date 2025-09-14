@@ -1,4 +1,4 @@
- //! Clone and checkout helpers for creating fork panes with LFS/submodules best-effort support.
+//! Clone and checkout helpers for creating fork panes with LFS/submodules best-effort support.
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

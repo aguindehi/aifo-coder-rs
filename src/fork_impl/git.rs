@@ -1,5 +1,5 @@
- //! Git helper utilities for invoking commands consistently from internal modules.
- //! Git helper utilities for invoking commands consistently from internal modules.
+//! Git helper utilities for invoking commands consistently from internal modules.
+//! Git helper utilities for invoking commands consistently from internal modules.
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 

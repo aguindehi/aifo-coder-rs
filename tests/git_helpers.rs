@@ -26,12 +26,33 @@ fn test_git_status_porcelain_clean_repo_is_empty() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path();
 
-    assert!(Command::new("git").args(["init"]).current_dir(root).status().unwrap().success());
-    let _ = Command::new("git").args(["config", "user.name", "AIFO Test"]).current_dir(root).status();
-    let _ = Command::new("git").args(["config", "user.email", "aifo@example.com"]).current_dir(root).status();
+    assert!(Command::new("git")
+        .args(["init"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let _ = Command::new("git")
+        .args(["config", "user.name", "AIFO Test"])
+        .current_dir(root)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "aifo@example.com"])
+        .current_dir(root)
+        .status();
     std::fs::write(root.join("a.txt"), "a\n").unwrap();
-    assert!(Command::new("git").args(["add", "-A"]).current_dir(root).status().unwrap().success());
-    assert!(Command::new("git").args(["commit", "-m", "c1"]).current_dir(root).status().unwrap().success());
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    assert!(Command::new("git")
+        .args(["commit", "-m", "c1"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
 
     let s = aifo_coder::fork_impl_git::git_status_porcelain(root).unwrap_or_default();
     assert!(
@@ -46,5 +67,8 @@ fn test_push_file_allow_args_appends_correct_flags() {
     let mut v = vec!["git".to_string()];
     aifo_coder::fork_impl_git::push_file_allow_args(&mut v);
     assert_eq!(v.get(1).map(String::as_str), Some("-c"));
-    assert_eq!(v.get(2).map(String::as_str), Some("protocol.file.allow=always"));
+    assert_eq!(
+        v.get(2).map(String::as_str),
+        Some("protocol.file.allow=always")
+    );
 }

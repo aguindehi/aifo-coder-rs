@@ -1,4 +1,4 @@
- //! Build per-session clean plans: determine clean vs protected panes (dirty, submodules, ahead, base-unknown).
+//! Build per-session clean plans: determine clean vs protected panes (dirty, submodules, ahead, base-unknown).
 use std::fs;
 use std::path::PathBuf;
 

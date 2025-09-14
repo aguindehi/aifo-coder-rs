@@ -1,4 +1,4 @@
- //! Snapshot helper: create a temporary commit including dirty index/working tree via a temporary index.
+//! Snapshot helper: create a temporary commit including dirty index/working tree via a temporary index.
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;

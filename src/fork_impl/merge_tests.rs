@@ -76,8 +76,7 @@ mod tests {
             .success());
 
         // Compose message relative to main
-        let msg =
-            compose_merge_message_impl(repo, &[(".".into(), "feature".to_string())], "main");
+        let msg = compose_merge_message_impl(repo, &[(".".into(), "feature".to_string())], "main");
 
         // First line must start with "Octopus merge:"
         let first_line = msg.lines().next().unwrap_or("");

@@ -1,4 +1,4 @@
- //! Pane cleanliness checks: classify panes as clean or protected (dirty, submodules, ahead, base-unknown).
+//! Pane cleanliness checks: classify panes as clean or protected (dirty, submodules, ahead, base-unknown).
 use std::path::Path;
 
 /// Result of checking a pane's cleanliness and protection reasons.

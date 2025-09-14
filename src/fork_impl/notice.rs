@@ -1,4 +1,4 @@
- //! Stale notice and auto-clean logic for fork sessions (no behavior change from public facade).
+//! Stale notice and auto-clean logic for fork sessions (no behavior change from public facade).
 use std::env;
 use std::fs;
 use std::time::SystemTime;

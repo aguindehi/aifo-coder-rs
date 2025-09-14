@@ -3,7 +3,6 @@ use std::io::{Read, Seek};
 use std::os::fd::{FromRawFd, RawFd};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
 // Capture stdout for the duration of f, returning the captured UTF-8 string.
 // Unix-only; safe for our CI matrix (macOS/Linux).
 fn capture_stdout<F: FnOnce()>(f: F) -> String {

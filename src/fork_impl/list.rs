@@ -1,4 +1,4 @@
- //! Fork list collection and rendering helpers (preserve exact strings and ordering).
+//! Fork list collection and rendering helpers (preserve exact strings and ordering).
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -118,7 +118,7 @@ pub(crate) fn fork_list_impl(
                                     created_at,
                                     age_days,
                                     &base_label,
-                                    stale
+                                    stale,
                                 ));
                             }
                         }
@@ -217,7 +217,7 @@ pub(crate) fn fork_list_impl(
                 *created_at,
                 *age_days,
                 base_label,
-                *stale
+                *stale,
             ));
         }
         out.push(']');
@@ -303,7 +303,8 @@ mod tests {
         let base_label = "main";
         let stale = true;
 
-        let actual = super::format_row_json(repo, sid, panes, created_at, age_days, base_label, stale);
+        let actual =
+            super::format_row_json(repo, sid, panes, created_at, age_days, base_label, stale);
         let expected = format!(
             "{{\"repo_root\":{},\"sid\":\"{}\",\"panes\":{},\"created_at\":{},\"age_days\":{},\"base_label\":{},\"stale\":true}}",
             crate::json_escape(&repo.display().to_string()),

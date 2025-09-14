@@ -1,4 +1,4 @@
- //! Session/pane scanning utilities used by fork maintenance flows.
+//! Session/pane scanning utilities used by fork maintenance flows.
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
