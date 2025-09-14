@@ -724,8 +724,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &container_name,
                     );
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        &session,
-                        &pane,
+                        &session.agent,
+                        &session.sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -1092,8 +1095,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             &container_name,
                         );
                         let inner = crate::fork::inner::build_inner_powershell(
-                            &session,
-                            &pane,
+                            &session.agent,
+                            &session.sid,
+                            i,
+                            pane_dir.as_path(),
+                            &pane_state_dir,
                             &child_args,
                         );
                         let orient = orient_for_layout(i);
