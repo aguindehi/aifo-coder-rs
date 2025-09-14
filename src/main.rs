@@ -286,7 +286,7 @@ fn main() -> ExitCode {
     }
 
     // Toolchain session RAII
-    let mut toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
+    let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
         let (kinds, overrides) = crate::toolchain_session::plan_from_cli(&cli);
@@ -313,7 +313,7 @@ fn main() -> ExitCode {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
                 Ok(Some(ts)) => {
                     // Toolchain sidecars and proxy started
-                    toolchain_session = Some(ts);
+                    _toolchain_session = Some(ts);
                 }
                 Ok(None) => { /* no-op: no toolchains requested or dry-run */ }
                 Err(_) => {

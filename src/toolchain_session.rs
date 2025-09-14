@@ -179,9 +179,6 @@ impl ToolchainSession {
         }
     }
 
-    pub fn cleanup(mut self, verbose: bool, in_fork_pane: bool) {
-        self.cleanup_inner(verbose, in_fork_pane);
-    }
 }
 
 impl Drop for ToolchainSession {
