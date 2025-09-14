@@ -59,6 +59,7 @@ fn require_repo_root() -> Result<PathBuf, ExitCode> {
 }
 
 fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
+    let use_err_color = aifo_coder::color_enabled_stderr();
     if let Agent::Fork { cmd } = &cli.command {
         match cmd {
             ForkCmd::List {
@@ -131,11 +132,10 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                             && *autoclean
                             && !*dry_run
                         {
-                            let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
                                 "{}",
                                 aifo_coder::paint(
-                                    use_err,
+                                    use_err_color,
                                     "\x1b[36;1m",
                                     &format!(
                                         "aifo-coder: octopus merge succeeded; disposing fork session {} ...",
@@ -155,11 +155,10 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                             };
                             match aifo_coder::fork_clean(&repo_root, &opts) {
                                 Ok(_) => {
-                                    let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
                                         "{}",
                                         aifo_coder::paint(
-                                            use_err,
+                                            use_err_color,
                                             "\x1b[32;1m",
                                             &format!(
                                                 "aifo-coder: disposed fork session {}.",
@@ -169,11 +168,10 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                                     );
                                 }
                                 Err(e) => {
-                                    let use_err = aifo_coder::color_enabled_stderr();
                                     eprintln!(
                                         "{}",
                                         aifo_coder::paint(
-                                            use_err,
+                                            use_err_color,
                                             "\x1b[33m",
                                             &format!(
                                                 "aifo-coder: warning: failed to dispose fork session {}: {}",
@@ -187,11 +185,10 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                         return Some(ExitCode::from(0));
                     }
                     Err(e) => {
-                        let use_err = aifo_coder::color_enabled_stderr();
                         eprintln!(
                             "{}",
                             aifo_coder::paint(
-                                use_err,
+                                use_err_color,
                                 "\x1b[31;1m",
                                 &format!("aifo-coder: fork merge failed: {}", e)
                             )
@@ -337,7 +334,10 @@ fn main() -> ExitCode {
                 if !cli.toolchain_bootstrap.is_empty() {
                     eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
                 }
-                eprintln!("aifo-coder: would prepare and mount /opt/aifo/bin shims; set AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>");
+                eprintln!(
+                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set "
+                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                );
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {

@@ -11,6 +11,8 @@ use crate::guidance::print_inspect_merge_guidance;
 // Orchestrate tmux-based fork session (Linux/macOS/WSL) — moved from main.rs (Phase 1)
 #[allow(clippy::needless_return)]
 pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
+    // Pre-compute stderr color usage once per run
+    let use_err_color = aifo_coder::color_enabled_stderr();
     // Preflight
     if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
         return code;
@@ -482,11 +484,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         if let Ok(wtbin) = wt {
             if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
                 {
-                    let use_err = aifo_coder::color_enabled_stderr();
                     eprintln!(
                         "{}",
                         aifo_coder::paint(
-                            use_err,
+                            use_err_color,
                             "\x1b[33m",
                             "aifo-coder: using PowerShell windows to enable post-fork merging (--fork-merge-strategy)."
                         )
@@ -812,11 +813,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         aifo_coder::MergingStrategy::Octopus => "octopus",
                     };
                     {
-                        let use_err = aifo_coder::color_enabled_stderr();
                         eprintln!(
                             "{}",
                             aifo_coder::paint(
-                                use_err,
+                                use_err_color,
                                 "\x1b[36;1m",
                                 &format!(
                                     "aifo-coder: applying post-fork merge strategy: {}",
@@ -870,11 +870,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                 };
                                 match aifo_coder::fork_clean(&repo_root, &opts) {
                                     Ok(_) => {
-                                        let use_err = aifo_coder::color_enabled_stderr();
                                         eprintln!(
                                             "{}",
                                             aifo_coder::paint(
-                                                use_err,
+                                                use_err_color,
                                                 "\x1b[32;1m",
                                                 &format!(
                                                     "aifo-coder: disposed fork session {}.",
@@ -884,11 +883,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                                         );
                                     }
                                     Err(e) => {
-                                        let use_err = aifo_coder::color_enabled_stderr();
                                         eprintln!(
                                             "{}",
                                             aifo_coder::paint(
-                                                use_err,
+                                                use_err_color,
                                                 "\x1b[33m",
                                                 &format!(
                                                     "aifo-coder: warning: failed to dispose fork session {}: {}",
@@ -901,11 +899,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         }
                         Err(e) => {
-                            let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
                                 "{}",
                                 aifo_coder::paint(
-                                    use_err,
+                                    use_err_color,
                                     "\x1b[31;1m",
                                     &format!(
                                         "aifo-coder: merge strategy '{}' failed: {}",
@@ -1215,11 +1212,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             _ => "none",
                         };
                         {
-                            let use_err = aifo_coder::color_enabled_stderr();
                             eprintln!(
                                 "{}",
                                 aifo_coder::paint(
-                                    use_err,
+                                    use_err_color,
                                     "\x1b[33m",
                                     &format!("aifo-coder: note: no waitable orchestrator found; automatic post-fork merging ({}) is unavailable.", strat)
                                 )
@@ -1227,7 +1223,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             eprintln!(
                                 "{}",
                                 aifo_coder::paint(
-                                    use_err,
+                                    use_err_color,
                                     "\x1b[33m",
                                     &format!(
                                         "aifo-coder: after you close all panes, run: aifo-coder fork merge --session {} --strategy {}",
@@ -1751,11 +1747,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 // visual separation from the guidance block above
                 println!();
                 {
-                    let use_err = aifo_coder::color_enabled_stderr();
                     eprintln!(
                         "{}",
                         aifo_coder::paint(
-                            use_err,
+                            use_err_color,
                             "\x1b[36;1m",
                             &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
                         )
