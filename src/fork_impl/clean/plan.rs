@@ -1,11 +1,11 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::fork_meta;
 use crate::json_escape;
 
-use super::super::fork_impl_panecheck;
-use super::super::fork_impl_scan;
+use crate::fork::fork_impl_panecheck;
+use crate::fork::fork_impl_scan;
 
 #[derive(Clone)]
 pub struct PaneStatus {

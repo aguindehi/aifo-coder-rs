@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use super::plan::SessionPlan;
+use crate::fork::fork_impl_clean_plan::SessionPlan;
 use crate::{color_enabled_stderr, paint};
 
 /// Check protections and (when required) prompt interactively.

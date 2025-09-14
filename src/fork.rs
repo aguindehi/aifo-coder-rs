@@ -2,14 +2,10 @@
 //! Fork lifecycle: repo detection, snapshotting, cloning panes, merging, cleaning and notices.
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
-use crate::{
-    color_enabled_stderr, color_enabled_stdout, json_escape, paint, toolchain_cleanup_session,
-};
 
 #[path = "fork_impl/clone.rs"]
 mod fork_impl_clone;
