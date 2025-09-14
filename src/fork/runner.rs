@@ -287,8 +287,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        &session,
-                        &pane,
+                        &session.agent,
+                        &session.sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -379,8 +382,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     let exec_shell_tail =
                         matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        &session,
-                        &pane,
+                        &session.agent,
+                        &session.sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -516,8 +522,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &pane_state_dir,
                         &container_name,
                     );
-                    let inner =
-                        crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
+                    let inner = crate::fork::inner::build_inner_powershell(
+                        &session.agent,
+                        &session.sid,
+                        1,
+                        pane1_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                    );
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("new-tab")
                         .arg("-d")
@@ -600,8 +612,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &pane_state_dir,
                         &container_name,
                     );
-                    let inner =
-                        crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
+                    let inner = crate::fork::inner::build_inner_powershell(
+                        &session.agent,
+                        &session.sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
+                        &child_args,
+                    );
                     let orient = orient_for_layout(i);
                     let mut cmd = Command::new(&wtbin);
                     cmd.arg("split-pane")
@@ -896,8 +914,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         &container_name,
                     );
                     let inner = crate::fork::inner::build_inner_gitbash(
-                        &session,
-                        &pane,
+                        &session.agent,
+                        &session.sid,
+                        i,
+                        pane_dir.as_path(),
+                        &pane_state_dir,
                         &child_args,
                         exec_shell_tail,
                     );
@@ -1014,8 +1035,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             &container_name,
                         );
                         let inner = crate::fork::inner::build_inner_powershell(
-                            &session,
-                            &pane,
+                            &session.agent,
+                            &session.sid,
+                            1,
+                            pane1_dir.as_path(),
+                            &pane_state_dir,
                             &child_args,
                         );
                         let mut cmd = Command::new(&wtbin2);
@@ -1186,7 +1210,14 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 &pane_state_dir,
                 &container_name,
             );
-            let inner = crate::fork::inner::build_inner_powershell(&session, &pane, &child_args);
+            let inner = crate::fork::inner::build_inner_powershell(
+                &session.agent,
+                &session.sid,
+                i,
+                pane_dir.as_path(),
+                &pane_state_dir,
+                &child_args,
+            );
 
             // Launch a new PowerShell window using Start-Process and capture its PID
             let script = {
@@ -1544,8 +1575,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             // Touch fields so clippy sees them as read on this target too
             let _ = (&pane.dir, &pane.branch);
             let inner = crate::fork::inner::build_tmux_launch_script(
-                &session,
-                &pane,
+                &sid,
+                i,
+                &container_name,
+                &pane_state_dir,
                 &child_joined,
                 &launcher,
             );
