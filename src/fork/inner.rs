@@ -117,8 +117,11 @@ pub fn build_inner_gitbash(
 
 #[cfg(not(windows))]
 pub fn build_inner_gitbash(
-    _session: &ForkSession,
-    _pane: &Pane,
+    _agent: &str,
+    _sid: &str,
+    _pane_index: usize,
+    _pane_dir: &Path,
+    _pane_state_dir: &Path,
     _child_args: &[String],
     _exec_shell_tail: bool,
 ) -> String {
