@@ -88,6 +88,7 @@ fn main() -> ExitCode {
                 all_repos,
                 color,
             } => {
+                // List existing sessions; supports JSON output and optional cross-repo scan
                 if let Some(mode) = color {
                     aifo_coder::set_color_mode(*mode);
                 }
@@ -118,6 +119,7 @@ fn main() -> ExitCode {
                 keep_dirty,
                 json,
             } => {
+                // Clean fork sessions with safety guards; can print a dry-run plan or JSON summary
                 let repo_root = match aifo_coder::repo_root() {
                     Some(p) => p,
                     None => {
@@ -144,6 +146,7 @@ fn main() -> ExitCode {
                 autoclean,
                 dry_run,
             } => {
+                // Merge selected session back to the base repo; supports strategy and optional autoclean
                 let repo_root = match aifo_coder::repo_root() {
                     Some(p) => p,
                     None => {
@@ -258,25 +261,25 @@ fn main() -> ExitCode {
 
     // Select the agent subcommand to run and capture its trailing arguments
     let (agent, args) = match &cli.command {
-        Agent::Codex { args } => ("codex", args.clone()),
-        Agent::Crush { args } => ("crush", args.clone()),
-        Agent::Aider { args } => ("aider", args.clone()),
-        Agent::Doctor => {
+        Agent::Codex { args } => ("codex", args.clone()), // Run Codex agent in container with pass-through args
+        Agent::Crush { args } => ("crush", args.clone()), // Run Crush agent in container with pass-through args
+        Agent::Aider { args } => ("aider", args.clone()), // Run Aider agent in container with pass-through args
+        Agent::Doctor => { // Defensive: handled earlier and returns immediately
             unreachable!("Doctor subcommand is handled earlier and returns immediately")
         }
-        Agent::Images => {
+        Agent::Images => { // Defensive: handled earlier and returns immediately
             unreachable!("Images subcommand is handled earlier and returns immediately")
         }
-        Agent::CacheClear => {
+        Agent::CacheClear => { // Defensive: handled earlier and returns immediately
             unreachable!("CacheClear subcommand is handled earlier and returns immediately")
         }
-        Agent::ToolchainCacheClear => unreachable!(
+        Agent::ToolchainCacheClear => unreachable!( // Defensive: handled earlier and returns immediately
             "ToolchainCacheClear subcommand is handled earlier and returns immediately"
         ),
-        Agent::Toolchain { .. } => {
+        Agent::Toolchain { .. } => { // Defensive: handled earlier and returns immediately
             unreachable!("Toolchain subcommand is handled earlier and returns immediately")
         }
-        Agent::Fork { .. } => {
+        Agent::Fork { .. } => { // Defensive: handled earlier and returns immediately
             unreachable!("Fork maintenance subcommands are handled earlier and return immediately")
         }
     };
@@ -375,10 +378,10 @@ fn main() -> ExitCode {
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
-                Ok(Some(ts)) => {
+                Ok(Some(ts)) => { // Toolchain sidecars and proxy started
                     toolchain_session = Some(ts);
                 }
-                Ok(None) => { /* no-op */ }
+                Ok(None) => { /* no-op: no toolchains requested or dry-run */ }
                 Err(_) => {
                     // Errors are already printed inside start_if_requested() with exact strings
                     return ExitCode::from(1);
