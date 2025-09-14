@@ -92,10 +92,10 @@ fn test_workspace_fork_list_json_golden_single_repo() {
         "[{{\"repo_root\":{},\"sid\":\"sid-old\",\"panes\":1,\"created_at\":{},\"age_days\":10,\"base_label\":{},\"stale\":true}},{{\"repo_root\":{},\"sid\":\"sid-new\",\"panes\":1,\"created_at\":{},\"age_days\":2,\"base_label\":{},\"stale\":false}}]",
         aifo_coder::json_escape(&repo_s),
         now.saturating_sub(10*86400),
-        aifo_coder::json_escape(\"main\"),
+        aifo_coder::json_escape("main"),
         aifo_coder::json_escape(&repo_s),
         now.saturating_sub(2*86400),
-        aifo_coder::json_escape(\"dev\")
+        aifo_coder::json_escape("dev")
     );
 
     assert_eq!(got, expected, "workspace fork_list JSON should match exactly");
