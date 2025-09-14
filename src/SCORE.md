@@ -65,9 +65,9 @@ Overall Grade: A
 
 ## Recommendations / Next Steps
 
-1. Adopt the new git_cmd helper across remaining direct Command::new("git") call sites for consistency; consider adding a git_cmd_quiet variant to standardize stdout/stderr policies.
-2. Add a dedicated stdout-capture golden test for fork_list JSON that exercises the public fork_list() printing path (will require a small internal hook for tests or capture harness).
-3. Expand module-level docs further where helpful and keep them updated as refactors continue.
-4. Evaluate CI matrix to ensure Windows and macOS coverage for the new module tests.
+1. Continue migrating any remaining direct git spawns in the binary-side code to consistent patterns, keeping behavior unchanged.
+2. Add CI jobs for macOS and Windows to validate platform-specific helpers and tests.
+3. Extend golden tests to cover workspace (--all-repos) JSON and plain outputs for fork_list.
+4. Keep module-level docs updated as refactors continue.
 
 Shall I proceed with these next steps?

@@ -7,15 +7,16 @@ use std::process::{Command, Stdio};
 pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io::Result<String> {
     // Create a unique temporary index path (under .git when possible)
     let tmp_idx = {
-        let git_dir_out = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("rev-parse")
-            .arg("--git-dir")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()
-            .ok();
+        let git_dir_out = {
+            let mut cmd = Command::new("git");
+            cmd.arg("-C")
+                .arg(repo_root)
+                .arg("rev-parse")
+                .arg("--git-dir")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+            cmd.output().ok()
+        };
         let git_dir = git_dir_out
             .and_then(|o| {
                 if o.status.success() {
@@ -58,22 +59,21 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
 
     // 3) Determine parent if any (HEAD may not exist)
-    let parent = Command::new("git")
-        .arg("-C")
-        .arg(repo_root)
-        .arg("rev-parse")
-        .arg("--verify")
-        .arg("HEAD")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let parent = {
+        let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+        cmd.arg("rev-parse")
+            .arg("--verify")
+            .arg("HEAD")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        cmd.output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    };
 
     // 4) commit-tree
-    let mut ct = Command::new("git");
-    ct.arg("-C").arg(repo_root);
+    let mut ct = super::fork_impl_git::git_cmd(Some(repo_root));
     ct.arg("commit-tree").arg(&tree);
     if let Some(p) = parent.as_deref() {
         ct.arg("-p").arg(p);

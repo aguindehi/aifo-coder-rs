@@ -106,25 +106,20 @@ pub fn fork_sanitize_base_label(s: &str) -> String {
 pub fn fork_base_info(repo_root: &Path) -> std::io::Result<(String, String, String)> {
     let root = repo_root;
     // Determine current branch or detached state
-    let branch_out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .arg("rev-parse")
+    let mut cmd = fork_impl_git::git_cmd(Some(root));
+    cmd.arg("rev-parse")
         .arg("--abbrev-ref")
         .arg("HEAD")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()?;
-    let head_out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .arg("rev-parse")
+        .stderr(Stdio::null());
+    let branch_out = cmd.output()?;
+    let mut cmd2 = fork_impl_git::git_cmd(Some(root));
+    cmd2.arg("rev-parse")
         .arg("--verify")
         .arg("HEAD")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok();
+        .stderr(Stdio::null());
+    let head_out = cmd2.output().ok();
 
     let head_sha = head_out
         .as_ref()

@@ -1,4 +1,5 @@
  //! Git helper utilities for invoking commands consistently from internal modules.
+ //! Git helper utilities for invoking commands consistently from internal modules.
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
@@ -57,5 +58,12 @@ pub fn git_cmd(repo: Option<&Path>) -> Command {
     if let Some(r) = repo {
         cmd.arg("-C").arg(r);
     }
+    cmd
+}
+
+/// Create a git Command preconfigured with optional -C <repo> and silent stdio.
+pub fn git_cmd_quiet(repo: Option<&Path>) -> Command {
+    let mut cmd = git_cmd(repo);
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
     cmd
 }

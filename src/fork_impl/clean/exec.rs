@@ -97,16 +97,15 @@ pub fn execute(
                 if !opts.dry_run {
                     let mut branches: Vec<String> = Vec::new();
                     for p in &remaining {
-                        if let Ok(out) = Command::new("git")
-                            .arg("-C")
-                            .arg(p)
-                            .arg("rev-parse")
-                            .arg("--abbrev-ref")
-                            .arg("HEAD")
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::null())
-                            .output()
-                        {
+                        if let Ok(out) = {
+                            let mut cmd = aifo_coder::fork_impl_git::git_cmd(Some(p));
+                            cmd.arg("rev-parse")
+                                .arg("--abbrev-ref")
+                                .arg("HEAD")
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::null());
+                            cmd.output()
+                        } {
                             if out.status.success() {
                                 let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
                                 if !b.is_empty() {

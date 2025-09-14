@@ -26,15 +26,14 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
     fs::create_dir_all(&session_dir)?;
 
     // Try to capture push URL from base repo (non-fatal if unavailable)
-    let base_push_url = Command::new("git")
-        .arg("-C")
-        .arg(&repo_abs)
-        .arg("remote")
+    let mut cmd = super::fork_impl_git::git_cmd(Some(&repo_abs));
+    cmd.arg("remote")
         .arg("get-url")
         .arg("--push")
         .arg("origin")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    let base_push_url = cmd
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -82,15 +81,12 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
 
         // Optional: set origin push URL to match base repo
         if let Some(ref url) = base_push_url {
-            let _ = Command::new("git")
-                .arg("-C")
-                .arg(&pane_dir)
+            let mut cmd = super::fork_impl_git::git_cmd_quiet(Some(&pane_dir));
+            let _ = cmd
                 .arg("remote")
                 .arg("set-url")
                 .arg("origin")
                 .arg(url)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
                 .status();
         }
 
@@ -134,31 +130,12 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
         if lfs_available {
             let uses_lfs = crate::repo_uses_lfs_quick(&pane_dir);
             if uses_lfs {
-                let _ = Command::new("git")
-                    .arg("-C")
-                    .arg(&pane_dir)
-                    .arg("lfs")
-                    .arg("install")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-                let _ = Command::new("git")
-                    .arg("-C")
-                    .arg(&pane_dir)
-                    .arg("lfs")
-                    .arg("fetch")
-                    .arg("--all")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-                let _ = Command::new("git")
-                    .arg("-C")
-                    .arg(&pane_dir)
-                    .arg("lfs")
-                    .arg("checkout")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
+                let mut lfs1 = super::fork_impl_git::git_cmd_quiet(Some(&pane_dir));
+                let _ = lfs1.arg("lfs").arg("install").status();
+                let mut lfs2 = super::fork_impl_git::git_cmd_quiet(Some(&pane_dir));
+                let _ = lfs2.arg("lfs").arg("fetch").arg("--all").status();
+                let mut lfs3 = super::fork_impl_git::git_cmd_quiet(Some(&pane_dir));
+                let _ = lfs3.arg("lfs").arg("checkout").status();
             }
         }
 

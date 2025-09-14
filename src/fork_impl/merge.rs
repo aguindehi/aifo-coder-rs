@@ -21,14 +21,13 @@ pub(crate) fn collect_pane_branches_impl(
 ) -> io::Result<Vec<(PathBuf, String)>> {
     let mut pane_branches: Vec<(PathBuf, String)> = Vec::new();
     for (pdir, branch_hint) in panes {
-        let actual_branch = Command::new("git")
-            .arg("-C")
-            .arg(pdir)
-            .arg("rev-parse")
-            .arg("--abbrev-ref")
-            .arg("HEAD")
-            .output()
-            .ok()
+        let actual_branch = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(pdir));
+            cmd.arg("rev-parse")
+                .arg("--abbrev-ref")
+                .arg("HEAD");
+            cmd.output().ok()
+        }
             .and_then(|o| {
                 if o.status.success() {
                     Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -52,14 +51,11 @@ pub(crate) fn collect_pane_branches_impl(
 }
 
 pub(crate) fn preflight_clean_working_tree_impl(repo_root: &Path) -> io::Result<()> {
-    let dirty = match Command::new("git")
-        .arg("-C")
-        .arg(repo_root)
-        .arg("status")
-        .arg("--porcelain=v1")
-        .arg("-uall")
-        .output()
-    {
+    let dirty = match {
+        let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+        cmd.arg("status").arg("--porcelain=v1").arg("-uall");
+        cmd.output()
+    } {
         Ok(o) => {
             if !o.status.success() {
                 true
@@ -93,15 +89,14 @@ pub(crate) fn compose_merge_message_impl(
 
     let mut summary_parts: Vec<String> = Vec::new();
     for (_p, br) in pane_branches {
-        let subj_out = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("log")
-            .arg("--no-merges")
-            .arg("--pretty=format:%s")
-            .arg(format!("{}..{}", base_ref_or_sha, br))
-            .output()
-            .ok();
+        let subj_out = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+            cmd.arg("log")
+                .arg("--no-merges")
+                .arg("--pretty=format:%s")
+                .arg(format!("{}..{}", base_ref_or_sha, br));
+            cmd.output().ok()
+        };
         if let Some(o) = subj_out {
             if o.status.success() {
                 let body = String::from_utf8_lossy(&o.stdout);
@@ -155,15 +150,14 @@ pub(crate) fn compose_merge_message_impl(
     ));
 
     for (_p, br) in pane_branches {
-        let log_out = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("log")
-            .arg("--no-merges")
-            .arg("--pretty=format:%h %s")
-            .arg(format!("{}..{}", base_ref_or_sha, br))
-            .output()
-            .ok();
+        let log_out = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+            cmd.arg("log")
+                .arg("--no-merges")
+                .arg("--pretty=format:%h %s")
+                .arg(format!("{}..{}", base_ref_or_sha, br));
+            cmd.output().ok()
+        };
         merge_message.push_str(&format!("- branch '{}':\n", br));
         if let Some(o) = log_out {
             if o.status.success() {
@@ -283,14 +277,14 @@ pub(crate) fn fork_merge_branches_impl(
         eprintln!("aifo-coder: git: {}", shell_join(&checkout_args));
     }
     if !dry_run {
-        let st = Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("checkout")
-            .arg("-B")
-            .arg(&target)
-            .arg(base_ref_or_sha)
-            .status()?;
+        let st = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+            cmd.arg("checkout")
+                .arg("-B")
+                .arg(&target)
+                .arg(base_ref_or_sha);
+            cmd.status()?
+        };
         if !st.success() {
             return Err(io::Error::other("failed to checkout merge target branch"));
         }
@@ -380,22 +374,20 @@ pub(crate) fn fork_merge_branches_impl(
     {
         let fetched_names: Vec<String> = pane_branches.iter().map(|(_p, b)| b.clone()).collect();
         let merge_commit_sha = if !dry_run {
-            Command::new("git")
-                .arg("-C")
-                .arg(repo_root)
-                .arg("rev-parse")
-                .arg("--verify")
-                .arg("HEAD")
-                .output()
-                .ok()
-                .and_then(|o| {
-                    if o.status.success() {
-                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default()
+            {
+                let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+                cmd.arg("rev-parse").arg("--verify").arg("HEAD");
+                cmd.output()
+                    .ok()
+                    .and_then(|o| {
+                        if o.status.success() {
+                            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default()
+            }
         } else {
             String::new()
         };
@@ -420,8 +412,8 @@ pub(crate) fn fork_merge_branches_impl(
 
     // Delete merged pane branches locally (best-effort)
     if !dry_run {
-        let mut del = Command::new("git");
-        del.arg("-C").arg(repo_root).arg("branch").arg("-D");
+        let mut del = super::fork_impl_git::git_cmd(Some(repo_root));
+        del.arg("branch").arg("-D");
         for (_p, br) in &pane_branches {
             del.arg(br);
         }
@@ -484,14 +476,13 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     // Determine each pane's current branch
     let mut panes: Vec<(PathBuf, String)> = Vec::new();
     for p in panes_dirs {
-        let branch = Command::new("git")
-            .arg("-C")
-            .arg(&p)
-            .arg("rev-parse")
-            .arg("--abbrev-ref")
-            .arg("HEAD")
-            .output()
-            .ok()
+        let branch = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(&p));
+            cmd.arg("rev-parse")
+                .arg("--abbrev-ref")
+                .arg("HEAD");
+            cmd.output().ok()
+        }
             .and_then(|o| {
                 if o.status.success() {
                     Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
