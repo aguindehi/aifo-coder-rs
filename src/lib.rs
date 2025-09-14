@@ -14,8 +14,8 @@ mod util;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
-pub use fork::*;
 pub use fork::types::MergingStrategy;
+pub use fork::*;
 #[cfg(windows)]
 pub use fork_windows_helpers::{
     fork_bash_inner_string, fork_ps_inner_string, ps_wait_process_cmd, wt_build_new_tab_args,
@@ -28,7 +28,6 @@ pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
 pub use util::*;
 
 // -------- Color mode and helpers --------
-
 
 /// Render a docker -v host:container pair.
 pub fn path_pair(host: &std::path::Path, container: &str) -> std::ffi::OsString {
