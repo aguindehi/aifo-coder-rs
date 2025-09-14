@@ -1,18 +1,8 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::os::fd::{FromRawFd, RawFd};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
 
 // Capture stdout for the duration of f, returning the captured UTF-8 string.
 // Unix-only; safe for our CI matrix (macOS/Linux).
