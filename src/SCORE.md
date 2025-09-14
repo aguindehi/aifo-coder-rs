@@ -5,42 +5,39 @@ Project: aifo-coder
 
 ## Summary
 
-Further refactoring extracted merge-related helpers and flows into a private module while preserving
-all public behavior. The fork facade now delegates merge operations, improving cohesion and
-maintainability. Tests remain green (previous run: 207 passed, 24 skipped).
+Completed Phase 2 clean path decomposition per spec. The fork_clean flow is now split into private
+modules for plan, prompt, and exec while preserving exact behavior and strings. The public facade
+remains stable and the test suite is green.
 
 ## Scoring
 
 - Architecture and Modularity: A
-  - Separation of concerns improved: fork_impl::{git,panecheck,notice,scan,merge}
-  - Public facade preserved; internal details hidden.
+  - Separation of concerns improved: fork_impl::{git,scan,panecheck,notice,merge,clone,list,snapshot,clean}
+  - Public APIs preserved; internal details hidden behind the facade.
 - Correctness and Behavior Parity: A
-  - No changes to public strings, prompts, or JSON ordering.
-  - Existing tests continue to pass.
+  - Outputs, prompts, and JSON ordering unchanged (manual JSON preserved).
+  - Existing tests pass unchanged.
 - Code Clarity and Maintainability: A
-  - Merge logic is centralized; remaining flows slated for extraction next.
+  - Fork clean logic centralized with clear responsibilities.
 - Error Handling and Robustness: A-
-  - Git helpers normalize invocations; best-effort cleanups preserved.
-  - Lock path race already fixed by capturing CWD early.
+  - Git invocations consistent; best-effort cleanups preserved.
 - Performance: A-
-  - Refactor has negligible overhead; centralized calls reduce duplication.
+  - No regressions; identical operations under the hood.
 - Testing: A-
-  - Existing tests cover major flows; consider targeted unit tests for new helpers.
+  - Consider adding golden tests for fork_list JSON and plan classification tests for fork_clean.
 
 Overall Grade: A
 
 ## Rationale
 
-The staged extraction reduces complexity in fork.rs and sets the stage for further internal
-modularization. Behavior is intentionally unchanged and validated by the test suite.
+The decomposition reduces complexity in src/fork.rs and aligns with the refactor plan, making the
+codebase easier to maintain and extend without altering user-visible behavior.
 
 ## Recommendations / Next Steps
 
-1. Extract remaining fork flows into private modules:
-   - fork_impl::{clone.rs, snapshot.rs, list.rs} with fork.rs delegating (merge is done).
-2. Add focused unit tests for fork_impl/git.rs and fork_impl/panecheck.rs to supplement integration coverage.
-3. Add a golden-test harness for fork_list JSON to lock exact formatting.
-4. Add or refine module-level documentation in src/fork_impl/* (ongoing).
-5. Review Windows orchestrator code paths for further consolidation and reuse.
+1. Add more Phase 0 style tests:
+   - fork_list JSON/plain ordering and stale flag; plan classification for fork_clean; merge message prefix/truncation via public flows.
+2. Consider golden tests for fork_list JSON to lock exact byte output.
+3. Expand module-level docs in src/fork_impl/* to describe responsibilities.
 
 Shall I proceed with these next steps?
