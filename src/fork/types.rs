@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use aifo_coder::MergingStrategy;
 
 /// High-level fork session information captured at creation time.
 pub struct ForkSession {
@@ -26,7 +27,7 @@ pub struct Pane {
 pub struct ForkOptions {
     pub verbose: bool,
     pub keep_on_failure: bool,
-    pub merge_strategy: crate::MergingStrategy,
+    pub merge_strategy: MergingStrategy,
     pub autoclean: bool,
     pub dry_run: bool,
     pub include_dirty: bool,
@@ -45,9 +46,9 @@ impl ForkOptions {
             self.dissociate,
         );
         let _ = match self.merge_strategy {
-            crate::MergingStrategy::None => 0,
-            crate::MergingStrategy::Fetch => 1,
-            crate::MergingStrategy::Octopus => 2,
+            MergingStrategy::None => 0,
+            MergingStrategy::Fetch => 1,
+            MergingStrategy::Octopus => 2,
         };
     }
 }
