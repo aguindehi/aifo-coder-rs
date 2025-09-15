@@ -1,5 +1,11 @@
 2025-09-15 00:00 User <user@example.com>
 
+QA: test suite green (227 passed, 24 skipped)
+
+- Verified all tests are green with latest changes.
+
+2025-09-15 00:00 User <user@example.com>
+
 Docs: add runner module docs; refine SCORE next steps
 
 - Added module-level docs to src/fork/runner.rs (binary-side orchestrator).

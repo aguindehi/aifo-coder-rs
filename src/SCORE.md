@@ -10,7 +10,7 @@ All internal flows under fork have been decomposed into cohesive private modules
 user-visible behavior remain unchanged, and a set of Phase-0 tests has been added to lock key
 behaviors. A small git helper was introduced to centralize the file:// protocol permission flag.
 
-Test status: 225 passed, 24 skipped.
+Test status: 227 passed, 24 skipped.
 
 ## Implementation status vs spec
 
@@ -57,7 +57,7 @@ Overall Grade: A
 
 ## Evidence
 
-- Tests: 225 passed, 24 skipped (make check).
+- Tests: 227 passed, 24 skipped (make check).
 - New tests:
   - tests/sanitize_label.rs
   - tests/repo_uses_lfs_quick.rs
