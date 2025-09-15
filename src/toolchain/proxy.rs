@@ -115,7 +115,7 @@ fn kill_in_container(
         script,
     ];
     if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        eprintln!("\naifo-coder: docker: {}", shell_join(&args));
     }
     // First attempt
     let mut cmd = Command::new(runtime);
