@@ -43,7 +43,7 @@ pub use shim::toolchain_write_shims;
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
     if verbose {
         eprintln!(
-            "\naifo-coder: proxy parsed tool={} argv={} cwd={}",
+            "\raifo-coder: proxy parsed tool={} argv={} cwd={}",
             tool,
             shell_join(argv),
             cwd
@@ -60,7 +60,7 @@ fn log_request_result(
 ) {
     if verbose {
         eprintln!(
-            "\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
+            "\raifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
             tool,
             kind,
             code,

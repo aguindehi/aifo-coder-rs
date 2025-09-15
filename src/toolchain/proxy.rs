@@ -115,7 +115,7 @@ fn kill_in_container(
         script,
     ];
     if verbose {
-        eprintln!("\naifo-coder: docker: {}", shell_join(&args));
+        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
     }
     // First attempt
     let mut cmd = Command::new(runtime);
@@ -143,7 +143,7 @@ fn disconnect_terminate_exec_in_container(
     verbose: bool,
 ) {
     // Always print a single disconnect line so the user sees it before returning to the agent
-    eprintln!("\naifo-coder: disconnect");
+    eprintln!("\raifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
@@ -629,13 +629,13 @@ fn handle_connection<S: Read + Write>(
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("\naifo-coder: proxy exec: tsc via local node_modules");
+                eprintln!("\raifo-coder: proxy exec: tsc via local node_modules");
             }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("\naifo-coder: proxy exec: tsc via npx");
+                eprintln!("\raifo-coder: proxy exec: tsc via npx");
             }
         }
     } else {
@@ -662,13 +662,13 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        eprintln!("\naifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+        eprintln!("\raifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
     }
 
     if proto_v2 {
         // Streaming (v2)
         if verbose {
-            eprintln!("\naifo-coder: proxy exec: proto=v2 (streaming)");
+            eprintln!("\raifo-coder: proxy exec: proto=v2 (streaming)");
         }
         let started = std::time::Instant::now();
 
@@ -718,7 +718,7 @@ fn handle_connection<S: Read + Write>(
                     }
                     if verbose_cl {
                         eprintln!(
-                            "\naifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                            "\raifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                             sig, exec_id_cl, accum
                         );
                     }
@@ -800,7 +800,7 @@ fn handle_connection<S: Read + Write>(
 
     // Buffered (v1)
     if verbose {
-        eprintln!("\naifo-coder: proxy exec: proto=v1 (buffered)");
+        eprintln!("\raifo-coder: proxy exec: proto=v1 (buffered)");
     }
     let started = std::time::Instant::now();
 
@@ -849,7 +849,7 @@ fn handle_connection<S: Read + Write>(
                 }
                 if verbose_cl {
                     eprintln!(
-                        "\naifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                        "\raifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                         sig, exec_id_cl, accum
                     );
                 }
