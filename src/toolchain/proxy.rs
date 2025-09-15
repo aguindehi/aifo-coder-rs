@@ -103,7 +103,7 @@ fn kill_in_container(
         sig = sig
     );
 
-    let mut args: Vec<String> = vec![
+    let args: Vec<String> = vec![
         "docker".into(),
         "exec".into(),
         container.into(),
@@ -134,7 +134,6 @@ fn terminate_exec_in_container(
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
-use std::path::PathBuf; // needed by kill helpers
 
 /// Build streaming docker exec spawn args: add -t and wrap with setsid+PGID script.
 fn build_streaming_exec_args(
