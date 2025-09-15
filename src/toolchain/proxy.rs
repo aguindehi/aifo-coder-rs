@@ -618,7 +618,7 @@ fn handle_connection<S: Read + Write>(
         .headers
         .get("x-aifo-exec-id")
         .cloned()
-        .unwrap_or_else(|| random_token());
+        .unwrap_or_else(random_token);
     // Register exec_id -> container
     exec_registry.insert(exec_id.clone(), name.clone());
 
