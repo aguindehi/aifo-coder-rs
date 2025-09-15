@@ -134,9 +134,30 @@ fn kill_in_container(
     let _ = cmd2.status();
 }
 
-/// TERM then KILL with ~2s grace.
+//// TERM then KILL with ~2s grace (generic termination).
 fn terminate_exec_in_container(runtime: &PathBuf, container: &str, exec_id: &str, verbose: bool) {
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
+    std::thread::sleep(Duration::from_secs(2));
+    kill_in_container(runtime, container, exec_id, "KILL", verbose);
+}
+
+/// Disconnect-triggered termination: INT then KILL with ~2s grace.
+/// Adds a short pre-INT delay to let the shim post /signal first.
+fn disconnect_terminate_exec_in_container(
+    runtime: &PathBuf,
+    container: &str,
+    exec_id: &str,
+    verbose: bool,
+) {
+    if verbose {
+        eprintln!(
+            "aifo-coder: disconnect: sending INT then KILL to exec_id={}",
+            exec_id
+        );
+    }
+    // Small grace to allow shim's trap to POST /signal.
+    std::thread::sleep(Duration::from_millis(150));
+    kill_in_container(runtime, container, exec_id, "INT", verbose);
     std::thread::sleep(Duration::from_secs(2));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
@@ -773,7 +794,7 @@ fn handle_connection<S: Read + Write>(
 
         if write_failed {
             // Client disconnected: terminate process group in container and stop docker exec
-            terminate_exec_in_container(&ctx.runtime, &name, &exec_id, verbose);
+            disconnect_terminate_exec_in_container(&ctx.runtime, &name, &exec_id, verbose);
             let _ = child.kill();
             let _ = child.wait();
             // Mark watcher done and remove from registry
