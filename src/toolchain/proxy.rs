@@ -128,11 +128,11 @@ fn terminate_exec_in_container(runtime: &PathBuf, container: &str, exec_id: &str
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
-/// Build streaming docker exec spawn args: add -t and wrap with setsid+PGID script.
-fn build_streaming_exec_args(
+/// Build docker exec spawn args with setsid+PGID wrapper (use_tty controls -t).
+fn build_exec_args_with_wrapper(
     container_name: &str,
     exec_preview_args: &[String],
-    _exec_id: &str,
+    use_tty: bool,
 ) -> Vec<String> {
     let mut spawn_args: Vec<String> = Vec::new();
     let mut idx = None;
@@ -145,9 +145,7 @@ fn build_streaming_exec_args(
     let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
     // Up to and including container name
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
-    // Allocate a TTY for streaming to improve interactive flushing.
-    // Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation if it interferes with tooling.
-    let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+    // Allocate a TTY for streaming to improve interactive flushing when requested.
     if use_tty {
         spawn_args.insert(1, "-t".to_string());
     }
@@ -155,7 +153,7 @@ fn build_streaming_exec_args(
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
     let inner = shell_join(&user_slice);
     let script = format!(
-        "set -e; d=\"/home/coder/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; if [ -z \"$d\" ]; then exec {inner} 2>&1; fi; mkdir -p \"$d\"; ( setsid sh -lc \"exec {inner} 2>&1\" ) & pg=$!; printf \"%s\" \"$pg\" > \"$d/pgid\"; wait \"$pg\"",
+        "set -e; d=\"/home/coder/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; if [ -z \"$d\" ]; then exec {inner} 2>&1; fi; mkdir -p \"$d\"; ( setsid sh -lc \"exec {inner} 2>&1\" ) & pg=$!; printf \"%s\" \"$pg\" > \"$d/pgid\"; wait \"$pg\"; rm -rf \"$d\" || true",
         inner = inner
     );
     spawn_args.push("sh".to_string());
@@ -654,7 +652,8 @@ fn handle_connection<S: Read + Write>(
         }
         let started = std::time::Instant::now();
 
-        let spawn_args = build_streaming_exec_args(&name, &exec_preview_args, &exec_id);
+        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+        let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
             cmd.arg(a);
@@ -672,6 +671,33 @@ fn handle_connection<S: Read + Write>(
                 return;
             }
         };
+
+        // Optional max-runtime escalation watcher
+        let done = Arc::new(AtomicBool::new(false));
+        if timeout_secs > 0 {
+            let done_cl = done.clone();
+            let runtime_cl = ctx.runtime.clone();
+            let container_cl = name.clone();
+            let exec_id_cl = exec_id.clone();
+            let verbose_cl = verbose;
+            std::thread::spawn(move || {
+                for (sig, dur) in [("INT", timeout_secs), ("TERM", 5), ("KILL", 5)].into_iter() {
+                    let mut secs = dur;
+                    while secs > 0 {
+                        if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
+                            return;
+                        }
+                        let step = secs.min(1);
+                        std::thread::sleep(Duration::from_secs(step));
+                        secs -= step;
+                    }
+                    if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
+                        return;
+                    }
+                    kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
+                }
+            });
+        }
 
         // Send prelude after successful spawn (include ExecId)
         respond_chunked_prelude(stream, Some(&exec_id));
@@ -729,13 +755,15 @@ fn handle_connection<S: Read + Write>(
             terminate_exec_in_container(&ctx.runtime, &name, &exec_id, verbose);
             let _ = child.kill();
             let _ = child.wait();
-            // Remove from registry
+            // Mark watcher done and remove from registry
+            done.store(true, std::sync::atomic::Ordering::SeqCst);
             let _ = exec_registry.remove(&exec_id);
             return;
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
-        // Remove from registry
+        // Mark watcher done and remove from registry
+        done.store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = exec_registry.remove(&exec_id);
         log_request_result(verbose, &tool, kind, code, &started);
         respond_chunked_trailer(stream, code);
@@ -748,8 +776,9 @@ fn handle_connection<S: Read + Write>(
     }
     let started = std::time::Instant::now();
 
+    let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, false);
     let mut cmd = Command::new(&ctx.runtime);
-    for a in &exec_preview_args[1..] {
+    for a in &spawn_args {
         cmd.arg(a);
     }
     cmd.stdout(Stdio::piped());
@@ -765,6 +794,33 @@ fn handle_connection<S: Read + Write>(
             return;
         }
     };
+
+    // Optional max-runtime escalation watcher
+    let done = Arc::new(AtomicBool::new(false));
+    if timeout_secs > 0 {
+        let done_cl = done.clone();
+        let runtime_cl = ctx.runtime.clone();
+        let container_cl = name.clone();
+        let exec_id_cl = exec_id.clone();
+        let verbose_cl = verbose;
+        std::thread::spawn(move || {
+            for (sig, dur) in [("INT", timeout_secs), ("TERM", 5), ("KILL", 5)].into_iter() {
+                let mut secs = dur;
+                while secs > 0 {
+                    if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
+                        return;
+                    }
+                    let step = secs.min(1);
+                    std::thread::sleep(Duration::from_secs(step));
+                    secs -= step;
+                }
+                if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
+                kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
+            }
+        });
+    }
 
     // Drain stdout/stderr concurrently
     let out_buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
@@ -810,6 +866,7 @@ fn handle_connection<S: Read + Write>(
 
     // Wait for child without hard timeout; join output threads
     let st = child.wait();
+    done.store(true, std::sync::atomic::Ordering::SeqCst);
     let final_code: i32 = st.ok().and_then(|s| s.code()).unwrap_or(1);
 
     if let Some(h) = h_out {
