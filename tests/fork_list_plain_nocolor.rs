@@ -101,7 +101,10 @@ fn test_fork_list_plain_output_no_color_single_repo() {
         "{}\n  sid-old  panes=1  age=10d  base=main  (stale)\n  sid-new  panes=1  age=2d  base=dev",
         header
     );
-    assert_eq!(got, expected, "single-repo plain output should match exactly");
+    assert_eq!(
+        got, expected,
+        "single-repo plain output should match exactly"
+    );
 }
 
 #[test]
