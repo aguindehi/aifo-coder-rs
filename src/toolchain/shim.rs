@@ -82,9 +82,12 @@ send_signal() {
   scmd+=(--data-urlencode "exec_id=$exec_id" --data-urlencode "signal=$sig" "$SURL")
   "${scmd[@]}" >/dev/null 2>&1 || true
 }
-trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; elif [ $sigint_count -eq 2 ]; then send_signal TERM; else send_signal KILL; fi' INT
-trap 'send_signal TERM' TERM
-trap 'send_signal HUP' HUP
+# Best-effort temp cleanup; safe if $tmp is empty/unset
+cleanup() { [ -n "$tmp" ] && rm -rf "$tmp"; }
+trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; exit 130; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; exit 143; else send_signal KILL; cleanup; exit 137; fi' INT
+trap 'send_signal TERM; cleanup; exit 143' TERM
+trap 'send_signal HUP; cleanup; exit 129' HUP
+trap 'cleanup' EXIT
 
 if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
   echo "aifo-shim: tool=$tool cwd=$cwd exec_id=$exec_id" >&2
