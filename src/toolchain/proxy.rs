@@ -413,7 +413,8 @@ fn handle_connection<S: Read + Write>(
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
-            match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
+            let notif_to = if timeout_secs == 0 { 5 } else { timeout_secs };
+            match notifications::notifications_handle_request(&argv, verbose, notif_to) {
                 Ok((status_code, body_out)) => {
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -437,7 +438,8 @@ fn handle_connection<S: Read + Write>(
 
         match auth_res {
             auth::AuthResult::Authorized { proto: _ } => {
-                match notifications::notifications_handle_request(&argv, verbose, timeout_secs) {
+                let notif_to = if timeout_secs == 0 { 5 } else { timeout_secs };
+                match notifications::notifications_handle_request(&argv, verbose, notif_to) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
