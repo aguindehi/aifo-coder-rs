@@ -23,6 +23,7 @@ pub(crate) enum Method {
 pub(crate) enum Endpoint {
     Exec,
     Notifications,
+    Signal,
 }
 
 /// Simple case-insensitive header map (keys lowercased)
@@ -135,6 +136,7 @@ pub(crate) fn classify_endpoint(path_lc: &str) -> Option<Endpoint> {
     match path_lc {
         "/exec" => Some(Endpoint::Exec),
         "/notify" => Some(Endpoint::Notifications),
+        "/signal" => Some(Endpoint::Signal),
         _ => None,
     }
 }
