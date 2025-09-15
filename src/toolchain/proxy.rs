@@ -113,12 +113,21 @@ fn kill_in_container(
     if verbose {
         eprintln!("aifo-coder: docker: {}", shell_join(&args));
     }
+    // First attempt
     let mut cmd = Command::new(runtime);
     for a in &args[1..] {
         cmd.arg(a);
     }
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
     let _ = cmd.status();
+    // Brief retry to mitigate transient docker/kill issues
+    std::thread::sleep(Duration::from_millis(100));
+    let mut cmd2 = Command::new(runtime);
+    for a in &args[1..] {
+        cmd2.arg(a);
+    }
+    cmd2.stdout(Stdio::null()).stderr(Stdio::null());
+    let _ = cmd2.status();
 }
 
 /// TERM then KILL with ~2s grace.
@@ -681,6 +690,7 @@ fn handle_connection<S: Read + Write>(
             let exec_id_cl = exec_id.clone();
             let verbose_cl = verbose;
             std::thread::spawn(move || {
+                let mut accum: u64 = 0;
                 for (sig, dur) in [("INT", timeout_secs), ("TERM", 5), ("KILL", 5)].into_iter() {
                     let mut secs = dur;
                     while secs > 0 {
@@ -690,9 +700,16 @@ fn handle_connection<S: Read + Write>(
                         let step = secs.min(1);
                         std::thread::sleep(Duration::from_secs(step));
                         secs -= step;
+                        accum = accum.saturating_add(step);
                     }
                     if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
                         return;
+                    }
+                    if verbose_cl {
+                        eprintln!(
+                            "aifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                            sig, exec_id_cl, accum
+                        );
                     }
                     kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
                 }
@@ -804,6 +821,7 @@ fn handle_connection<S: Read + Write>(
         let exec_id_cl = exec_id.clone();
         let verbose_cl = verbose;
         std::thread::spawn(move || {
+            let mut accum: u64 = 0;
             for (sig, dur) in [("INT", timeout_secs), ("TERM", 5), ("KILL", 5)].into_iter() {
                 let mut secs = dur;
                 while secs > 0 {
@@ -813,9 +831,16 @@ fn handle_connection<S: Read + Write>(
                     let step = secs.min(1);
                     std::thread::sleep(Duration::from_secs(step));
                     secs -= step;
+                    accum = accum.saturating_add(step);
                 }
                 if done_cl.load(std::sync::atomic::Ordering::SeqCst) {
                     return;
+                }
+                if verbose_cl {
+                    eprintln!(
+                        "aifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                        sig, exec_id_cl, accum
+                    );
                 }
                 kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
             }
@@ -904,4 +929,48 @@ fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
     ["rust", "node", "python", "c-cpp", "go"]
         .iter()
         .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_exec_args_with_wrapper_v1_like_includes_pgid_file_and_no_tty() {
+        let container = "tc-container";
+        // Minimal plausible preview: docker exec ... <container> <user-cmd...>
+        let exec_preview_args: Vec<String> = vec![
+            "docker".into(),
+            "exec".into(),
+            "-w".into(),
+            "/workspace".into(),
+            container.into(),
+            "echo".into(),
+            "hello".into(),
+        ];
+        let out = build_exec_args_with_wrapper(container, &exec_preview_args, false);
+        // Should not include -t when use_tty=false
+        assert!(
+            !out.iter().any(|s| s == "-t"),
+            "unexpected -t (tty) in non-streaming wrapper args: {:?}",
+            out
+        );
+        // Should end with "sh -c <script>" and script must contain exec dir + pgid file + setsid
+        assert!(
+            out.iter().any(|s| s == "sh") && out.iter().any(|s| s == "-c"),
+            "wrapper should invoke sh -c, got: {:?}",
+            out
+        );
+        let script = out.last().expect("script arg");
+        assert!(
+            script.contains("/.aifo-exec/${AIFO_EXEC_ID:-}") && script.contains("/pgid"),
+            "wrapper script should create pgid file under exec dir, got: {}",
+            script
+        );
+        assert!(
+            script.contains("setsid"),
+            "wrapper script should use setsid to create a new process group, got: {}",
+            script
+        );
+    }
 }
