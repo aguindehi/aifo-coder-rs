@@ -1,13 +1,17 @@
 /*!
 Proxy module: dispatcher, accept loop, and public toolexec_start_proxy API.
 
-Implements Phase 2 steady-state architecture:
+Implements v3 signal propagation and timeout model:
 - Listener setup (TCP/unix), accept loop with backoff.
 - Per-connection dispatcher using http::read_http_request + http::classify_endpoint.
 - Centralized auth/proto via auth::validate_auth_and_proto.
-- Notifications policy per spec, including optional NOAUTH bypass.
+- /signal endpoint: authenticated signal forwarding by ExecId.
+- ExecId registry and streaming prelude includes X-Exec-Id (v2).
+- Setsid+PGID wrapper applied to v1 and v2 execs; PGID file at $HOME/.aifo-exec/<ExecId>/pgid.
+- Disconnect-triggered termination for v2 (TERM -> KILL).
+- No default proxy-imposed timeout for tool execs; optional max-runtime escalation (INT at T, TERM at T+5s, KILL at T+10s).
+- Notifications policy per spec with independent short timeout.
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
-- Buffered timeout kills child to avoid orphans.
 */
 use std::collections::HashMap;
 use std::env as std_env;
