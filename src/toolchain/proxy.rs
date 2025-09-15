@@ -123,17 +123,11 @@ fn kill_in_container(
 }
 
 /// TERM then KILL with ~2s grace.
-fn terminate_exec_in_container(
-    runtime: &PathBuf,
-    container: &str,
-    exec_id: &str,
-    verbose: bool,
-) {
+fn terminate_exec_in_container(runtime: &PathBuf, container: &str, exec_id: &str, verbose: bool) {
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
     std::thread::sleep(Duration::from_secs(2));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
-
 
 /// Build streaming docker exec spawn args: add -t and wrap with setsid+PGID script.
 fn build_streaming_exec_args(
@@ -374,7 +368,9 @@ fn handle_connection<S: Read + Write>(
     // Endpoint classification and method enforcement
     let endpoint = http::classify_endpoint(&req.path_lc);
     match endpoint {
-        Some(http::Endpoint::Exec) | Some(http::Endpoint::Notifications) | Some(http::Endpoint::Signal) => {
+        Some(http::Endpoint::Exec)
+        | Some(http::Endpoint::Notifications)
+        | Some(http::Endpoint::Signal) => {
             if req.method != http::Method::Post {
                 respond_plain(stream, "405 Method Not Allowed", 86, ERR_METHOD_NOT_ALLOWED);
                 let _ = stream.flush();
@@ -513,7 +509,9 @@ fn handle_connection<S: Read + Write>(
                 }
                 kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
                 // 204 No Content without exit code header
-                let _ = stream.write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                let _ = stream.write_all(
+                    b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
                 let _ = stream.flush();
                 return;
             }
