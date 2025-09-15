@@ -413,7 +413,11 @@ fn handle_connection<S: Read + Write>(
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
-            let notif_to = if timeout_secs == 0 { 5 } else { timeout_secs };
+            let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .filter(|&v| v > 0)
+                .unwrap_or_else(|| if timeout_secs == 0 { 5 } else { timeout_secs });
             match notifications::notifications_handle_request(&argv, verbose, notif_to) {
                 Ok((status_code, body_out)) => {
                     let header = format!(
@@ -438,7 +442,11 @@ fn handle_connection<S: Read + Write>(
 
         match auth_res {
             auth::AuthResult::Authorized { proto: _ } => {
-                let notif_to = if timeout_secs == 0 { 5 } else { timeout_secs };
+                let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
+                    .ok()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .filter(|&v| v > 0)
+                    .unwrap_or_else(|| if timeout_secs == 0 { 5 } else { timeout_secs });
                 match notifications::notifications_handle_request(&argv, verbose, notif_to) {
                     Ok((status_code, body_out)) => {
                         let header = format!(
