@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::fs;
 use std::io::{Read, Seek};
-use std::os::fd::{FromRawFd, RawFd};
+use std::os::fd::FromRawFd;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // Capture stdout to a temporary file (Unix-only; sufficient for CI matrix).
@@ -102,8 +102,8 @@ fn test_workspace_fork_list_json_multiple_repos_order_insensitive() {
     let repo_b_s = repo_b.display().to_string();
     assert_eq!(normalized[0].0, repo_a_s);
     assert_eq!(normalized[0].1, "sid-old-a");
-    assert_eq!(normalized[0].3, true, "repo A entry should be stale");
+    assert!(normalized[0].3, "repo A entry should be stale");
     assert_eq!(normalized[1].0, repo_b_s);
     assert_eq!(normalized[1].1, "sid-new-b");
-    assert_eq!(normalized[1].3, false, "repo B entry should not be stale");
+    assert!(!normalized[1].3, "repo B entry should not be stale");
 }
