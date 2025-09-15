@@ -143,7 +143,7 @@ fn disconnect_terminate_exec_in_container(
     verbose: bool,
 ) {
     // Always print a single disconnect line so the user sees it before returning to the agent
-    eprintln!("aifo-coder: disconnect");
+    eprintln!("\naifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
@@ -629,13 +629,13 @@ fn handle_connection<S: Read + Write>(
             full_args = vec!["./node_modules/.bin/tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("aifo-coder: proxy exec: tsc via local node_modules\r");
+                eprintln!("\naifo-coder: proxy exec: tsc via local node_modules");
             }
         } else {
             full_args = vec!["npx".to_string(), "tsc".to_string()];
             full_args.extend(argv.clone());
             if verbose {
-                eprintln!("aifo-coder: proxy exec: tsc via npx\r\n\r");
+                eprintln!("\naifo-coder: proxy exec: tsc via npx");
             }
         }
     } else {
@@ -662,20 +662,17 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        eprintln!(
-            "aifo-coder: proxy docker: {}\r",
-            shell_join(&exec_preview_args)
-        );
+        eprintln!("\naifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
     }
 
     if proto_v2 {
         // Streaming (v2)
         if verbose {
-            eprintln!("aifo-coder: proxy exec: proto=v2 (streaming)\r\n\r");
+            eprintln!("\naifo-coder: proxy exec: proto=v2 (streaming)");
         }
         let started = std::time::Instant::now();
 
-        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() == Some("1");
         let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
@@ -721,7 +718,7 @@ fn handle_connection<S: Read + Write>(
                     }
                     if verbose_cl {
                         eprintln!(
-                            "aifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                            "\naifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                             sig, exec_id_cl, accum
                         );
                     }
@@ -803,7 +800,7 @@ fn handle_connection<S: Read + Write>(
 
     // Buffered (v1)
     if verbose {
-        eprintln!("aifo-coder: proxy exec: proto=v1 (buffered)\r\n\r");
+        eprintln!("\naifo-coder: proxy exec: proto=v1 (buffered)");
     }
     let started = std::time::Instant::now();
 
@@ -852,7 +849,7 @@ fn handle_connection<S: Read + Write>(
                 }
                 if verbose_cl {
                     eprintln!(
-                        "aifo-coder: max-runtime: sending {} to exec_id={} after {}s",
+                        "\naifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                         sig, exec_id_cl, accum
                     );
                 }
