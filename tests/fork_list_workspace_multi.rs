@@ -8,8 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 fn capture_stdout<F: FnOnce()>(f: F) -> String {
     use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
     unsafe {
-        let path =
-            std::ffi::CString::new("/tmp/aifo-coder-test-stdout-ws-multi.tmp").unwrap();
+        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout-ws-multi.tmp").unwrap();
         let mode = std::ffi::CString::new("w+").unwrap();
         let file = fopen(path.as_ptr(), mode.as_ptr());
         assert!(!file.is_null(), "failed to open temp file for capture");
@@ -91,19 +90,10 @@ fn test_workspace_fork_list_json_multiple_repos_order_insensitive() {
     let mut normalized: Vec<(String, String, u64, bool)> = Vec::new();
     for row in arr {
         let obj = row.as_object().expect("obj");
-        let repo_root = obj
-            .get("repo_root")
-            .and_then(|x| x.as_str())
-            .unwrap_or("");
+        let repo_root = obj.get("repo_root").and_then(|x| x.as_str()).unwrap_or("");
         let sid = obj.get("sid").and_then(|x| x.as_str()).unwrap_or("");
-        let created_at = obj
-            .get("created_at")
-            .and_then(|x| x.as_u64())
-            .unwrap_or(0);
-        let stale = obj
-            .get("stale")
-            .and_then(|x| x.as_bool())
-            .unwrap_or(false);
+        let created_at = obj.get("created_at").and_then(|x| x.as_u64()).unwrap_or(0);
+        let stale = obj.get("stale").and_then(|x| x.as_bool()).unwrap_or(false);
         normalized.push((repo_root.to_string(), sid.to_string(), created_at, stale));
     }
     normalized.sort_by(|a, b| a.0.cmp(&b.0));
