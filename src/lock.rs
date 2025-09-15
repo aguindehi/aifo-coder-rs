@@ -124,6 +124,10 @@ pub fn should_acquire_lock() -> bool {
 /// - Otherwise (not in a Git repo), legacy ordered candidates:
 ///   HOME/.aifo-coder.lock, XDG_RUNTIME_DIR/aifo-coder.lock, /tmp/aifo-coder.lock, CWD/.aifo-coder.lock
 pub fn candidate_lock_paths() -> Vec<PathBuf> {
+    // Capture the current working directory immediately to avoid races with other tests
+    // that may call set_current_dir() in parallel.
+    let initial_cwd = env::current_dir().ok();
+
     if let Some(root) = crate::repo_root() {
         let mut paths = Vec::new();
         // Preferred: in-repo lock (if writable, acquire will succeed)
@@ -153,7 +157,7 @@ pub fn candidate_lock_paths() -> Vec<PathBuf> {
         }
     }
     paths.push(PathBuf::from("/tmp/aifo-coder.lock"));
-    if let Ok(cwd) = env::current_dir() {
+    if let Some(cwd) = initial_cwd.clone().or_else(|| env::current_dir().ok()) {
         paths.push(cwd.join(".aifo-coder.lock"));
     }
     paths

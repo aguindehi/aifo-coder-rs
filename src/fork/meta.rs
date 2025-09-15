@@ -1,3 +1,4 @@
+use crate as aifo_coder;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -37,16 +38,15 @@ pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> i
     } else if let Some(snap) = m.snapshot_sha {
         snap.to_string()
     } else {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("rev-parse")
-            .arg("--verify")
-            .arg(m.base_ref_or_sha)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok();
+        let out = {
+            let mut cmd = aifo_coder::fork::fork_impl_git::git_cmd(Some(repo_root));
+            cmd.arg("rev-parse")
+                .arg("--verify")
+                .arg(m.base_ref_or_sha)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null());
+            cmd.output().ok()
+        };
         if let Some(o) = out {
             if o.status.success() {
                 String::from_utf8_lossy(&o.stdout).trim().to_string()
@@ -135,8 +135,42 @@ pub fn update_panes_created(
     fs::write(meta_path, s)
 }
 
+pub fn append_fields_compact(repo_root: &Path, sid: &str, fields_kv: &str) -> io::Result<()> {
+    let session_dir = aifo_coder::fork_session_dir(repo_root, sid);
+    let meta_path = session_dir.join(".meta.json");
+
+    // Ensure session directory exists (best-effort)
+    let _ = fs::create_dir_all(&session_dir);
+
+    match fs::read_to_string(&meta_path) {
+        Ok(s) => {
+            if let Some(idx) = s.rfind('}') {
+                let mut out = String::from(&s[..idx]);
+                if !out.trim_end().ends_with('{') {
+                    out.push_str(", ");
+                }
+                out.push_str(fields_kv);
+                out.push('}');
+                fs::write(&meta_path, out)?;
+            } else {
+                // Malformed existing content; replace with minimal valid JSON
+                let out = format!("{{{}}}", fields_kv);
+                fs::write(&meta_path, out)?;
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Create a minimal metadata file if it doesn't exist yet
+            let out = format!("{{{}}}", fields_kv);
+            fs::write(&meta_path, out)?;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 // Minimal JSON string parsers for specific fields
-fn extract_value_string(text: &str, key: &str) -> Option<String> {
+pub fn extract_value_string(text: &str, key: &str) -> Option<String> {
     let needle = format!("\"{}\":", key);
     let pos = text.find(&needle)?;
     let rest = text[pos + needle.len()..].trim_start();
@@ -154,7 +188,7 @@ fn extract_value_string(text: &str, key: &str) -> Option<String> {
     }
 }
 
-fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
+pub fn extract_value_u64(text: &str, key: &str) -> Option<u64> {
     let needle = format!("\"{}\":", key);
     let pos = text.find(&needle)?;
     let rest = &text[pos + needle.len()..];

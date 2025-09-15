@@ -1,3 +1,8 @@
+#![allow(clippy::module_name_repetitions)]
+//! Fork orchestrator for launching panes (tmux on Unix; Windows Terminal/PowerShell/Git Bash on Windows).
+//! This is binary-side code that leverages the public library facade (aifo_coder::*) and keeps
+//! user-visible behavior unchanged.
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -67,22 +72,16 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         }
     } else {
         // Warn if dirty but not including
-        if let Ok(out) = Command::new("git")
-            .arg("-C")
-            .arg(&repo_root)
-            .arg("status")
-            .arg("--porcelain=v1")
-            .arg("-uall")
-            .output()
+        let dirty = aifo_coder::fork_impl_git::git_status_porcelain(&repo_root)
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if dirty
+            && !aifo_coder::warn_prompt_continue_or_quit(&[
+                "working tree has uncommitted changes; they will not be included in the fork panes.",
+                "re-run with --fork-include-dirty to include them.",
+            ])
         {
-            if !out.stdout.is_empty()
-                && !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "working tree has uncommitted changes; they will not be included in the fork panes.",
-                    "re-run with --fork-include-dirty to include them.",
-                ])
-            {
-                return ExitCode::from(1);
-            }
+            return ExitCode::from(1);
         }
     }
 
@@ -91,22 +90,16 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         cli.fork_merging_strategy,
         aifo_coder::MergingStrategy::Octopus
     ) {
-        if let Ok(o) = Command::new("git")
-            .arg("-C")
-            .arg(&repo_root)
-            .arg("status")
-            .arg("--porcelain=v1")
-            .arg("-uall")
-            .output()
+        let dirty_oct = aifo_coder::fork_impl_git::git_status_porcelain(&repo_root)
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if dirty_oct
+            && !aifo_coder::warn_prompt_continue_or_quit(&[
+                "octopus merge requires a clean working tree in the original repository.",
+                "commit or stash your changes before proceeding, or merging will likely fail.",
+            ])
         {
-            if !o.stdout.is_empty()
-                && !aifo_coder::warn_prompt_continue_or_quit(&[
-                    "octopus merge requires a clean working tree in the original repository.",
-                    "commit or stash your changes before proceeding, or merging will likely fail.",
-                ])
-            {
-                return ExitCode::from(1);
-            }
+            return ExitCode::from(1);
         }
     }
     // Preflight: warn once about missing toolchains and allow abort
@@ -208,25 +201,23 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     let base_commit_sha_for_meta = if let Some(ref snap) = snapshot_sha {
         snap.clone()
     } else {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(&repo_root)
-            .arg("rev-parse")
+        let mut cmd = aifo_coder::fork_impl_git::git_cmd(Some(&repo_root));
+        cmd.arg("rev-parse")
             .arg("--verify")
             .arg(&base_ref_or_sha)
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok();
-        out.and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| base_commit_sha.clone())
+            .stderr(std::process::Stdio::null());
+        cmd.output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| base_commit_sha.clone())
     };
     // Shadow base_commit_sha so existing metadata builders pick the correct SHA
     let base_commit_sha = base_commit_sha_for_meta.clone();

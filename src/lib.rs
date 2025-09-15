@@ -2,6 +2,8 @@ mod apparmor;
 mod color;
 mod docker;
 mod fork;
+#[path = "fork/meta.rs"]
+pub mod fork_meta;
 #[path = "fork/strategy.rs"]
 mod fork_strategy;
 #[cfg(windows)]
