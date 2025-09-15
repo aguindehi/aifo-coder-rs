@@ -134,7 +134,6 @@ fn kill_in_container(
     let _ = cmd2.status();
 }
 
-
 /// Disconnect-triggered termination: INT then KILL with ~2s grace.
 /// Adds a short pre-INT delay to let the shim post /signal first.
 fn disconnect_terminate_exec_in_container(
