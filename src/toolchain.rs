@@ -60,7 +60,7 @@ fn log_request_result(
 ) {
     if verbose {
         eprintln!(
-            "\raifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r",
+            "\r\n\raifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r\n\r",
             tool,
             kind,
             code,
