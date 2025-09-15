@@ -38,16 +38,15 @@ pub fn write_initial_meta(repo_root: &Path, sid: &str, m: &SessionMeta<'_>) -> i
     } else if let Some(snap) = m.snapshot_sha {
         snap.to_string()
     } else {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("rev-parse")
-            .arg("--verify")
-            .arg(m.base_ref_or_sha)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok();
+        let out = {
+            let mut cmd = aifo_coder::fork::fork_impl_git::git_cmd(Some(repo_root));
+            cmd.arg("rev-parse")
+                .arg("--verify")
+                .arg(m.base_ref_or_sha)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null());
+            cmd.output().ok()
+        };
         if let Some(o) = out {
             if o.status.success() {
                 String::from_utf8_lossy(&o.stdout).trim().to_string()
