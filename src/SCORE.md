@@ -45,7 +45,7 @@ Test status: 227 passed, 24 skipped.
 - Performance: A-
   - Refactor is neutral; minor wins from centralized logic and reuse.
 - Testing: A
-  - 218 tests passing, 24 skipped; targeted unit tests added for critical paths.
+  - 227 tests passing, 24 skipped; targeted unit tests added for critical paths.
 
 Overall Grade: A
 
@@ -66,10 +66,9 @@ Overall Grade: A
 ## Recommendations / Next Steps
 
 1. Monitor CI across macOS, Windows, and Linux and expand test coverage where flaky behavior is observed (e.g., path canonicalization differences).
-2. Add further golden tests:
-   - fork_list plain output under forced color mode (set AIFO_CODER_COLOR=always).
-   - Workspace (--all-repos) with multiple repositories to verify deterministic ordering.
-3. Audit any remaining direct git spawns outside the fork modules and migrate to git_cmd/git_cmd_quiet if present (no behavior change).
-4. Keep module-level docs updated as refactors continue.
+2. Extend golden tests:
+   - Add a workspace (--all-repos) plain-output test under forced color mode (set AIFO_CODER_COLOR=always) to lock colorized formatting.
+3. Periodically audit and migrate any newly introduced direct git spawns outside fork modules to git_cmd/git_cmd_quiet to maintain consistency.
+4. Continue augmenting module-level docs in src/fork_impl/* and binary-side fork/* modules for onboarding and maintenance clarity.
 
 Shall I proceed with these next steps?
