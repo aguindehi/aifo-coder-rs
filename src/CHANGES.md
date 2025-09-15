@@ -1,5 +1,11 @@
 2025-09-15 00:00 User <user@example.com>
 
+QA: test suite green (230 passed, 24 skipped)
+
+- Verified all tests are green with latest changes.
+
+2025-09-15 00:00 User <user@example.com>
+
 Tests: add non-color plain goldens for single-repo and workspace
 
 - Added tests/fork_list_plain_nocolor.rs to lock non-color plain output for single-repo and workspace modes under non-TTY capture.
