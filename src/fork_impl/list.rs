@@ -75,11 +75,11 @@ fn format_row_json(
     )
 }
 
-pub(crate) fn fork_list_impl(
+pub(crate) fn fork_list_to_string_impl(
     repo_root: &Path,
     json: bool,
     all_repos: bool,
-) -> std::io::Result<i32> {
+) -> std::io::Result<String> {
     // Threshold for stale highlighting in list output (default 14d)
     let list_stale_days: u64 = env::var("AIFO_CODER_FORK_LIST_STALE_DAYS")
         .ok()
@@ -87,114 +87,107 @@ pub(crate) fn fork_list_impl(
         .unwrap_or(14);
 
     if all_repos {
-        // Optional workspace scan when AIFO_CODER_WORKSPACE_ROOT is set
-        if let Ok(ws) = env::var("AIFO_CODER_WORKSPACE_ROOT") {
-            let ws_path = Path::new(&ws);
-            if ws_path.is_dir() {
-                let mut any = false;
-                if json {
-                    let mut out = String::from("[");
-                    let mut first = true;
-                    if let Ok(rd) = fs::read_dir(ws_path) {
-                        for ent in rd.flatten() {
-                            let repo = ent.path();
-                            if !repo.is_dir() {
-                                continue;
-                            }
-                            let forks_dir = repo.join(".aifo-coder").join("forks");
-                            if !forks_dir.exists() {
-                                continue;
-                            }
-                            let rows = collect_rows(&repo, list_stale_days);
-                            for (sid, panes, created_at, age_days, base_label, stale) in rows {
-                                if !first {
-                                    out.push(',');
-                                }
-                                first = false;
-                                out.push_str(&format_row_json(
-                                    &repo,
-                                    &sid,
-                                    panes,
-                                    created_at,
-                                    age_days,
-                                    &base_label,
-                                    stale,
-                                ));
-                            }
-                        }
+        // Workspace scan requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory
+        let ws = env::var("AIFO_CODER_WORKSPACE_ROOT")
+            .map_err(|_| std::io::Error::other("workspace root env missing"))?;
+        let ws_path = Path::new(&ws);
+        if !ws_path.is_dir() {
+            return Err(std::io::Error::other(
+                "--all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.",
+            ));
+        }
+
+        if json {
+            let mut items: Vec<String> = Vec::new();
+            if let Ok(rd) = fs::read_dir(ws_path) {
+                for ent in rd.flatten() {
+                    let repo = ent.path();
+                    if !repo.is_dir() {
+                        continue;
                     }
-                    out.push(']');
-                    println!("{}", out);
-                } else {
-                    if let Ok(rd) = fs::read_dir(ws_path) {
-                        for ent in rd.flatten() {
-                            let repo = ent.path();
-                            if !repo.is_dir() {
-                                continue;
-                            }
-                            let forks_dir = repo.join(".aifo-coder").join("forks");
-                            if !forks_dir.exists() {
-                                continue;
-                            }
-                            let rows = collect_rows(&repo, list_stale_days);
-                            if rows.is_empty() {
-                                continue;
-                            }
-                            any = true;
-                            let use_color = crate::color_enabled_stdout();
-                            let header_path = format!("{}/.aifo-coder/forks", repo.display());
-                            let mut out = String::new();
-                            out.push_str(&format!(
-                                "{} {}\n",
-                                crate::paint(
-                                    use_color,
-                                    "\x1b[36;1m",
-                                    "aifo-coder: fork sessions under"
-                                ),
-                                crate::paint(use_color, "\x1b[34;1m", &header_path)
-                            ));
-                            for (sid, panes, _created_at, age_days, base_label, stale) in rows {
-                                let base_text = if use_color {
-                                    crate::paint(use_color, "\x1b[34;1m", &base_label)
-                                } else {
-                                    base_label.clone()
-                                };
-                                if stale {
-                                    let stale_text = if use_color {
-                                        crate::paint(use_color, "\x1b[33m", "(stale)")
-                                    } else {
-                                        "(stale)".to_string()
-                                    };
-                                    out.push_str(&format!(
-                                        "  {}  panes={}  age={}d  base={}  {}\n",
-                                        sid, panes, age_days, base_text, stale_text
-                                    ));
-                                } else {
-                                    out.push_str(&format!(
-                                        "  {}  panes={}  age={}d  base={}\n",
-                                        sid, panes, age_days, base_text
-                                    ));
-                                }
-                            }
-                            println!("{}", out);
-                        }
+                    let forks_dir = repo.join(".aifo-coder").join("forks");
+                    if !forks_dir.exists() {
+                        continue;
                     }
-                    if !any {
-                        println!(
-                            "aifo-coder: no fork sessions found under workspace {}",
-                            ws_path.display()
-                        );
+                    let rows = collect_rows(&repo, list_stale_days);
+                    for (sid, panes, created_at, age_days, base_label, stale) in rows {
+                        items.push(format_row_json(
+                            &repo,
+                            &sid,
+                            panes,
+                            created_at,
+                            age_days,
+                            &base_label,
+                            stale,
+                        ));
                     }
                 }
-                return Ok(0);
             }
-            // If workspace root is invalid, report error when --all-repos was requested
-            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
-            return Ok(1);
+            let out = format!("[{}]", items.join(","));
+            return Ok(out);
         } else {
-            // Missing env var: explicitly error when --all-repos is requested without workspace root
-            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
-            return Ok(1);
+            let mut blocks: Vec<String> = Vec::new();
+            let mut any = false;
+            if let Ok(rd) = fs::read_dir(ws_path) {
+                for ent in rd.flatten() {
+                    let repo = ent.path();
+                    if !repo.is_dir() {
+                        continue;
+                    }
+                    let forks_dir = repo.join(".aifo-coder").join("forks");
+                    if !forks_dir.exists() {
+                        continue;
+                    }
+                    let rows = collect_rows(&repo, list_stale_days);
+                    if rows.is_empty() {
+                        continue;
+                    }
+                    any = true;
+                    let use_color = crate::color_enabled_stdout();
+                    let header_path = format!("{}/.aifo-coder/forks", repo.display());
+                    let mut lines: Vec<String> = Vec::new();
+                    lines.push(format!(
+                        "{} {}",
+                        crate::paint(
+                            use_color,
+                            "\x1b[36;1m",
+                            "aifo-coder: fork sessions under"
+                        ),
+                        crate::paint(use_color, "\x1b[34;1m", &header_path)
+                    ));
+                    for (sid, panes, _created_at, age_days, base_label, stale) in rows {
+                        let base_text = if use_color {
+                            crate::paint(use_color, "\x1b[34;1m", &base_label)
+                        } else {
+                            base_label.clone()
+                        };
+                        if stale {
+                            let stale_text = if use_color {
+                                crate::paint(use_color, "\x1b[33m", "(stale)")
+                            } else {
+                                "(stale)".to_string()
+                            };
+                            lines.push(format!(
+                                "  {}  panes={}  age={}d  base={}  {}",
+                                sid, panes, age_days, base_text, stale_text
+                            ));
+                        } else {
+                            lines.push(format!(
+                                "  {}  panes={}  age={}d  base={}",
+                                sid, panes, age_days, base_text
+                            ));
+                        }
+                    }
+                    blocks.push(lines.join("\n"));
+                }
+            }
+            if !any {
+                return Ok(format!(
+                    "aifo-coder: no fork sessions found under workspace {}",
+                    ws_path.display()
+                ));
+            }
+            return Ok(blocks.join("\n"));
         }
     }
 
@@ -202,42 +195,36 @@ pub(crate) fn fork_list_impl(
     let rows = collect_rows(repo_root, list_stale_days);
     if rows.is_empty() {
         if json {
-            println!("[]");
+            return Ok("[]".to_string());
         } else {
             let base = repo_root.join(".aifo-coder").join("forks");
-            println!(
+            return Ok(format!(
                 "aifo-coder: no fork sessions found under {}",
                 base.display()
-            );
+            ));
         }
-        return Ok(0);
     }
 
     if json {
-        let mut out = String::from("[");
-        for (idx, (sid, panes, created_at, age_days, base_label, stale)) in rows.iter().enumerate()
-        {
-            if idx > 0 {
-                out.push(',');
-            }
-            out.push_str(&format_row_json(
+        let mut items: Vec<String> = Vec::new();
+        for (sid, panes, created_at, age_days, base_label, stale) in rows {
+            items.push(format_row_json(
                 repo_root,
-                sid,
-                *panes,
-                *created_at,
-                *age_days,
-                base_label,
-                *stale,
+                &sid,
+                panes,
+                created_at,
+                age_days,
+                &base_label,
+                stale,
             ));
         }
-        out.push(']');
-        println!("{}", out);
+        Ok(format!("[{}]", items.join(",")))
     } else {
         let use_color = crate::color_enabled_stdout();
         let header_path = format!("{}/.aifo-coder/forks", repo_root.display());
-        let mut out = String::new();
-        out.push_str(&format!(
-            "{} {}\n",
+        let mut lines: Vec<String> = Vec::new();
+        lines.push(format!(
+            "{} {}",
             crate::paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
             crate::paint(use_color, "\x1b[34;1m", &header_path)
         ));
@@ -253,20 +240,36 @@ pub(crate) fn fork_list_impl(
                 } else {
                     "(stale)".to_string()
                 };
-                out.push_str(&format!(
-                    "  {}  panes={}  age={}d  base={}  {}\n",
+                lines.push(format!(
+                    "  {}  panes={}  age={}d  base={}  {}",
                     sid, panes, age_days, base_text, stale_text
                 ));
             } else {
-                out.push_str(&format!(
-                    "  {}  panes={}  age={}d  base={}\n",
+                lines.push(format!(
+                    "  {}  panes={}  age={}d  base={}",
                     sid, panes, age_days, base_text
                 ));
             }
         }
-        println!("{}", out);
+        Ok(lines.join("\n"))
     }
-    Ok(0)
+}
+
+pub(crate) fn fork_list_impl(
+    repo_root: &Path,
+    json: bool,
+    all_repos: bool,
+) -> std::io::Result<i32> {
+    match fork_list_to_string_impl(repo_root, json, all_repos) {
+        Ok(s) => {
+            println!("{}", s);
+            Ok(0)
+        }
+        Err(_) => {
+            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            Ok(1)
+        }
+    }
 }
 
 #[cfg(test)]

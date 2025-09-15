@@ -1,43 +1,5 @@
 use std::fs;
-use std::io::{Read, Seek};
-use std::os::fd::{FromRawFd, RawFd};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-// Capture stdout for the duration of f, returning the captured UTF-8 string.
-// Unix-only; safe for our CI matrix (macOS/Linux).
-fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
-    unsafe {
-        // Open a temporary file
-        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout-ws.tmp").unwrap();
-        let mode = std::ffi::CString::new("w+").unwrap();
-        let file = fopen(path.as_ptr(), mode.as_ptr());
-        assert!(!file.is_null(), "failed to open temp file for capture");
-        let fd: RawFd = fileno(file);
-
-        // Duplicate current stdout
-        let stdout_fd = STDOUT_FILENO;
-        let saved = dup(stdout_fd);
-        assert!(saved >= 0, "dup(stdout) failed");
-
-        // Redirect stdout to file
-        assert!(dup2(fd, stdout_fd) >= 0, "dup2 failed");
-
-        // Run the function
-        f();
-
-        // Flush and restore stdout
-        fflush(std::ptr::null_mut());
-        assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
-
-        // Read back the file
-        let mut f = std::fs::File::from_raw_fd(fd);
-        let mut s = String::new();
-        f.rewind().ok();
-        f.read_to_string(&mut s).expect("read captured");
-        s
-    }
-}
 
 #[test]
 fn test_workspace_fork_list_json_golden_single_repo() {
@@ -80,11 +42,9 @@ fn test_workspace_fork_list_json_golden_single_repo() {
     )
     .unwrap();
 
-    // Capture stdout from public API for workspace JSON
-    let out = capture_stdout(|| {
-        // repo_root argument is ignored in --all-repos mode
-        let _ = aifo_coder::fork_list(ws.path(), true, true);
-    });
+    // Obtain JSON output string from public API for workspace mode
+    let out =
+        aifo_coder::fork_list_to_string(ws.path(), true, true).expect("fork_list_to_string");
     let got = out.trim();
 
     let repo_s = repo.display().to_string();
@@ -144,10 +104,9 @@ fn test_workspace_fork_list_plain_single_repo() {
     )
     .unwrap();
 
-    // Capture stdout from public API for workspace plain output
-    let out = capture_stdout(|| {
-        let _ = aifo_coder::fork_list(ws.path(), false, true);
-    });
+    // Obtain plain output string from public API for workspace mode
+    let out =
+        aifo_coder::fork_list_to_string(ws.path(), false, true).expect("fork_list_to_string");
     let got = out.trim();
 
     let header = format!(

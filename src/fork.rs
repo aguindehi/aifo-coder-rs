@@ -263,6 +263,14 @@ fn read_file_to_string(p: &Path) -> Option<String> {
 
 /* moved: use fork_impl_scan::secs_since_epoch */
 
+pub fn fork_list_to_string(
+    repo_root: &Path,
+    json: bool,
+    all_repos: bool,
+) -> std::io::Result<String> {
+    fork_impl_list::fork_list_to_string_impl(repo_root, json, all_repos)
+}
+
 /// List fork sessions under the current repository.
 /// Returns exit code (0 on success).
 pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> std::io::Result<i32> {
