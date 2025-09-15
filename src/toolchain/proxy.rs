@@ -134,12 +134,6 @@ fn kill_in_container(
     let _ = cmd2.status();
 }
 
-//// TERM then KILL with ~2s grace (generic termination).
-fn terminate_exec_in_container(runtime: &PathBuf, container: &str, exec_id: &str, verbose: bool) {
-    kill_in_container(runtime, container, exec_id, "TERM", verbose);
-    std::thread::sleep(Duration::from_secs(2));
-    kill_in_container(runtime, container, exec_id, "KILL", verbose);
-}
 
 /// Disconnect-triggered termination: INT then KILL with ~2s grace.
 /// Adds a short pre-INT delay to let the shim post /signal first.
