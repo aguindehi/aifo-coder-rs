@@ -1,5 +1,13 @@
 2025-09-15 00:00 User <user@example.com>
 
+Tests: add workspace plain-color golden; refine SCORE
+
+- Added tests/fork_list_workspace_plain_color.rs to lock colored plain output for --all-repos when AIFO_CODER_COLOR=always.
+- Updated SCORE.md test counts and refined recommendations for further golden scenarios (TTY vs non-TTY).
+- No functional changes; behavior remains identical.
+
+2025-09-15 00:00 User <user@example.com>
+
 QA: test suite green (227 passed, 24 skipped)
 
 - Verified all tests are green with latest changes.
