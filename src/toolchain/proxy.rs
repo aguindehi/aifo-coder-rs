@@ -36,7 +36,7 @@ use super::{auth, http, notifications};
 use super::{container_exists, select_kind_for_tool, sidecar_allowlist};
 
 use super::{
-    build_sidecar_exec_preview, log_parsed_request, log_request_result, random_token,
+    log_parsed_request, log_request_result, random_token,
     ERR_BAD_REQUEST, ERR_FORBIDDEN, ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED,
     ERR_UNSUPPORTED_PROTO,
 };
@@ -622,7 +622,7 @@ fn handle_connection<S: Read + Write>(
     // Register exec_id -> container
     exec_registry.insert(exec_id.clone(), name.clone());
 
-    let exec_preview_args = build_sidecar_exec_preview(
+    let exec_preview_args = sidecar::build_sidecar_exec_preview_with_exec_id(
         &name,
         if cfg!(unix) { uidgid } else { None },
         &pwd,

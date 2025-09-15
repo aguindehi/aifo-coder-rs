@@ -338,6 +338,16 @@ pub fn build_sidecar_run_preview(
     args
 }
 
+pub(crate) fn build_sidecar_exec_preview_with_exec_id(
+    name: &str,
+    uidgid: Option<(u32, u32)>,
+    pwd: &Path,
+    kind: &str,
+    user_args: &[String],
+) -> Vec<String> {
+    build_sidecar_exec_preview_with_exec_id(name, uidgid, pwd, kind, user_args, None)
+}
+
 pub fn build_sidecar_exec_preview(
     name: &str,
     uidgid: Option<(u32, u32)>,
@@ -616,7 +626,6 @@ pub fn toolchain_run(
         &pwd,
         sidecar_kind.as_str(),
         args,
-        None,
     );
     let exec_preview = shell_join(&exec_preview_args);
 
