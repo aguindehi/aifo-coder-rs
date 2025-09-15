@@ -134,8 +134,8 @@ fn kill_in_container(
     let _ = cmd2.status();
 }
 
-/// Disconnect-triggered termination: INT then KILL with ~2s grace.
-/// Adds a short pre-INT delay to let the shim post /signal first.
+/** Disconnect-triggered termination: INT then KILL with ~2s grace.
+Adds a short pre-INT delay to let the shim post /signal first. */
 fn disconnect_terminate_exec_in_container(
     runtime: &PathBuf,
     container: &str,
@@ -146,9 +146,9 @@ fn disconnect_terminate_exec_in_container(
     eprintln!("aifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
-    kill_in_container(runtime, container, exec_id, "INT", false);
+    kill_in_container(runtime, container, exec_id, "INT", verbose);
     std::thread::sleep(Duration::from_secs(2));
-    kill_in_container(runtime, container, exec_id, "KILL", false);
+    kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
 /// Build docker exec spawn args with setsid+PGID wrapper (use_tty controls -t).
