@@ -10,7 +10,7 @@ All internal flows under fork have been decomposed into cohesive private modules
 user-visible behavior remain unchanged, and a set of Phase-0 tests has been added to lock key
 behaviors. A small git helper was introduced to centralize the file:// protocol permission flag.
 
-Test status: 228 passed, 24 skipped.
+Test status: 230 passed, 24 skipped.
 
 ## Implementation status vs spec
 
@@ -57,7 +57,7 @@ Overall Grade: A
 
 ## Evidence
 
-- Tests: 228 passed, 24 skipped (make check).
+- Tests: 230 passed, 24 skipped (make check).
 - New tests:
   - tests/sanitize_label.rs
   - tests/repo_uses_lfs_quick.rs
@@ -67,8 +67,9 @@ Overall Grade: A
 
 1. Monitor CI across macOS, Windows, and Linux and expand test coverage where flaky behavior is observed (e.g., path canonicalization differences).
 2. Extend golden tests:
-   - Add TTY vs non-TTY variants for plain output to ensure stable color/no-color decisions.
-   - Add workspace (--all-repos) tests covering multiple repositories with forced color to lock formatting across repos.
+   - DONE: Added non-TTY plain-output goldens (single-repo and workspace).
+   - Add TTY vs non-TTY variants for plain output to ensure stable color/no-color decisions (TTY variant pending).
+   - DONE: Added workspace (--all-repos) tests covering multiple repositories and forced color formatting.
 3. Periodically audit and migrate any newly introduced direct git spawns outside fork modules to git_cmd/git_cmd_quiet to maintain consistency.
 4. Continue augmenting module-level docs in src/fork_impl/* and binary-side fork/* modules for onboarding and maintenance clarity.
 

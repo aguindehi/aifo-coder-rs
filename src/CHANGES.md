@@ -1,5 +1,12 @@
 2025-09-15 00:00 User <user@example.com>
 
+Tests: add non-color plain goldens for single-repo and workspace
+
+- Added tests/fork_list_plain_nocolor.rs to lock non-color plain output for single-repo and workspace modes under non-TTY capture.
+- Updated SCORE.md test counts and notes; kept behavior identical.
+
+2025-09-15 00:00 User <user@example.com>
+
 Tests: add workspace plain-color golden; refine SCORE
 
 - Added tests/fork_list_workspace_plain_color.rs to lock colored plain output for --all-repos when AIFO_CODER_COLOR=always.
