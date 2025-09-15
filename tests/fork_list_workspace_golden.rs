@@ -43,8 +43,7 @@ fn test_workspace_fork_list_json_golden_single_repo() {
     .unwrap();
 
     // Obtain JSON output string from public API for workspace mode
-    let out =
-        aifo_coder::fork_list_to_string(ws.path(), true, true).expect("fork_list_to_string");
+    let out = aifo_coder::fork_list_to_string(ws.path(), true, true).expect("fork_list_to_string");
     let got = out.trim();
 
     let repo_s = repo.display().to_string();
@@ -105,8 +104,7 @@ fn test_workspace_fork_list_plain_single_repo() {
     .unwrap();
 
     // Obtain plain output string from public API for workspace mode
-    let out =
-        aifo_coder::fork_list_to_string(ws.path(), false, true).expect("fork_list_to_string");
+    let out = aifo_coder::fork_list_to_string(ws.path(), false, true).expect("fork_list_to_string");
     let got = out.trim();
 
     let header = format!(

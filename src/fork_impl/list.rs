@@ -148,11 +148,7 @@ pub(crate) fn fork_list_to_string_impl(
                     let mut lines: Vec<String> = Vec::new();
                     lines.push(format!(
                         "{} {}",
-                        crate::paint(
-                            use_color,
-                            "\x1b[36;1m",
-                            "aifo-coder: fork sessions under"
-                        ),
+                        crate::paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
                         crate::paint(use_color, "\x1b[34;1m", &header_path)
                     ));
                     for (sid, panes, _created_at, age_days, base_label, stale) in rows {
