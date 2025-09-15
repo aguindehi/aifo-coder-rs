@@ -143,30 +143,40 @@ pub(crate) fn fork_list_impl(
                             any = true;
                             let use_color = crate::color_enabled_stdout();
                             let header_path = format!("{}/.aifo-coder/forks", repo.display());
-                            println!(
-                                "{} {}",
+                            let mut out = String::new();
+                            out.push_str(&format!(
+                                "{} {}\n",
                                 crate::paint(
                                     use_color,
                                     "\x1b[36;1m",
                                     "aifo-coder: fork sessions under"
                                 ),
                                 crate::paint(use_color, "\x1b[34;1m", &header_path)
-                            );
+                            ));
                             for (sid, panes, _created_at, age_days, base_label, stale) in rows {
-                                let base_col = crate::paint(use_color, "\x1b[34;1m", &base_label);
-                                if stale {
-                                    let stale_col = crate::paint(use_color, "\x1b[33m", "(stale)");
-                                    println!(
-                                        "  {}  panes={}  age={}d  base={}  {}",
-                                        sid, panes, age_days, base_col, stale_col
-                                    );
+                                let base_text = if use_color {
+                                    crate::paint(use_color, "\x1b[34;1m", &base_label)
                                 } else {
-                                    println!(
-                                        "  {}  panes={}  age={}d  base={}",
-                                        sid, panes, age_days, base_col
-                                    );
+                                    base_label.clone()
+                                };
+                                if stale {
+                                    let stale_text = if use_color {
+                                        crate::paint(use_color, "\x1b[33m", "(stale)")
+                                    } else {
+                                        "(stale)".to_string()
+                                    };
+                                    out.push_str(&format!(
+                                        "  {}  panes={}  age={}d  base={}  {}\n",
+                                        sid, panes, age_days, base_text, stale_text
+                                    ));
+                                } else {
+                                    out.push_str(&format!(
+                                        "  {}  panes={}  age={}d  base={}\n",
+                                        sid, panes, age_days, base_text
+                                    ));
                                 }
                             }
+                            println!("{}", out);
                         }
                     }
                     if !any {
@@ -225,26 +235,36 @@ pub(crate) fn fork_list_impl(
     } else {
         let use_color = crate::color_enabled_stdout();
         let header_path = format!("{}/.aifo-coder/forks", repo_root.display());
-        println!(
-            "{} {}",
+        let mut out = String::new();
+        out.push_str(&format!(
+            "{} {}\n",
             crate::paint(use_color, "\x1b[36;1m", "aifo-coder: fork sessions under"),
             crate::paint(use_color, "\x1b[34;1m", &header_path)
-        );
+        ));
         for (sid, panes, _created_at, age_days, base_label, stale) in rows {
-            let base_col = crate::paint(use_color, "\x1b[34;1m", &base_label);
-            if stale {
-                let stale_col = crate::paint(use_color, "\x1b[33m", "(stale)");
-                println!(
-                    "  {}  panes={}  age={}d  base={}  {}",
-                    sid, panes, age_days, base_col, stale_col
-                );
+            let base_text = if use_color {
+                crate::paint(use_color, "\x1b[34;1m", &base_label)
             } else {
-                println!(
-                    "  {}  panes={}  age={}d  base={}",
-                    sid, panes, age_days, base_col
-                );
+                base_label.clone()
+            };
+            if stale {
+                let stale_text = if use_color {
+                    crate::paint(use_color, "\x1b[33m", "(stale)")
+                } else {
+                    "(stale)".to_string()
+                };
+                out.push_str(&format!(
+                    "  {}  panes={}  age={}d  base={}  {}\n",
+                    sid, panes, age_days, base_text, stale_text
+                ));
+            } else {
+                out.push_str(&format!(
+                    "  {}  panes={}  age={}d  base={}\n",
+                    sid, panes, age_days, base_text
+                ));
             }
         }
+        println!("{}", out);
     }
     Ok(0)
 }
