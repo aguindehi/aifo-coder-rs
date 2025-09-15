@@ -149,17 +149,13 @@ fn disconnect_terminate_exec_in_container(
     exec_id: &str,
     verbose: bool,
 ) {
-    if verbose {
-        eprintln!(
-            "aifo-coder: disconnect: sending INT then KILL to exec_id={}",
-            exec_id
-        );
-    }
+    // Always print a single disconnect line so the user sees it before returning to the agent
+    eprintln!("aifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
-    kill_in_container(runtime, container, exec_id, "INT", verbose);
+    kill_in_container(runtime, container, exec_id, "INT", false);
     std::thread::sleep(Duration::from_secs(2));
-    kill_in_container(runtime, container, exec_id, "KILL", verbose);
+    kill_in_container(runtime, container, exec_id, "KILL", false);
 }
 
 /// Build docker exec spawn args with setsid+PGID wrapper (use_tty controls -t).
