@@ -36,9 +36,8 @@ use super::{auth, http, notifications};
 use super::{container_exists, select_kind_for_tool, sidecar_allowlist};
 
 use super::{
-    log_parsed_request, log_request_result, random_token,
-    ERR_BAD_REQUEST, ERR_FORBIDDEN, ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED,
-    ERR_UNSUPPORTED_PROTO,
+    log_parsed_request, log_request_result, random_token, ERR_BAD_REQUEST, ERR_FORBIDDEN,
+    ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
 };
 
 struct ProxyCtx {
