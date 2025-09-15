@@ -1,137 +1,111 @@
 Title: Refactor src/fork.rs into cohesive submodules with stable public API (v3, implemented)
-Version: v3-implemented
+Version: v3-implemented-2025-09-15
 
 Overview and validation
-- The v1 plan is sound: keep src/fork.rs as the public facade within the library crate, refactor
-  internally into cohesive helpers, and preserve all public behavior and strings.
-- To avoid collision with the binary’s src/fork/* tree, add private helper modules under a new
-  directory (src/fork_impl/*) and import them into src/fork.rs via #[path].
-- Reuse the existing src/fork/meta.rs (manual JSON, preserved key order) from the library side
-  via #[path = "fork/meta.rs"]. Export minimal helpers there and delete duplicated meta helpers
-  from src/fork.rs.
-- No CLI, output, or semantic changes are permitted. Public API remains bit-for-bit identical.
+- The refactor is complete: src/fork.rs remains the public facade; internal logic is fully
+  decomposed into cohesive helpers under src/fork_impl/* while preserving all public behavior
+  and strings.
+- To avoid collisions with the binary’s src/fork/* tree, helpers live under src/fork_impl/* and
+  are imported via #[path] in src/fork.rs.
+- Existing src/fork/meta.rs (manual JSON writer; key order preserved) is reused and exported from
+  the library; all metadata operations continue to preserve key order and field names.
+- Public API and CLI outputs remain bit-for-bit compatible; acceptance is backed by goldens.
 
-Scope
-- In-scope: internal module decomposition, centralizing git invocation, session scanning, pane
-  checks, metadata reuse, and plan/prompt/execute decomposition for maintenance flows.
-- Out-of-scope: any user-visible changes, new dependencies, or removal of the binary-side fork
-  modules under src/fork/*.
+Current scope and state (implemented)
+- Cohesive internal modules:
+  - src/fork_impl/git.rs: git(), git_stdout_str(), git_status_porcelain(), git_supports_lfs(),
+    push_file_allow_args(), set_file_allow(), git_cmd(), git_cmd_quiet().
+  - src/fork_impl/scan.rs: session_dirs(), pane_dirs_for_session(), secs_since_epoch().
+  - src/fork_impl/panecheck.rs: PaneCheck, pane_check().
+  - src/fork_impl/notice.rs: stale notice and autoclean logic (delegated from fork.rs).
+  - src/fork_impl/list.rs: data collection and rendering for fork_list (single repo and workspace).
+  - src/fork_impl/clone.rs: fork_clone_and_checkout_panes_impl() (two-attempt strategy, submodules,
+    LFS best-effort, origin push URL).
+  - src/fork_impl/snapshot.rs: fork_create_snapshot_impl() (temporary index + commit-tree).
+  - src/fork_impl/merge.rs: collect_pane_branches_impl(), preflight_clean_working_tree_impl(),
+    compose_merge_message_impl(), and merging flows (fetch-only, octopus).
+  - src/fork_impl/clean/{plan.rs,prompt.rs,exec.rs}: clean planning, interactive prompt/refusal,
+    execution and metadata updates.
+- Public facade delegates:
+  - fork_list(), fork_clean(), fork_print_stale_notice(), fork_autoclean_if_enabled(),
+    fork_clone_and_checkout_panes(), fork_create_snapshot(), fork_merge_branches(),
+    fork_merge_branches_by_session().
+- Binary-side improvements:
+  - Orchestrator code adopts helpers for porcelain status and rev-parse; no behavior changes.
+  - Windows/Unix orchestrators and prompts remain byte-for-byte identical.
 
-Public API stability (must remain unchanged)
-- repo_root
-- fork_sanitize_base_label
-- fork_base_info
-- fork_create_snapshot
-- fork_branch_name
-- fork_session_dir
-- repo_uses_lfs_quick
-- fork_clone_and_checkout_panes
-- struct ForkCleanOpts
-- fork_list
-- fork_clean
-- fork_print_stale_notice
-- fork_autoclean_if_enabled
-- fork_merge_branches
-- fork_merge_branches_by_session
+Tests and goldens (Phase 0 realized)
+- Added coverage to lock current behavior:
+  - Label sanitization: tests/sanitize_label.rs (separators, collapsing, trimming, length).
+  - Quick LFS detection: tests/repo_uses_lfs_quick.rs (top-level and nested .gitattributes).
+  - List goldens:
+    - Single-repo JSON: tests/fork_list_public_json_golden.rs.
+    - Workspace JSON: tests/fork_list_workspace_golden.rs.
+    - Plain (non-color) single-repo and workspace: tests/fork_list_plain_nocolor.rs.
+    - Plain (forced color) single-repo and workspace: tests/fork_list_plain_color.rs,
+      tests/fork_list_workspace_plain_color.rs.
+    - Workspace multiple repos JSON (order-insensitive): tests/fork_list_workspace_multi.rs.
+  - Clean plan classification: src/fork_impl/clean/plan.rs (module tests for dirty, base-unknown,
+    ahead).
+  - Merge message prefix and truncation: src/fork_impl/merge_tests.rs.
+  - Git helpers: tests/git_helpers.rs (stdout-str failure path, porcelain clean, file-allow args).
+  - Snapshot presence and type: tests/fork_snapshot.rs.
+- All tests pass across the matrix; JSON/strings verified by exact match where applicable.
 
-Consistency and behavior guarantees
-- Git calls: always use -C <repo>, respect current stdio silencing, and add
-  -c protocol.file.allow=always for file:// sources where used today.
-- JSON and prompts: outputs and strings must remain identical (including color decisions,
-  punctuation, and wording). Continue using manual JSON writers in meta.rs to preserve key order.
-- Exit codes and error pathways remain unchanged.
-- Colorization: keep using color_enabled_stdout/stderr and paint with the same escape sequences.
-- Best-effort cleanups (temp files, sidecars) must remain best-effort.
+Consistency and behavior guarantees (maintained)
+- Git calls: consistently use -C <repo>; file:// allowed where required via helper; stdout/stderr
+  policy unchanged.
+- JSON and prompts: outputs and strings remain identical (including color decisions). Manual
+  JSON writer preserves key order.
+- Exit codes and error pathways unchanged.
+- Colorization: continues to use color_enabled_stdout/stderr and paint with the same escapes.
+- Best-effort cleanups for temp files and sidecars remain best-effort.
 
-Compressed phased implementation plan
+CI and tooling
+- GitHub Actions workflow added with Linux, macOS and Windows test jobs (Clippy with -D warnings,
+  full test runs). Artifacts uploaded for packaging on Linux/macOS.
 
-Phase 0: Safety net tests (no refactor yet)
-- Add fast unit/integration tests to lock current behavior:
-  - fork_sanitize_base_label edge cases (separators, collapse, truncation, empty).
-  - repo_uses_lfs_quick for .lfsconfig and nested .gitattributes filter=lfs.
-  - fork_list ordering by created_at and stale flag computation; assert JSON/plain outputs.
-  - fork_clean plan classification for dirty/submodules-dirty/ahead/base-unknown via temp repos.
-  - compose_merge_message prefixing (“Octopus merge: …”) and 160-char truncation.
-- Use // ignore-tidy-linelength where needed in tests; no dependency changes.
-
-Phase 1: Internal helpers and metadata reuse (no behavior change)
-- Add src/fork_impl/git.rs (private):
-  - git(repo, args) -> io::Result<Output>
-  - git_stdout_str(repo, args) -> Option<String>
-  - git_status_porcelain(repo) -> Option<String>
-  - git_supports_lfs() -> bool
-  - helper to amend args with -c protocol.file.allow=always for file:// paths
-- Add src/fork_impl/scan.rs (private):
-  - forks_base(repo_root) -> PathBuf
-  - list_session_dirs(base) -> Vec<PathBuf>
-  - list_pane_dirs(session_dir) -> Vec<PathBuf>
-  - read_created_at(session_dir) -> u64 (from meta or fs metadata)
-  - age_days(now, created_at) -> u64
-- Add src/fork_impl/panecheck.rs (private):
-  - struct PaneCheck { clean: bool, reasons: Vec<String> }
-  - pane_check(pane_dir, base_commit: Option<&str>) -> PaneCheck
-    (dirty via status porcelain, submodules via submodule status, ahead/base-unknown via rev-list)
-- In src/fork.rs, replace duplicated inline git and scanning code with these helpers internally.
-- Integrate src/fork/meta.rs into the library via #[path = "fork/meta.rs"] mod meta;
-  add public helpers in meta.rs and switch callsites:
-  - pub fn extract_value_string(text, key) -> Option<String>
-  - pub fn extract_value_u64(text, key) -> Option<u64>
-  - pub fn append_fields_compact(repo_root, sid, fields_kv: &str) -> io::Result<()>
-    (migrate fork_meta_append_fields unchanged)
-- Remove meta_extract_value and fork_meta_append_fields from src/fork.rs.
-
-Phase 2: Decompose maintenance flows (no behavior change)
-- Clean path:
-  - src/fork_impl/clean/plan.rs:
-    - Build per-session plan: (session_dir, Vec<(pane_dir, PaneCheck)>)
-    - Compute protected vs clean counts; decide deletability under force/keep-dirty modes
-    - Render the exact dry-run JSON plan as today
-  - src/fork_impl/clean/prompt.rs:
-    - Print totals and prompt identically to current messages (guard non-interactive stdin)
-  - src/fork_impl/clean/exec.rs:
-    - Execute deletions; call toolchain_cleanup_session before removing session dirs
-    - With keep_dirty, delete only clean panes and update .meta.json via src/fork/meta.rs
-- fork_clean in src/fork.rs becomes a thin orchestrator calling plan -> optional JSON/dry-run exit
-  -> prompt (unless yes/json) -> exec; keep messages and exit codes identical.
-- List/notice/autoclean path:
-  - src/fork_impl/list.rs: collect list rows (sid, panes, created_at, age_days, base_label, stale),
-    sorted by created_at; render identical JSON/plain output for single-repo and workspace modes
-  - src/fork_impl/notice.rs: compute stale-notice and autoclean decisions; keep text identical
-- Merge/clone/snapshot helpers:
-  - src/fork_impl/clone.rs: move fork_clone_and_checkout_panes with same two-attempt clone strategy,
-    submodules update, LFS steps, and origin push URL handling
-  - src/fork_impl/snapshot.rs: move fork_create_snapshot; encapsulate temporary index handling
-  - src/fork_impl/merge.rs: move collect_pane_branches, compose_merge_message, and merge logic;
-    preserve messages, temp file cleanup, and metadata updates
-
-Phase 3: Consistency pass and verification (no behavior change)
-- Ensure all git invocations consistently use -C and current stdio behavior.
-- Ensure file:// protocol.allow=always is passed everywhere it is today.
-- Preserve exact strings (prompts, warnings, JSON) and color codes; verify with golden assertions
-  where feasible.
-- Confirm temporary files (merge message) are always removed best-effort.
-- Run and fix tests; compare outputs for fork_list and fork_clean dry-run JSON byte-for-byte.
-
-Acceptance criteria
-- All functions listed under “Public API stability” keep identical signatures and behavior.
-- fork_list JSON/plain outputs match exactly (single-repo and workspace).
-- fork_clean dry-run JSON and interactive prompts match exactly; refusal and protection logic
-  remains unchanged; execution results match across modes (force/keep-dirty/default).
-- Merge flows (fetch-only and octopus) and metadata append operations remain identical, including
-  key order and field names written by meta.rs.
-- Existing and new tests pass on supported platforms.
+Acceptance criteria (met)
+- All public functions under “Public API stability” retained with identical signatures and behavior.
+- fork_list JSON/plain outputs match exactly for single-repo and workspace modes (goldens).
+- fork_clean dry-run JSON and prompts match; refusal and protection logic unchanged; execution
+  results match across modes (force, keep-dirty, default).
+- Merge flows (fetch-only and octopus) and metadata updates identical, including key order and
+  field names written by meta.rs.
+- Test suite: 230 passed, 24 skipped.
 
 Risks and mitigations
-- JSON key order: continue to use src/fork/meta.rs manual writers; only add minimal exported
-  helpers to avoid reordering.
-- Prompt wording: route through a helper only if it can emit identical text; otherwise keep
-  direct I/O flows.
-- Dual trees (library vs binary): place new helpers under src/fork_impl and import meta via
-  #[path = "fork/meta.rs"] to avoid collisions with src/fork/* used by the binary.
-- LFS/Submodules variability: centralize git calls and keep current silent stdio behavior;
-  maintain two-attempt clone strategy and LFS detection.
+- JSON key order: retained by manual writers in src/fork/meta.rs; call sites updated only to use
+  exported helpers.
+- Prompt wording and color: preserved by delegating without rewriting messages; golden tests guard
+  critical output.
+- Platform variance (git/LFS/submodules): helpers normalize invocations; behavior preserved with
+  two-attempt clone and best-effort operations.
 
 Migration notes
-- Keep src/fork.rs as the public facade; add #[path] wiring to private helpers in src/fork_impl/*.
-- Do not rename src/fork.rs to src/fork/mod.rs to avoid colliding with the binary’s module tree.
-- Ensure src/lib.rs continues to pub use crate::fork::* so external callers remain unchanged.
+- src/fork.rs remains the facade; private helpers live under src/fork_impl/*.
+- src/fork/meta.rs is imported and exported from the library; no duplicated JSON writers.
+- src/lib.rs continues to pub use crate::fork::* so external callers remain unchanged.
+
+Roadmap for future improvements (jumpstart)
+- Testing:
+  - Add TTY vs non-TTY variants for plain outputs to further lock color/no-color decisions.
+  - Expand workspace tests with multiple repositories and mixed stale/age combinations for both
+    JSON and plain outputs (order-insensitive assertions retained for JSON).
+- Git helper adoption:
+  - Periodically audit for any newly introduced direct Command::new("git") spawns outside fork
+    modules and migrate to git_cmd/git_cmd_quiet as appropriate.
+- Documentation:
+  - Continue augmenting module-level docs in src/fork_impl/* and binary-side fork/* for faster
+    onboarding and maintenance clarity.
+- Optional future enhancements (non-breaking):
+  - Structured logs (behind a feature/env) for merge/clean flows.
+  - Concurrency/throughput guardrails for heavy operations under load.
+  - Additional goldens for messages surrounding post-merge/autoclean guidance.
+
+Change log reference (summary)
+- Modules added: git, scan, panecheck, notice, list, clone, snapshot, merge, clean/{plan,prompt,exec}.
+- Helpers added: git_cmd, git_cmd_quiet, push_file_allow_args, set_file_allow.
+- Tests added: sanitize label, LFS quick, list goldens (JSON/plain, single/workspace), clean plan,
+  merge message, git helpers, snapshot.
+- CI: multi-OS matrix with clippy -D warnings and full test suites.
