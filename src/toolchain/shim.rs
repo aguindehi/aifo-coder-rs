@@ -214,5 +214,36 @@ exit "$ec"
             fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
         }
     }
+
+    // Provide a 'sh' wrapper that ensures transient shells exit after running a command.
+    // This prevents dropping into an interactive shell after '/run ...' completes or is interrupted.
+    // Opt-out by setting AIFO_SH_WRAP_DISABLE=1 inside the agent container.
+    let sh_wrap = r#"#!/bin/sh
+# aifo-coder sh wrapper: auto-exit after -c/-lc commands to avoid lingering shells.
+# Opt-out: AIFO_SH_WRAP_DISABLE=1
+if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then
+  exec /bin/sh "$@"
+fi
+
+# When invoked as sh -c "cmd" [...] or sh -lc "cmd" [...],
+# append '; exit' so the shell terminates after the command finishes.
+if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then
+  flag="$1"
+  cmd="$2"
+  shift 2
+  exec /bin/sh "$flag" "$cmd; exit" "$@"
+fi
+
+# Fallback: just chain to real /bin/sh
+exec /bin/sh "$@"
+"#;
+    let sh_path = dir.join("sh");
+    fs::write(&sh_path, sh_wrap)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&sh_path, fs::Permissions::from_mode(0o755))?;
+    }
+
     Ok(())
 }
