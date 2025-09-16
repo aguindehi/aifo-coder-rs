@@ -178,6 +178,20 @@ fn main() {
         {
             exit_code = 0;
         }
+        // In verbose mode, inform user and give proxy logs a brief moment to flush before exiting.
+        if env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("aifo-coder: disconnect, waiting for process termination...");
+            let wait_secs: u64 = env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(1);
+            if wait_secs > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(wait_secs));
+            }
+            eprintln!("aifo-coder: terminating now");
+            // Ensure the agent prompt appears on a fresh, clean line
+            eprintln!();
+        }
     }
     process::exit(exit_code);
 }

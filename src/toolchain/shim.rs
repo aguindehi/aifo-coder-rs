@@ -182,8 +182,23 @@ fi
 
 ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
 : # body streamed directly by curl
-# If the HTTP stream disconnected (e.g., Ctrl-C) or header is missing, terminate parent shell too.
+# If the HTTP stream disconnected (e.g., Ctrl-C) or header is missing, give proxy logs a moment
+# to flush (verbose mode), then terminate the transient parent shell to avoid lingering prompts.
 if [ "$disconnected" -ne 0 ] || [ -z "$ec" ]; then
+  if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+    echo "aifo-coder: disconnect, waiting for process termination..." >&2
+    wait_secs="${AIFO_SHIM_DISCONNECT_WAIT_SECS:-1}"
+    case "$wait_secs" in
+      '' ) wait_secs=1 ;;
+      *[!0-9]* ) wait_secs=1 ;;
+    esac
+    if [ "$wait_secs" -gt 0 ]; then
+      sleep "$wait_secs"
+    fi
+    echo "aifo-coder: terminating now" >&2
+    # Ensure the agent prompt appears on a fresh, clean line
+    echo >&2
+  fi
   kill_parent_shell_if_interactive
 fi
 # Resolve exit code: prefer header; on disconnect, default to 0 unless opted out.
