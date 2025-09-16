@@ -355,6 +355,7 @@ pub fn build_docker_cmd(
     // Shell command inside container
     let sh_cmd = format!(
         "set -e; umask 077; \
+         if [ \"${AIFO_AGENT_IGNORE_SIGINT:-1}\" = \"1\" ]; then trap '' INT; fi; \
          export PATH=\"/opt/aifo/bin:/opt/venv/bin:$PATH\"; \
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
