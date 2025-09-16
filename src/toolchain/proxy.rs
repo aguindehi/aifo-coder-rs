@@ -50,6 +50,7 @@ struct ProxyCtx {
     session: String,
     timeout_secs: u64,
     verbose: bool,
+    agent_container: Option<String>,
     uidgid: Option<(u32, u32)>,
 }
 
@@ -134,6 +135,37 @@ fn kill_in_container(
     let _ = cmd2.status();
 }
 
+/// Best-effort: kill the interactive /run shell inside the agent container using recorded tpgid.
+fn kill_agent_shell_in_agent_container(
+    runtime: &PathBuf,
+    agent_container: &str,
+    exec_id: &str,
+    verbose: bool,
+) {
+    // Read recorded terminal foreground PGID and signal that group within the agent container.
+    let script = format!(
+        "pg=\"/home/coder/.aifo-exec/{id}/agent_tpgid\"; if [ -f \"$pg\" ]; then n=$(cat \"$pg\" 2>/dev/null); if [ -n \"$n\" ]; then kill -s HUP -\"$n\" || true; sleep 0.1; kill -s TERM -\"$n\" || true; sleep 0.3; kill -s KILL -\"$n\" || true; fi; fi",
+        id = exec_id
+    );
+    let args: Vec<String> = vec![
+        "docker".into(),
+        "exec".into(),
+        agent_container.into(),
+        "sh".into(),
+        "-lc".into(),
+        script,
+    ];
+    if verbose {
+        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
+    }
+    let mut cmd = Command::new(runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    let _ = cmd.status();
+}
+
 /** Disconnect-triggered termination: INT then KILL with ~2s grace.
 Adds a short pre-INT delay to let the shim post /signal first. */
 fn disconnect_terminate_exec_in_container(
@@ -141,12 +173,17 @@ fn disconnect_terminate_exec_in_container(
     container: &str,
     exec_id: &str,
     verbose: bool,
+    agent_container: Option<&str>,
 ) {
     // Always print a single disconnect line so the user sees it before returning to the agent
     eprintln!("\raifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
+    // In parallel, try to close the transient /run shell in the agent container, if known.
+    if let Some(ac) = agent_container {
+        kill_agent_shell_in_agent_container(runtime, ac, exec_id, verbose);
+    }
     std::thread::sleep(Duration::from_millis(500));
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
     std::thread::sleep(Duration::from_millis(1500));
@@ -280,6 +317,7 @@ pub fn toolexec_start_proxy(
                         session: session.clone(),
                         timeout_secs,
                         verbose,
+                        agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
                         uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
                     };
                     handle_connection(&ctx, &mut stream, &mut tool_cache, &mut exec_registry);
@@ -352,6 +390,7 @@ pub fn toolexec_start_proxy(
                 session: session.clone(),
                 timeout_secs,
                 verbose,
+                agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
                 uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
             };
             handle_connection(&ctx, &mut stream, &mut tool_cache, &mut exec_registry);
@@ -782,7 +821,13 @@ fn handle_connection<S: Read + Write>(
 
         if write_failed {
             // Client disconnected: terminate process group in container and stop docker exec
-            disconnect_terminate_exec_in_container(&ctx.runtime, &name, &exec_id, verbose);
+            disconnect_terminate_exec_in_container(
+                &ctx.runtime,
+                &name,
+                &exec_id,
+                verbose,
+                ctx.agent_container.as_deref(),
+            );
             let _ = child.kill();
             let _ = child.wait();
             // Mark watcher done and remove from registry

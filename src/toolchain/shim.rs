@@ -135,6 +135,17 @@ fi
 tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
 mkdir -p "$tmp"
 
+# Record agent container terminal foreground PGID for this exec to allow proxy to close the /run shell on disconnect.
+d="$HOME/.aifo-exec/$exec_id"
+mkdir -p "$d" 2>/dev/null || true
+tpgid=""
+if [ -r "/proc/$$/stat" ]; then
+  tpgid="$(awk '{print $8}' "/proc/$$/stat" 2>/dev/null | tr -d ' \r\n')"
+elif command -v ps >/dev/null 2>&1; then
+  tpgid="$(ps -o tpgid= -p "$$" 2>/dev/null | tr -d ' \r\n')"
+fi
+if [ -n "$tpgid" ]; then printf "%s" "$tpgid" > "$d/agent_tpgid" 2>/dev/null || true; fi
+
 # Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Aifo-Exec-Id: $exec_id")
 cmd+=(--data-urlencode "tool=$tool" --data-urlencode "cwd=$cwd")
@@ -172,6 +183,7 @@ if [ -z "$ec" ]; then
     ec=1
   fi
 fi
+rm -rf "$d" 2>/dev/null || true
 rm -rf "$tmp"
 exit "$ec"
 "#;

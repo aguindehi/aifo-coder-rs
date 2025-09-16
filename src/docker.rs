@@ -339,6 +339,8 @@ pub fn build_docker_cmd(
     // Container name/hostname
     let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
         .unwrap_or_else(|_| format!("{}-{}-{}", prefix, agent, crate::create_session_id()));
+    // Make container name available to other subsystems (e.g., proxy) via env
+    env::set_var("AIFO_CODER_CONTAINER_NAME", &container_name);
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
     let name_flags = vec![
         OsString::from("--name"),
