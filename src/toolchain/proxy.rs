@@ -165,7 +165,15 @@ fn kill_agent_shell_in_agent_container(
            fi; \
            kill -s KILL \"$p\" >/dev/null 2>&1 || true; \
          fi; fi; \
-         if [ -f \"$tt\" ]; then t=$(cat \"$tt\" 2>/dev/null); kill_shells_by_tty \"$t\"; fi; \
+         if [ -f \"$tt\" ]; then \
+           t=$(cat \"$tt\" 2>/dev/null); \
+           kill_shells_by_tty \"$t\"; \
+           # Also inject an 'exit' and Ctrl-D to the controlling TTY (best-effort) \
+           if [ -n \"$t\" ]; then \
+             printf \"exit\\r\\n\" > \"$t\" 2>/dev/null || true; sleep 0.1; \
+             printf \"\\004\" > \"$t\" 2>/dev/null || true; \
+           fi; \
+         fi; \
          if [ ! -f \"$pp\" ] && [ -f \"$tp\" ]; then n=$(cat \"$tp\" 2>/dev/null); if [ -n \"$n\" ]; then \
            kill -s HUP -\"$n\" || true; sleep 0.1; \
            kill -s TERM -\"$n\" || true; sleep 0.3; \

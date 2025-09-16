@@ -147,10 +147,13 @@ fi
 if [ -n "$tpgid" ]; then printf "%s" "$tpgid" > "$d/agent_tpgid" 2>/dev/null || true; fi
 printf "%s" "$PPID" > "$d/agent_ppid" 2>/dev/null || true
 # Record controlling TTY path to help terminate the /run shell on disconnect (best-effort)
+tty_link=""
 if [ -t 0 ]; then
   tty_link="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || true)"
-  if [ -n "$tty_link" ]; then printf "%s" "$tty_link" > "$d/tty" 2>/dev/null || true; fi
+elif [ -t 1 ]; then
+  tty_link="$(readlink -f "/proc/$$/fd/1" 2>/dev/null || true)"
 fi
+if [ -n "$tty_link" ]; then printf "%s" "$tty_link" > "$d/tty" 2>/dev/null || true; fi
 
 # Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Aifo-Exec-Id: $exec_id")
