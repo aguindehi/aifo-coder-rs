@@ -121,6 +121,7 @@ kill_parent_shell_if_interactive() {
     fi
   fi
 }
+trap - INT
 trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 130; fi; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi; else send_signal KILL; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 137; fi; fi' INT
 trap 'send_signal TERM; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi' TERM
 trap 'send_signal HUP; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 129; fi' HUP
