@@ -84,9 +84,9 @@ send_signal() {
 }
 # Best-effort temp cleanup; safe if $tmp is empty/unset
 cleanup() { [ -n "$tmp" ] && rm -rf "$tmp"; }
-trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; exit 130; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; exit 143; else send_signal KILL; cleanup; exit 137; fi' INT
-trap 'send_signal TERM; cleanup; exit 143' TERM
-trap 'send_signal HUP; cleanup; exit 129' HUP
+trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 130; fi; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi; else send_signal KILL; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 137; fi; fi' INT
+trap 'send_signal TERM; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi' TERM
+trap 'send_signal HUP; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 129; fi' HUP
 trap 'cleanup' EXIT
 
 if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
