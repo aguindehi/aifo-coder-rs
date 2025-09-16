@@ -86,13 +86,28 @@ send_signal() {
 cleanup() { [ -n "$tmp" ] && rm -rf "$tmp"; }
 kill_parent_shell_if_interactive() {
   if [ "${AIFO_SHIM_KILL_PARENT_SHELL_ON_SIGINT:-1}" = "1" ] && { [ -t 0 ] || [ -t 1 ]; }; then
-    p="$PPID"
     if command -v ps >/dev/null 2>&1; then
-      comm="$(ps -o comm= -p "$p" 2>/dev/null | tr -d '\r\n')"
-      case "$comm" in sh|bash|dash|zsh|ksh|ash|busybox|busybox-sh)
-        kill -HUP "$p" >/dev/null 2>&1 || true
-        ;;
-      esac
+      try_kill() {
+        pid="$1"
+        [ -z "$pid" ] && return 1
+        comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d '\r\n' || printf '')"
+        case "$comm" in sh|bash|dash|zsh|ksh|ash|busybox|busybox-sh)
+          pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' \r\n')"
+          if [ -n "$pgid" ]; then
+            kill -HUP -"$pgid" >/dev/null 2>&1 || kill -HUP "$pid" >/dev/null 2>&1 || true
+          else
+            kill -HUP "$pid" >/dev/null 2>&1 || true
+          fi
+          return 0
+          ;;
+        esac
+        return 1
+      }
+      p="$PPID"
+      try_kill "$p" || {
+        gp="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' \r\n')"
+        try_kill "$gp" || true
+      }
     fi
   fi
 }
