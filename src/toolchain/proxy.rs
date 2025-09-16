@@ -147,7 +147,9 @@ fn disconnect_terminate_exec_in_container(
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(Duration::from_millis(500));
+    kill_in_container(runtime, container, exec_id, "TERM", verbose);
+    std::thread::sleep(Duration::from_millis(1500));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 

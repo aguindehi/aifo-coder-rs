@@ -84,9 +84,21 @@ send_signal() {
 }
 # Best-effort temp cleanup; safe if $tmp is empty/unset
 cleanup() { [ -n "$tmp" ] && rm -rf "$tmp"; }
-trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 130; fi; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi; else send_signal KILL; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 137; fi; fi' INT
-trap 'send_signal TERM; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi' TERM
-trap 'send_signal HUP; cleanup; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 129; fi' HUP
+kill_parent_shell_if_interactive() {
+  if [ "${AIFO_SHIM_KILL_PARENT_SHELL_ON_SIGINT:-1}" = "1" ] && { [ -t 0 ] || [ -t 1 ]; }; then
+    p="$PPID"
+    if command -v ps >/dev/null 2>&1; then
+      comm="$(ps -o comm= -p "$p" 2>/dev/null | tr -d '\r\n')"
+      case "$comm" in sh|bash|dash|zsh|ksh|ash|busybox|busybox-sh)
+        kill -HUP "$p" >/dev/null 2>&1 || true
+        ;;
+      esac
+    fi
+  fi
+}
+trap 'sigint_count=$((sigint_count+1)); if [ $sigint_count -eq 1 ]; then send_signal INT; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 130; fi; elif [ $sigint_count -eq 2 ]; then send_signal TERM; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi; else send_signal KILL; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 137; fi; fi' INT
+trap 'send_signal TERM; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 143; fi' TERM
+trap 'send_signal HUP; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_SHIM_EXIT_ZERO_ON_SIGINT:-1}" = "1" ]; then exit 0; else exit 129; fi' HUP
 trap 'cleanup' EXIT
 
 if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
