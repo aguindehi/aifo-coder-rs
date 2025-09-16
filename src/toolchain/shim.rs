@@ -86,28 +86,38 @@ send_signal() {
 cleanup() { [ -n "$tmp" ] && rm -rf "$tmp"; }
 kill_parent_shell_if_interactive() {
   if [ "${AIFO_SHIM_KILL_PARENT_SHELL_ON_SIGINT:-1}" = "1" ] && { [ -t 0 ] || [ -t 1 ]; }; then
-    if command -v ps >/dev/null 2>&1; then
-      try_kill() {
-        pid="$1"
-        [ -z "$pid" ] && return 1
-        comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d '\r\n' || printf '')"
-        case "$comm" in sh|bash|dash|zsh|ksh|ash|busybox|busybox-sh)
-          pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' \r\n')"
-          if [ -n "$pgid" ]; then
-            kill -HUP -"$pgid" >/dev/null 2>&1 || kill -HUP "$pid" >/dev/null 2>&1 || true
-          else
-            kill -HUP "$pid" >/dev/null 2>&1 || true
-          fi
-          return 0
-          ;;
-        esac
-        return 1
-      }
-      p="$PPID"
-      try_kill "$p" || {
-        gp="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' \r\n')"
-        try_kill "$gp" || true
-      }
+    p="$PPID"
+    # Detect parent command name without ps if possible
+    comm=""
+    if [ -r "/proc/$p/comm" ]; then
+      comm="$(tr -d '\r\n' < "/proc/$p/comm" 2>/dev/null || printf '')"
+    elif command -v ps >/dev/null 2>&1; then
+      comm="$(ps -o comm= -p "$p" 2>/dev/null | tr -d '\r\n' || printf '')"
+    fi
+    is_shell=0
+    case "$comm" in
+      sh|bash|dash|zsh|ksh|ash|busybox|busybox-sh) is_shell=1 ;;
+    esac
+    if [ "$is_shell" -eq 1 ]; then
+      # Try graceful -> forceful sequence on parent shell; avoid wide PGID kills by default.
+      # If parent is a group leader, also try signaling its PGID.
+      pgid=""
+      if [ -r "/proc/$p/stat" ]; then
+        pgid="$(awk '{print $5}' "/proc/'"$p"'/stat" 2>/dev/null | tr -d ' \r\n')"
+      elif command -v ps >/dev/null 2>&1; then
+        pgid="$(ps -o pgid= -p "$p" 2>/dev/null | tr -d ' \r\n')"
+      fi
+      kill -HUP "$p" >/dev/null 2>&1 || true
+      sleep 0.05
+      kill -TERM "$p" >/dev/null 2>&1 || true
+      sleep 0.05
+      if [ -n "$pgid" ] && [ "$pgid" = "$p" ]; then
+        kill -HUP -"$pgid" >/dev/null 2>&1 || true
+        sleep 0.05
+        kill -TERM -"$pgid" >/dev/null 2>&1 || true
+        sleep 0.05
+      fi
+      kill -KILL "$p" >/dev/null 2>&1 || true
     fi
   fi
 }
@@ -142,13 +152,26 @@ else
 fi
 
 cmd+=("$URL")
-"${cmd[@]}" || true
+disconnected=0
+if ! "${cmd[@]}"; then
+  disconnected=1
+fi
 
 ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
 : # body streamed directly by curl
+# If the HTTP stream disconnected (e.g., Ctrl-C) or header is missing, terminate parent shell too.
+if [ "$disconnected" -ne 0 ] || [ -z "$ec" ]; then
+  kill_parent_shell_if_interactive
+fi
+# Resolve exit code: prefer header; on disconnect, default to 0 unless opted out.
+if [ -z "$ec" ]; then
+  if [ "$disconnected" -ne 0 ] && [ "${AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT:-1}" = "1" ]; then
+    ec=0
+  else
+    ec=1
+  fi
+fi
 rm -rf "$tmp"
-# Fallback to 1 if header missing
-case "$ec" in '' ) ec=1 ;; esac
 exit "$ec"
 "#;
     fs::write(&shim_path, shim)?;
