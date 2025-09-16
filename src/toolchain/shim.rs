@@ -103,7 +103,7 @@ kill_parent_shell_if_interactive() {
       # If parent is a group leader, also try signaling its PGID.
       pgid=""
       if [ -r "/proc/$p/stat" ]; then
-        pgid="$(awk '{print $5}' "/proc/'"$p"'/stat" 2>/dev/null | tr -d ' \r\n')"
+        pgid="$(awk '{print $5}' "/proc/$p/stat" 2>/dev/null | tr -d ' \r\n')"
       elif command -v ps >/dev/null 2>&1; then
         pgid="$(ps -o pgid= -p "$p" 2>/dev/null | tr -d ' \r\n')"
       fi
@@ -145,6 +145,7 @@ elif command -v ps >/dev/null 2>&1; then
   tpgid="$(ps -o tpgid= -p "$$" 2>/dev/null | tr -d ' \r\n')"
 fi
 if [ -n "$tpgid" ]; then printf "%s" "$tpgid" > "$d/agent_tpgid" 2>/dev/null || true; fi
+printf "%s" "$PPID" > "$d/agent_ppid" 2>/dev/null || true
 
 # Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Aifo-Exec-Id: $exec_id")

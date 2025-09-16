@@ -144,7 +144,7 @@ fn kill_agent_shell_in_agent_container(
 ) {
     // Read recorded terminal foreground PGID and signal that group within the agent container.
     let script = format!(
-        "pg=\"/home/coder/.aifo-exec/{id}/agent_tpgid\"; if [ -f \"$pg\" ]; then n=$(cat \"$pg\" 2>/dev/null); if [ -n \"$n\" ]; then kill -s HUP -\"$n\" || true; sleep 0.1; kill -s TERM -\"$n\" || true; sleep 0.3; kill -s KILL -\"$n\" || true; fi; fi",
+        "pp=\"/home/coder/.aifo-exec/{id}/agent_ppid\"; tp=\"/home/coder/.aifo-exec/{id}/agent_tpgid\"; if [ -f \"$pp\" ]; then p=$(cat \"$pp\" 2>/dev/null); if [ -n \"$p\" ]; then pg=\"\"; if [ -r \"/proc/$p/stat\" ]; then pg=\"$(awk '{{print $5}}' \"/proc/$p/stat\" 2>/dev/null | tr -d ' \\r\\n')\"; fi; kill -s HUP \"$p\" >/dev/null 2>&1 || true; sleep 0.1; kill -s TERM \"$p\" >/dev/null 2>&1 || true; sleep 0.3; if [ -n \"$pg\" ]; then kill -s HUP -\"$pg\" >/dev/null 2>&1 || true; sleep 0.1; kill -s TERM -\"$pg\" >/dev/null 2>&1 || true; sleep 0.3; fi; kill -s KILL \"$p\" >/dev/null 2>&1 || true; fi; fi; if [ ! -f \"$pp\" ] && [ -f \"$tp\" ]; then n=$(cat \"$tp\" 2>/dev/null); if [ -n \"$n\" ]; then kill -s HUP -\"$n\" || true; sleep 0.1; kill -s TERM -\"$n\" || true; sleep 0.3; kill -s KILL -\"$n\" || true; fi; fi",
         id = exec_id
     );
     let args: Vec<String> = vec![
