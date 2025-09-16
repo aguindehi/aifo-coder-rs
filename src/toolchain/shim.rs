@@ -154,6 +154,8 @@ elif [ -t 1 ]; then
   tty_link="$(readlink -f "/proc/$$/fd/1" 2>/dev/null || true)"
 fi
 if [ -n "$tty_link" ]; then printf "%s" "$tty_link" > "$d/tty" 2>/dev/null || true; fi
+# Mark this TTY as protected from interactive fallback; wrapper will auto-exit.
+touch "$d/no_shell_on_tty" 2>/dev/null || true
 
 # Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Aifo-Exec-Id: $exec_id")
@@ -192,7 +194,7 @@ if [ -z "$ec" ]; then
     ec=1
   fi
 fi
-rm -rf "$d" 2>/dev/null || true
+if [ "$disconnected" -eq 0 ] && [ -n "$ec" ]; then rm -rf "$d" 2>/dev/null || true; fi
 rm -rf "$tmp"
 exit "$ec"
 "#;
@@ -219,10 +221,23 @@ exit "$ec"
     // This prevents dropping into an interactive shell after '/run ...' completes or is interrupted.
     // Opt-out by setting AIFO_SH_WRAP_DISABLE=1 inside the agent container.
     let sh_wrap = r#"#!/bin/sh
-# aifo-coder sh wrapper: auto-exit after -c/-lc commands to avoid lingering shells.
+# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.
 # Opt-out: AIFO_SH_WRAP_DISABLE=1
 if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then
   exec /bin/sh "$@"
+fi
+
+# If interactive and this TTY was used for a recent tool exec, exit immediately.
+if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then
+  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"
+  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then
+    for d in "$HOME"/.aifo-exec/*; do
+      [ -d "$d" ] || continue
+      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then
+        exit 0
+      fi
+    done
+  fi
 fi
 
 # When invoked as sh -c "cmd" [...] or sh -lc "cmd" [...],
@@ -243,6 +258,23 @@ exec /bin/sh "$@"
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&sh_path, fs::Permissions::from_mode(0o755))?;
+    }
+    // Provide bash and dash wrappers with the same auto-exit behavior
+    let bash_wrap = sh_wrap.replace("/bin/sh", "/bin/bash");
+    let dash_wrap = sh_wrap.replace("/bin/sh", "/bin/dash");
+    let bash_path = dir.join("bash");
+    fs::write(&bash_path, &bash_wrap)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&bash_path, fs::Permissions::from_mode(0o755))?;
+    }
+    let dash_path = dir.join("dash");
+    fs::write(&dash_path, &dash_wrap)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dash_path, fs::Permissions::from_mode(0o755))?;
     }
 
     Ok(())
