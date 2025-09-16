@@ -91,6 +91,9 @@ pub fn build_docker_cmd(
     env_flags.push(OsString::from("CODEX_HOME=/home/coder/.codex"));
     env_flags.push(OsString::from("-e"));
     env_flags.push(OsString::from("GNUPGHOME=/home/coder/.gnupg"));
+    // Ensure our auto-exit shell wrapper is preferred for transient shells
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
 
     // XDG_RUNTIME_DIR for gpg-agent sockets
     #[cfg(unix)]
