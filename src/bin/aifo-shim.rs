@@ -1,7 +1,5 @@
-#[cfg(unix)]
-use nix::sys::signal::{self, Signal};
 #[cfg(target_os = "linux")]
-use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet};
+use nix::sys::signal::{self, Signal, SaFlags, SigAction, SigHandler, SigSet};
 #[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
@@ -20,15 +18,15 @@ static GOT_TERM: AtomicBool = AtomicBool::new(false);
 #[cfg(unix)]
 static GOT_HUP: AtomicBool = AtomicBool::new(false);
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 extern "C" fn handle_sigint(_sig: i32) {
     SIGINT_COUNT.fetch_add(1, Ordering::SeqCst);
 }
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 extern "C" fn handle_term(_sig: i32) {
     GOT_TERM.store(true, Ordering::SeqCst);
 }
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 extern "C" fn handle_hup(_sig: i32) {
     GOT_HUP.store(true, Ordering::SeqCst);
 }
@@ -110,8 +108,6 @@ fn kill_parent_shell_if_interactive() {
     let _ = signal::kill(Pid::from_raw(ppid), Signal::SIGKILL);
 }
 
-#[cfg(not(target_os = "linux"))]
-fn kill_parent_shell_if_interactive() {}
 
 fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose: bool) {
     let mut args: Vec<String> = vec![
@@ -294,11 +290,11 @@ fn main() {
     };
 
     // Poll for signals while streaming
-    let mut status_success: bool = false;
+    let mut status_success_opt: Option<bool> = None;
     loop {
         // Check if child exited
         if let Ok(Some(st)) = child.try_wait() {
-            status_success = st.success();
+            status_success_opt = Some(st.success());
             break;
         }
         // Handle signals (Unix)
@@ -387,9 +383,10 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 
-    if !status_success {
-        status_success = child.wait().map(|s| s.success()).unwrap_or(false);
-    }
+    let status_success = match status_success_opt {
+        Some(v) => v,
+        None => child.wait().map(|s| s.success()).unwrap_or(false),
+    };
 
     // Parse X-Exit-Code from headers/trailers
     let mut exit_code: i32 = 1;
