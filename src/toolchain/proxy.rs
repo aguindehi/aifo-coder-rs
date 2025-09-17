@@ -737,7 +737,10 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        eprintln!("\raifo-coder: proxy docker: {}", shell_join(&exec_preview_args));
+        eprintln!(
+            "\raifo-coder: proxy docker: {}",
+            shell_join(&exec_preview_args)
+        );
     }
 
     if proto_v2 {
