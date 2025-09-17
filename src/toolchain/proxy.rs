@@ -8,7 +8,7 @@ Implements v3 signal propagation and timeout model:
 - /signal endpoint: authenticated signal forwarding by ExecId.
 - ExecId registry and streaming prelude includes X-Exec-Id (v2).
 - Setsid+PGID wrapper applied to v1 and v2 execs; PGID file at $HOME/.aifo-exec/<ExecId>/pgid.
-- Disconnect-triggered termination for v2 (TERM -> KILL).
+- Disconnect-triggered termination for v2 (INT -> TERM -> KILL).
 - No default proxy-imposed timeout for tool execs; optional max-runtime escalation (INT at T, TERM at T+5s, KILL at T+10s).
 - Notifications policy per spec with independent short timeout.
 - Streaming prelude only after successful spawn; plain 500 on spawn error.

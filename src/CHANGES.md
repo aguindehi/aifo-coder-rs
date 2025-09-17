@@ -1,3 +1,11 @@
+2025-09-18 00:45 User <user@example.com>
+
+Shim v5.2: polish native HTTP and proxy docs
+
+- Native HTTP client: tolerant X-Exit-Code parsing (case-insensitive headers/trailers).
+- Proxy docs clarified disconnect sequence (INT → TERM → KILL) to match implementation.
+- Next: add acceptance tests (TCP/UDS, large output, disconnect) before removing curl from full images.
+
 2025-09-18 00:30 User <user@example.com>
 
 Shim v5.2: drop curl from slim runtime images (KEEP_APT=0)

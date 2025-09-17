@@ -1,4 +1,4 @@
-# Source Code Scoring — 2025-09-18 00:00
+# Source Code Scoring — 2025-09-18 00:45
 
 Summary
 - Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
@@ -33,23 +33,21 @@ Notable Strengths
 - Backward-compatible defaults (exit semantics) with env toggles for legacy behavior.
 
 Risks and Mitigations
-- Curl dependency remains until v5.2: mitigate by documenting and gating removal behind tests.
+- Curl retained in full images for tooling; removed from slim images when KEEP_APT=0.
 - Parent-shell heuristics vary by distro: limited to Linux and guarded by env; proxy best-effort
   cleanup complements shim behavior.
 - Docker CLI flakiness on signals: implemented brief retry; logs emphasized when verbose.
 
 Recommendations (Next Steps)
-1) Acceptance tests and curl removal (v5.2):
+1) Phase 4 acceptance tests:
    - Golden logs for native HTTP path (TCP/UDS); large-output and disconnect coverage.
-   - After parity, drop curl from slim images if unused elsewhere.
-2) Add acceptance tests:
-   - Golden verbose logs; signal escalation sequence; disconnect exit semantics (default/legacy).
-   - Host override precedence and wrapper auto-exit behavior.
-3) Harden and polish (v5.3):
+   - Host override precedence and wrapper auto-exit behavior; signal escalation sequence.
+2) Hardening and polish (v5.3):
    - Tighten input limits, error messages; broaden tests for tool availability routing.
    - Improve parent-shell cleanup fallback paths (non-/proc environments).
-4) Documentation:
-   - Update README and release notes describing baked shims, overrides, and verification steps.
+3) Documentation and release notes:
+   - Describe verifying active shim and overriding with AIFO_SHIM_DIR; note curl removal from slim images.
+   - Plan curl removal from full images after acceptance tests confirm no remaining dependencies.
 
 Shall I proceed with these next steps?
 
