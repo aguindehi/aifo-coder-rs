@@ -7,6 +7,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::io::{Read, Write};
+use std::net::TcpStream;
+#[cfg(target_os = "linux")]
+use std::os::unix::net::UnixStream;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
@@ -149,6 +153,552 @@ fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose
     let _ = cmd.status();
 }
 
+// Native HTTP/1.1 client (Phase 3): TCP + Linux UDS, chunked request, trailer parsing.
+// Returns Some(exit_code) when native path is taken; None to fall back to curl.
+fn try_run_native(
+    url: &str,
+    token: &str,
+    exec_id: &str,
+    form_parts: &[(String, String)],
+    verbose: bool,
+) -> Option<i32> {
+    // Gate via env for phased rollout (default off)
+    if std::env::var("AIFO_SHIM_NATIVE_HTTP")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        return None;
+    }
+
+    // Percent-encode a single component for application/x-www-form-urlencoded
+    fn urlencode_component(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for b in s.bytes() {
+            match b {
+                b' ' => out.push('+'),
+                b'-' | b'_' | b'.' | b'~' | b'*' => out.push(b as char),
+                b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => out.push(b as char),
+                _ => {
+                    out.push('%');
+                    out.push_str(&format!("{:02X}", b));
+                }
+            }
+        }
+        out
+    }
+
+    // Build the urlencoded body from provided form parts (tool, cwd, arg=...)
+    let mut body = String::new();
+    for (i, (k, v)) in form_parts.iter().enumerate() {
+        if i > 0 {
+            body.push('&');
+        }
+        body.push_str(&urlencode_component(k));
+        body.push('=');
+        body.push_str(&urlencode_component(v));
+    }
+
+    // Connection abstraction over TCP/UDS
+    enum Conn {
+        Tcp(TcpStream, String, String), // stream, host header, path
+        #[cfg(target_os = "linux")]
+        Uds(UnixStream, String), // stream, path (Host: localhost)
+    }
+
+    // Parse URL and connect
+    let mut conn: Conn = if url.starts_with("unix://") {
+        #[cfg(target_os = "linux")]
+        {
+            let sock = url.trim_start_matches("unix://");
+            let path = "/exec".to_string();
+            match UnixStream::connect(sock) {
+                Ok(stream) => {
+                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
+                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                    Conn::Uds(stream, path)
+                }
+                Err(_) => return None, // fall back to curl on connect error
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            return None;
+        }
+    } else {
+        // Expect http://host:port/path
+        let mut rest = url.trim_start_matches("http://").to_string();
+        let path_idx = rest.find('/').unwrap_or(rest.len());
+        let (host_port, path) = rest.split_at(path_idx);
+        let path = if path.is_empty() {
+            "/exec".to_string()
+        } else {
+            path.to_string()
+        };
+        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+            let pn = p.parse::<u16>().unwrap_or(80);
+            (h.to_string(), pn)
+        } else {
+            (host_port.to_string(), 80u16)
+        };
+        let addr = format!("{}:{}", host, port);
+        match TcpStream::connect(&addr) {
+            Ok(stream) => {
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                Conn::Tcp(stream, host, path)
+            }
+            Err(_) => return None, // fall back to curl on connect error
+        }
+    };
+
+    // Compose request headers
+    let (mut stream_box, host_header, path) = match &mut conn {
+        Conn::Tcp(s, host, path) => (s as &mut dyn Write, host.clone(), path.clone()),
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s, path) => (s as &mut dyn Write, "localhost".to_string(), path.clone()),
+    };
+
+    let req_line = format!("POST {} HTTP/1.1\r\n", path);
+    let headers = format!(
+        concat!(
+            "Host: {host}\r\n",
+            "Authorization: Bearer {tok}\r\n",
+            "X-Aifo-Proto: 2\r\n",
+            "TE: trailers\r\n",
+            "Content-Type: application/x-www-form-urlencoded\r\n",
+            "Transfer-Encoding: chunked\r\n",
+            "X-Aifo-Exec-Id: {eid}\r\n",
+            "Connection: close\r\n",
+            "\r\n"
+        ),
+        host = host_header,
+        tok = token,
+        eid = exec_id
+    );
+
+    // Write request line + headers
+    if stream_box.write_all(req_line.as_bytes()).is_err()
+        || stream_box.write_all(headers.as_bytes()).is_err()
+    {
+        return None;
+    }
+
+    // Chunk writer
+    fn write_chunk<W: Write>(w: &mut W, data: &[u8]) -> std::io::Result<()> {
+        write!(w, "{:X}\r\n", data.len())?;
+        w.write_all(data)?;
+        w.write_all(b"\r\n")?;
+        Ok(())
+    }
+
+    // Send body as chunks (8 KiB pieces)
+    let bytes = body.as_bytes();
+    let mut ofs = 0usize;
+    while ofs < bytes.len() {
+        let end = (ofs + 8192).min(bytes.len());
+        if write_chunk(&mut stream_box, &bytes[ofs..end]).is_err() {
+            return None;
+        }
+        ofs = end;
+    }
+    if stream_box.write_all(b"0\r\n\r\n").is_err() {
+        return None;
+    }
+    let _ = stream_box.flush();
+
+    // Now read response and stream stdout
+    // Helper to read until headers end
+    fn find_header_end(buf: &[u8]) -> Option<usize> {
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            Some(i + 4)
+        } else if let Some(i) = buf.windows(2).position(|w| w == b"\n\n") {
+            Some(i + 2)
+        } else {
+            None
+        }
+    }
+
+    // Reader abstraction
+    let mut reader_box: Box<dyn Read> = match conn {
+        Conn::Tcp(s, _, _) => Box::new(s),
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s, _) => Box::new(s),
+    };
+
+    let mut hdr_buf: Vec<u8> = Vec::with_capacity(4096);
+    let mut tmp = [0u8; 1024];
+    let mut header_end_idx: Option<usize> = None;
+
+    // Poll headers with timeouts to allow SIG handling
+    loop {
+        match reader_box.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => {
+                hdr_buf.extend_from_slice(&tmp[..n]);
+                if let Some(idx) = find_header_end(&hdr_buf) {
+                    header_end_idx = Some(idx);
+                    break;
+                }
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
+                || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                // Check signals
+                #[cfg(unix)]
+                {
+                    let cnt = SIGINT_COUNT.load(Ordering::SeqCst);
+                    if cnt >= 1 {
+                        let sig = if cnt == 1 {
+                            "INT"
+                        } else if cnt == 2 {
+                            "TERM"
+                        } else {
+                            "KILL"
+                        };
+                        post_signal(url, token, exec_id, sig, verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            if sig != "KILL" {
+                                kill_parent_shell_if_interactive();
+                            }
+                        }
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            match sig {
+                                "INT" => 130,
+                                "TERM" => 143,
+                                _ => 137,
+                            }
+                        };
+                        return Some(code);
+                    }
+                    if GOT_TERM.load(Ordering::SeqCst) {
+                        post_signal(url, token, exec_id, "TERM", verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            kill_parent_shell_if_interactive();
+                        }
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            143
+                        };
+                        return Some(code);
+                    }
+                    if GOT_HUP.load(Ordering::SeqCst) {
+                        post_signal(url, token, exec_id, "HUP", verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            kill_parent_shell_if_interactive();
+                        }
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            129
+                        };
+                        return Some(code);
+                    }
+                }
+                continue;
+            }
+            Err(_) => break,
+        }
+    }
+
+    let idx = match header_end_idx {
+        Some(i) => i,
+        None => {
+            // No headers; treat as disconnect
+            if verbose {
+                eprintln!("aifo-coder: disconnect, waiting for process termination...");
+                let wait_secs: u64 = std::env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
+                    .ok()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(1);
+                if wait_secs > 0 {
+                    std::thread::sleep(std::time::Duration::from_secs(wait_secs));
+                }
+                eprintln!("aifo-coder: terminating now");
+                eprintln!();
+            }
+            let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+                .ok()
+                .as_deref()
+                != Some("0")
+            {
+                0
+            } else {
+                1
+            };
+            // Keep markers for proxy cleanup; best-effort tmp cleanup
+            let tmp_base = std::env::var("TMPDIR")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "/tmp".to_string());
+            let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
+            let _ = fs::remove_dir_all(&tmp_dir);
+            return Some(ec);
+        }
+    };
+
+    // Parse headers
+    let header_bytes = &hdr_buf[..idx];
+    let body_after = &hdr_buf[idx..];
+    let header_text = String::from_utf8_lossy(header_bytes);
+    let mut is_chunked = false;
+    let mut header_exit_code: Option<i32> = None;
+    for line in header_text.lines() {
+        let l = line.trim();
+        if l.to_ascii_lowercase().starts_with("transfer-encoding:")
+            && l.to_ascii_lowercase().contains("chunked")
+        {
+            is_chunked = true;
+        } else if let Some(v) = l.strip_prefix("X-Exit-Code:") {
+            if let Ok(n) = v.trim().parse::<i32>() {
+                header_exit_code = Some(n);
+            }
+        }
+    }
+
+    let mut stdout = std::io::stdout();
+
+    // Stream body
+    let mut exit_code: i32 = 1;
+    let mut had_trailer = false;
+
+    if is_chunked {
+        // Initialize a buffer that already contains any bytes after headers
+        let mut buf: Vec<u8> = body_after.to_vec();
+        // Helper to read a single line ending in CRLF or LF
+        let mut read_line = |buf: &mut Vec<u8>| -> Option<String> {
+            loop {
+                if let Some(pos) = buf
+                    .windows(2)
+                    .position(|w| w == b"\r\n")
+                    .or_else(|| buf.iter().position(|&b| b == b'\n'))
+                {
+                    let (line, rest) = if pos + 1 < buf.len() && buf[pos] == b'\r' {
+                        let line = buf[..pos].to_vec();
+                        let rest = buf[pos + 2..].to_vec();
+                        (line, rest)
+                    } else {
+                        let line = buf[..pos].to_vec();
+                        let rest = buf[pos + 1..].to_vec();
+                        (line, rest)
+                    };
+                    *buf = rest;
+                    return String::from_utf8(line).ok();
+                }
+                let mut tmp2 = [0u8; 1024];
+                match reader_box.read(&mut tmp2) {
+                    Ok(0) => return None,
+                    Ok(n) => buf.extend_from_slice(&tmp2[..n]),
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut => {}
+                    Err(_) => return None,
+                }
+                // Signal checks during blocking reads
+                #[cfg(unix)]
+                {
+                    let cnt = SIGINT_COUNT.load(Ordering::SeqCst);
+                    if cnt >= 1 {
+                        let sig = if cnt == 1 { "INT" } else if cnt == 2 { "TERM" } else { "KILL" };
+                        post_signal(url, token, exec_id, sig, verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            if sig != "KILL" {
+                                kill_parent_shell_if_interactive();
+                            }
+                        }
+                        return Some("__exit__".to_string());
+                    }
+                    if GOT_TERM.load(Ordering::SeqCst) {
+                        post_signal(url, token, exec_id, "TERM", verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            kill_parent_shell_if_interactive();
+                        }
+                        return Some("__exit_term__".to_string());
+                    }
+                    if GOT_HUP.load(Ordering::SeqCst) {
+                        post_signal(url, token, exec_id, "HUP", verbose);
+                        #[cfg(target_os = "linux")]
+                        {
+                            kill_parent_shell_if_interactive();
+                        }
+                        return Some("__exit_hup__".to_string());
+                    }
+                }
+            }
+        };
+
+        loop {
+            let ln = match read_line(&mut buf) {
+                Some(s) => s,
+                None => break, // disconnect
+            };
+            if ln == "__exit__" || ln == "__exit_term__" || ln == "__exit_hup__" {
+                // Signal exit mapping handled by caller of try_run_native (we returned Some(code) earlier)
+                // Here, break and treat as disconnect to be safe.
+                break;
+            }
+            let ln_trim = ln.trim();
+            if ln_trim.is_empty() {
+                continue;
+            }
+            // Parse chunk size (hex), tolerate extensions
+            let mut size_hex = ln_trim;
+            if let Some(idx) = ln_trim.find(';') {
+                size_hex = &ln_trim[..idx];
+            }
+            let size = match usize::from_str_radix(size_hex, 16) {
+                Ok(v) => v,
+                Err(_) => break,
+            };
+            if size == 0 {
+                // Read and parse trailers until blank line
+                loop {
+                    if let Some(tr) = read_line(&mut buf) {
+                        let t = tr.trim();
+                        if t.is_empty() {
+                            break;
+                        }
+                        if let Some(v) = t.strip_prefix("X-Exit-Code:") {
+                            if let Ok(n) = v.trim().parse::<i32>() {
+                                exit_code = n;
+                                had_trailer = true;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                break;
+            }
+            // Read size bytes + CRLF
+            let mut remaining = size;
+            while remaining > 0 {
+                if !buf.is_empty() {
+                    let take = remaining.min(buf.len());
+                    if stdout.write_all(&buf[..take]).is_err() {
+                        // client write error: treat as disconnect
+                        break;
+                    }
+                    buf.drain(..take);
+                    remaining -= take;
+                } else {
+                    let mut tmp3 = [0u8; 8192];
+                    match reader_box.read(&mut tmp3) {
+                        Ok(0) => break, // disconnect
+                        Ok(n) => buf.extend_from_slice(&tmp3[..n]),
+                        Err(ref e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                || e.kind() == std::io::ErrorKind::TimedOut => {}
+                        Err(_) => break,
+                    }
+                }
+            }
+            // Consume trailing CRLF after chunk
+            // Ensure we have at least 2 bytes to drop CRLF
+            while buf.len() < 2 {
+                let mut tmp4 = [0u8; 64];
+                match reader_box.read(&mut tmp4) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&tmp4[..n]),
+                    Err(_) => break,
+                }
+            }
+            if buf.starts_with(b"\r\n") {
+                buf.drain(..2);
+            } else if buf.starts_with(b"\n") {
+                buf.drain(..1);
+            }
+            let _ = stdout.flush();
+        }
+    } else {
+        // Not chunked: write remaining body bytes and drain to EOF
+        if !body_after.is_empty() {
+            let _ = stdout.write_all(body_after);
+        }
+        let mut tmpb = [0u8; 8192];
+        loop {
+            match reader_box.read(&mut tmpb) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let _ = stdout.write_all(&tmpb[..n]);
+                }
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(_) => break,
+            }
+        }
+        if let Some(hc) = header_exit_code {
+            exit_code = hc;
+            had_trailer = true; // treat as we have an exit header
+        }
+    }
+
+    // Cleanup markers and tmp dir
+    if had_trailer {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
+        let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
+        let _ = fs::remove_dir_all(&d);
+    } else {
+        if verbose {
+            eprintln!("aifo-coder: disconnect, waiting for process termination...");
+            let wait_secs: u64 = std::env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(1);
+            if wait_secs > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(wait_secs));
+            }
+            eprintln!("aifo-coder: terminating now");
+            eprintln!();
+        }
+        if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+            .ok()
+            .as_deref()
+            != Some("0")
+        {
+            exit_code = 0;
+        } else if exit_code == 0 {
+            // keep 0 if server told us explicitly
+        } else if exit_code == 1 {
+            // default fallback on disconnect when not zeroed by env
+            exit_code = 1;
+        }
+    }
+    // Best-effort tmp dir cleanup created by caller naming scheme
+    let tmp_base = std::env::var("TMPDIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/tmp".to_string());
+    let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
+    let _ = fs::remove_dir_all(&tmp_dir);
+
+    Some(exit_code)
+}
+
 fn main() {
     let url = match env::var("AIFO_TOOLEEXEC_URL") {
         Ok(v) if !v.trim().is_empty() => v,
@@ -226,6 +776,11 @@ fn main() {
     form_parts.push(("cwd".to_string(), cwd.clone()));
     for a in std::env::args().skip(1) {
         form_parts.push(("arg".to_string(), a));
+    }
+
+    // Try native HTTP client (Phase 3); fall back to curl when disabled or on error
+    if let Some(code) = try_run_native(&url, &token, &exec_id, &form_parts, verbose) {
+        process::exit(code);
     }
 
     // Prepare temp directory for header dump
