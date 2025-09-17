@@ -1,3 +1,11 @@
+2025-09-18 01:00 User <user@example.com>
+
+Shim v5.2: refine native HTTP urlencoding and finalize Phase 3
+
+- Native HTTP client: encode '*' in application/x-www-form-urlencoded components (safer RFC compliance).
+- Verified case-insensitive X-Exit-Code handling in headers/trailers; unified disconnect UX retained.
+- Phase 3 complete; proceed to Phase 4 acceptance tests (TCP/UDS, large output, disconnect).
+
 2025-09-18 00:45 User <user@example.com>
 
 Shim v5.2: polish native HTTP and proxy docs

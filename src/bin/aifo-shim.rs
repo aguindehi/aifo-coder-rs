@@ -177,7 +177,7 @@ fn try_run_native(
         for b in s.bytes() {
             match b {
                 b' ' => out.push('+'),
-                b'-' | b'_' | b'.' | b'~' | b'*' => out.push(b as char),
+                b'-' | b'_' | b'.' | b'~' => out.push(b as char),
                 b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => out.push(b as char),
                 _ => {
                     out.push('%');
