@@ -308,10 +308,8 @@ fn try_run_native(
     fn find_header_end(buf: &[u8]) -> Option<usize> {
         if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             Some(i + 4)
-        } else if let Some(i) = buf.windows(2).position(|w| w == b"\n\n") {
-            Some(i + 2)
         } else {
-            None
+            buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
         }
     }
 
@@ -490,7 +488,7 @@ fn try_run_native(
         // Initialize a buffer that already contains any bytes after headers
         let mut buf: Vec<u8> = body_after.to_vec();
         // Helper to read a single line ending in CRLF or LF
-        let mut read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
+        let read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
             loop {
                 if let Some(pos) = buf
                     .windows(2)
@@ -559,11 +557,8 @@ fn try_run_native(
             }
         };
 
-        loop {
-            let ln = match read_line(&mut *reader_box, &mut buf) {
-                Some(s) => s,
-                None => break, // disconnect
-            };
+        while let Some(s) = read_line(&mut *reader_box, &mut buf) {
+            let ln = s;
             if ln == "__exit__" || ln == "__exit_term__" || ln == "__exit_hup__" {
                 // Signal exit mapping handled by caller of try_run_native (we returned Some(code) earlier)
                 // Here, break and treat as disconnect to be safe.
@@ -584,28 +579,24 @@ fn try_run_native(
             };
             if size == 0 {
                 // Read and parse trailers until blank line
-                loop {
-                    if let Some(tr) = read_line(&mut *reader_box, &mut buf) {
-                        let t = tr.trim();
-                        if t.is_empty() {
-                            break;
+                while let Some(tr) = read_line(&mut *reader_box, &mut buf) {
+                    let t = tr.trim();
+                    if t.is_empty() {
+                        break;
+                    }
+                    if let Some(v) = t.strip_prefix("X-Exit-Code:") {
+                        if let Ok(n) = v.trim().parse::<i32>() {
+                            exit_code = n;
+                            had_trailer = true;
                         }
-                        if let Some(v) = t.strip_prefix("X-Exit-Code:") {
+                    } else if t.to_ascii_lowercase().starts_with("x-exit-code:") {
+                        if let Some(idx) = t.find(':') {
+                            let v = &t[idx + 1..];
                             if let Ok(n) = v.trim().parse::<i32>() {
                                 exit_code = n;
                                 had_trailer = true;
                             }
-                        } else if t.to_ascii_lowercase().starts_with("x-exit-code:") {
-                            if let Some(idx) = t.find(':') {
-                                let v = &t[idx + 1..];
-                                if let Ok(n) = v.trim().parse::<i32>() {
-                                    exit_code = n;
-                                    had_trailer = true;
-                                }
-                            }
                         }
-                    } else {
-                        break;
                     }
                 }
                 break;
