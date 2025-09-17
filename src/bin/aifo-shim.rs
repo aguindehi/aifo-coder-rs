@@ -4,13 +4,13 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 use nix::unistd::Pid;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
-use std::process::{self, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
+use std::process::{self, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
@@ -163,11 +163,7 @@ fn try_run_native(
     verbose: bool,
 ) -> Option<i32> {
     // Default enabled; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback
-    if std::env::var("AIFO_SHIM_NATIVE_HTTP")
-        .ok()
-        .as_deref()
-        == Some("0")
-    {
+    if std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() == Some("0") {
         return None;
     }
 
@@ -341,8 +337,9 @@ fn try_run_native(
                     break;
                 }
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut =>
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
             {
                 // Check signals
                 #[cfg(unix)]
@@ -526,7 +523,13 @@ fn try_run_native(
                 {
                     let cnt = SIGINT_COUNT.load(Ordering::SeqCst);
                     if cnt >= 1 {
-                        let sig = if cnt == 1 { "INT" } else if cnt == 2 { "TERM" } else { "KILL" };
+                        let sig = if cnt == 1 {
+                            "INT"
+                        } else if cnt == 2 {
+                            "TERM"
+                        } else {
+                            "KILL"
+                        };
                         post_signal(url, token, exec_id, sig, verbose);
                         #[cfg(target_os = "linux")]
                         {
