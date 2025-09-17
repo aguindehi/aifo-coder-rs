@@ -40,13 +40,14 @@ pub use proxy::toolexec_start_proxy;
 mod shim;
 pub use shim::toolchain_write_shims;
 
-fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
+fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exec_id: &str) {
     if verbose {
         eprintln!(
-            "\r\naifo-coder: proxy parsed tool={} argv={} cwd={}",
+            "\r\naifo-coder: proxy parsed tool={} argv={} cwd={} exec_id={}",
             tool,
             shell_join(argv),
-            cwd
+            cwd,
+            exec_id
         );
     }
 }

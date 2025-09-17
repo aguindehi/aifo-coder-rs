@@ -502,8 +502,13 @@ fn handle_connection<S: Read + Write>(
         }
     }
 
-    // Log
-    log_parsed_request(verbose, &tool, &argv, &cwd);
+    // ExecId: accept header or generate, and log parsed request including exec_id
+    let exec_id = req
+        .headers
+        .get("x-aifo-exec-id")
+        .cloned()
+        .unwrap_or_else(random_token);
+    log_parsed_request(verbose, &tool, &argv, &cwd, &exec_id);
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
@@ -718,12 +723,7 @@ fn handle_connection<S: Read + Write>(
         full_args.extend(argv.clone());
     }
 
-    // ExecId: accept header or generate
-    let exec_id = req
-        .headers
-        .get("x-aifo-exec-id")
-        .cloned()
-        .unwrap_or_else(random_token);
+    // ExecId already determined above; reuse
     // Register exec_id -> container
     exec_registry.insert(exec_id.clone(), name.clone());
 
