@@ -1,3 +1,58 @@
+# Source Code Scoring — 2025-09-17 12:00
+
+Summary
+- Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
+  ExecId registry and /signal forwarding, disconnect termination semantics, host override shims,
+  and launcher/plumbing to wire everything together. Curl remains for v5.0–v5.1 as specified.
+
+Grades
+- Correctness: A-
+  - Signal traps in Rust shim mirror POSIX shim (INT→TERM→KILL); parent-shell cleanup on Linux.
+  - Proxy classifies endpoints, authenticates, streams with chunked prelude + trailers, and
+    performs disconnect cleanup and optional max-runtime escalation.
+  - Form parsing tolerant to CRLFCRLF/LFLF; allowlists enforced per toolchain kind.
+- Robustness: A-
+  - Best-effort retries on docker exec signals; defensive file I/O; unix socket transport gated.
+  - Host override path supported read-only; wrappers avoid lingering shells.
+- Performance: A-
+  - Streaming (proto v2) with chunked transfer and minimal allocations; buffered v1 kept simple.
+- Security: B+
+  - Bearer validation strict; notifications endpoint whitelisted to 'say' only when configured.
+  - Further hardening planned for native HTTP client (TLS/UDS validation and input caps).
+- Maintainability: A
+  - Clear modularization (auth, http, proxy, sidecar, routing, shim); logging consistent.
+  - Tests cover key routines (exec wrapper args, URL/form parsing); more can be added.
+- UX: A-
+  - Unified verbose logs; clean prompt on disconnect via shim messaging and parent-shell handling.
+- Test Coverage: B+
+  - Unit tests present; recommend adding integration tests for proxy disconnect and signal paths.
+
+Notable Strengths
+- Feature parity between Rust and POSIX shims with consistent environment knobs and UX.
+- Clean separation of responsibilities; good use of helper modules and re-exports.
+- Backward-compatible defaults (exit semantics) with env toggles for legacy behavior.
+
+Risks and Mitigations
+- Curl dependency remains until v5.2: mitigate by documenting and gating removal behind tests.
+- Parent-shell heuristics vary by distro: limited to Linux and guarded by env; proxy best-effort
+  cleanup complements shim behavior.
+- Docker CLI flakiness on signals: implemented brief retry; logs emphasized when verbose.
+
+Recommendations (Next Steps)
+1) Implement native HTTP client in Rust shim (v5.2):
+   - HTTP/1.1 POST /exec (chunked), header/trailer parsing, TCP + Linux UDS.
+   - Remove curl from slim images when coverage confirms parity.
+2) Add acceptance tests:
+   - Golden verbose logs; signal escalation sequence; disconnect exit semantics (default/legacy).
+   - Host override precedence and wrapper auto-exit behavior.
+3) Harden and polish (v5.3):
+   - Tighten input limits, error messages; broaden tests for tool availability routing.
+   - Improve parent-shell cleanup fallback paths (non-/proc environments).
+4) Documentation:
+   - Update README and release notes describing baked shims, overrides, and verification steps.
+
+Shall I proceed with these next steps?
+
 # aifo-coder Source Code Scorecard
 
 Date: 2025-09-07

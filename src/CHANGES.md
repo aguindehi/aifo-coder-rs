@@ -1,3 +1,12 @@
+2025-09-17 12:00 User <user@example.com>
+
+Shim v5: compiled Rust shim, wrappers, proxy signals
+
+- Baked compiled Rust aifo-shim into images; added sh/bash/dash auto-exit wrappers.
+- Implemented ExecId registry and /signal in proxy; disconnect termination UX and escalation.
+- Added host-generated POSIX shims (override) with traps and markers; curl remains (v5.0–v5.1).
+- Launcher integrates SHELL=/opt/aifo/bin/sh and PATH symlinks; optional unix socket on Linux.
+
 2025-09-15 00:00 User <user@example.com>
 
 QA: test suite green (230 passed, 24 skipped)
