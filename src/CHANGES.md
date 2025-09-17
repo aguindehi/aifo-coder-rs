@@ -1,3 +1,9 @@
+2025-09-18 01:30 User <user@example.com>
+
+QA: test suite green (231 passed, 24 skipped)
+
+- Verified all tests are green after TTY default change and native HTTP refinements.
+
 2025-09-18 01:15 User <user@example.com>
 
 Shim v5.2: proxy TTY default on (AIFO_TOOLEEXEC_TTY=0 disables)
