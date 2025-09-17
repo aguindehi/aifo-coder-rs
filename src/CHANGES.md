@@ -1,3 +1,11 @@
+2025-09-17 12:30 User <user@example.com>
+
+Shim v5: finalize parity and logging; minor polish
+
+- Unified proxy verbose logs to include exec_id in parsed-request line.
+- Ensured Linux-only signal hooks for Rust shim; preserved default 0 exit on traps/disconnect.
+- Kept curl-based client for v5.0–v5.1; wrappers auto-exit and respect no_shell_on_tty markers.
+
 2025-09-17 12:00 User <user@example.com>
 
 QA: test suite green (231 passed, 24 skipped)
