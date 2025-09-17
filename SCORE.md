@@ -3,7 +3,7 @@
 Summary
 - Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
   ExecId registry and /signal forwarding, disconnect termination semantics, host override shims,
-  and launcher/plumbing to wire everything together. Curl remains for v5.0–v5.1 as specified.
+  and launcher/plumbing to wire everything together. Native HTTP enabled; curl removed from slim images when KEEP_APT=0; retained where needed.
 
 Grades
 - Correctness: A-

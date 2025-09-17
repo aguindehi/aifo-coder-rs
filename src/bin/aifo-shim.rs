@@ -466,13 +466,19 @@ fn try_run_native(
     let mut header_exit_code: Option<i32> = None;
     for line in header_text.lines() {
         let l = line.trim();
-        if l.to_ascii_lowercase().starts_with("transfer-encoding:")
-            && l.to_ascii_lowercase().contains("chunked")
-        {
+        let ll = l.to_ascii_lowercase();
+        if ll.starts_with("transfer-encoding:") && ll.contains("chunked") {
             is_chunked = true;
         } else if let Some(v) = l.strip_prefix("X-Exit-Code:") {
             if let Ok(n) = v.trim().parse::<i32>() {
                 header_exit_code = Some(n);
+            }
+        } else if ll.starts_with("x-exit-code:") {
+            if let Some(idx) = l.find(':') {
+                let v = &l[idx + 1..];
+                if let Ok(n) = v.trim().parse::<i32>() {
+                    header_exit_code = Some(n);
+                }
             }
         }
     }
@@ -585,6 +591,14 @@ fn try_run_native(
                             if let Ok(n) = v.trim().parse::<i32>() {
                                 exit_code = n;
                                 had_trailer = true;
+                            }
+                        } else if t.to_ascii_lowercase().starts_with("x-exit-code:") {
+                            if let Some(idx) = t.find(':') {
+                                let v = &t[idx + 1..];
+                                if let Ok(n) = v.trim().parse::<i32>() {
+                                    exit_code = n;
+                                    had_trailer = true;
+                                }
                             }
                         }
                     } else {

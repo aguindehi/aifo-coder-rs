@@ -1,3 +1,11 @@
+2025-09-18 00:30 User <user@example.com>
+
+Shim v5.2: drop curl from slim runtime images (KEEP_APT=0)
+
+- Removed curl from codex-slim, crush-slim, and aider-slim runtime images when KEEP_APT=0.
+- Kept curl in builder stages and full images as needed for tooling (e.g., uv install).
+- Native HTTP client remains default; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback.
+
 2025-09-18 00:00 User <user@example.com>
 
 Shim v5.2: enable native HTTP by default; curl fallback opt-out
