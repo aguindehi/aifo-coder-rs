@@ -1,14 +1,14 @@
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::process::{self, Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
 #[cfg(unix)]
 use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::process::{self, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
 
@@ -145,7 +145,10 @@ fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose
     cmd.args(&args);
     if verbose {
         let joined = args.join(" ");
-        eprintln!("\raifo-shim: posting signal {} via curl {}", signal_name, joined);
+        eprintln!(
+            "\raifo-shim: posting signal {} via curl {}",
+            signal_name, joined
+        );
     }
     let _ = cmd.status();
 }
@@ -302,7 +305,13 @@ fn main() {
         {
             let cnt = SIGINT_COUNT.load(Ordering::SeqCst);
             if cnt >= 1 {
-                let sig = if cnt == 1 { "INT" } else if cnt == 2 { "TERM" } else { "KILL" };
+                let sig = if cnt == 1 {
+                    "INT"
+                } else if cnt == 2 {
+                    "TERM"
+                } else {
+                    "KILL"
+                };
                 post_signal(&url, &token, &exec_id, sig, verbose);
                 #[cfg(target_os = "linux")]
                 {
