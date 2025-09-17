@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-use nix::sys::signal::{self, Signal, SaFlags, SigAction, SigHandler, SigSet};
+use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 #[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
@@ -107,7 +107,6 @@ fn kill_parent_shell_if_interactive() {
     }
     let _ = signal::kill(Pid::from_raw(ppid), Signal::SIGKILL);
 }
-
 
 fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose: bool) {
     let mut args: Vec<String> = vec![
