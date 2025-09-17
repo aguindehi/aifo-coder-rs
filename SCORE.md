@@ -1,4 +1,4 @@
-# Source Code Scoring — 2025-09-17 12:30
+# Source Code Scoring — 2025-09-18 00:00
 
 Summary
 - Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
@@ -39,9 +39,9 @@ Risks and Mitigations
 - Docker CLI flakiness on signals: implemented brief retry; logs emphasized when verbose.
 
 Recommendations (Next Steps)
-1) Implement native HTTP client in Rust shim (v5.2):
-   - HTTP/1.1 POST /exec (chunked), header/trailer parsing, TCP + Linux UDS.
-   - Remove curl from slim images when coverage confirms parity.
+1) Acceptance tests and curl removal (v5.2):
+   - Golden logs for native HTTP path (TCP/UDS); large-output and disconnect coverage.
+   - After parity, drop curl from slim images if unused elsewhere.
 2) Add acceptance tests:
    - Golden verbose logs; signal escalation sequence; disconnect exit semantics (default/legacy).
    - Host override precedence and wrapper auto-exit behavior.

@@ -162,11 +162,11 @@ fn try_run_native(
     form_parts: &[(String, String)],
     verbose: bool,
 ) -> Option<i32> {
-    // Gate via env for phased rollout (default off)
+    // Default enabled; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback
     if std::env::var("AIFO_SHIM_NATIVE_HTTP")
         .ok()
         .as_deref()
-        != Some("1")
+        == Some("0")
     {
         return None;
     }

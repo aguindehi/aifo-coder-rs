@@ -1,3 +1,11 @@
+2025-09-18 00:00 User <user@example.com>
+
+Shim v5.2: enable native HTTP by default; curl fallback opt-out
+
+- Native HTTP client (TCP/UDS, chunked + trailers) enabled by default in Rust shim.
+- Set AIFO_SHIM_NATIVE_HTTP=0 to force curl-based path (temporary safety valve).
+- Behavior and exits preserved; curl removal will follow after acceptance tests.
+
 2025-09-17 12:30 User <user@example.com>
 
 Shim v5: finalize parity and logging; minor polish
