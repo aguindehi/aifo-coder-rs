@@ -1,3 +1,10 @@
+2025-09-18 01:15 User <user@example.com>
+
+Shim v5.2: proxy TTY default on (AIFO_TOOLEEXEC_TTY=0 disables)
+
+- In streaming proto (v2), allocate a TTY by default for better interactive flushing.
+- Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation; v1 buffered path unchanged.
+
 2025-09-18 01:00 User <user@example.com>
 
 Shim v5.2: refine native HTTP urlencoding and finalize Phase 3

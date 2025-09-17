@@ -750,7 +750,7 @@ fn handle_connection<S: Read + Write>(
         }
         let started = std::time::Instant::now();
 
-        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() == Some("1");
+        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
         let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
