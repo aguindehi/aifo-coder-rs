@@ -1,5 +1,11 @@
 2025-09-17 12:00 User <user@example.com>
 
+QA: test suite green (231 passed, 24 skipped)
+
+- Verified all tests are green with latest shim/proxy changes.
+
+2025-09-17 12:00 User <user@example.com>
+
 Shim v5: compiled Rust shim, wrappers, proxy signals
 
 - Baked compiled Rust aifo-shim into images; added sh/bash/dash auto-exit wrappers.
