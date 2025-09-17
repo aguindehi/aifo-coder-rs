@@ -289,11 +289,13 @@ fn main() {
     };
 
     // Poll for signals while streaming
-    let mut status_success_opt: Option<bool> = None;
+    let mut exited: bool = false;
+    let mut status_success: bool = false;
     loop {
         // Check if child exited
         if let Ok(Some(st)) = child.try_wait() {
-            status_success_opt = Some(st.success());
+            status_success = st.success();
+            exited = true;
             break;
         }
         // Handle signals (Unix)
@@ -382,10 +384,9 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 
-    let status_success = match status_success_opt {
-        Some(v) => v,
-        None => child.wait().map(|s| s.success()).unwrap_or(false),
-    };
+    if !exited {
+        status_success = child.wait().map(|s| s.success()).unwrap_or(false);
+    }
 
     // Parse X-Exit-Code from headers/trailers
     let mut exit_code: i32 = 1;
