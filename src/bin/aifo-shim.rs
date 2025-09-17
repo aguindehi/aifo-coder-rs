@@ -1,13 +1,14 @@
 #[cfg(unix)]
-use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
-#[cfg(unix)]
+use nix::sys::signal::{self, Signal};
+#[cfg(target_os = "linux")]
+use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet};
+#[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
@@ -32,7 +33,7 @@ extern "C" fn handle_hup(_sig: i32) {
     GOT_HUP.store(true, Ordering::SeqCst);
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn install_signal_handlers() {
     let act_int = SigAction::new(
         SigHandler::Handler(handle_sigint),
@@ -276,7 +277,7 @@ fn main() {
     }
     args.push(final_url);
 
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     install_signal_handlers();
 
     let mut cmd = Command::new("curl");
@@ -293,11 +294,11 @@ fn main() {
     };
 
     // Poll for signals while streaming
-    let mut status_opt: Option<std::process::ExitStatus> = None;
+    let mut status_success: bool = false;
     loop {
         // Check if child exited
         if let Ok(Some(st)) = child.try_wait() {
-            status_opt = Some(st);
+            status_success = st.success();
             break;
         }
         // Handle signals (Unix)
@@ -386,7 +387,9 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 
-    let status = status_opt.expect("child status");
+    if !status_success {
+        status_success = child.wait().map(|s| s.success()).unwrap_or(false);
+    }
 
     // Parse X-Exit-Code from headers/trailers
     let mut exit_code: i32 = 1;
@@ -400,7 +403,7 @@ fn main() {
                 }
             }
         }
-    } else if status.success() {
+    } else if status_success {
         // If curl succeeded but header file missing, assume success
         exit_code = 0;
         had_header = true;
