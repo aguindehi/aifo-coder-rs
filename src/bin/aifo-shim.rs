@@ -223,7 +223,7 @@ fn try_run_native(
         }
     } else {
         // Expect http://host:port/path
-        let mut rest = url.trim_start_matches("http://").to_string();
+        let rest = url.trim_start_matches("http://").to_string();
         let path_idx = rest.find('/').unwrap_or(rest.len());
         let (host_port, path) = rest.split_at(path_idx);
         let path = if path.is_empty() {
@@ -490,7 +490,7 @@ fn try_run_native(
         // Initialize a buffer that already contains any bytes after headers
         let mut buf: Vec<u8> = body_after.to_vec();
         // Helper to read a single line ending in CRLF or LF
-        let mut read_line = |buf: &mut Vec<u8>| -> Option<String> {
+        let mut read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
             loop {
                 if let Some(pos) = buf
                     .windows(2)
@@ -510,7 +510,7 @@ fn try_run_native(
                     return String::from_utf8(line).ok();
                 }
                 let mut tmp2 = [0u8; 1024];
-                match reader_box.read(&mut tmp2) {
+                match reader.read(&mut tmp2) {
                     Ok(0) => return None,
                     Ok(n) => buf.extend_from_slice(&tmp2[..n]),
                     Err(ref e)
@@ -560,7 +560,7 @@ fn try_run_native(
         };
 
         loop {
-            let ln = match read_line(&mut buf) {
+            let ln = match read_line(&mut *reader_box, &mut buf) {
                 Some(s) => s,
                 None => break, // disconnect
             };
@@ -585,7 +585,7 @@ fn try_run_native(
             if size == 0 {
                 // Read and parse trailers until blank line
                 loop {
-                    if let Some(tr) = read_line(&mut buf) {
+                    if let Some(tr) = read_line(&mut *reader_box, &mut buf) {
                         let t = tr.trim();
                         if t.is_empty() {
                             break;
