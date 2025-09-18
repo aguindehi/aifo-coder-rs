@@ -180,6 +180,97 @@ fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose
     let _ = cmd.status();
 }
 
+// Best-effort native POST /signal over TCP or Linux UDS; silent on errors.
+fn send_signal_native(url: &str, token: &str, exec_id: &str, signal_name: &str) {
+    let body = format!("exec_id={}&signal={}", exec_id, signal_name);
+    // UDS on Linux
+    if url.starts_with("unix://") {
+        #[cfg(target_os = "linux")]
+        {
+            let sock = url.trim_start_matches("unix://");
+            let mut stream = match UnixStream::connect(sock) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
+            let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
+            let req = format!(
+                concat!(
+                    "POST /signal HTTP/1.1\r\n",
+                    "Host: localhost\r\n",
+                    "Authorization: Bearer {tok}\r\n",
+                    "X-Aifo-Proto: 2\r\n",
+                    "Content-Type: application/x-www-form-urlencoded\r\n",
+                    "Content-Length: {len}\r\n",
+                    "Connection: close\r\n",
+                    "\r\n"
+                ),
+                tok = token,
+                len = body.len()
+            );
+            let _ = stream.write_all(req.as_bytes());
+            let _ = stream.write_all(body.as_bytes());
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+        return;
+    }
+
+    // Default TCP http://host:port/…
+    let rest = url.trim_start_matches("http://").to_string();
+    let path_idx = rest.find('/').unwrap_or(rest.len());
+    let (host_port, _path) = rest.split_at(path_idx);
+    let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+        let pn = p.parse::<u16>().unwrap_or(80);
+        (h.to_string(), pn)
+    } else {
+        (host_port.to_string(), 80u16)
+    };
+    let addr = format!("{}:{}", host, port);
+    let mut stream = match TcpStream::connect(&addr) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
+    let req = format!(
+        concat!(
+            "POST /signal HTTP/1.1\r\n",
+            "Host: {host}\r\n",
+            "Authorization: Bearer {tok}\r\n",
+            "X-Aifo-Proto: 2\r\n",
+            "Content-Type: application/x-www-form-urlencoded\r\n",
+            "Content-Length: {len}\r\n",
+            "Connection: close\r\n",
+            "\r\n"
+        ),
+        host = host,
+        tok = token,
+        len = body.len()
+    );
+    let _ = stream.write_all(req.as_bytes());
+    let _ = stream.write_all(body.as_bytes());
+    let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Both);
+}
+
+// Best-effort proactive escalation during disconnect wait: INT -> TERM -> KILL.
+fn proactive_disconnect_escalation(url: &str, token: &str, exec_id: &str) {
+    if std::env::var("AIFO_SHIM_PROACTIVE_DISCONNECT_ESCALATION")
+        .ok()
+        .as_deref()
+        == Some("0")
+    {
+        return;
+    }
+    // INT, brief grace, then TERM, longer grace, then KILL.
+    send_signal_native(url, token, exec_id, "INT");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    send_signal_native(url, token, exec_id, "TERM");
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    send_signal_native(url, token, exec_id, "KILL");
+}
+
 // Native HTTP/1.1 client (Phase 3): TCP + Linux UDS, chunked request, trailer parsing.
 // Returns Some(exit_code) when native path is taken; None to fall back to curl.
 fn try_run_native(
@@ -457,6 +548,8 @@ fn try_run_native(
                 // Proactively close the transient /run shell to keep prompt clean.
                 kill_parent_shell_if_interactive();
             }
+            // Proactively drive escalation on the proxy while we wait.
+            proactive_disconnect_escalation(url, token, exec_id);
             disconnect_wait(verbose);
             let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
                 .ok()
@@ -703,6 +796,8 @@ fn try_run_native(
             // Proactively terminate the transient parent shell to keep prompt clean.
             kill_parent_shell_if_interactive();
         }
+        // Proactively drive escalation on the proxy while we wait.
+        proactive_disconnect_escalation(url, token, exec_id);
         disconnect_wait(verbose);
         if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
             .ok()
