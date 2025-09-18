@@ -1,3 +1,9 @@
+2025-09-18 02:15 User <user@example.com>
+
+QA: test suite green (231 passed, 26 skipped)
+
+- Verified all tests are green after acceptance tests/doc additions.
+
 2025-09-18 02:00 User <user@example.com>
 
 Shim v5.4: Phase 4 acceptance tests, golden docs, and curl retention
