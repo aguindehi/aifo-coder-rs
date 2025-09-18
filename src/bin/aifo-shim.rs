@@ -554,6 +554,10 @@ fn try_run_native(
             // Proactively drive escalation on the proxy while we wait.
             proactive_disconnect_escalation(url, token, exec_id);
             disconnect_wait(verbose);
+            // After waiting, remove exec markers so the shell wrapper won't auto-exit next /run
+            let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
+            let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
+            let _ = fs::remove_dir_all(&d_rm);
             let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
                 .ok()
                 .as_deref()
@@ -802,6 +806,10 @@ fn try_run_native(
         // Proactively drive escalation on the proxy while we wait.
         proactive_disconnect_escalation(url, token, exec_id);
         disconnect_wait(verbose);
+        // Remove exec markers so the shell wrapper won't auto-exit on the next /run
+        let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
+        let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
+        let _ = fs::remove_dir_all(&d_rm);
         if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
             .ok()
             .as_deref()
@@ -1113,6 +1121,8 @@ fn main() {
         proactive_disconnect_escalation(&url, &token, &exec_id);
         // Inform user and wait so proxy logs can flush before returning control
         disconnect_wait(verbose);
+        // Remove exec markers so the shell wrapper won't auto-exit on the next /run
+        let _ = fs::remove_dir_all(&base_dir);
     }
     process::exit(exit_code);
 }
