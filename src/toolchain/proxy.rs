@@ -25,7 +25,7 @@ use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -334,9 +334,9 @@ pub fn toolexec_start_proxy(
                 if verbose {
                     eprintln!("aifo-coder: toolexec proxy listening on unix socket");
                 }
-                let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
-                let mut exec_registry: HashMap<String, String> = HashMap::new();
-                let mut recent_signals: HashMap<String, std::time::Instant> = HashMap::new();
+                let tool_cache = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<(String, String), bool>::new()));
+                let exec_registry = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
+                let recent_signals = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, std::time::Instant>::new()));
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -364,22 +364,25 @@ pub fn toolexec_start_proxy(
                     }
                     let _ = stream.set_write_timeout(None);
 
-                    let ctx = ProxyCtx {
-                        runtime: runtime.clone(),
-                        token: token_for_thread2.clone(),
-                        session: session.clone(),
-                        timeout_secs,
-                        verbose,
-                        agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
-                        uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
-                    };
-                    handle_connection(
-                        &ctx,
-                        &mut stream,
-                        &mut tool_cache,
-                        &mut exec_registry,
-                        &mut recent_signals,
-                    );
+                    let tc = tool_cache.clone();
+                    let er = exec_registry.clone();
+                    let rs = recent_signals.clone();
+                    let runtime_cl = runtime.clone();
+                    let token_cl = token_for_thread2.clone();
+                    let session_cl = session.clone();
+                    std::thread::spawn(move || {
+                        let ctx2 = ProxyCtx {
+                            runtime: runtime_cl,
+                            token: token_cl,
+                            session: session_cl,
+                            timeout_secs,
+                            verbose,
+                            agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
+                            uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+                        };
+                        let mut s = stream;
+                        handle_connection(&ctx2, &mut s, &tc, &er, &rs);
+                    });
                 }
                 let _ = fs::remove_file(&sock_path_cl);
                 let _ = fs::remove_dir(&host_dir_cl);
@@ -414,9 +417,9 @@ pub fn toolexec_start_proxy(
                 bind_host
             );
         }
-        let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
-        let mut exec_registry: HashMap<String, String> = HashMap::new();
-        let mut recent_signals: HashMap<String, std::time::Instant> = HashMap::new();
+        let tool_cache = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<(String, String), bool>::new()));
+        let exec_registry = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
+        let recent_signals = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, std::time::Instant>::new()));
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -444,22 +447,25 @@ pub fn toolexec_start_proxy(
             }
             let _ = stream.set_write_timeout(None);
 
-            let ctx = ProxyCtx {
-                runtime: runtime.clone(),
-                token: token_for_thread.clone(),
-                session: session.clone(),
-                timeout_secs,
-                verbose,
-                agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
-                uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
-            };
-            handle_connection(
-                &ctx,
-                &mut stream,
-                &mut tool_cache,
-                &mut exec_registry,
-                &mut recent_signals,
-            );
+            let tc = tool_cache.clone();
+            let er = exec_registry.clone();
+            let rs = recent_signals.clone();
+            let runtime_cl = runtime.clone();
+            let token_cl = token_for_thread.clone();
+            let session_cl = session.clone();
+            std::thread::spawn(move || {
+                let ctx2 = ProxyCtx {
+                    runtime: runtime_cl,
+                    token: token_cl,
+                    session: session_cl,
+                    timeout_secs,
+                    verbose,
+                    agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
+                    uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+                };
+                let mut s = stream;
+                handle_connection(&ctx2, &mut s, &tc, &er, &rs);
+            });
         }
         if verbose {
             eprintln!("aifo-coder: toolexec proxy stopped");
@@ -473,9 +479,9 @@ pub fn toolexec_start_proxy(
 fn handle_connection<S: Read + Write>(
     ctx: &ProxyCtx,
     stream: &mut S,
-    tool_cache: &mut HashMap<(String, String), bool>,
-    exec_registry: &mut HashMap<String, String>,
-    recent_signals: &mut HashMap<String, std::time::Instant>,
+    tool_cache: &Arc<Mutex<HashMap<(String, String), bool>>>,
+    exec_registry: &Arc<Mutex<HashMap<String, String>>>,
+    recent_signals: &Arc<Mutex<HashMap<String, std::time::Instant>>>,
 ) {
     let token: &str = &ctx.token;
     let session: &str = &ctx.session;
@@ -637,8 +643,8 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
-                let container = if let Some(name) = exec_registry.get(&exec_id) {
-                    name.clone()
+                let container = if let Some(name) = exec_registry.lock().unwrap().get(&exec_id).cloned() {
+                    name
                 } else {
                     respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
                     let _ = stream.flush();
@@ -660,7 +666,10 @@ fn handle_connection<S: Read + Write>(
                 }
                 kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
                 // Record recent /signal for this exec to suppress duplicate disconnect escalation
-                recent_signals.insert(exec_id.clone(), std::time::Instant::now());
+                {
+                    let mut rs = recent_signals.lock().unwrap();
+                    rs.insert(exec_id.clone(), std::time::Instant::now());
+                }
                 // 204 No Content without exit code header
                 let _ = stream.write_all(
                     b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -724,7 +733,10 @@ fn handle_connection<S: Read + Write>(
     debug_assert!(authorized);
 
     // Route to sidecar kind and enforce allowlist
-    let selected_kind = select_kind_for_tool(session, &tool, timeout_secs, tool_cache);
+    let selected_kind = {
+        let mut cache = tool_cache.lock().unwrap();
+        select_kind_for_tool(session, &tool, timeout_secs, &mut *cache)
+    };
     let kind = selected_kind.as_str();
     let allow = sidecar_allowlist(kind);
     if !allow.contains(&tool.as_str()) {
@@ -768,7 +780,10 @@ fn handle_connection<S: Read + Write>(
 
     // ExecId already determined above; reuse
     // Register exec_id -> container
-    exec_registry.insert(exec_id.clone(), name.clone());
+    {
+        let mut er = exec_registry.lock().unwrap();
+        er.insert(exec_id.clone(), name.clone());
+    }
 
     let exec_preview_args = sidecar::build_sidecar_exec_preview_with_exec_id(
         &name,
@@ -901,10 +916,12 @@ fn handle_connection<S: Read + Write>(
 
         if write_failed {
             // Client disconnected: if we saw a recent /signal for this exec, skip duplicate escalation.
-            let suppress = recent_signals
-                .get(&exec_id)
-                .map(|ts| ts.elapsed() < Duration::from_millis(2300))
-                .unwrap_or(false);
+            let suppress = {
+                let rs = recent_signals.lock().unwrap();
+                rs.get(&exec_id)
+                    .map(|ts| ts.elapsed() < Duration::from_millis(2300))
+                    .unwrap_or(false)
+            };
             if suppress {
                 log_stderr_and_file("\raifo-coder: disconnect");
                 if let Some(ac) = ctx.agent_container.as_deref() {
@@ -923,16 +940,28 @@ fn handle_connection<S: Read + Write>(
             let _ = child.wait();
             // Mark watcher done and remove from registry
             done.store(true, std::sync::atomic::Ordering::SeqCst);
-            let _ = exec_registry.remove(&exec_id);
-            let _ = recent_signals.remove(&exec_id);
+            {
+                let mut er = exec_registry.lock().unwrap();
+                let _ = er.remove(&exec_id);
+            }
+            {
+                let mut rs = recent_signals.lock().unwrap();
+                let _ = rs.remove(&exec_id);
+            }
             return;
         }
 
         let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
         // Mark watcher done and remove from registry
         done.store(true, std::sync::atomic::Ordering::SeqCst);
-        let _ = exec_registry.remove(&exec_id);
-        let _ = recent_signals.remove(&exec_id);
+        {
+            let mut er = exec_registry.lock().unwrap();
+            let _ = er.remove(&exec_id);
+        }
+        {
+            let mut rs = recent_signals.lock().unwrap();
+            let _ = rs.remove(&exec_id);
+        }
         log_request_result(verbose, &tool, kind, code, &started);
         respond_chunked_trailer(stream, code);
         return;
@@ -1062,8 +1091,14 @@ fn handle_connection<S: Read + Write>(
         }
     }
 
-    let _ = exec_registry.remove(&exec_id);
-    let _ = recent_signals.remove(&exec_id);
+    {
+        let mut er = exec_registry.lock().unwrap();
+        let _ = er.remove(&exec_id);
+    }
+    {
+        let mut rs = recent_signals.lock().unwrap();
+        let _ = rs.remove(&exec_id);
+    }
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
     let header = format!(
