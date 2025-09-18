@@ -112,6 +112,33 @@ fn kill_parent_shell_if_interactive() {
     let _ = signal::kill(Pid::from_raw(ppid), Signal::SIGKILL);
 }
 
+fn compute_wait_secs(verbose: bool) -> u64 {
+    if let Ok(v) = std::env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS") {
+        if let Ok(n) = v.trim().parse::<u64>() {
+            return n;
+        }
+    }
+    if verbose { 3 } else { 1 }
+}
+
+fn disconnect_wait(verbose: bool) {
+    let secs = compute_wait_secs(verbose);
+    // Start the first line on a fresh column even if a prompt or ^C was mid-line
+    eprint!("\n\r");
+    eprintln!(
+        "aifo-coder: disconnect, waiting for process termination (~{}s)...",
+        secs
+    );
+    if secs > 0 {
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+    }
+    if verbose {
+        eprintln!("aifo-coder: terminating now");
+        // Ensure the agent prompt appears on a fresh, clean line
+        eprintln!();
+    }
+}
+
 fn post_signal(url: &str, token: &str, exec_id: &str, signal_name: &str, verbose: bool) {
     let mut args: Vec<String> = vec![
         "-sS".into(),
@@ -255,9 +282,6 @@ fn try_run_native(
         Conn::Uds(s, path) => (s as &mut dyn Write, "localhost".to_string(), path.clone()),
     };
 
-    if verbose {
-        eprintln!("aifo-shim: variant=rust transport=native");
-    }
 
     let req_line = format!("POST {} HTTP/1.1\r\n", path);
     let headers = format!(
@@ -376,6 +400,7 @@ fn try_run_native(
                                 _ => 137,
                             }
                         };
+                        disconnect_wait(verbose);
                         return Some(code);
                     }
                     if GOT_TERM.load(Ordering::SeqCst) {
@@ -425,18 +450,7 @@ fn try_run_native(
         Some(i) => i,
         None => {
             // No headers; treat as disconnect
-            if verbose {
-                eprintln!("aifo-coder: disconnect, waiting for process termination...");
-                let wait_secs: u64 = std::env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
-                    .ok()
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(1);
-                if wait_secs > 0 {
-                    std::thread::sleep(std::time::Duration::from_secs(wait_secs));
-                }
-                eprintln!("aifo-coder: terminating now");
-                eprintln!();
-            }
+            disconnect_wait(verbose);
             let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
                 .ok()
                 .as_deref()
@@ -675,18 +689,7 @@ fn try_run_native(
         let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d);
     } else {
-        if verbose {
-            eprintln!("aifo-coder: disconnect, waiting for process termination...");
-            let wait_secs: u64 = std::env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(1);
-            if wait_secs > 0 {
-                std::thread::sleep(std::time::Duration::from_secs(wait_secs));
-            }
-            eprintln!("aifo-coder: terminating now");
-            eprintln!();
-        }
+        disconnect_wait(verbose);
         if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
             .ok()
             .as_deref()
@@ -775,6 +778,11 @@ fn main() {
     let _ = fs::write(base_dir.join("no_shell_on_tty"), b"");
 
     if verbose {
+        let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
+        eprintln!(
+            "aifo-shim: variant=rust transport={}",
+            if prefer_native { "native" } else { "curl" }
+        );
         eprintln!("aifo-shim: tool={} cwd={} exec_id={}", tool, cwd, exec_id);
         eprintln!(
             "aifo-shim: preparing request to {} (proto={})",
@@ -846,10 +854,6 @@ fn main() {
     #[cfg(target_os = "linux")]
     install_signal_handlers();
 
-    if verbose {
-        eprintln!("aifo-shim: variant=rust transport=curl");
-    }
-
     let mut cmd = Command::new("curl");
     cmd.args(&args);
     cmd.stdout(Stdio::inherit());
@@ -904,6 +908,8 @@ fn main() {
                         _ => 137,
                     }
                 };
+                // Inform user and wait briefly so proxy logs can flush cleanly
+                disconnect_wait(verbose);
                 // Keep markers for proxy cleanup
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
@@ -988,20 +994,8 @@ fn main() {
         {
             exit_code = 0;
         }
-        // In verbose mode, inform user and give proxy logs a brief moment to flush before exiting.
-        if env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("aifo-coder: disconnect, waiting for process termination...");
-            let wait_secs: u64 = env::var("AIFO_SHIM_DISCONNECT_WAIT_SECS")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(1);
-            if wait_secs > 0 {
-                std::thread::sleep(std::time::Duration::from_secs(wait_secs));
-            }
-            eprintln!("aifo-coder: terminating now");
-            // Ensure the agent prompt appears on a fresh, clean line
-            eprintln!();
-        }
+        // Inform user and wait so proxy logs can flush before returning control
+        disconnect_wait(verbose);
     }
     process::exit(exit_code);
 }
