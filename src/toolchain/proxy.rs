@@ -526,7 +526,9 @@ fn handle_connection<S: Read + Write>(
         .get("x-aifo-exec-id")
         .cloned()
         .unwrap_or_else(random_token);
-    log_parsed_request(verbose, &tool, &argv, &cwd, &exec_id);
+    if matches!(endpoint, Some(http::Endpoint::Exec)) {
+        log_parsed_request(verbose, &tool, &argv, &cwd, &exec_id);
+    }
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
@@ -634,6 +636,12 @@ fn handle_connection<S: Read + Write>(
                     respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
                     let _ = stream.flush();
                     return;
+                }
+                if verbose {
+                    log_stderr_and_file(&format!(
+                        "\raifo-coder: proxy signal: exec_id={} sig={}",
+                        exec_id, sig
+                    ));
                 }
                 kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
                 // 204 No Content without exit code header
