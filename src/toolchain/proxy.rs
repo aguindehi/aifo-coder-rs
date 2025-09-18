@@ -263,7 +263,7 @@ fn build_exec_args_with_wrapper(
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
     let inner = shell_join(&user_slice);
     let script = format!(
-        "set -e; export PATH=\"/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; d=\"/home/coder/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; if [ -z \"${{AIFO_EXEC_ID:-}}\" ]; then exec {inner} 2>&1; fi; mkdir -p \"$d\"; ( setsid sh -lc \"export PATH=\\\"/home/coder/.cargo/bin:/usr/local/cargo/bin:\\$PATH\\\"; exec {inner} 2>&1\" ) & pg=$!; printf \"%s\" \"$pg\" > \"$d/pgid\"; wait \"$pg\"; rm -rf \"$d\" || true",
+        "set -e; export PATH=\"/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; eid=\"${{AIFO_EXEC_ID:-}}\"; if [ -z \"$eid\" ]; then exec {inner} 2>&1; fi; d=\"${{HOME:-/home/coder}}/.aifo-exec/$eid\"; mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/$eid\"; mkdir -p \"$d\" || true; }}; ( setsid sh -lc \"export PATH=\\\"/home/coder/.cargo/bin:/usr/local/cargo/bin:\\$PATH\\\"; exec {inner} 2>&1\" ) & pg=$!; printf \"%s\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; wait \"$pg\"; rm -rf \"$d\" || true",
         inner = inner
     );
     spawn_args.push("sh".to_string());
