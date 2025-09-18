@@ -4,40 +4,6 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-#[cfg(unix)]
-fn capture_stderr<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, STDERR_FILENO};
-    use std::fs;
-    use std::os::unix::io::AsRawFd;
-    let path = "/tmp/aifo-coder-test-stderr-accept-logs.tmp";
-    let _ = fs::remove_file(path);
-    let file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .read(true)
-        .truncate(true)
-        .open(path)
-        .expect("open tmp stderr");
-    unsafe {
-        let saved = dup(STDERR_FILENO);
-        assert!(saved >= 0, "dup stderr");
-        let ok = dup2(file.as_raw_fd(), STDERR_FILENO);
-        assert!(ok >= 0, "dup2 stderr");
-        f();
-        fflush(std::ptr::null_mut());
-        let ok2 = dup2(saved, STDERR_FILENO);
-        assert!(ok2 >= 0, "restore stderr");
-        let _ = libc::close(saved);
-    }
-    std::fs::read_to_string(path).unwrap_or_default()
-}
-
-#[cfg(not(unix))]
-fn capture_stderr<F: FnOnce()>(f: F) -> String {
-    // Fallback: just run and return empty logs
-    f();
-    String::new()
-}
 
 fn urlencode_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
