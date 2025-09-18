@@ -92,6 +92,20 @@ fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
     let _ = w.flush();
 }
 
+/// Test helper: tee important proxy log lines to stderr and optionally to a file
+/// when AIFO_TEST_LOG_PATH is set (used by acceptance tests to avoid dup2 tricks).
+fn log_stderr_and_file(s: &str) {
+    eprintln!("{}", s);
+    if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
+        if !p.trim().is_empty() {
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+                use std::io::Write as _;
+                let _ = writeln!(f, "{}", s);
+            }
+        }
+    }
+}
+
 /// Best-effort: send a signal to the process group inside container for given exec id.
 fn kill_in_container(
     runtime: &PathBuf,
@@ -210,7 +224,7 @@ fn disconnect_terminate_exec_in_container(
     agent_container: Option<&str>,
 ) {
     // Always print a single disconnect line so the user sees it before returning to the agent
-    eprintln!("\raifo-coder: disconnect");
+    log_stderr_and_file("\raifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(150));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
@@ -746,7 +760,7 @@ fn handle_connection<S: Read + Write>(
     if proto_v2 {
         // Streaming (v2)
         if verbose {
-            eprintln!("\raifo-coder: proxy exec: proto=v2 (streaming)\r\n\r");
+            log_stderr_and_file("\raifo-coder: proxy exec: proto=v2 (streaming)\r\n\r");
         }
         let started = std::time::Instant::now();
 
@@ -884,7 +898,7 @@ fn handle_connection<S: Read + Write>(
 
     // Buffered (v1)
     if verbose {
-        eprintln!("\raifo-coder: proxy exec: proto=v1 (buffered)\r\n\r");
+        log_stderr_and_file("\raifo-coder: proxy exec: proto=v1 (buffered)\r\n\r");
     }
     let started = std::time::Instant::now();
 
