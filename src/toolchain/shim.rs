@@ -128,6 +128,7 @@ trap 'send_signal HUP; cleanup; kill_parent_shell_if_interactive; if [ "${AIFO_S
 trap 'cleanup' EXIT
 
 if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+  echo "aifo-shim: variant=posix transport=curl" >&2
   echo "aifo-shim: tool=$tool cwd=$cwd exec_id=$exec_id" >&2
   echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2
 fi

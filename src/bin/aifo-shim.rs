@@ -255,6 +255,10 @@ fn try_run_native(
         Conn::Uds(s, path) => (s as &mut dyn Write, "localhost".to_string(), path.clone()),
     };
 
+    if verbose {
+        eprintln!("aifo-shim: variant=rust transport=native");
+    }
+
     let req_line = format!("POST {} HTTP/1.1\r\n", path);
     let headers = format!(
         concat!(
@@ -837,6 +841,10 @@ fn main() {
 
     #[cfg(target_os = "linux")]
     install_signal_handlers();
+
+    if verbose {
+        eprintln!("aifo-shim: variant=rust transport=curl");
+    }
 
     let mut cmd = Command::new("curl");
     cmd.args(&args);
