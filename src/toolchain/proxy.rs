@@ -98,7 +98,11 @@ fn log_stderr_and_file(s: &str) {
     eprintln!("{}", s);
     if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
         if !p.trim().is_empty() {
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&p)
+            {
                 use std::io::Write as _;
                 let _ = writeln!(f, "{}", s);
             }
