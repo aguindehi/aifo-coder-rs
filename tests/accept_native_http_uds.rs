@@ -41,11 +41,7 @@ fn accept_phase4_native_http_uds_exec_rust_version() {
     // Start proxy (UDS)
     let (url, token, running, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy (uds)");
-    assert!(
-        url.starts_with("unix://"),
-        "expected uds url, got: {}",
-        url
-    );
+    assert!(url.starts_with("unix://"), "expected uds url, got: {}", url);
     let sock_path = url.trim_start_matches("unix://");
     let mut stream = UnixStream::connect(sock_path).expect("uds connect");
     let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
