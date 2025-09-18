@@ -341,7 +341,7 @@ pub fn toolexec_start_proxy(
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
                     }
-                    let (mut stream, _addr) = match listener.accept() {
+                    let (stream, _addr) = match listener.accept() {
                         Ok(pair) => pair,
                         Err(e) => {
                             if e.kind() == io::ErrorKind::WouldBlock {
@@ -424,7 +424,7 @@ pub fn toolexec_start_proxy(
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
             }
-            let (mut stream, _addr) = match listener.accept() {
+            let (stream, _addr) = match listener.accept() {
                 Ok(pair) => pair,
                 Err(e) => {
                     if e.kind() == io::ErrorKind::WouldBlock {
