@@ -144,7 +144,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             }
             // Parse chunk size (hex), tolerate extensions after ';'
             let size_hex = ln_trim.split(';').next().unwrap_or(ln_trim);
-            let mut size = match usize::from_str_radix(size_hex, 16) {
+            let size = match usize::from_str_radix(size_hex, 16) {
                 Ok(v) => v,
                 Err(_) => break,
             };

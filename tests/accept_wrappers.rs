@@ -20,6 +20,18 @@ fn accept_phase4_wrappers_auto_exit_present() {
 
     // Inspect the first 50 lines of /opt/aifo/bin/sh and assert '; exit' injection present
     let rt = aifo_coder::container_runtime_path().expect("docker path");
+    // Skip if the image is not present locally to avoid pulling during acceptance tests
+    let present = std::process::Command::new(&rt)
+        .args(["image", "inspect", &image])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !present {
+        eprintln!("skipping: image not present locally: {}", image);
+        return;
+    }
     let mut cmd = std::process::Command::new(&rt);
     cmd.args([
         "run",
