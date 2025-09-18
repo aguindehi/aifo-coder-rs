@@ -147,7 +147,13 @@ impl ToolchainSession {
                 return Err(e);
             }
         };
-        std::env::set_var("AIFO_TOOLEEXEC_URL", &url);
+        // Use loopback URL on host for tests, but rewrite to host.docker.internal for agent container env
+        let url_for_env = if url.starts_with("http://127.0.0.1:") {
+            url.replacen("http://127.0.0.1", "http://host.docker.internal", 1)
+        } else {
+            url.clone()
+        };
+        std::env::set_var("AIFO_TOOLEEXEC_URL", &url_for_env);
         std::env::set_var("AIFO_TOOLEEXEC_TOKEN", &token);
         if cli.verbose {
             std::env::set_var("AIFO_TOOLCHAIN_VERBOSE", "1");

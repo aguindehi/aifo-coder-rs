@@ -433,7 +433,7 @@ pub fn toolexec_start_proxy(
             eprintln!("aifo-coder: toolexec proxy stopped");
         }
     });
-    let url = format!("http://host.docker.internal:{}/exec", port);
+    let url = format!("http://127.0.0.1:{}/exec", port);
     Ok((url, token, running, handle))
 }
 
