@@ -151,7 +151,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             if size == 0 {
                 // Consume trailers until blank line
                 loop {
-                    match read_line(&mut rbuf) {
+                    match read_line_from(reader, &mut rbuf) {
                         Some(tr) => {
                             if tr.trim().is_empty() {
                                 break;
@@ -240,7 +240,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                 }
                 // Consume trailers (best-effort)
                 loop {
-                    match read_line(&mut rbuf) {
+                    match read_line_from(reader, &mut rbuf) {
                         Some(tr) => {
                             if tr.trim().is_empty() {
                                 break;
