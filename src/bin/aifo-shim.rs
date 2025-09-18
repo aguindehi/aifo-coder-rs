@@ -196,8 +196,8 @@ fn send_signal_native(url: &str, token: &str, exec_id: &str, signal_name: &str) 
                 Ok(s) => s,
                 Err(_) => return,
             };
-            let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
-            let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(300)));
+            let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(300)));
             let req = format!(
                 concat!(
                     "POST /signal HTTP/1.1\r\n",
@@ -235,8 +235,8 @@ fn send_signal_native(url: &str, token: &str, exec_id: &str, signal_name: &str) 
         Ok(s) => s,
         Err(_) => return,
     };
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(300)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(300)));
     let req = format!(
         concat!(
             "POST /signal HTTP/1.1\r\n",
@@ -918,6 +918,9 @@ fn main() {
     if let Some(code) = try_run_native(&url, &token, &exec_id, &form_parts, verbose) {
         process::exit(code);
     }
+    if verbose {
+        eprintln!("aifo-shim: native HTTP failed, falling back to curl");
+    }
 
     // Prepare temp directory for header dump
     let tmp_base = env::var("TMPDIR")
@@ -1106,6 +1109,8 @@ fn main() {
         {
             exit_code = 0;
         }
+        // Proactively drive escalation on the proxy while we wait.
+        proactive_disconnect_escalation(&url, &token, &exec_id);
         // Inform user and wait so proxy logs can flush before returning control
         disconnect_wait(verbose);
     }
