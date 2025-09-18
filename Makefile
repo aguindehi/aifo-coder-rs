@@ -73,6 +73,11 @@ help:
 	@echo ""
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
 	@echo ""
+	@echo "Build shim:"
+	@echo ""
+	@echo "  build-shim .................. Build the aifo-shim binary with host toolchain"
+	@echo "  build-shim-with-builder ..... Build aifo-shim using the Rust Builder container"
+	@echo ""
 	@echo "Build images:"
 	@echo ""
 	@echo "  build ....................... Build both slim and fat images (all agents)"
@@ -602,6 +607,43 @@ build-launcher:
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
 	fi
+
+.PHONY: build-shim build-shim-with-builder
+
+build-shim:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  echo "Building aifo-shim with rustup (stable) ..."; \
+	  rustup run stable cargo build --release --bin aifo-shim; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "Building aifo-shim with local cargo ..."; \
+	  cargo build --release --bin aifo-shim; \
+	else \
+	  echo "Error: cargo not found; use 'make build-shim-with-builder' to build inside Docker." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Built: $$(ls -1 target/*/release/aifo-shim 2>/dev/null || ls -1 target/release/aifo-shim 2>/dev/null || echo 'target/release/aifo-shim')"
+
+build-shim-with-builder:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Building aifo-shim inside $(RUST_BUILDER_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
+	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
 .PHONY: lint check test test-cargo test-legacy
 
