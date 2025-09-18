@@ -133,11 +133,8 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
 
         // Decode chunks
         body.clear();
-        loop {
-            let ln = match read_line_from(reader, &mut rbuf) {
-                Some(s) => s,
-                None => break,
-            };
+        while let Some(s) = read_line_from(reader, &mut rbuf) {
+            let ln = s;
             let ln_trim = ln.trim();
             if ln_trim.is_empty() {
                 continue;
@@ -150,14 +147,9 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             };
             if size == 0 {
                 // Consume trailers until blank line
-                loop {
-                    match read_line_from(reader, &mut rbuf) {
-                        Some(tr) => {
-                            if tr.trim().is_empty() {
-                                break;
-                            }
-                        }
-                        None => break,
+                while let Some(tr) = read_line_from(reader, &mut rbuf) {
+                    if tr.trim().is_empty() {
+                        break;
                     }
                 }
                 break;
@@ -199,11 +191,8 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             // If BODY_CAP reached, we can continue draining remaining chunks without appending
             if body.len() >= BODY_CAP {
                 // Drain until zero-size chunk encountered
-                loop {
-                    let ln2 = match read_line_from(reader, &mut rbuf) {
-                        Some(s) => s,
-                        None => break,
-                    };
+                while let Some(s) = read_line_from(reader, &mut rbuf) {
+                    let ln2 = s;
                     let size_hex2 = ln2.trim().split(';').next().unwrap_or(ln2.trim());
                     let sz2 = usize::from_str_radix(size_hex2, 16).unwrap_or(0);
                     if sz2 == 0 {
@@ -239,14 +228,9 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                     }
                 }
                 // Consume trailers (best-effort)
-                loop {
-                    match read_line_from(reader, &mut rbuf) {
-                        Some(tr) => {
-                            if tr.trim().is_empty() {
-                                break;
-                            }
-                        }
-                        None => break,
+                while let Some(tr) = read_line_from(reader, &mut rbuf) {
+                    if tr.trim().is_empty() {
+                        break;
                     }
                 }
                 break;
