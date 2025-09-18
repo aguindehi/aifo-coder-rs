@@ -42,7 +42,7 @@ fn accept_phase4_native_http_tcp_exec_rust_version() {
     assert!(url.starts_with("http://"), "expected tcp url, got: {}", url);
 
     // Build a minimal HTTP/1.1 chunked request to POST /exec invoking `cargo --version`
-    let mut rest = url.trim_start_matches("http://").to_string();
+    let rest = url.trim_start_matches("http://").to_string();
     let path_idx = rest.find('/').unwrap_or(rest.len());
     let (host_port, path) = rest.split_at(path_idx);
     let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
@@ -57,7 +57,7 @@ fn accept_phase4_native_http_tcp_exec_rust_version() {
     let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(20)));
 
-    let body_pairs = vec![
+    let body_pairs = [
         ("tool".to_string(), "cargo".to_string()),
         ("cwd".to_string(), "/workspace".to_string()),
         ("arg".to_string(), "--version".to_string()),
