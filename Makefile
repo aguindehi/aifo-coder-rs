@@ -151,10 +151,6 @@ help:
 	@echo "  test-toolchain-live ......... Run live toolchain tests (ignored by default)"
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
-	@echo "  test-accept-phase4 .......... Run Phase 4 acceptance tests (ignored by default)"
-	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
-	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
-	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo "  test-proxy-errors ........... Run proxy error semantics tests (ignored by default)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
@@ -162,6 +158,12 @@ help:
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
+	@echo ""
+	@echo "Test suites:"
+	@echo ""
+	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
+	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
+	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
@@ -867,8 +869,7 @@ test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	cargo test --test proxy_streaming_tcp -- --ignored
 
-.PHONY: test-accept-phase4 test-acceptance-suite test-integration-suite test-e2e-suite
-test-accept-phase4: test-acceptance-suite
+.PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
 
 test-acceptance-suite:
 	@echo "Running acceptance test suite (ignored by default) ..."
