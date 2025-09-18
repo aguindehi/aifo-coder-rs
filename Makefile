@@ -152,6 +152,9 @@ help:
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
 	@echo "  test-accept-phase4 .......... Run Phase 4 acceptance tests (ignored by default)"
+	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
+	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
+	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo "  test-proxy-errors ........... Run proxy error semantics tests (ignored by default)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
@@ -864,9 +867,11 @@ test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	cargo test --test proxy_streaming_tcp -- --ignored
 
-.PHONY: test-accept-phase4
-test-accept-phase4:
-	@echo "Running Phase 4 acceptance tests (ignored by default) ..."
+.PHONY: test-accept-phase4 test-acceptance-suite test-integration-suite test-e2e-suite
+test-accept-phase4: test-acceptance-suite
+
+test-acceptance-suite:
+	@echo "Running acceptance test suite (ignored by default) ..."
 	cargo test --test accept_native_http_tcp -- --ignored
 	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
 	cargo test --test accept_wrappers -- --ignored
@@ -874,6 +879,21 @@ test-accept-phase4:
 	cargo test --test accept_stream_large -- --ignored
 	cargo test --test accept_disconnect -- --ignored
 	cargo test --test accept_override_shim_dir -- --ignored
+
+test-integration-suite:
+	@echo "Running integration/E2E test suite (ignored by default) ..."
+	$(MAKE) test-proxy-unix
+	$(MAKE) test-proxy-errors
+	$(MAKE) test-proxy-tcp
+	$(MAKE) test-dev-tool-routing
+	$(MAKE) test-tsc-resolution
+	$(MAKE) test-toolchain-rust-e2e
+	$(MAKE) test-shim-embed
+
+test-e2e-suite:
+	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
+	$(MAKE) test-acceptance-suite
+	$(MAKE) test-integration-suite
 
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
