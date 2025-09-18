@@ -790,6 +790,10 @@ fn main() {
         form_parts.push(("arg".to_string(), a));
     }
 
+    // Install Linux signal handlers before entering native path so Ctrl-C is trapped properly
+    #[cfg(target_os = "linux")]
+    install_signal_handlers();
+
     // Try native HTTP client (Phase 3); fall back to curl when disabled or on error
     if let Some(code) = try_run_native(&url, &token, &exec_id, &form_parts, verbose) {
         process::exit(code);
