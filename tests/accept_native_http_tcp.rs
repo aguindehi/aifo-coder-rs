@@ -37,13 +37,9 @@ fn accept_phase4_native_http_tcp_exec_rust_version() {
         .expect("toolchain_start_session");
 
     // Start proxy (TCP)
-    let (url, token, running, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("start proxy (tcp)");
-    assert!(
-        url.starts_with("http://"),
-        "expected tcp url, got: {}",
-        url
-    );
+    let (url, token, running, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy (tcp)");
+    assert!(url.starts_with("http://"), "expected tcp url, got: {}", url);
 
     // Build a minimal HTTP/1.1 chunked request to POST /exec invoking `cargo --version`
     let mut rest = url.trim_start_matches("http://").to_string();
