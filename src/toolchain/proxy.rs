@@ -336,6 +336,7 @@ pub fn toolexec_start_proxy(
                 }
                 let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
                 let mut exec_registry: HashMap<String, String> = HashMap::new();
+                let mut recent_signals: HashMap<String, std::time::Instant> = HashMap::new();
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -372,7 +373,13 @@ pub fn toolexec_start_proxy(
                         agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
                         uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
                     };
-                    handle_connection(&ctx, &mut stream, &mut tool_cache, &mut exec_registry);
+                    handle_connection(
+                        &ctx,
+                        &mut stream,
+                        &mut tool_cache,
+                        &mut exec_registry,
+                        &mut recent_signals,
+                    );
                 }
                 let _ = fs::remove_file(&sock_path_cl);
                 let _ = fs::remove_dir(&host_dir_cl);
@@ -409,6 +416,7 @@ pub fn toolexec_start_proxy(
         }
         let mut tool_cache: HashMap<(String, String), bool> = HashMap::new();
         let mut exec_registry: HashMap<String, String> = HashMap::new();
+        let mut recent_signals: HashMap<String, std::time::Instant> = HashMap::new();
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -445,7 +453,13 @@ pub fn toolexec_start_proxy(
                 agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
                 uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
             };
-            handle_connection(&ctx, &mut stream, &mut tool_cache, &mut exec_registry);
+            handle_connection(
+                &ctx,
+                &mut stream,
+                &mut tool_cache,
+                &mut exec_registry,
+                &mut recent_signals,
+            );
         }
         if verbose {
             eprintln!("aifo-coder: toolexec proxy stopped");
@@ -461,6 +475,7 @@ fn handle_connection<S: Read + Write>(
     stream: &mut S,
     tool_cache: &mut HashMap<(String, String), bool>,
     exec_registry: &mut HashMap<String, String>,
+    recent_signals: &mut HashMap<String, std::time::Instant>,
 ) {
     let token: &str = &ctx.token;
     let session: &str = &ctx.session;
@@ -644,6 +659,8 @@ fn handle_connection<S: Read + Write>(
                     ));
                 }
                 kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
+                // Record recent /signal for this exec to suppress duplicate disconnect escalation
+                recent_signals.insert(exec_id.clone(), std::time::Instant::now());
                 // 204 No Content without exit code header
                 let _ = stream.write_all(
                     b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -883,19 +900,31 @@ fn handle_connection<S: Read + Write>(
         }
 
         if write_failed {
-            // Client disconnected: terminate process group in container and stop docker exec
-            disconnect_terminate_exec_in_container(
-                &ctx.runtime,
-                &name,
-                &exec_id,
-                verbose,
-                ctx.agent_container.as_deref(),
-            );
+            // Client disconnected: if we saw a recent /signal for this exec, skip duplicate escalation.
+            let suppress = recent_signals
+                .get(&exec_id)
+                .map(|ts| ts.elapsed() < Duration::from_millis(2300))
+                .unwrap_or(false);
+            if suppress {
+                log_stderr_and_file("\raifo-coder: disconnect");
+                if let Some(ac) = ctx.agent_container.as_deref() {
+                    kill_agent_shell_in_agent_container(&ctx.runtime, ac, &exec_id, verbose);
+                }
+            } else {
+                disconnect_terminate_exec_in_container(
+                    &ctx.runtime,
+                    &name,
+                    &exec_id,
+                    verbose,
+                    ctx.agent_container.as_deref(),
+                );
+            }
             let _ = child.kill();
             let _ = child.wait();
             // Mark watcher done and remove from registry
             done.store(true, std::sync::atomic::Ordering::SeqCst);
             let _ = exec_registry.remove(&exec_id);
+            let _ = recent_signals.remove(&exec_id);
             return;
         }
 
@@ -903,6 +932,7 @@ fn handle_connection<S: Read + Write>(
         // Mark watcher done and remove from registry
         done.store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = exec_registry.remove(&exec_id);
+        let _ = recent_signals.remove(&exec_id);
         log_request_result(verbose, &tool, kind, code, &started);
         respond_chunked_trailer(stream, code);
         return;
@@ -1033,6 +1063,7 @@ fn handle_connection<S: Read + Write>(
     }
 
     let _ = exec_registry.remove(&exec_id);
+    let _ = recent_signals.remove(&exec_id);
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
     let header = format!(
