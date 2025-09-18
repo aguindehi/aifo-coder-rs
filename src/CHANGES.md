@@ -1,3 +1,12 @@
+2025-09-18 02:35 User <user@example.com>
+
+QA: Phase 4 acceptance tests passed
+
+- Ran make test-accept-phase4: native HTTP TCP passed; UDS skipped on non-Linux;
+  wrapper auto-exit check passed/skipped conditionally based on local image.
+- v5 implementation complete across Phases 1–4; release notes and verification
+  guide added.
+
 2025-09-18 02:15 User <user@example.com>
 
 QA: test suite green (231 passed, 26 skipped)
