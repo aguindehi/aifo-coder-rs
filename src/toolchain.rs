@@ -52,7 +52,11 @@ fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exe
         eprintln!("{}", line);
         if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
             if !p.trim().is_empty() {
-                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&p)
+                {
                     use std::io::Write as _;
                     let _ = writeln!(f, "{}", line);
                 }
@@ -79,7 +83,11 @@ fn log_request_result(
         eprintln!("{}", line);
         if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
             if !p.trim().is_empty() {
-                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&p)
+                {
                     use std::io::Write as _;
                     let _ = writeln!(f, "{}", line);
                 }

@@ -3,7 +3,6 @@
 use std::net::TcpStream;
 use std::time::Duration;
 
-
 fn urlencode_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
@@ -35,7 +34,10 @@ fn accept_phase4_disconnect_triggers_proxy_log() {
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("toolchain_start_session");
 
-    let log_path = format!("/tmp/aifo-coder-accept-disconnect-{}.log", std::process::id());
+    let log_path = format!(
+        "/tmp/aifo-coder-accept-disconnect-{}.log",
+        std::process::id()
+    );
     // Start proxy (TCP) with verbose and tee logs
     std::env::set_var("AIFO_TOOLCHAIN_VERBOSE", "1");
     std::env::set_var("AIFO_TEST_LOG_PATH", &log_path);

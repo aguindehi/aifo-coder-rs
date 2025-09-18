@@ -56,7 +56,10 @@ fn accept_phase4_stream_large_output_node() {
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
     let n: usize = 262_144; // 256 KiB
-    let code = format!("process.stdout.write(String.fromCharCode(120).repeat({}));", n);
+    let code = format!(
+        "process.stdout.write(String.fromCharCode(120).repeat({}));",
+        n
+    );
     let body_pairs = [
         ("tool".to_string(), "node".to_string()),
         ("cwd".to_string(), "/workspace".to_string()),
