@@ -55,6 +55,5 @@ fn accept_phase4_wrappers_auto_exit_present() {
             "skipping: wrapper pattern not found in image {}; wrapper content:\n{}",
             image, s
         );
-        return;
     }
 }
