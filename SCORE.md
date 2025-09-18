@@ -101,7 +101,7 @@ Actionable recommendations (next steps)
    - Document fallback toggles (AIFO_SHIM_NATIVE_HTTP=0), TTY behavior, and unix socket mounting details with examples.
 
 Score change log
-- Tests currently: 231 passed, 26 skipped (docker/UDS E2E appropriately ignored by default).
-- Recent changes enabled native HTTP by default, gated curl removal for slim images, aligned proxy TTY defaults with the spec, and added Phase 4 acceptance tests and docs.
+- Acceptance suite: disconnect UX fix validated; accept_disconnect and Phase 4 tests green locally (docker/UDS gated as appropriate).
+- Recent change: Rust shim drops /exec stream before disconnect_wait so the proxy begins INT→TERM→KILL and logs during the wait; prevents prompt overwrite; parity with shell shim retained.
 
-Shall I proceed with the next steps above (golden logs, broader acceptance scenarios, and polishing)?
+Shall I proceed with these next steps?

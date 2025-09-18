@@ -1,3 +1,11 @@
+2025-09-18 02:55 User <user@example.com>
+
+Shim v5.4: disconnect UX — start proxy signals during shim wait
+
+- Rust shim now drops the /exec stream immediately on disconnect to trigger the proxy's INT→TERM→KILL sequence and logs during the shim's verbose wait, preventing prompt overwrite.
+- Kept Linux parent-shell termination; exit semantics unchanged (defaults preserved).
+- Acceptance tests: accept_disconnect and Phase 4 suite passing locally.
+
 2025-09-18 02:40 User <user@example.com>
 
 QA: test suite green (231 passed, 30 skipped)
