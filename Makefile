@@ -821,6 +821,10 @@ test-accept-phase4:
 	cargo test --test accept_native_http_tcp -- --ignored
 	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
 	cargo test --test accept_wrappers -- --ignored
+	cargo test --test accept_logs_golden -- --ignored
+	cargo test --test accept_stream_large -- --ignored
+	cargo test --test accept_disconnect -- --ignored
+	cargo test --test accept_override_shim_dir -- --ignored
 
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
