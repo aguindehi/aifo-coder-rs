@@ -11,6 +11,24 @@ fn accept_phase4_host_override_shim_dir_script_active() {
     let td = tempfile::tempdir().expect("tmpdir");
     let shim_dir = td.path();
     aifo_coder::toolchain_write_shims(shim_dir).expect("write shims");
+    // On macOS, Docker Desktop may not share /private/var/folders/... with containers.
+    // Copy shims to a mount path under $HOME to ensure visibility inside the container.
+    let mount_dir = if cfg!(target_os = "macos") {
+        let home = home::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+        let md = home.join(format!(".aifo-shim-accept-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&md);
+        std::fs::create_dir_all(&md).expect("create mount_dir");
+        for ent in std::fs::read_dir(shim_dir).expect("read shim_dir") {
+            let ent = ent.expect("dirent");
+            let src = ent.path();
+            let dst = md.join(ent.file_name());
+            // best-effort copy; ignore perms errors
+            let _ = std::fs::copy(&src, &dst);
+        }
+        md
+    } else {
+        shim_dir.to_path_buf()
+    };
 
     // Choose agent image (prefer env override; fallback to aider)
     let image = std::env::var("AIFO_CODER_TEST_IMAGE")
@@ -42,7 +60,7 @@ fn accept_phase4_host_override_shim_dir_script_active() {
             "run",
             "--rm",
             "-v",
-            &format!("{}:/opt/aifo/bin:ro", shim_dir.display()),
+            &format!("{}:/opt/aifo/bin:ro", mount_dir.display()),
             "--entrypoint",
             "sh",
             &image,
