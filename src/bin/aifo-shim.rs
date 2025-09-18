@@ -118,7 +118,11 @@ fn compute_wait_secs(verbose: bool) -> u64 {
             return n;
         }
     }
-    if verbose { 3 } else { 1 }
+    if verbose {
+        3
+    } else {
+        1
+    }
 }
 
 fn disconnect_wait(verbose: bool) {
@@ -372,7 +376,6 @@ fn try_run_native(
         #[cfg(target_os = "linux")]
         Conn::Uds(s, path) => (s as &mut dyn Write, "localhost".to_string(), path.clone()),
     };
-
 
     let req_line = format!("POST {} HTTP/1.1\r\n", path);
     let headers = format!(
