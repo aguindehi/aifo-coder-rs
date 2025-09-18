@@ -230,15 +230,15 @@ fn disconnect_terminate_exec_in_container(
     // Always print a single disconnect line so the user sees it before returning to the agent
     log_stderr_and_file("\raifo-coder: disconnect");
     // Small grace to allow shim's trap to POST /signal.
-    std::thread::sleep(Duration::from_millis(150));
+    std::thread::sleep(Duration::from_millis(50));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
     // In parallel, try to close the transient /run shell in the agent container, if known.
     if let Some(ac) = agent_container {
         kill_agent_shell_in_agent_container(runtime, ac, exec_id, verbose);
     }
-    std::thread::sleep(Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(250));
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
-    std::thread::sleep(Duration::from_millis(1500));
+    std::thread::sleep(Duration::from_millis(750));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
@@ -915,12 +915,25 @@ fn handle_connection<S: Read + Write>(
         }
 
         if write_failed {
-            // Client disconnected: if we saw a recent /signal for this exec, skip duplicate escalation.
+            // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
-                let rs = recent_signals.lock().unwrap();
-                rs.get(&exec_id)
-                    .map(|ts| ts.elapsed() < Duration::from_millis(2300))
-                    .unwrap_or(false)
+                let grace_ms: u64 = std_env::var("AIFO_PROXY_SIGNAL_GRACE_MS")
+                    .ok()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(300);
+                let deadline = std::time::Instant::now() + Duration::from_millis(grace_ms);
+                loop {
+                    let seen = {
+                        let rs = recent_signals.lock().unwrap();
+                        rs.get(&exec_id)
+                            .map(|ts| ts.elapsed() < Duration::from_millis(2300))
+                            .unwrap_or(false)
+                    };
+                    if seen || std::time::Instant::now() >= deadline {
+                        break seen;
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
             };
             if suppress {
                 log_stderr_and_file("\raifo-coder: disconnect");
