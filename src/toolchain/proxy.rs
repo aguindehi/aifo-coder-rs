@@ -186,8 +186,8 @@ fn kill_agent_shell_in_agent_container(
          if [ -f \"$tt\" ]; then \
            t=$(cat \"$tt\" 2>/dev/null); \
            kill_shells_by_tty \"$t\"; \
-           # Also inject an 'exit' and Ctrl-D to the controlling TTY (best-effort) \
-           if [ -n \"$t\" ]; then \
+           # Also inject an 'exit' and Ctrl-D to the controlling TTY (best-effort, opt-in) \
+           if [ -n \"$t\" ] && [ \"${AIFO_PROXY_INJECT_EXIT_ON_TTY:-0}\" = \"1\" ]; then \
              printf \"exit\\r\\n\" > \"$t\" 2>/dev/null || true; sleep 0.1; \
              printf \"\\004\" > \"$t\" 2>/dev/null || true; \
            fi; \

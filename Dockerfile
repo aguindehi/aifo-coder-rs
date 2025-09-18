@@ -92,11 +92,15 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
   'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
   '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
+  '  NOW="$(date +%s)"' \
+  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
   '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
   '    for d in "$HOME"/.aifo-exec/*; do' \
   '      [ -d "$d" ] || continue' \
   '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
-  '        exit 0' \
+  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
+  '        AGE="$((NOW - MTIME))"' \
+  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
   '      fi' \
   '    done' \
   '  fi' \
@@ -313,11 +317,15 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
   'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
   '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
+  '  NOW="$(date +%s)"' \
+  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
   '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
   '    for d in "$HOME"/.aifo-exec/*; do' \
   '      [ -d "$d" ] || continue' \
   '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
-  '        exit 0' \
+  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
+  '        AGE="$((NOW - MTIME))"' \
+  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
   '      fi' \
   '    done' \
   '  fi' \
