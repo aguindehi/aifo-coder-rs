@@ -164,7 +164,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps curl || true; \
+    apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
@@ -187,7 +187,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps curl || true; \
+    apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
@@ -276,7 +276,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-        apt-get remove -y procps curl || true; \
+        apt-get remove -y procps || true; \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \

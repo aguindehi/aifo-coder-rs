@@ -1,3 +1,11 @@
+2025-09-18 02:00 User <user@example.com>
+
+Shim v5.4: Phase 4 acceptance tests, golden docs, and curl retention
+
+- Added Phase 4 acceptance tests (ignored by default): TCP/UDS native HTTP and wrapper check.
+- Introduced docs/RELEASE_NOTES_v5.md and docs/VERIFY_v5.md with quick verification checklist.
+- Adjusted curl policy: retain curl in full agent images; slim images still drop curl when KEEP_APT=0.
+
 2025-09-18 01:30 User <user@example.com>
 
 QA: test suite green (231 passed, 24 skipped)

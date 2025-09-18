@@ -154,6 +154,7 @@ help:
 	@echo "  test-toolchain-live ......... Run live toolchain tests (ignored by default)"
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-accept-phase4 .......... Run Phase 4 acceptance tests (ignored by default)"
 	@echo "  test-proxy-errors ........... Run proxy error semantics tests (ignored by default)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
@@ -813,6 +814,13 @@ test-proxy-errors:
 test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	cargo test --test proxy_streaming_tcp -- --ignored
+
+.PHONY: test-accept-phase4
+test-accept-phase4:
+	@echo "Running Phase 4 acceptance tests (ignored by default) ..."
+	cargo test --test accept_native_http_tcp -- --ignored
+	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
+	cargo test --test accept_wrappers -- --ignored
 
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
