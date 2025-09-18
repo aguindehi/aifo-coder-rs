@@ -102,21 +102,8 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             rbuf.extend_from_slice(&buf[body_start..]);
         }
 
-        // Helper: read more bytes into rbuf
-        let mut read_more = |rbuf: &mut Vec<u8>| -> Option<()> {
-            let mut tmp2 = [0u8; 1024];
-            match reader.read(&mut tmp2) {
-                Ok(0) => None,
-                Ok(n) => {
-                    rbuf.extend_from_slice(&tmp2[..n]);
-                    Some(())
-                }
-                Err(_e) => None,
-            }
-        };
-
-        // Helper: read a single line ending in CRLF or LF
-        let mut read_line = |rbuf: &mut Vec<u8>| -> Option<String> {
+        // Helper: read a single line ending in CRLF or LF directly from reader
+        fn read_line_from<R2: Read>(reader: &mut R2, rbuf: &mut Vec<u8>) -> Option<String> {
             loop {
                 if let Some(pos) = rbuf
                     .windows(2)
@@ -135,16 +122,19 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                     *rbuf = rest;
                     return String::from_utf8(line).ok();
                 }
-                if read_more(rbuf).is_none() {
-                    return None;
+                let mut tmp2 = [0u8; 1024];
+                match reader.read(&mut tmp2) {
+                    Ok(0) => return None,
+                    Ok(n) => rbuf.extend_from_slice(&tmp2[..n]),
+                    Err(_e) => return None,
                 }
             }
-        };
+        }
 
         // Decode chunks
         body.clear();
         loop {
-            let ln = match read_line(&mut rbuf) {
+            let ln = match read_line_from(reader, &mut rbuf) {
                 Some(s) => s,
                 None => break,
             };
@@ -174,8 +164,11 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             }
             // Read exactly 'size' bytes for this chunk (respect BODY_CAP)
             while rbuf.len() < size {
-                if read_more(&mut rbuf).is_none() {
-                    break;
+                let mut tmp2 = [0u8; 1024];
+                match reader.read(&mut tmp2) {
+                    Ok(0) => break,
+                    Ok(n) => rbuf.extend_from_slice(&tmp2[..n]),
+                    Err(_e) => break,
                 }
             }
             let take = size.min(rbuf.len());
@@ -188,12 +181,14 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                 }
                 // Even if we didn't copy all (cap reached), we must still drain the full chunk size
                 rbuf.drain(..take);
-                size -= take;
             }
             // Consume trailing CRLF after chunk payload
             while rbuf.len() < 2 {
-                if read_more(&mut rbuf).is_none() {
-                    break;
+                let mut tmp2 = [0u8; 1024];
+                match reader.read(&mut tmp2) {
+                    Ok(0) => break,
+                    Ok(n) => rbuf.extend_from_slice(&tmp2[..n]),
+                    Err(_e) => break,
                 }
             }
             if rbuf.starts_with(b"\r\n") {
@@ -205,7 +200,7 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             if body.len() >= BODY_CAP {
                 // Drain until zero-size chunk encountered
                 loop {
-                    let ln2 = match read_line(&mut rbuf) {
+                    let ln2 = match read_line_from(reader, &mut rbuf) {
                         Some(s) => s,
                         None => break,
                     };
@@ -217,16 +212,24 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                     // Drain payload + trailing CRLF
                     let mut left = sz2;
                     while left > 0 {
-                        if rbuf.is_empty() && read_more(&mut rbuf).is_none() {
-                            break;
+                        if rbuf.is_empty() {
+                            let mut tmp2 = [0u8; 1024];
+                            match reader.read(&mut tmp2) {
+                                Ok(0) => break,
+                                Ok(n) => rbuf.extend_from_slice(&tmp2[..n]),
+                                Err(_e) => break,
+                            }
                         }
                         let drop = left.min(rbuf.len());
                         rbuf.drain(..drop);
                         left -= drop;
                     }
                     while rbuf.len() < 2 {
-                        if read_more(&mut rbuf).is_none() {
-                            break;
+                        let mut tmp2 = [0u8; 1024];
+                        match reader.read(&mut tmp2) {
+                            Ok(0) => break,
+                            Ok(n) => rbuf.extend_from_slice(&tmp2[..n]),
+                            Err(_e) => break,
                         }
                     }
                     if rbuf.starts_with(b"\r\n") {
