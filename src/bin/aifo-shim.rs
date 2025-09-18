@@ -449,7 +449,14 @@ fn try_run_native(
     let idx = match header_end_idx {
         Some(i) => i,
         None => {
-            // No headers; treat as disconnect
+            // No headers; treat as disconnect — ensure proxy sees it now
+            // Close the underlying stream so the proxy detects disconnect immediately.
+            std::mem::drop(reader_box);
+            #[cfg(target_os = "linux")]
+            {
+                // Proactively close the transient /run shell to keep prompt clean.
+                kill_parent_shell_if_interactive();
+            }
             disconnect_wait(verbose);
             let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
                 .ok()
@@ -689,6 +696,13 @@ fn try_run_native(
         let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d);
     } else {
+        // Close the stream now so the proxy can start its disconnect sequence and logs.
+        std::mem::drop(reader_box);
+        #[cfg(target_os = "linux")]
+        {
+            // Proactively terminate the transient parent shell to keep prompt clean.
+            kill_parent_shell_if_interactive();
+        }
         disconnect_wait(verbose);
         if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
             .ok()
