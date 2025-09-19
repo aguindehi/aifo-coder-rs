@@ -748,7 +748,7 @@ fn handle_connection<S: Read + Write>(
     let name = sidecar::sidecar_container_name(kind, session);
     if !container_exists(&name) {
         let msg = format!(
-            "tool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
+            "\r\ntool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
             tool
         );
         respond_plain(stream, "409 Conflict", 86, msg.as_bytes());
