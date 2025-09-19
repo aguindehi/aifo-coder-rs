@@ -96,6 +96,9 @@ mod tests {
 "#;
     write_file(&ws.join("src").join("lib.rs"), lib_rs);
 
+    // Ensure repo-root detection works (many functions look for a .git directory)
+    std::fs::create_dir_all(ws.join(".git")).expect("mkdir .git");
+
     // Change into workspace for sidecar execs
     let old_cwd = env::current_dir().expect("cwd");
     env::set_current_dir(&ws).expect("chdir");
@@ -107,7 +110,14 @@ mod tests {
     };
 
     // Format check (rustfmt present in aifo image)
-    let code_fmt = run(&["cargo", "fmt", "--", "--check"]);
+    let code_fmt = run(&[
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "Cargo.toml",
+        "--",
+        "--check",
+    ]);
     assert_eq!(
         code_fmt, 0,
         "cargo fmt -- --check failed in rust sidecar (image={})",
@@ -118,6 +128,8 @@ mod tests {
     let code_clippy = run(&[
         "cargo",
         "clippy",
+        "--manifest-path",
+        "Cargo.toml",
         "--all-targets",
         "--all-features",
         "--",
@@ -131,7 +143,13 @@ mod tests {
     );
 
     // cargo test
-    let code_test = run(&["cargo", "test", "--no-fail-fast"]);
+    let code_test = run(&[
+        "cargo",
+        "test",
+        "--manifest-path",
+        "Cargo.toml",
+        "--no-fail-fast",
+    ]);
     assert_eq!(
         code_test, 0,
         "cargo test failed in rust sidecar (image={})",
@@ -139,7 +157,14 @@ mod tests {
     );
 
     // cargo nextest run
-    let code_nextest = run(&["cargo", "nextest", "run", "--no-fail-fast"]);
+    let code_nextest = run(&[
+        "cargo",
+        "nextest",
+        "run",
+        "--manifest-path",
+        "Cargo.toml",
+        "--no-fail-fast",
+    ]);
     assert_eq!(
         code_nextest, 0,
         "cargo nextest run failed in rust sidecar (image={})",
