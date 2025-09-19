@@ -872,24 +872,28 @@ test-proxy-tcp:
 .PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
 
 test-acceptance-suite:
-	@echo "Running acceptance test suite (ignored by default) ..."
-	cargo test --test accept_native_http_tcp -- --ignored
-	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
-	cargo test --test accept_wrappers -- --ignored
-	cargo test --test accept_logs_golden -- --ignored
-	cargo test --test accept_stream_large -- --ignored
-	cargo test --test accept_disconnect -- --ignored
-	cargo test --test accept_override_shim_dir -- --ignored
+	@set -e; \
+	echo "Running acceptance test suite (ignored by default) via cargo nextest ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  EXPR='binary("^accept_native_http_tcp$$") | binary("^accept_native_http_uds$$") | binary("^accept_wrappers$$") | binary("^accept_logs_golden$$") | binary("^accept_stream_large$$") | binary("^accept_disconnect$$") | binary("^accept_override_shim_dir$$")'; \
+	else \
+	  EXPR='binary("^accept_native_http_tcp$$") | binary("^accept_wrappers$$") | binary("^accept_logs_golden$$") | binary("^accept_stream_large$$") | binary("^accept_disconnect$$") | binary("^accept_override_shim_dir$$")'; \
+	  echo "Skipping UDS acceptance test (non-Linux host)"; \
+	fi; \
+	cargo nextest run --include-ignored -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
-	@echo "Running integration/E2E test suite (ignored by default) ..."
-	$(MAKE) test-proxy-unix
-	$(MAKE) test-proxy-errors
-	$(MAKE) test-proxy-tcp
-	$(MAKE) test-dev-tool-routing
-	$(MAKE) test-tsc-resolution
-	$(MAKE) test-toolchain-rust-e2e
-	$(MAKE) test-shim-embed
+	@set -e; \
+	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  EXPR='binary("^proxy_unix_socket$$") | binary("^proxy_error_semantics$$") | binary("^proxy_streaming_tcp$$") | binary("^dev_tool_routing$$") | binary("^tsc_resolution$$") | binary("^shim_embed$$")'; \
+	else \
+	  EXPR='binary("^proxy_smoke$$") | binary("^proxy_error_semantics$$") | binary("^proxy_streaming_tcp$$") | binary("^dev_tool_routing$$") | binary("^tsc_resolution$$") | binary("^shim_embed$$")'; \
+	fi; \
+	cargo nextest run --include-ignored -E "$$EXPR" $(ARGS)
+	@$(MAKE) test-toolchain-rust-e2e
 
 test-e2e-suite:
 	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
