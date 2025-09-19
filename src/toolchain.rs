@@ -74,7 +74,7 @@ fn log_request_result(
 ) {
     if verbose {
         let line = format!(
-            "\r\n\raifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r\n\r",
+            "aifo-coder: proxy result tool={} kind={} code={} dur_ms={}",
             tool,
             kind,
             code,
