@@ -615,7 +615,7 @@ fn try_run_native(
         // Track immediate signal-handling exit code (when we wait inside the reader loop)
         let mut signal_exit: Option<i32> = None;
         // Helper to read a single line ending in CRLF or LF
-        let read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
+        let mut read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
             loop {
                 if let Some(pos) = buf
                     .windows(2)
