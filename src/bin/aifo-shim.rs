@@ -128,7 +128,7 @@ fn compute_wait_secs(verbose: bool) -> u64 {
 fn disconnect_wait(verbose: bool) {
     let secs = compute_wait_secs(verbose);
     eprintln!(
-        "aifo-coder: disconnect, waiting for process termination (~{}s)...",
+        "\raifo-coder: disconnect, waiting for process termination (~{}s)...",
         secs
     );
     // Add an extra blank line after the line to end on a clean new line
