@@ -40,14 +40,28 @@ pub use proxy::toolexec_start_proxy;
 mod shim;
 pub use shim::toolchain_write_shims;
 
-fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str) {
+fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exec_id: &str) {
     if verbose {
-        eprintln!(
-            "aifo-coder: proxy parsed tool={} argv={} cwd={}\r",
+        let line = format!(
+            "\r\naifo-coder: proxy parsed tool={} argv={} cwd={} exec_id={}",
             tool,
             shell_join(argv),
-            cwd
+            cwd,
+            exec_id
         );
+        eprintln!("{}", line);
+        if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
+            if !p.trim().is_empty() {
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&p)
+                {
+                    use std::io::Write as _;
+                    let _ = writeln!(f, "{}", line);
+                }
+            }
+        }
     }
 }
 
@@ -59,13 +73,26 @@ fn log_request_result(
     started: &std::time::Instant,
 ) {
     if verbose {
-        eprintln!(
-            "\r\naifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r\n\r",
+        let line = format!(
+            "\r\n\raifo-coder: proxy result tool={} kind={} code={} dur_ms={}\r\n\r",
             tool,
             kind,
             code,
             started.elapsed().as_millis()
         );
+        eprintln!("{}", line);
+        if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
+            if !p.trim().is_empty() {
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&p)
+                {
+                    use std::io::Write as _;
+                    let _ = writeln!(f, "{}", line);
+                }
+            }
+        }
     }
 }
 

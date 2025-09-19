@@ -78,49 +78,46 @@ WORKDIR /workspace
 
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
-# Installing POSIX shell shim below; symlinks will be created afterwards
-# Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
-RUN printf '%s\n' \
+# Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
+COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
+  printf '%s\n' \
   '#!/bin/sh' \
-  'set -e' \
-  'if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then' \
-  '  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2' \
-  '  exit 86' \
+  '# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.' \
+  '# Opt-out: AIFO_SH_WRAP_DISABLE=1' \
+  'if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then' \
+  '  exec /bin/sh "$@"' \
   'fi' \
-  'tool="$(basename "$0")"' \
-  'cwd="$(pwd)"' \
-  'tmp="${TMPDIR:-/tmp}/aifo-shim.$$"' \
-  'mkdir -p "$tmp"' \
-  'conf="$tmp/curl.conf"' \
-  ': > "$conf"' \
-  'if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then' \
-  '  echo "aifo-shim: tool=$tool cwd=$cwd" >&2' \
-  '  echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2' \
+  '' \
+  '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
+  'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
+  '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
+  '  NOW="$(date +%s)"' \
+  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
+  '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
+  '    for d in "$HOME"/.aifo-exec/*; do' \
+  '      [ -d "$d" ] || continue' \
+  '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
+  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
+  '        AGE="$((NOW - MTIME))"' \
+  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
+  '      fi' \
+  '    done' \
+  '  fi' \
   'fi' \
-  'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
-  'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
-  'printf "%s\n" "request = POST" >> "$conf"' \
-  'printf "header = \"Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = \"Proxy-Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "%s\n" "header = \"X-Aifo-Proto: 2\"" >> "$conf"' \
-  'printf "%s\n" "header = \"TE: trailers\"" >> "$conf"' \
-  'printf "%s\n" "header = \"Content-Type: application/x-www-form-urlencoded\"" >> "$conf"' \
-  'printf "data = \"tool=%s\"\\n" "$tool" >> "$conf"' \
-  'printf "data = \"cwd=%s\"\\n" "$cwd" >> "$conf"' \
-  'for a in "$@"; do' \
-  '  printf "data = \"arg=%s\"\\n" "$a" >> "$conf"' \
-  'done' \
-  'URL="$AIFO_TOOLEEXEC_URL"' \
-  'case "$URL" in' \
-  '  unix://*) SOCKET="${URL#unix://}"; printf "unix-socket = %s\n" "$SOCKET" >> "$conf"; URL="http://localhost/exec" ;;' \
-  'esac' \
-  'printf "url = \"%s\"\\n" "$URL" >> "$conf"' \
-  'curl --config "$conf" || true' \
-  'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
-  'rm -rf "$tmp"' \
-  'case "$ec" in "") ec=1 ;; esac' \
-  'exit "$ec"' \
-  > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
+  '' \
+  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
+  'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
+  '  flag="$1"' \
+  '  cmd="$2"' \
+  '  shift 2' \
+  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
+  'fi' \
+  '' \
+  'exec /bin/sh "$@"' \
+  > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
+  sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
 # Create PATH symlinks to the shim
 RUN for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
@@ -306,49 +303,46 @@ WORKDIR /workspace
 
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
-# Installing POSIX shell shim below; symlinks will be created afterwards
-# Overwrite aifo-shim with a POSIX shell client that streams (protocol v2) and reads trailers for exit code
-RUN printf '%s\n' \
+# Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
+COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
+  printf '%s\n' \
   '#!/bin/sh' \
-  'set -e' \
-  'if [ -z "$AIFO_TOOLEEXEC_URL" ] || [ -z "$AIFO_TOOLEEXEC_TOKEN" ]; then' \
-  '  echo "aifo-shim: proxy not configured. Please launch agent with --toolchain." >&2' \
-  '  exit 86' \
+  '# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.' \
+  '# Opt-out: AIFO_SH_WRAP_DISABLE=1' \
+  'if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then' \
+  '  exec /bin/sh "$@"' \
   'fi' \
-  'tool="$(basename "$0")"' \
-  'cwd="$(pwd)"' \
-  'tmp="${TMPDIR:-/tmp}/aifo-shim.$$"' \
-  'mkdir -p "$tmp"' \
-  'conf="$tmp/curl.conf"' \
-  ': > "$conf"' \
-  'if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then' \
-  '  echo "aifo-shim: tool=$tool cwd=$cwd" >&2' \
-  '  echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2' \
+  '' \
+  '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
+  'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
+  '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
+  '  NOW="$(date +%s)"' \
+  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
+  '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
+  '    for d in "$HOME"/.aifo-exec/*; do' \
+  '      [ -d "$d" ] || continue' \
+  '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
+  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
+  '        AGE="$((NOW - MTIME))"' \
+  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
+  '      fi' \
+  '    done' \
+  '  fi' \
   'fi' \
-  'printf "%s\n" "silent" "show-error" "no-buffer" > "$conf"' \
-  'printf "dump-header = %s\n" "$tmp/h" >> "$conf"' \
-  'printf "%s\n" "request = POST" >> "$conf"' \
-  'printf "header = \"Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "header = \"Proxy-Authorization: Bearer %s\"\\n" "$AIFO_TOOLEEXEC_TOKEN" >> "$conf"' \
-  'printf "%s\n" "header = \"X-Aifo-Proto: 2\"" >> "$conf"' \
-  'printf "%s\n" "header = \"TE: trailers\"" >> "$conf"' \
-  'printf "%s\n" "header = \"Content-Type: application/x-www-form-urlencoded\"" >> "$conf"' \
-  'printf "data = \"tool=%s\"\\n" "$tool" >> "$conf"' \
-  'printf "data = \"cwd=%s\"\\n" "$cwd" >> "$conf"' \
-  'for a in "$@"; do' \
-  '  printf "data = \"arg=%s\"\\n" "$a" >> "$conf"' \
-  'done' \
-  'URL="$AIFO_TOOLEEXEC_URL"' \
-  'case "$URL" in' \
-  '  unix://*) SOCKET="${URL#unix://}"; printf "unix-socket = %s\n" "$SOCKET" >> "$conf"; URL="http://localhost/exec" ;;' \
-  'esac' \
-  'printf "url = \"%s\"\\n" "$URL" >> "$conf"' \
-  'curl --config "$conf" || true' \
-  'ec="$(awk '\''/^X-Exit-Code:/{print $2}'\'' "$tmp/h" | tr -d '\''\r'\'' | tail -n1)"' \
-  'rm -rf "$tmp"' \
-  'case "$ec" in "") ec=1 ;; esac' \
-  'exit "$ec"' \
-  > /opt/aifo/bin/aifo-shim && chmod 0755 /opt/aifo/bin/aifo-shim
+  '' \
+  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
+  'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
+  '  flag="$1"' \
+  '  cmd="$2"' \
+  '  shift 2' \
+  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
+  'fi' \
+  '' \
+  'exec /bin/sh "$@"' \
+  > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
+  sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
 # Create PATH symlinks to the shim
 RUN for t in cargo rustc node npm npx tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt notifications-cmd; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
@@ -398,7 +392,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
+    apt-get remove -y procps curl || true; \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
@@ -420,7 +414,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
+    apt-get remove -y procps curl || true; \
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
@@ -509,7 +503,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-        apt-get remove -y procps || true; \
+        apt-get remove -y procps curl || true; \
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \

@@ -345,6 +345,17 @@ pub fn build_sidecar_exec_preview(
     kind: &str,
     user_args: &[String],
 ) -> Vec<String> {
+    build_sidecar_exec_preview_with_exec_id(name, uidgid, pwd, kind, user_args, None)
+}
+
+pub(crate) fn build_sidecar_exec_preview_with_exec_id(
+    name: &str,
+    uidgid: Option<(u32, u32)>,
+    pwd: &Path,
+    kind: &str,
+    user_args: &[String],
+    exec_id: Option<&str>,
+) -> Vec<String> {
     let mut args: Vec<String> = vec!["docker".to_string(), "exec".to_string()];
     if let Some((uid, gid)) = uidgid {
         args.push("-u".to_string());
@@ -355,6 +366,11 @@ pub fn build_sidecar_exec_preview(
     // base env
     push_env(&mut args, "HOME", "/home/coder");
     push_env(&mut args, "GNUPGHOME", "/home/coder/.gnupg");
+    if let Some(eid) = exec_id {
+        if !eid.trim().is_empty() {
+            push_env(&mut args, "AIFO_EXEC_ID", eid);
+        }
+    }
 
     // Phase 2 marking: when executing with an official rust image, mark for bootstrap (Phase 4 will consume this)
     if kind == "rust"

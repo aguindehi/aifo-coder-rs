@@ -97,3 +97,8 @@ to the compiler.
 
 As a general rule, do not create dead code or mark functions as dead code. If you
 really need to do that, get user consent for it.
+
+# Testing Rust Code
+
+As a general rule use 'make check --no-fail-fast' instead of 'cargo test'. Make
+check used nextest which is a log faster then cargo test.

@@ -1,3 +1,108 @@
+2025-09-18 02:55 User <user@example.com>
+
+Shim v5.4: disconnect UX — start proxy signals during shim wait
+
+- Rust shim now drops the /exec stream immediately on disconnect to trigger the proxy's INT→TERM→KILL sequence and logs during the shim's verbose wait, preventing prompt overwrite.
+- Kept Linux parent-shell termination; exit semantics unchanged (defaults preserved).
+- Acceptance tests: accept_disconnect and Phase 4 suite passing locally.
+
+2025-09-18 02:40 User <user@example.com>
+
+QA: test suite green (231 passed, 30 skipped)
+
+- Verified all tests are green with latest changes; 30 skipped due to docker/UDS gating.
+
+2025-09-18 02:35 User <user@example.com>
+
+QA: Phase 4 acceptance tests passed
+
+- Ran make test-accept-phase4: native HTTP TCP passed; UDS skipped on non-Linux;
+  wrapper auto-exit check passed/skipped conditionally based on local image.
+- v5 implementation complete across Phases 1–4; release notes and verification
+  guide added.
+
+2025-09-18 02:15 User <user@example.com>
+
+QA: test suite green (231 passed, 26 skipped)
+
+- Verified all tests are green after acceptance tests/doc additions.
+
+2025-09-18 02:00 User <user@example.com>
+
+Shim v5.4: Phase 4 acceptance tests, golden docs, and curl retention
+
+- Added Phase 4 acceptance tests (ignored by default): TCP/UDS native HTTP and wrapper check.
+- Introduced docs/RELEASE_NOTES_v5.md and docs/VERIFY_v5.md with quick verification checklist.
+- Adjusted curl policy: retain curl in full agent images; slim images still drop curl when KEEP_APT=0.
+
+2025-09-18 01:30 User <user@example.com>
+
+QA: test suite green (231 passed, 24 skipped)
+
+- Verified all tests are green after TTY default change and native HTTP refinements.
+
+2025-09-18 01:15 User <user@example.com>
+
+Shim v5.2: proxy TTY default on (AIFO_TOOLEEXEC_TTY=0 disables)
+
+- In streaming proto (v2), allocate a TTY by default for better interactive flushing.
+- Set AIFO_TOOLEEXEC_TTY=0 to disable TTY allocation; v1 buffered path unchanged.
+
+2025-09-18 01:00 User <user@example.com>
+
+Shim v5.2: refine native HTTP urlencoding and finalize Phase 3
+
+- Native HTTP client: encode '*' in application/x-www-form-urlencoded components (safer RFC compliance).
+- Verified case-insensitive X-Exit-Code handling in headers/trailers; unified disconnect UX retained.
+- Phase 3 complete; proceed to Phase 4 acceptance tests (TCP/UDS, large output, disconnect).
+
+2025-09-18 00:45 User <user@example.com>
+
+Shim v5.2: polish native HTTP and proxy docs
+
+- Native HTTP client: tolerant X-Exit-Code parsing (case-insensitive headers/trailers).
+- Proxy docs clarified disconnect sequence (INT → TERM → KILL) to match implementation.
+- Next: add acceptance tests (TCP/UDS, large output, disconnect) before removing curl from full images.
+
+2025-09-18 00:30 User <user@example.com>
+
+Shim v5.2: drop curl from slim runtime images (KEEP_APT=0)
+
+- Removed curl from codex-slim, crush-slim, and aider-slim runtime images when KEEP_APT=0.
+- Kept curl in builder stages and full images as needed for tooling (e.g., uv install).
+- Native HTTP client remains default; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback.
+
+2025-09-18 00:00 User <user@example.com>
+
+Shim v5.2: enable native HTTP by default; curl fallback opt-out
+
+- Native HTTP client (TCP/UDS, chunked + trailers) enabled by default in Rust shim.
+- Set AIFO_SHIM_NATIVE_HTTP=0 to force curl-based path (temporary safety valve).
+- Behavior and exits preserved; curl removal will follow after acceptance tests.
+
+2025-09-17 12:30 User <user@example.com>
+
+Shim v5: finalize parity and logging; minor polish
+
+- Unified proxy verbose logs to include exec_id in parsed-request line.
+- Ensured Linux-only signal hooks for Rust shim; preserved default 0 exit on traps/disconnect.
+- Kept curl-based client for v5.0–v5.1; wrappers auto-exit and respect no_shell_on_tty markers.
+
+2025-09-17 12:00 User <user@example.com>
+
+QA: test suite green (231 passed, 24 skipped)
+
+- Verified all tests are green with latest shim/proxy changes.
+
+2025-09-17 12:00 User <user@example.com>
+
+Shim v5: compiled Rust shim, wrappers, proxy signals
+
+- Baked compiled Rust aifo-shim into images; added sh/bash/dash auto-exit wrappers.
+- Implemented ExecId registry and /signal in proxy; disconnect termination UX and escalation.
+- Added host-generated POSIX shims (override) with traps and markers; curl remains (v5.0–v5.1).
+- Launcher integrates SHELL=/opt/aifo/bin/sh and PATH symlinks; optional unix socket on Linux.
+
 2025-09-15 00:00 User <user@example.com>
 
 QA: test suite green (230 passed, 24 skipped)

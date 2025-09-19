@@ -4,14 +4,6 @@ help:
 	@echo ""
 	@echo "aifo-coder - Makefile targets"
 	@echo ""
-	@echo "Docs: see docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
-	@echo ""
-	@echo "Fork mode:"
-	@echo "  aifo-coder --fork N [--fork-include-dirty] [--fork-dissociate] [--fork-session-name NAME] [--fork-layout tiled|even-h|even-v] [--fork-keep-on-failure] aider --"
-	@echo "  aifo-coder fork list [--json] [--all-repos]"
-	@echo "  aifo-coder fork clean [--session|--older-than|--all] [--dry-run] [--yes] [--keep-dirty|--force] [--json]"
-	@echo "  Tips: AIFO_CODER_FORK_STALE_DAYS to tune stale threshold; AIFO_CODER_FORK_AUTOCLEAN=1 to auto-clean old clean sessions."
-	@echo ""
 	@echo "Variables:"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
@@ -72,6 +64,11 @@ help:
 	@echo "Build launcher:"
 	@echo ""
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
+	@echo ""
+	@echo "Build shim:"
+	@echo ""
+	@echo "  build-shim .................. Build the aifo-shim binary with host toolchain"
+	@echo "  build-shim-with-builder ..... Build aifo-shim using the Rust Builder container"
 	@echo ""
 	@echo "Build images:"
 	@echo ""
@@ -162,6 +159,12 @@ help:
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
+	@echo "Test suites:"
+	@echo ""
+	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
+	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
+	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
+	@echo ""
 	@echo "AppArmor (security) profile:"
 	@echo
 	@echo "  apparmor .................... Generate build/apparmor/$${APPARMOR_PROFILE_NAME} from template"
@@ -169,14 +172,29 @@ help:
 	@echo "  apparmor-load-colima ........ Load the generated profile directly into the Colima VM"
 	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log"
 	@echo ""
-	@echo "Tip: Override variables inline, e.g.: make TAG=dev build-codex"
-	@echo ""
 	@echo "Usage:"
 	@echo ""
 	@echo "   make IMAGE_PREFIX=myrepo/aifo-coder TAG=v1 build"
 	@echo ""
 	@echo "   Load AppArmor policy into Colima VM (macOS):"
 	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
+	@echo ""
+	@echo "Fork mode:"
+	@echo ""
+	@echo "  aifo-coder --fork N [--fork-include-dirty] [--fork-dissociate] [--fork-session-name NAME]"
+	@echo "             [--fork-layout tiled|even-h|even-v] [--fork-keep-on-failure] aider -- [<aider arguments>]"
+	@echo "  aifo-coder fork list [--json] [--all-repos]"
+	@echo "  aifo-coder fork clean [--session|--older-than|--all] [--dry-run] [--yes] [--keep-dirty|--force] [--json]"
+	@echo ""
+	@echo "  Variables: AIFO_CODER_FORK_STALE_DAYS to tune stale threshold; AIFO_CODER_FORK_AUTOCLEAN=1 to auto-clean old clean sessions."
+	@echo ""
+	@echo "Docs:"
+	@echo ""
+	@echo "  See docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
+	@echo ""
+	@echo "Tip:"
+	@echo ""
+	@echo "  Override variables inline, e.g.: make TAG=dev build-codex"
 	@echo ""
 
 # Build one image per agent with shared base layers for maximal cache reuse.
@@ -602,6 +620,43 @@ build-launcher:
 	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
 	fi
 
+.PHONY: build-shim build-shim-with-builder
+
+build-shim:
+	@set -e; \
+	if command -v rustup >/dev/null 2>&1; then \
+	  echo "Building aifo-shim with rustup (stable) ..."; \
+	  rustup run stable cargo build --release --bin aifo-shim; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "Building aifo-shim with local cargo ..."; \
+	  cargo build --release --bin aifo-shim; \
+	else \
+	  echo "Error: cargo not found; use 'make build-shim-with-builder' to build inside Docker." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Built: $$(ls -1 target/*/release/aifo-shim 2>/dev/null || ls -1 target/release/aifo-shim 2>/dev/null || echo 'target/release/aifo-shim')"
+
+build-shim-with-builder:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Building aifo-shim inside $(RUST_BUILDER_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
+	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
+
 .PHONY: lint check test test-cargo test-legacy
 
 lint:
@@ -813,6 +868,33 @@ test-proxy-errors:
 test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	cargo test --test proxy_streaming_tcp -- --ignored
+
+.PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
+
+test-acceptance-suite:
+	@echo "Running acceptance test suite (ignored by default) ..."
+	cargo test --test accept_native_http_tcp -- --ignored
+	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
+	cargo test --test accept_wrappers -- --ignored
+	cargo test --test accept_logs_golden -- --ignored
+	cargo test --test accept_stream_large -- --ignored
+	cargo test --test accept_disconnect -- --ignored
+	cargo test --test accept_override_shim_dir -- --ignored
+
+test-integration-suite:
+	@echo "Running integration/E2E test suite (ignored by default) ..."
+	$(MAKE) test-proxy-unix
+	$(MAKE) test-proxy-errors
+	$(MAKE) test-proxy-tcp
+	$(MAKE) test-dev-tool-routing
+	$(MAKE) test-tsc-resolution
+	$(MAKE) test-toolchain-rust-e2e
+	$(MAKE) test-shim-embed
+
+test-e2e-suite:
+	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
+	$(MAKE) test-acceptance-suite
+	$(MAKE) test-integration-suite
 
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:

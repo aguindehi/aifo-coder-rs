@@ -91,6 +91,9 @@ pub fn build_docker_cmd(
     env_flags.push(OsString::from("CODEX_HOME=/home/coder/.codex"));
     env_flags.push(OsString::from("-e"));
     env_flags.push(OsString::from("GNUPGHOME=/home/coder/.gnupg"));
+    // Ensure our auto-exit shell wrapper is preferred for transient shells
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
 
     // XDG_RUNTIME_DIR for gpg-agent sockets
     #[cfg(unix)]
@@ -339,6 +342,8 @@ pub fn build_docker_cmd(
     // Container name/hostname
     let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
         .unwrap_or_else(|_| format!("{}-{}-{}", prefix, agent, crate::create_session_id()));
+    // Make container name available to other subsystems (e.g., proxy) via env
+    env::set_var("AIFO_CODER_CONTAINER_NAME", &container_name);
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
     let name_flags = vec![
         OsString::from("--name"),
@@ -355,6 +360,7 @@ pub fn build_docker_cmd(
     // Shell command inside container
     let sh_cmd = format!(
         "set -e; umask 077; \
+         if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
          export PATH=\"/opt/aifo/bin:/opt/venv/bin:$PATH\"; \
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
