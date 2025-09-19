@@ -664,12 +664,12 @@ fn handle_connection<S: Read + Write>(
                         exec_id, sig
                     ));
                 }
-                kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
-                // Record recent /signal for this exec to suppress duplicate disconnect escalation
+                // Record recent /signal for this exec immediately to suppress duplicate disconnect escalation
                 {
                     let mut rs = recent_signals.lock().unwrap();
                     rs.insert(exec_id.clone(), std::time::Instant::now());
                 }
+                kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
                 // 204 No Content without exit code header
                 let _ = stream.write_all(
                     b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -920,7 +920,7 @@ fn handle_connection<S: Read + Write>(
                 let grace_ms: u64 = std_env::var("AIFO_PROXY_SIGNAL_GRACE_MS")
                     .ok()
                     .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(300);
+                    .unwrap_or(500);
                 let deadline = std::time::Instant::now() + Duration::from_millis(grace_ms);
                 loop {
                     let seen = {
