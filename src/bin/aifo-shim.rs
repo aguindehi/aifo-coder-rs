@@ -612,6 +612,8 @@ fn try_run_native(
     if is_chunked {
         // Initialize a buffer that already contains any bytes after headers
         let mut buf: Vec<u8> = body_after.to_vec();
+        // Track immediate signal-handling exit code (when we wait inside the reader loop)
+        let mut signal_exit: Option<i32> = None;
         // Helper to read a single line ending in CRLF or LF
         let read_line = |reader: &mut dyn Read, buf: &mut Vec<u8>| -> Option<String> {
             loop {
@@ -660,7 +662,23 @@ fn try_run_native(
                                 kill_parent_shell_if_interactive();
                             }
                         }
-                        return Some("__exit__".to_string());
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            match sig {
+                                "INT" => 130,
+                                "TERM" => 143,
+                                _ => 137,
+                            }
+                        };
+                        disconnect_wait(verbose);
+                        signal_exit = Some(code);
+                        return Some("__signal__".to_string());
                     }
                     if GOT_TERM.load(Ordering::SeqCst) {
                         post_signal(url, token, exec_id, "TERM", verbose);
@@ -668,7 +686,19 @@ fn try_run_native(
                         {
                             kill_parent_shell_if_interactive();
                         }
-                        return Some("__exit_term__".to_string());
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            143
+                        };
+                        disconnect_wait(verbose);
+                        signal_exit = Some(code);
+                        return Some("__signal__".to_string());
                     }
                     if GOT_HUP.load(Ordering::SeqCst) {
                         post_signal(url, token, exec_id, "HUP", verbose);
@@ -676,7 +706,19 @@ fn try_run_native(
                         {
                             kill_parent_shell_if_interactive();
                         }
-                        return Some("__exit_hup__".to_string());
+                        let code = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_SIGINT")
+                            .ok()
+                            .as_deref()
+                            .unwrap_or("1")
+                            == "1"
+                        {
+                            0
+                        } else {
+                            129
+                        };
+                        disconnect_wait(verbose);
+                        signal_exit = Some(code);
+                        return Some("__signal__".to_string());
                     }
                 }
             }
@@ -684,9 +726,7 @@ fn try_run_native(
 
         while let Some(s) = read_line(&mut *reader_box, &mut buf) {
             let ln = s;
-            if ln == "__exit__" || ln == "__exit_term__" || ln == "__exit_hup__" {
-                // Signal exit mapping handled by caller of try_run_native (we returned Some(code) earlier)
-                // Here, break and treat as disconnect to be safe.
+            if ln == "__signal__" {
                 break;
             }
             let ln_trim = ln.trim();
@@ -765,6 +805,15 @@ fn try_run_native(
                 buf.drain(..1);
             }
             let _ = stdout.flush();
+        }
+        // If a signal was handled, close stream, cleanup markers, and exit now
+        if let Some(code) = signal_exit {
+            // Close the stream so the proxy can continue cleanup/logging
+            std::mem::drop(reader_box);
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
+            let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
+            let _ = fs::remove_dir_all(&d);
+            return Some(code);
         }
     } else {
         // Not chunked: write remaining body bytes and drain to EOF
