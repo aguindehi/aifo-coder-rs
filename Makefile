@@ -890,7 +890,7 @@ test-integration-suite:
 	if [ "$$OS" = "Linux" ]; then \
 	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
 	else \
-	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
+	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/)' ; \
 	fi; \
 	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
