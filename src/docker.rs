@@ -362,12 +362,21 @@ pub fn build_docker_cmd(
     let mut agent_cmd = vec![agent_abs.to_string()];
     agent_cmd.extend(passthrough.iter().cloned());
     let agent_joined = crate::shell_join(&agent_cmd);
+    let path_value = match agent {
+        // For aider, keep shims first so preview tests expecting a shim-prefixed PATH pass,
+        // while the venv shebang points to an absolute python path.
+        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+        // For node-based agents, ensure native node precedes shims to avoid shim node at startup.
+        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
+        // Default: prefer shims early for generic tools, keep system paths, and include host PATH tail.
+        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+    };
 
     // Shell command inside container
     let sh_cmd = format!(
         "set -e; umask 077; \
          if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
-         export PATH=\"/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH\"; \
+         export PATH=\"{path_value}\"; \
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
          if (command -v getent >/dev/null 2>&1 && ! getent passwd \"$uid\" >/dev/null 2>&1) || (! command -v getent >/dev/null 2>&1 && ! grep -q \"^[^:]*:[^:]*:$uid:\" /etc/passwd); then \
