@@ -881,7 +881,7 @@ test-acceptance-suite:
 	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	cargo nextest run --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
 	@set -e; \
@@ -892,7 +892,7 @@ test-integration-suite:
 	else \
 	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
 	fi; \
-	cargo nextest run --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
 
 test-e2e-suite:
