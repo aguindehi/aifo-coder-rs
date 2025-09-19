@@ -138,7 +138,7 @@ mod tests {
         let mut body = format!(
             "tool={}&cwd={}",
             urlencoding::Encoded::new(tool),
-            urlencoding::Encoded::new(".")
+            urlencoding::Encoded::new("/workspace")
         );
         for a in args {
             body.push('&');
@@ -251,12 +251,16 @@ mod tests {
 
     // Format check (only if rustfmt present)
     if has_rustfmt {
-        let (code_fmt, _out_fmt) =
-            post_exec_tcp_v2(port, &token, "cargo", &["fmt", "--", "--check"]);
+        let (code_fmt, out_fmt) = post_exec_tcp_v2(
+            port,
+            &token,
+            "cargo",
+            &["fmt", "--manifest-path", "/workspace/Cargo.toml", "--", "--check"],
+        );
         assert_eq!(
             code_fmt, 0,
-            "cargo fmt -- --check failed in rust sidecar (image={})",
-            image
+            "cargo fmt -- --check failed in rust sidecar (image={}):\n{}",
+            image, out_fmt
         );
     } else {
         eprintln!("skipping cargo fmt check: rustfmt component not installed in image {}", image);
@@ -264,28 +268,41 @@ mod tests {
 
     // Clippy (deny warnings) only if clippy present
     if has_clippy {
-        let (code_clippy, _out_clippy) = post_exec_tcp_v2(
+        let (code_clippy, out_clippy) = post_exec_tcp_v2(
             port,
             &token,
             "cargo",
-            &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+            &[
+                "clippy",
+                "--manifest-path",
+                "/workspace/Cargo.toml",
+                "--all-targets",
+                "--all-features",
+                "--",
+                "-D",
+                "warnings",
+            ],
         );
         assert_eq!(
             code_clippy, 0,
-            "cargo clippy -D warnings failed in rust sidecar (image={})",
-            image
+            "cargo clippy -D warnings failed in rust sidecar (image={}):\n{}",
+            image, out_clippy
         );
     } else {
         eprintln!("skipping cargo clippy check: clippy component not installed in image {}", image);
     }
 
     // cargo check (type-check without linking; more robust across minimal images)
-    let (code_check, _out_check) =
-        post_exec_tcp_v2(port, &token, "cargo", &["check", "--all-targets"]);
+    let (code_check, out_check) = post_exec_tcp_v2(
+        port,
+        &token,
+        "cargo",
+        &["check", "--all-targets", "--manifest-path", "/workspace/Cargo.toml"],
+    );
     assert_eq!(
         code_check, 0,
-        "cargo check failed in rust sidecar (image={})",
-        image
+        "cargo check failed in rust sidecar (image={}):\n{}",
+        image, out_check
     );
 
     // Probe cargo-nextest presence only (do not run build/run to avoid linking)
