@@ -114,7 +114,7 @@ mod tests {
         "cargo",
         "fmt",
         "--manifest-path",
-        "Cargo.toml",
+        "/workspace/Cargo.toml",
         "--",
         "--check",
     ]);
@@ -129,7 +129,7 @@ mod tests {
         "cargo",
         "clippy",
         "--manifest-path",
-        "Cargo.toml",
+        "/workspace/Cargo.toml",
         "--all-targets",
         "--all-features",
         "--",
@@ -147,7 +147,7 @@ mod tests {
         "cargo",
         "test",
         "--manifest-path",
-        "Cargo.toml",
+        "/workspace/Cargo.toml",
         "--no-fail-fast",
     ]);
     assert_eq!(
@@ -162,7 +162,7 @@ mod tests {
         "nextest",
         "run",
         "--manifest-path",
-        "Cargo.toml",
+        "/workspace/Cargo.toml",
         "--no-fail-fast",
     ]);
     assert_eq!(
