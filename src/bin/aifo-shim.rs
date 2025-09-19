@@ -127,12 +127,12 @@ fn compute_wait_secs(verbose: bool) -> u64 {
 
 fn disconnect_wait(verbose: bool) {
     let secs = compute_wait_secs(verbose);
-    // Start the first line on a fresh column even if a prompt or ^C was mid-line
-    eprint!("\n\r");
     eprintln!(
         "aifo-coder: disconnect, waiting for process termination (~{}s)...",
         secs
     );
+    // Add an extra blank line after the line to end on a clean new line
+    eprintln!();
     if secs > 0 {
         std::thread::sleep(std::time::Duration::from_secs(secs));
     }
@@ -574,6 +574,7 @@ fn try_run_native(
                 .unwrap_or_else(|| "/tmp".to_string());
             let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
             let _ = fs::remove_dir_all(&tmp_dir);
+            if !verbose { eprint!("\n\r"); }
             return Some(ec);
         }
     };
@@ -813,6 +814,7 @@ fn try_run_native(
             let home = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
             let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
             let _ = fs::remove_dir_all(&d);
+            if !verbose { eprint!("\n\r"); }
             return Some(code);
         }
     } else {
@@ -879,6 +881,8 @@ fn try_run_native(
         .unwrap_or_else(|| "/tmp".to_string());
     let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
     let _ = fs::remove_dir_all(&tmp_dir);
+
+    if !verbose { eprint!("\n\r"); }
 
     Some(exit_code)
 }
@@ -1085,6 +1089,7 @@ fn main() {
                 // Keep markers for proxy cleanup
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
+                if !verbose { eprint!("\n\r"); }
                 process::exit(code);
             }
             if GOT_TERM.load(Ordering::SeqCst) {
@@ -1106,6 +1111,7 @@ fn main() {
                 };
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
+                if !verbose { eprint!("\n\r"); }
                 process::exit(code);
             }
             if GOT_HUP.load(Ordering::SeqCst) {
@@ -1127,6 +1133,7 @@ fn main() {
                 };
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
+                if !verbose { eprint!("\n\r"); }
                 process::exit(code);
             }
         }
@@ -1173,5 +1180,6 @@ fn main() {
         // Remove exec markers so the shell wrapper won't auto-exit on the next /run
         let _ = fs::remove_dir_all(&base_dir);
     }
+    if !verbose { eprint!("\n\r"); }
     process::exit(exit_code);
 }
