@@ -495,6 +495,7 @@ fn try_run_native(
                             }
                         };
                         disconnect_wait(verbose);
+                        eprint!("\n\r");
                         return Some(code);
                     }
                     if GOT_TERM.load(Ordering::SeqCst) {
@@ -513,6 +514,7 @@ fn try_run_native(
                         } else {
                             143
                         };
+                        eprint!("\n\r");
                         return Some(code);
                     }
                     if GOT_HUP.load(Ordering::SeqCst) {
@@ -531,6 +533,7 @@ fn try_run_native(
                         } else {
                             129
                         };
+                        eprint!("\n\r");
                         return Some(code);
                     }
                 }
@@ -574,7 +577,7 @@ fn try_run_native(
                 .unwrap_or_else(|| "/tmp".to_string());
             let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
             let _ = fs::remove_dir_all(&tmp_dir);
-            if !verbose { eprint!("\n\r"); }
+            eprint!("\n\r");
             return Some(ec);
         }
     };
@@ -814,7 +817,7 @@ fn try_run_native(
             let home = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
             let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
             let _ = fs::remove_dir_all(&d);
-            if !verbose { eprint!("\n\r"); }
+            eprint!("\n\r");
             return Some(code);
         }
     } else {
@@ -882,7 +885,7 @@ fn try_run_native(
     let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
     let _ = fs::remove_dir_all(&tmp_dir);
 
-    if !verbose { eprint!("\n\r"); }
+    eprint!("\n\r");
 
     Some(exit_code)
 }
@@ -1089,7 +1092,7 @@ fn main() {
                 // Keep markers for proxy cleanup
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
-                if !verbose { eprint!("\n\r"); }
+                eprint!("\n\r");
                 process::exit(code);
             }
             if GOT_TERM.load(Ordering::SeqCst) {
@@ -1111,7 +1114,7 @@ fn main() {
                 };
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
-                if !verbose { eprint!("\n\r"); }
+                eprint!("\n\r");
                 process::exit(code);
             }
             if GOT_HUP.load(Ordering::SeqCst) {
@@ -1133,7 +1136,7 @@ fn main() {
                 };
                 let _ = child.wait();
                 let _ = fs::remove_dir_all(&tmp_dir);
-                if !verbose { eprint!("\n\r"); }
+                eprint!("\n\r");
                 process::exit(code);
             }
         }
@@ -1180,6 +1183,6 @@ fn main() {
         // Remove exec markers so the shell wrapper won't auto-exit on the next /run
         let _ = fs::remove_dir_all(&base_dir);
     }
-    if !verbose { eprint!("\n\r"); }
+    eprint!("\n\r");
     process::exit(exit_code);
 }
