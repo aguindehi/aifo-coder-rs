@@ -103,8 +103,18 @@ fn accept_phase4_disconnect_triggers_proxy_log() {
     // Immediately close the socket to force a write error on the proxy side
     let _ = stream.shutdown(std::net::Shutdown::Both);
 
-    // Allow proxy to log disconnect, then stop it
-    std::thread::sleep(Duration::from_millis(500));
+    // Wait up to 3s for the proxy to log 'disconnect' before stopping it
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    loop {
+        let logs_now = std::fs::read_to_string(&log_path).unwrap_or_default();
+        if logs_now.contains("aifo-coder: disconnect") {
+            break;
+        }
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
     running.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
 
