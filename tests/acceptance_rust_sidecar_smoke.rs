@@ -229,6 +229,26 @@ mod tests {
     let has_rustfmt = has_comp_list && comps.contains("rustfmt");
     let has_clippy = has_comp_list && comps.contains("clippy");
 
+    // Ensure rustc is available; otherwise skip compile/test steps
+    let (code_rustc, _out_rustc) = post_exec_tcp_v2(port, &token, "rustc", &["--version"]);
+    if code_rustc != 0 {
+        eprintln!(
+            "skipping cargo test suite: rustc not installed in image {}",
+            image
+        );
+        // Cleanup proxy/session and restore env/cwd before early return
+        flag.store(false, std::sync::atomic::Ordering::SeqCst);
+        let _ = handle.join();
+        aifo_coder::toolchain_cleanup_session(&sid, true);
+        if let Some(v) = old_to.clone() {
+            env::set_var("AIFO_TOOLEEXEC_TIMEOUT_SECS", v);
+        } else {
+            env::remove_var("AIFO_TOOLEEXEC_TIMEOUT_SECS");
+        }
+        env::set_current_dir(&old_cwd).ok();
+        return;
+    }
+
     // Format check (only if rustfmt present)
     if has_rustfmt {
         let (code_fmt, _out_fmt) =
