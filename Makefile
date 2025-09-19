@@ -876,9 +876,9 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='binary("^accept_native_http_tcp$$") | binary("^accept_native_http_uds$$") | binary("^accept_wrappers$$") | binary("^accept_logs_golden$$") | binary("^accept_stream_large$$") | binary("^accept_disconnect$$") | binary("^accept_override_shim_dir$$")'; \
+	  EXPR='test(/^accept_/)' ; \
 	else \
-	  EXPR='binary("^accept_native_http_tcp$$") | binary("^accept_wrappers$$") | binary("^accept_logs_golden$$") | binary("^accept_stream_large$$") | binary("^accept_disconnect$$") | binary("^accept_override_shim_dir$$")'; \
+	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
 	cargo nextest run --run-ignored ignored-only -E "$$EXPR" $(ARGS)
@@ -888,9 +888,9 @@ test-integration-suite:
 	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='binary("^proxy_unix_socket$$") | binary("^proxy_error_semantics$$") | binary("^proxy_streaming_tcp$$") | binary("^dev_tool_routing$$") | binary("^tsc_resolution$$") | binary("^shim_embed$$")'; \
+	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
 	else \
-	  EXPR='binary("^proxy_smoke$$") | binary("^proxy_error_semantics$$") | binary("^proxy_streaming_tcp$$") | binary("^dev_tool_routing$$") | binary("^tsc_resolution$$") | binary("^shim_embed$$")'; \
+	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
 	fi; \
 	cargo nextest run --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
