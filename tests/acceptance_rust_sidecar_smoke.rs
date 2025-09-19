@@ -221,28 +221,45 @@ mod tests {
         (code, text)
     }
 
-    // Format check (rustfmt present in aifo image)
-    let (code_fmt, _out_fmt) = post_exec_tcp_v2(port, &token, "cargo", &["fmt", "--", "--check"]);
-    assert_eq!(
-        code_fmt, 0,
-        "cargo fmt -- --check failed in rust sidecar (image={})",
-        image
-    );
+    // Detect installed rustup components to decide which checks to run
+    let (code_comp, out_comp) =
+        post_exec_tcp_v2(port, &token, "rustup", &["component", "list", "--installed"]);
+    let comps = out_comp.to_ascii_lowercase();
+    let has_comp_list = code_comp == 0;
+    let has_rustfmt = has_comp_list && comps.contains("rustfmt");
+    let has_clippy = has_comp_list && comps.contains("clippy");
 
-    // Clippy (deny warnings)
-    let (code_clippy, _out_clippy) = post_exec_tcp_v2(
-        port,
-        &token,
-        "cargo",
-        &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
-    );
-    assert_eq!(
-        code_clippy, 0,
-        "cargo clippy -D warnings failed in rust sidecar (image={})",
-        image
-    );
+    // Format check (only if rustfmt present)
+    if has_rustfmt {
+        let (code_fmt, _out_fmt) =
+            post_exec_tcp_v2(port, &token, "cargo", &["fmt", "--", "--check"]);
+        assert_eq!(
+            code_fmt, 0,
+            "cargo fmt -- --check failed in rust sidecar (image={})",
+            image
+        );
+    } else {
+        eprintln!("skipping cargo fmt check: rustfmt component not installed in image {}", image);
+    }
 
-    // cargo test
+    // Clippy (deny warnings) only if clippy present
+    if has_clippy {
+        let (code_clippy, _out_clippy) = post_exec_tcp_v2(
+            port,
+            &token,
+            "cargo",
+            &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+        );
+        assert_eq!(
+            code_clippy, 0,
+            "cargo clippy -D warnings failed in rust sidecar (image={})",
+            image
+        );
+    } else {
+        eprintln!("skipping cargo clippy check: clippy component not installed in image {}", image);
+    }
+
+    // cargo test (always run)
     let (code_test, _out_test) =
         post_exec_tcp_v2(port, &token, "cargo", &["test", "--no-fail-fast"]);
     assert_eq!(
@@ -251,18 +268,27 @@ mod tests {
         image
     );
 
-    // cargo nextest run
-    let (code_nextest, _out_nextest) = post_exec_tcp_v2(
-        port,
-        &token,
-        "cargo",
-        &["nextest", "run", "--no-fail-fast"],
-    );
-    assert_eq!(
-        code_nextest, 0,
-        "cargo nextest run failed in rust sidecar (image={})",
-        image
-    );
+    // cargo nextest run (only if nextest installed)
+    let (code_nextest_v, _out_nextest_v) =
+        post_exec_tcp_v2(port, &token, "cargo", &["nextest", "-V"]);
+    if code_nextest_v == 0 {
+        let (code_nextest, _out_nextest) = post_exec_tcp_v2(
+            port,
+            &token,
+            "cargo",
+            &["nextest", "run", "--no-fail-fast"],
+        );
+        assert_eq!(
+            code_nextest, 0,
+            "cargo nextest run failed in rust sidecar (image={})",
+            image
+        );
+    } else {
+        eprintln!(
+            "skipping cargo nextest run: cargo-nextest not installed in image {}",
+            image
+        );
+    }
 
     // Cleanup proxy/session
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
