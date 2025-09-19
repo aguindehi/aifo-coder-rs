@@ -750,7 +750,7 @@ fn handle_connection<S: Read + Write>(
     // Route to sidecar kind and enforce allowlist
     let selected_kind = {
         let mut cache = tool_cache.lock().unwrap();
-        select_kind_for_tool(session, &tool, timeout_secs, &mut *cache)
+        select_kind_for_tool(session, &tool, timeout_secs, &mut cache)
     };
     let kind = selected_kind.as_str();
     let allow = sidecar_allowlist(kind);
