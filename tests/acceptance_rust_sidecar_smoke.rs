@@ -103,21 +103,126 @@ mod tests {
     let old_cwd = env::current_dir().expect("cwd");
     env::set_current_dir(&ws).expect("chdir");
 
-    let run = |argv: &[&str]| -> i32 {
-        let args: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
-        aifo_coder::toolchain_run("rust", &args, Some(&image), false, false, false)
-            .expect("toolchain_run returned io::Result")
+    // Start a rust session and proxy so the workspace is mounted at /workspace and -w is set
+    let kinds = vec!["rust".to_string()];
+    let overrides: Vec<(String, String)> = Vec::new();
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("failed to start rust sidecar session");
+
+    let (url, token, flag, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
+
+    // Extract port from URL; connect to localhost:<port> from the host
+    let port: u16 = {
+        assert!(
+            url.starts_with("http://"),
+            "expected http:// URL, got: {url}"
+        );
+        let without_proto = url.trim_start_matches("http://");
+        let host_port = without_proto.split('/').next().unwrap_or(without_proto);
+        host_port
+            .rsplit(':')
+            .next()
+            .and_then(|s| s.parse::<u16>().ok())
+            .expect("failed to parse port from URL")
     };
 
+    // Minimal HTTP v2 client to run tool=cargo and read chunked body and trailers
+    fn post_exec_tcp_v2(port: u16, token: &str, tool: &str, args: &[&str]) -> (i32, String) {
+        use std::io::{BufRead, BufReader, Read, Write};
+        use std::net::TcpStream;
+
+        let mut stream =
+            TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
+
+        let mut body = format!(
+            "tool={}&cwd={}",
+            urlencoding::Encoded::new(tool),
+            urlencoding::Encoded::new(".")
+        );
+        for a in args {
+            body.push('&');
+            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+        }
+
+        let req = format!(
+            "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nTE: trailers\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            token,
+            body.len(),
+            body
+        );
+        stream.write_all(req.as_bytes()).expect("write failed");
+
+        // Read headers until CRLFCRLF
+        let mut reader = BufReader::new(stream);
+        let mut header = String::new();
+        loop {
+            let mut line = String::new();
+            let n = reader
+                .read_line(&mut line)
+                .expect("read header line failed");
+            if n == 0 {
+                break;
+            }
+            header.push_str(&line);
+            if header.ends_with("\r\n\r\n") || header.ends_with("\n\n") {
+                break;
+            }
+            if header.len() > 128 * 1024 {
+                break;
+            }
+        }
+
+        // Read chunked body; assemble into a string, then parse trailers for exit code
+        let mut body_out = Vec::new();
+        loop {
+            let mut size_line = String::new();
+            reader
+                .read_line(&mut size_line)
+                .expect("read chunk size failed");
+            if size_line.is_empty() {
+                break;
+            }
+            let size_str = size_line.trim();
+            let size_only = size_str.split(';').next().unwrap_or(size_str);
+            let Ok(sz) = usize::from_str_radix(size_only, 16) else {
+                break;
+            };
+            if sz == 0 {
+                break;
+            }
+            let mut chunk = vec![0u8; sz];
+            reader
+                .read_exact(&mut chunk)
+                .expect("read chunk data failed");
+            body_out.extend_from_slice(&chunk);
+            let mut crlf = [0u8; 2];
+            reader.read_exact(&mut crlf).expect("read CRLF failed");
+        }
+
+        // Read trailers; extract X-Exit-Code
+        let mut code: i32 = 1;
+        loop {
+            let mut tline = String::new();
+            let n = reader.read_line(&mut tline).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            let tl = tline.trim_end_matches(['\r', '\n']);
+            if tl.is_empty() {
+                break;
+            }
+            if let Some(v) = tl.strip_prefix("X-Exit-Code: ") {
+                code = v.trim().parse::<i32>().unwrap_or(1);
+            }
+        }
+
+        let text = String::from_utf8_lossy(&body_out).to_string();
+        (code, text)
+    }
+
     // Format check (rustfmt present in aifo image)
-    let code_fmt = run(&[
-        "cargo",
-        "fmt",
-        "--manifest-path",
-        "/workspace/Cargo.toml",
-        "--",
-        "--check",
-    ]);
+    let (code_fmt, _out_fmt) = post_exec_tcp_v2(port, &token, "cargo", &["fmt", "--", "--check"]);
     assert_eq!(
         code_fmt, 0,
         "cargo fmt -- --check failed in rust sidecar (image={})",
@@ -125,17 +230,12 @@ mod tests {
     );
 
     // Clippy (deny warnings)
-    let code_clippy = run(&[
+    let (code_clippy, _out_clippy) = post_exec_tcp_v2(
+        port,
+        &token,
         "cargo",
-        "clippy",
-        "--manifest-path",
-        "/workspace/Cargo.toml",
-        "--all-targets",
-        "--all-features",
-        "--",
-        "-D",
-        "warnings",
-    ]);
+        &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+    );
     assert_eq!(
         code_clippy, 0,
         "cargo clippy -D warnings failed in rust sidecar (image={})",
@@ -143,13 +243,8 @@ mod tests {
     );
 
     // cargo test
-    let code_test = run(&[
-        "cargo",
-        "test",
-        "--manifest-path",
-        "/workspace/Cargo.toml",
-        "--no-fail-fast",
-    ]);
+    let (code_test, _out_test) =
+        post_exec_tcp_v2(port, &token, "cargo", &["test", "--no-fail-fast"]);
     assert_eq!(
         code_test, 0,
         "cargo test failed in rust sidecar (image={})",
@@ -157,19 +252,22 @@ mod tests {
     );
 
     // cargo nextest run
-    let code_nextest = run(&[
+    let (code_nextest, _out_nextest) = post_exec_tcp_v2(
+        port,
+        &token,
         "cargo",
-        "nextest",
-        "run",
-        "--manifest-path",
-        "/workspace/Cargo.toml",
-        "--no-fail-fast",
-    ]);
+        &["nextest", "run", "--no-fail-fast"],
+    );
     assert_eq!(
         code_nextest, 0,
         "cargo nextest run failed in rust sidecar (image={})",
         image
     );
+
+    // Cleanup proxy/session
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = handle.join();
+    aifo_coder::toolchain_cleanup_session(&sid, true);
 
     // Restore env and cwd
     if let Some(v) = old_to {
