@@ -272,6 +272,10 @@ fn main() -> ExitCode {
     dotenvy::dotenv().ok();
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
+    // Honor --non-interactive by suppressing the LLM credentials prompt
+    if cli.non_interactive {
+        std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");
+    }
     apply_cli_globals(&cli);
 
     // Fork orchestrator: run early if requested
@@ -310,6 +314,11 @@ fn main() -> ExitCode {
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines
     if !warn_if_tmp_workspace(true) {
+        eprintln!("aborted.");
+        return ExitCode::from(1);
+    }
+    // Warn and optionally block if LLM credentials are missing
+    if !crate::warnings::warn_if_missing_llm_credentials(true) {
         eprintln!("aborted.");
         return ExitCode::from(1);
     }

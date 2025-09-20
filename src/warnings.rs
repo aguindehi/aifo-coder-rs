@@ -185,3 +185,56 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str)
     let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
     aifo_coder::warn_prompt_continue_or_quit(&lines)
 }
+
+// Warn (and optionally block) when LLM credentials are missing.
+// Returns true to continue, false to abort (when interactive and user declines).
+pub fn warn_if_missing_llm_credentials(interactive_block: bool) -> bool {
+    if std::env::var("AIFO_CODER_SUPPRESS_LLM_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return true;
+    }
+
+    let is_set_nonempty = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    };
+
+    let mut missing: Vec<&str> = Vec::new();
+    if !is_set_nonempty("AIFO_API_KEY") {
+        missing.push("AIFO_API_KEY");
+    }
+    if !is_set_nonempty("AIFO_API_BASE") {
+        missing.push("AIFO_API_BASE");
+    }
+    if !is_set_nonempty("AIFO_API_VERSION") {
+        missing.push("AIFO_API_VERSION");
+    }
+
+    if missing.is_empty() {
+        return true;
+    }
+
+    let mut msgs: Vec<String> = Vec::new();
+    msgs.push("missing LLM credentials/environment variables:".to_string());
+    for k in &missing {
+        msgs.push(format!("{k}: missing"));
+    }
+    msgs.push(
+        "set them in your shell or .env file, or run: aifo-coder doctor".to_string(),
+    );
+
+    if interactive_block {
+        let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
+        aifo_coder::warn_prompt_continue_or_quit(&lines)
+    } else {
+        for m in msgs {
+            aifo_coder::warn_print(&m);
+        }
+        true
+    }
+}
