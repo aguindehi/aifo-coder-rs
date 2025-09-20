@@ -973,7 +973,7 @@ fn try_notify_native(
     };
 
     // Write request
-    let (mut w, host_header) = match &mut conn {
+    let (w, host_header) = match &mut conn {
         Conn::Tcp(s, host) => (s as &mut dyn Write, host.clone()),
         #[cfg(target_os = "linux")]
         Conn::Uds(s) => (s as &mut dyn Write, "localhost".to_string()),
