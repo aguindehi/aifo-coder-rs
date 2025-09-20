@@ -15,6 +15,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
 
+// Notification tools handled via /notify (extendable)
+const NOTIFY_TOOLS: &[&str] = &["say"];
+
 #[cfg(unix)]
 static SIGINT_COUNT: AtomicU32 = AtomicU32::new(0);
 #[cfg(unix)]
@@ -1078,7 +1081,7 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
 
     // Notification tools early path (native + curl)
-    if tool == "say" {
+    if NOTIFY_TOOLS.contains(&tool.as_str()) {
         if verbose {
             let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
             eprintln!(

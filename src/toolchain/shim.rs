@@ -65,7 +65,16 @@ if [ -z "$exec_id" ]; then
 fi
 
 # Notification tools: early /notify path (POSIX curl)
-if [ "$tool" = "say" ]; then
+# Allow overriding the list via AIFO_NOTIFY_TOOLS; default to "say"
+NOTIFY_TOOLS="${AIFO_NOTIFY_TOOLS:-say}"
+is_notify=0
+for nt in $NOTIFY_TOOLS; do
+  if [ "$tool" = "$nt" ]; then
+    is_notify=1
+    break
+  fi
+done
+if [ "$is_notify" -eq 1 ]; then
   if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
     echo "aifo-shim: variant=posix transport=curl" >&2
     printf "aifo-shim: notify cmd=%s argv=%s\n" "$tool" "$*" >&2
