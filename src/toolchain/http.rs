@@ -359,4 +359,9 @@ mod tests {
         assert!(pairs.contains(&(String::from("b"), String::from(""))));
         assert!(pairs.contains(&(String::from("c"), String::from(""))));
     }
+
+    #[test]
+    fn test_classify_endpoint_notify() {
+        assert_eq!(classify_endpoint("/notify"), Some(Endpoint::Notifications));
+    }
 }
