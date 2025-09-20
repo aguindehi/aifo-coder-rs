@@ -334,9 +334,16 @@ pub fn toolexec_start_proxy(
                 if verbose {
                     eprintln!("aifo-coder: toolexec proxy listening on unix socket");
                 }
-                let tool_cache = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<(String, String), bool>::new()));
-                let exec_registry = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
-                let recent_signals = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, std::time::Instant>::new()));
+                let tool_cache =
+                    std::sync::Arc::new(std::sync::Mutex::new(
+                        HashMap::<(String, String), bool>::new(),
+                    ));
+                let exec_registry =
+                    std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
+                let recent_signals =
+                    std::sync::Arc::new(std::sync::Mutex::new(
+                        HashMap::<String, std::time::Instant>::new(),
+                    ));
                 loop {
                     if !running_cl2.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -417,9 +424,16 @@ pub fn toolexec_start_proxy(
                 bind_host
             );
         }
-        let tool_cache = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<(String, String), bool>::new()));
-        let exec_registry = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
-        let recent_signals = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, std::time::Instant>::new()));
+        let tool_cache = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<
+            (String, String),
+            bool,
+        >::new()));
+        let exec_registry =
+            std::sync::Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
+        let recent_signals = std::sync::Arc::new(std::sync::Mutex::new(HashMap::<
+            String,
+            std::time::Instant,
+        >::new()));
         loop {
             if !running_cl.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -643,13 +657,14 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
-                let container = if let Some(name) = exec_registry.lock().unwrap().get(&exec_id).cloned() {
-                    name
-                } else {
-                    respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
-                    let _ = stream.flush();
-                    return;
-                };
+                let container =
+                    if let Some(name) = exec_registry.lock().unwrap().get(&exec_id).cloned() {
+                        name
+                    } else {
+                        respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
+                        let _ = stream.flush();
+                        return;
+                    };
                 // Allow only a safe subset of signals
                 let sig = signal.to_ascii_uppercase();
                 let allowed = ["INT", "TERM", "HUP", "KILL"];
@@ -735,7 +750,7 @@ fn handle_connection<S: Read + Write>(
     // Route to sidecar kind and enforce allowlist
     let selected_kind = {
         let mut cache = tool_cache.lock().unwrap();
-        select_kind_for_tool(session, &tool, timeout_secs, &mut *cache)
+        select_kind_for_tool(session, &tool, timeout_secs, &mut cache)
     };
     let kind = selected_kind.as_str();
     let allow = sidecar_allowlist(kind);

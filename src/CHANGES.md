@@ -1,3 +1,11 @@
+2025-09-19 00:00 User <user@example.com>
+
+Codex images: keep node; continue removing npm/npx/yarn
+
+- Dockerfile: Do not delete /usr/local/bin/node or nodejs in codex and codex-slim
+  cleanup blocks (KEEP_APT=0). Codex requires node at runtime.
+- Still remove npm, npx, yarn, yarnpkg to keep image size slim after install.
+
 2025-09-18 02:55 User <user@example.com>
 
 Shim v5.4: disconnect UX — start proxy signals during shim wait
