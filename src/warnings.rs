@@ -102,46 +102,61 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
     }
     // Emit concise guidance to stderr (color-aware)
     let use_err = aifo_coder::color_enabled_stderr();
+
+    // Header
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33;1m",
-            "warning: no language toolchain sidecars enabled (--toolchain)."
+            "Warning: no language toolchain sidecars enabled (--toolchain)."
         )
+    );
+    eprintln!();
+
+    // Body (indented)
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "  Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(use_err, "\x1b[33m", "  Enable toolchains as needed, e.g.:")
     );
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+            "    ./aifo-coder --toolchain rust --toolchain node --toolchain python aider -- [<aider arguments>]"
         )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(use_err, "\x1b[33m", "  Pin toolchain versions:")
     );
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
+            "    --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
         )
     );
+    eprintln!("{}", aifo_coder::paint(use_err, "\x1b[33m", "  Options:"));
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+            "    --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
         )
     );
-    eprintln!(
-        "{}",
-        aifo_coder::paint(
-            use_err,
-            "\x1b[33m",
-            "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
-        )
-    );
+    eprintln!();
 }
 
 // Fork orchestrator preflight warning with single continue/abort prompt.
@@ -219,22 +234,52 @@ pub fn warn_if_missing_llm_credentials(interactive_block: bool) -> bool {
         return true;
     }
 
-    let mut msgs: Vec<String> = Vec::new();
-    msgs.push("missing LLM credentials/environment variables:".to_string());
-    for k in &missing {
-        msgs.push(format!("{k}: missing"));
-    }
-    msgs.push(
-        "set them in your shell or .env file, or run: aifo-coder doctor".to_string(),
-    );
+    let use_err = aifo_coder::color_enabled_stderr();
 
-    if interactive_block {
-        let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
-        aifo_coder::warn_prompt_continue_or_quit(&lines)
-    } else {
-        for m in msgs {
-            aifo_coder::warn_print(&m);
-        }
-        true
+    // Header
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "Warning: missing LLM credentials/environment variables:"
+        )
+    );
+    eprintln!();
+
+    // Missing list
+    for k in &missing {
+        eprintln!(
+            "{}",
+            aifo_coder::paint(use_err, "\x1b[33m", &format!("  Missing: {k}"))
+        );
     }
+    eprintln!();
+
+    // Guidance
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "Warning: set them in your shell or .env file, or run: aifo-coder doctor"
+        )
+    );
+    eprintln!();
+
+    if !interactive_block {
+        return true;
+    }
+
+    // Only prompt on a TTY; otherwise continue
+    if atty::is(atty::Stream::Stdin) {
+        eprint!("Press Enter to continue, or 'q' to abort: ");
+        let mut buf = String::new();
+        let _ = std::io::stdin().read_line(&mut buf);
+        let ans = buf.trim().to_ascii_lowercase();
+        if ans == "q" {
+            return false;
+        }
+    }
+    true
 }
