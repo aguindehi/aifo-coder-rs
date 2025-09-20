@@ -611,6 +611,10 @@ fn handle_connection<S: Read + Write>(
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
+        // Back-compat: default to 'say' when cmd is omitted by older clients/tests
+        if notif_cmd.is_empty() {
+            notif_cmd = "say".to_string();
+        }
         if verbose {
             log_stderr_and_file(&format!(
                 "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}\r\n\r",

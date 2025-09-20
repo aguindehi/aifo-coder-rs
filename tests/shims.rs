@@ -24,7 +24,7 @@ fn test_toolchain_write_shims_creates_files() {
         "pkg-config",
         "go",
         "gofmt",
-        "notifications-cmd",
+        "say",
     ] {
         assert!(tmp.path().join(t).exists(), "missing shim: {}", t);
     }

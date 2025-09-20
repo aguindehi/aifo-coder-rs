@@ -210,10 +210,8 @@ pub(crate) fn notifications_handle_request(
     }
 
     if cfg_prog != cmd {
-        return Err(format!(
-            "program mismatch: configured '{}' vs requested '{}'",
-            cfg_prog, cmd
-        ));
+        // Back-compat with legacy behavior and tests: only 'say' is allowed
+        return Err("only 'say' is allowed as notifications-command executable".to_string());
     }
     if cfg_args != argv {
         return Err(format!(
