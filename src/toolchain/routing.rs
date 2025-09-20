@@ -170,7 +170,9 @@ fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
             let st = cmd.status();
             let _ = tx.send(st.ok().map(|s| s.success()).unwrap_or(false));
         });
-        if let Ok(ok) = rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+        // Use a small default when no global timeout is configured, so we can cache availability.
+        let probe_secs = if timeout_secs == 0 { 2 } else { timeout_secs };
+        if let Ok(ok) = rx.recv_timeout(Duration::from_secs(probe_secs)) {
             return ok;
         }
     }
