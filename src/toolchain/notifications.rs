@@ -188,9 +188,10 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
     Err("notifications-command not found in ~/.aider.conf.yml".to_string())
 }
 
-/// Validate and, if allowed, execute the host 'say' command with provided args.
+/// Validate and, if allowed, execute the requested host notification command with provided args.
 /// Returns (exit_code, output_bytes) on success, or Err(reason) if rejected.
 pub(crate) fn notifications_handle_request(
+    cmd: &str,
     argv: &[String],
     _verbose: bool,
     timeout_secs: u64,
@@ -199,10 +200,21 @@ pub(crate) fn notifications_handle_request(
     if cfg_argv.is_empty() {
         return Err("notifications-command is empty".to_string());
     }
-    if cfg_argv[0] != "say" {
-        return Err("only 'say' is allowed as notifications-command executable".to_string());
-    }
+    let cfg_prog = cfg_argv[0].clone();
     let cfg_args = &cfg_argv[1..];
+
+    // Optional allowlist to guard surprises; start closed and add vetted tools over time.
+    let allowlist = ["say"];
+    if !allowlist.contains(&cmd) {
+        return Err(format!("command '{}' not allowed for notifications", cmd));
+    }
+
+    if cfg_prog != cmd {
+        return Err(format!(
+            "program mismatch: configured '{}' vs requested '{}'",
+            cfg_prog, cmd
+        ));
+    }
     if cfg_args != argv {
         return Err(format!(
             "arguments mismatch: configured {:?} vs requested {:?}",
@@ -210,15 +222,16 @@ pub(crate) fn notifications_handle_request(
         ));
     }
 
-    // Execute 'say' on the host with a timeout.
+    // Execute on the host with a timeout.
     let (tx, rx) = std::sync::mpsc::channel();
     let args_vec: Vec<String> = argv.to_vec();
+    let cmd_str = cmd.to_string();
     std::thread::spawn(move || {
-        let mut cmd = Command::new("say");
+        let mut c = Command::new(cmd_str);
         for a in &args_vec {
-            cmd.arg(a);
+            c.arg(a);
         }
-        let out = cmd.output();
+        let out = c.output();
         let _ = tx.send(out);
     });
     match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
@@ -229,7 +242,7 @@ pub(crate) fn notifications_handle_request(
             }
             Ok((o.status.code().unwrap_or(1), b))
         }
-        Ok(Err(e)) => Err(format!("failed to execute host 'say': {}", e)),
-        Err(_timeout) => Err("host 'say' execution timed out".to_string()),
+        Ok(Err(e)) => Err(format!("failed to execute host '{}': {}", cmd, e)),
+        Err(_timeout) => Err(format!("host '{}' execution timed out", cmd)),
     }
 }

@@ -1,9 +1,9 @@
 #[test]
-fn test_notifications_cmd_shim_missing_env_exit86() {
+fn test_say_shim_missing_env_exit86() {
     let tmp = tempfile::tempdir().expect("tmpdir");
     aifo_coder::toolchain_write_shims(tmp.path()).expect("write shims");
-    let shim = tmp.path().join("notifications-cmd");
-    assert!(shim.exists(), "notifications-cmd shim must exist");
+    let shim = tmp.path().join("say");
+    assert!(shim.exists(), "say shim must exist");
 
     // Exec shim without proxy env, expect exit 86
     #[cfg(unix)]
