@@ -31,10 +31,29 @@ if [ -f "$HOME/.cargo/env" ]; then
   . "$HOME/.cargo/env"
 fi
 
-BIN="${AIFO_CODER_BIN:-./target/release/aifo-coder$EXE}"
+# Determine project root based on script location (follow symlinks if possible)
+SCRIPT_INVOCATION="$(command -v -- "$0" 2>/dev/null || echo "$0")"
+if command -v readlink >/dev/null 2>&1; then
+  TARGET="$SCRIPT_INVOCATION"
+  while [ -L "$TARGET" ]; do
+    DIR="$(cd -P "$(dirname "$TARGET")" && pwd)"
+    LINK="$(readlink "$TARGET")"
+    case "$LINK" in
+      /*) TARGET="$LINK" ;;
+      *) TARGET="$DIR/$LINK" ;;
+    esac
+  done
+  SCRIPT_PATH="$TARGET"
+else
+  SCRIPT_PATH="$SCRIPT_INVOCATION"
+fi
+PROJECT_ROOT_DEFAULT="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+PROJECT_ROOT="${AIFO_CODER_PROJECT_ROOT:-$PROJECT_ROOT_DEFAULT}"
 
-if [ ! -x "$BIN" ] && [ -x "./target/debug/aifo-coder$EXE" ]; then
-  BIN="./target/debug/aifo-coder$EXE"
+BIN="${AIFO_CODER_BIN:-$PROJECT_ROOT/target/release/aifo-coder$EXE}"
+
+if [ ! -x "$BIN" ] && [ -x "$PROJECT_ROOT/target/debug/aifo-coder$EXE" ]; then
+  BIN="$PROJECT_ROOT/target/debug/aifo-coder$EXE"
 fi
 
 # Helper: check if a binary is runnable on this host (avoids Exec format error)
@@ -54,15 +73,15 @@ if command -v cargo >/dev/null 2>&1; then
   NEED_BUILD=0
   if [ ! -x "$BIN" ]; then
     NEED_BUILD=1
-  elif [ -f Cargo.toml ] && [ Cargo.toml -nt "$BIN" ]; then
+  elif [ -f "$PROJECT_ROOT/Cargo.toml" ] && [ "$PROJECT_ROOT/Cargo.toml" -nt "$BIN" ]; then
     NEED_BUILD=1
-  elif [ -d src ] && find src -type f -newer "$BIN" -print -quit | grep -q .; then
+  elif [ -d "$PROJECT_ROOT/src" ] && find "$PROJECT_ROOT/src" -type f -newer "$BIN" -print -quit | grep -q .; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
     echo "Building aifo-coder (release)..."
-    cargo build --release
-    BIN="./target/release/aifo-coder$EXE"
+    CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
+    BIN="$PROJECT_ROOT/target/release/aifo-coder$EXE"
   fi
 fi
 
@@ -72,8 +91,8 @@ fi
 
 if command -v cargo >/dev/null 2>&1; then
   echo "Building aifo-coder (release)..."
-  cargo build --release
-  BIN="./target/release/aifo-coder$EXE"
+  CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
+  BIN="$PROJECT_ROOT/target/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     exec "$BIN" "$@"
   fi
@@ -104,12 +123,13 @@ if command -v docker >/dev/null 2>&1; then
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
   MSYS_NO_PATHCONV=1 \
     docker run $DOCKER_PLATFORM_ARGS --rm \
-      -v "$PWD:/workspace" \
+      -v "$PROJECT_ROOT:/workspace" \
       -v "$HOME/.cargo/registry:/root/.cargo/registry" \
       -v "$HOME/.cargo/git:/root/.cargo/git" \
-      -v "$PWD/target:/workspace/target" \
+      -v "$PROJECT_ROOT/target:/workspace/target" \
+      -w /workspace \
       "${RUST_BUILDER_IMAGE:-aifo-coder-rust-builder}" cargo build --release $CARGO_TARGET
-  BIN="./target/${RELEASE_FOLDER}release/aifo-coder$EXE"
+  BIN="$PROJECT_ROOT/target/${RELEASE_FOLDER}release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
     exec "$BIN" "$@"
   else
