@@ -100,5 +100,5 @@ really need to do that, get user consent for it.
 
 # Testing Rust Code
 
-As a general rule use 'make check --no-fail-fast' instead of 'cargo test'. Make
-check used nextest which is a log faster then cargo test.
+As a general rule use 'make check ARGS="--no-fail-fast"' instead of 'cargo test'. Make
+check uses 'cargo nextest' which is a lot faster then 'cargo test'.
