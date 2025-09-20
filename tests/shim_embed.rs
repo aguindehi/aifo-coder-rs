@@ -30,7 +30,7 @@ fn test_embedded_shim_presence_in_agent_image() {
     // Verify that /opt/aifo/bin/aifo-shim exists and PATH resolves cargo/npx
     let cmd = "set -e; command -v cargo >/dev/null 2>&1 && command -v npx >/dev/null 2>&1 && [ -x /opt/aifo/bin/aifo-shim ] && echo ok";
     let out = std::process::Command::new("docker")
-        .args(["run", "--rm", &image, "bash", "-lc", cmd])
+        .args(["run", "--rm", &image, "sh", "-lc", cmd])
         .output();
 
     match out {

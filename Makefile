@@ -872,24 +872,28 @@ test-proxy-tcp:
 .PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
 
 test-acceptance-suite:
-	@echo "Running acceptance test suite (ignored by default) ..."
-	cargo test --test accept_native_http_tcp -- --ignored
-	@if [ "$$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then cargo test --test accept_native_http_uds -- --ignored; else echo "Skipping UDS acceptance test (non-Linux host)"; fi
-	cargo test --test accept_wrappers -- --ignored
-	cargo test --test accept_logs_golden -- --ignored
-	cargo test --test accept_stream_large -- --ignored
-	cargo test --test accept_disconnect -- --ignored
-	cargo test --test accept_override_shim_dir -- --ignored
+	@set -e; \
+	echo "Running acceptance test suite (ignored by default) via cargo nextest ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  EXPR='test(/^accept_/)' ; \
+	else \
+	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
+	  echo "Skipping UDS acceptance test (non-Linux host)"; \
+	fi; \
+	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
-	@echo "Running integration/E2E test suite (ignored by default) ..."
-	$(MAKE) test-proxy-unix
-	$(MAKE) test-proxy-errors
-	$(MAKE) test-proxy-tcp
-	$(MAKE) test-dev-tool-routing
-	$(MAKE) test-tsc-resolution
-	$(MAKE) test-toolchain-rust-e2e
-	$(MAKE) test-shim-embed
+	@set -e; \
+	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Linux" ]; then \
+	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
+	else \
+	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/)' ; \
+	fi; \
+	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	@$(MAKE) test-toolchain-rust-e2e
 
 test-e2e-suite:
 	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
@@ -952,11 +956,11 @@ test-toolchain-rust-e2e:
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
 	  echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS); \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS); \
 	  else \
 	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
 	  fi; \
@@ -977,7 +981,7 @@ test-toolchain-rust-e2e:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \

@@ -92,6 +92,48 @@ fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
     let _ = w.flush();
 }
 
+/// Best-effort detection of an unreadable/untraversable /workspace inside the container
+/// for the current uid:gid. Returns a diagnostic body if access appears denied.
+fn workspace_access_hint(
+    runtime: &PathBuf,
+    container: &str,
+    uidgid: Option<(u32, u32)>,
+    verbose: bool,
+) -> Option<Vec<u8>> {
+    let mut args: Vec<String> = vec!["docker".into(), "exec".into()];
+    if let Some((uid, gid)) = uidgid {
+        args.push("-u".into());
+        args.push(format!("{uid}:{gid}"));
+    }
+    args.push(container.into());
+    args.push("sh".into());
+    args.push("-lc".into());
+    let script = "set -e; ls -ld /workspace 2>&1; if [ -x /workspace ] && [ -r /workspace ]; then echo OK; else echo DENIED; fi";
+    args.push(script.into());
+    if verbose {
+        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
+    }
+    let mut cmd = Command::new(runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let out = match cmd.output() {
+        Ok(o) => o,
+        Err(_) => return None,
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    if stdout.contains("OK") {
+        None
+    } else {
+        let mut msg = String::new();
+        msg.push_str("workspace not readable/traversable for current uid:gid inside container; cwd=/workspace\n");
+        msg.push_str(&stdout);
+        msg.push_str("\nHint: On macOS, temporary directories may be 0700 and not traversable in Docker. Consider 'chmod -R 755 <project>' or adjust your test harness to relax permissions.\n");
+        Some(msg.into_bytes())
+    }
+}
+
 /// Test helper: tee important proxy log lines to stderr and optionally to a file
 /// when AIFO_TEST_LOG_PATH is set (used by acceptance tests to avoid dup2 tricks).
 fn log_stderr_and_file(s: &str) {
@@ -772,6 +814,14 @@ fn handle_connection<S: Read + Write>(
     }
 
     let pwd = std::path::PathBuf::from(cwd);
+    // Optional hardening: detect unreadable /workspace for current uid:gid and surface a helpful hint
+    if pwd.as_path() == std::path::Path::new("/workspace") {
+        if let Some(hint) = workspace_access_hint(&ctx.runtime, &name, uidgid, verbose) {
+            respond_plain(stream, "409 Conflict", 86, &hint);
+            let _ = stream.flush();
+            return;
+        }
+    }
     let mut full_args: Vec<String>;
     if tool == "tsc" {
         let nm_tsc = pwd.join("node_modules").join(".bin").join("tsc");
