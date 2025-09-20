@@ -272,8 +272,12 @@ mod tests {
     }
 
     // Detect installed rustup components to decide which checks to run
-    let (code_comp, out_comp) =
-        post_exec_tcp_v2(port, &token, "rustup", &["component", "list", "--installed"]);
+    let (code_comp, out_comp) = post_exec_tcp_v2(
+        port,
+        &token,
+        "rustup",
+        &["component", "list", "--installed"],
+    );
     let comps = out_comp.to_ascii_lowercase();
     let has_comp_list = code_comp == 0;
     let has_rustfmt = has_comp_list && comps.contains("rustfmt");
@@ -305,7 +309,13 @@ mod tests {
             port,
             &token,
             "cargo",
-            &["fmt", "--manifest-path", "/workspace/Cargo.toml", "--", "--check"],
+            &[
+                "fmt",
+                "--manifest-path",
+                "/workspace/Cargo.toml",
+                "--",
+                "--check",
+            ],
         );
         assert_eq!(
             code_fmt, 0,
@@ -313,7 +323,10 @@ mod tests {
             image, out_fmt
         );
     } else {
-        eprintln!("skipping cargo fmt check: rustfmt component not installed in image {}", image);
+        eprintln!(
+            "skipping cargo fmt check: rustfmt component not installed in image {}",
+            image
+        );
     }
 
     // Clippy (deny warnings) only if clippy present
@@ -339,12 +352,14 @@ mod tests {
             image, out_clippy
         );
     } else {
-        eprintln!("skipping cargo clippy check: clippy component not installed in image {}", image);
+        eprintln!(
+            "skipping cargo clippy check: clippy component not installed in image {}",
+            image
+        );
     }
 
     // cargo --version (simple presence/exec check without relying on manifest or writes)
-    let (code_cargo_ver, out_cargo_ver) =
-        post_exec_tcp_v2(port, &token, "cargo", &["--version"]);
+    let (code_cargo_ver, out_cargo_ver) = post_exec_tcp_v2(port, &token, "cargo", &["--version"]);
     assert_eq!(
         code_cargo_ver, 0,
         "cargo --version failed in rust sidecar (image={}):\n{}",

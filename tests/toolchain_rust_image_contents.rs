@@ -27,7 +27,9 @@ fn run_in_container(image: &str, shell_cmd: &str) -> Option<std::process::Output
 }
 
 fn image_present(image: &str) -> bool {
-    let Some(rt) = docker_path() else { return false; };
+    let Some(rt) = docker_path() else {
+        return false;
+    };
     Command::new(rt)
         .arg("image")
         .arg("inspect")

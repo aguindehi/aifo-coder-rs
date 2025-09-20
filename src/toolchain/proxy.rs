@@ -627,7 +627,8 @@ fn handle_connection<S: Read + Write>(
                 .filter(|&v| v > 0)
                 .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
             let started = std::time::Instant::now();
-            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to) {
+            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to)
+            {
                 Ok((status_code, body_out)) => {
                     log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                     let header = format!(
@@ -658,7 +659,9 @@ fn handle_connection<S: Read + Write>(
                     .filter(|&v| v > 0)
                     .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
                 let started = std::time::Instant::now();
-                match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to) {
+                match notifications::notifications_handle_request(
+                    &notif_cmd, &argv, verbose, notif_to,
+                ) {
                     Ok((status_code, body_out)) => {
                         log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                         let header = format!(
