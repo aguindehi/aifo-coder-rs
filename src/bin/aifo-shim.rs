@@ -890,7 +890,13 @@ fn try_run_native(
     Some(exit_code)
 }
 
-fn try_notify_native(url: &str, token: &str, cmd: &str, args: &[String], _verbose: bool) -> Option<i32> {
+fn try_notify_native(
+    url: &str,
+    token: &str,
+    cmd: &str,
+    args: &[String],
+    _verbose: bool,
+) -> Option<i32> {
     // Default enabled; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback
     if std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() == Some("0") {
         return None;
@@ -987,7 +993,10 @@ fn try_notify_native(url: &str, token: &str, cmd: &str, args: &[String], _verbos
         tok = token,
         len = body.len()
     );
-    if w.write_all(req.as_bytes()).is_err() || w.write_all(body.as_bytes()).is_err() || w.flush().is_err() {
+    if w.write_all(req.as_bytes()).is_err()
+        || w.write_all(body.as_bytes()).is_err()
+        || w.flush().is_err()
+    {
         return None;
     }
 
