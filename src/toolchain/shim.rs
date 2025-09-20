@@ -36,7 +36,7 @@ const SHIM_TOOLS: &[&str] = &[
     "pkg-config",
     "go",
     "gofmt",
-    "notifications-cmd",
+    "say",
 ];
 
 /// Write aifo-shim and tool wrappers into the given directory.
@@ -62,6 +62,47 @@ if [ -z "$exec_id" ]; then
   else
     exec_id="$(date +%s%N).$$"
   fi
+fi
+
+# Notification tools: early /notify path (POSIX curl)
+# Allow overriding the list via AIFO_NOTIFY_TOOLS; default to "say"
+NOTIFY_TOOLS="${AIFO_NOTIFY_TOOLS:-say}"
+is_notify=0
+for nt in $NOTIFY_TOOLS; do
+  if [ "$tool" = "$nt" ]; then
+    is_notify=1
+    break
+  fi
+done
+if [ "$is_notify" -eq 1 ]; then
+  if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+    echo "aifo-shim: variant=posix transport=curl" >&2
+    printf "aifo-shim: notify cmd=%s argv=%s\n" "$tool" "$*" >&2
+    echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2
+  fi
+  tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
+  mkdir -p "$tmp"
+  cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "Content-Type: application/x-www-form-urlencoded")
+  if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
+    SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
+    cmd+=(--unix-socket "$SOCKET")
+    URL="http://localhost/notify"
+  else
+    base="$AIFO_TOOLEEXEC_URL"
+    base="${base%/exec}"
+    URL="${base}/notify"
+  fi
+  cmd+=(--data-urlencode "cmd=$tool")
+  for a in "$@"; do
+    cmd+=(--data-urlencode "arg=$a")
+  done
+  if ! "${cmd[@]}"; then
+    : # body printed by curl on error as well
+  fi
+  ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
+  rm -rf "$tmp"
+  [ -n "$ec" ] || ec=1
+  exit "$ec"
 fi
 
 # Signal forwarding helpers and traps

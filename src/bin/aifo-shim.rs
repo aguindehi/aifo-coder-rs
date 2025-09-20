@@ -15,6 +15,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
 
+// Notification tools handled via /notify (extendable)
+const NOTIFY_TOOLS: &[&str] = &["say"];
+
 #[cfg(unix)]
 static SIGINT_COUNT: AtomicU32 = AtomicU32::new(0);
 #[cfg(unix)]
@@ -890,6 +893,168 @@ fn try_run_native(
     Some(exit_code)
 }
 
+fn try_notify_native(
+    url: &str,
+    token: &str,
+    cmd: &str,
+    args: &[String],
+    _verbose: bool,
+) -> Option<i32> {
+    // Default enabled; set AIFO_SHIM_NATIVE_HTTP=0 to force curl fallback
+    if std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() == Some("0") {
+        return None;
+    }
+
+    fn urlencode_component(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for b in s.bytes() {
+            match b {
+                b' ' => out.push('+'),
+                b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+                b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => out.push(b as char),
+                _ => {
+                    out.push('%');
+                    out.push_str(&format!("{:02X}", b));
+                }
+            }
+        }
+        out
+    }
+
+    let mut body = String::new();
+    body.push_str("cmd=");
+    body.push_str(&urlencode_component(cmd));
+    for a in args {
+        body.push('&');
+        body.push_str("arg=");
+        body.push_str(&urlencode_component(a));
+    }
+
+    enum Conn {
+        Tcp(TcpStream, String), // stream, host header
+        #[cfg(target_os = "linux")]
+        Uds(UnixStream),
+    }
+
+    // Connect
+    let mut conn: Conn = if url.starts_with("unix://") {
+        #[cfg(target_os = "linux")]
+        {
+            let sock = url.trim_start_matches("unix://");
+            match UnixStream::connect(sock) {
+                Ok(stream) => {
+                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
+                    Conn::Uds(stream)
+                }
+                Err(_) => return None,
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            return None;
+        }
+    } else {
+        let rest = url.trim_start_matches("http://").to_string();
+        let path_idx = rest.find('/').unwrap_or(rest.len());
+        let (host_port, _path) = rest.split_at(path_idx);
+        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+            let pn = p.parse::<u16>().unwrap_or(80);
+            (h.to_string(), pn)
+        } else {
+            (host_port.to_string(), 80u16)
+        };
+        let addr = format!("{}:{}", host, port);
+        match TcpStream::connect(&addr) {
+            Ok(stream) => {
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
+                Conn::Tcp(stream, host)
+            }
+            Err(_) => return None,
+        }
+    };
+
+    // Write request
+    let (w, host_header) = match &mut conn {
+        Conn::Tcp(s, host) => (s as &mut dyn Write, host.clone()),
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s) => (s as &mut dyn Write, "localhost".to_string()),
+    };
+    let req = format!(
+        concat!(
+            "POST /notify HTTP/1.1\r\n",
+            "Host: {host}\r\n",
+            "Authorization: Bearer {tok}\r\n",
+            "X-Aifo-Proto: 2\r\n",
+            "Content-Type: application/x-www-form-urlencoded\r\n",
+            "Content-Length: {len}\r\n",
+            "Connection: close\r\n",
+            "\r\n"
+        ),
+        host = host_header,
+        tok = token,
+        len = body.len()
+    );
+    if w.write_all(req.as_bytes()).is_err()
+        || w.write_all(body.as_bytes()).is_err()
+        || w.flush().is_err()
+    {
+        return None;
+    }
+
+    // Read response, print body, parse X-Exit-Code
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 2048];
+    let mut reader: Box<dyn Read> = match conn {
+        Conn::Tcp(s, _) => Box::new(s),
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s) => Box::new(s),
+    };
+    loop {
+        match reader.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => buf.extend_from_slice(&tmp[..n]),
+            Err(_) => break,
+        }
+    }
+    // Find header end
+    let header_end = if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+        i + 4
+    } else if let Some(i) = buf.windows(2).position(|w| w == b"\n\n") {
+        i + 2
+    } else {
+        buf.len()
+    };
+    let header_bytes = &buf[..header_end];
+    let mut exit_code: i32 = 1;
+    for line in String::from_utf8_lossy(header_bytes).lines() {
+        let ll = line.to_ascii_lowercase();
+        if ll.starts_with("x-exit-code:") {
+            if let Some(idx) = line.find(':') {
+                if let Ok(n) = line[idx + 1..].trim().parse::<i32>() {
+                    exit_code = n;
+                }
+            }
+        }
+    }
+    let mut stdout = std::io::stdout();
+    if header_end < buf.len() {
+        let _ = stdout.write_all(&buf[header_end..]);
+    }
+    loop {
+        match reader.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => {
+                let _ = stdout.write_all(&tmp[..n]);
+            }
+            Err(_) => break,
+        }
+    }
+    let _ = stdout.flush();
+    Some(exit_code)
+}
+
 fn main() {
     let url = match env::var("AIFO_TOOLEEXEC_URL") {
         Ok(v) if !v.trim().is_empty() => v,
@@ -914,6 +1079,104 @@ fn main() {
             pb.file_name().map(|s| s.to_string_lossy().to_string())
         })
         .unwrap_or_else(|| "unknown".to_string());
+
+    // Notification tools early path (native + curl)
+    if NOTIFY_TOOLS.contains(&tool.as_str()) {
+        if verbose {
+            let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
+            eprintln!(
+                "aifo-shim: variant=rust transport={}",
+                if prefer_native { "native" } else { "curl" }
+            );
+            eprintln!(
+                "aifo-shim: notify cmd={} argv={}",
+                tool,
+                std::env::args().skip(1).collect::<Vec<_>>().join(" ")
+            );
+            eprintln!(
+                "aifo-shim: preparing request to {} (proto={})",
+                url, PROTO_VERSION
+            );
+        }
+        let args_vec: Vec<String> = std::env::args().skip(1).collect();
+        if let Some(code) = try_notify_native(&url, &token, &tool, &args_vec, verbose) {
+            process::exit(code);
+        }
+        if verbose {
+            eprintln!("aifo-shim: native HTTP failed, falling back to curl");
+        }
+
+        // Prepare temp headers file
+        let tmp_base = env::var("TMPDIR")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "/tmp".to_string());
+        let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
+        let _ = fs::create_dir_all(&tmp_dir);
+        let header_path = format!("{}/h", tmp_dir);
+
+        // Build curl args
+        let mut args: Vec<String> = Vec::new();
+        args.push("-sS".to_string());
+        args.push("--no-buffer".to_string());
+        args.push("-D".to_string());
+        args.push(header_path.clone());
+        args.push("-X".to_string());
+        args.push("POST".to_string());
+        args.push("-H".to_string());
+        args.push(format!("Authorization: Bearer {}", token));
+        args.push("-H".to_string());
+        args.push(format!("X-Aifo-Proto: {}", PROTO_VERSION));
+        args.push("-H".to_string());
+        args.push("Content-Type: application/x-www-form-urlencoded".to_string());
+
+        args.push("--data-urlencode".to_string());
+        args.push(format!("cmd={}", tool));
+        for a in &args_vec {
+            args.push("--data-urlencode".to_string());
+            args.push(format!("arg={}", a));
+        }
+
+        let mut final_url = url.clone();
+        if url.starts_with("unix://") {
+            let sock_path = url.trim_start_matches("unix://").to_string();
+            args.push("--unix-socket".to_string());
+            args.push(sock_path);
+            final_url = "http://localhost/notify".to_string();
+        } else {
+            if let Some(idx) = final_url.rfind("/exec") {
+                final_url.truncate(idx);
+            }
+            final_url.push_str("/notify");
+        }
+        args.push(final_url);
+
+        let status_success = Command::new("curl")
+            .args(&args)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+
+        let mut exit_code: i32 = 1;
+        if let Ok(hdr) = fs::read_to_string(&header_path) {
+            for line in hdr.lines() {
+                if line.to_ascii_lowercase().starts_with("x-exit-code:") {
+                    if let Some(idx) = line.find(':') {
+                        if let Ok(n) = line[idx + 1..].trim().parse::<i32>() {
+                            exit_code = n;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if status_success {
+            exit_code = 1;
+        }
+        let _ = fs::remove_dir_all(&tmp_dir);
+        process::exit(exit_code);
+    }
 
     let cwd = env::current_dir()
         .map(|p| p.display().to_string())

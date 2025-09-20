@@ -582,6 +582,7 @@ fn handle_connection<S: Read + Write>(
     let mut tool = String::new();
     let mut cwd = "/workspace".to_string();
     let mut argv: Vec<String> = Vec::new();
+    let mut notif_cmd: String = String::new();
     for (k, v) in req
         .query
         .iter()
@@ -593,6 +594,7 @@ fn handle_connection<S: Read + Write>(
             "tool" => tool = v,
             "cwd" => cwd = v,
             "arg" => argv.push(v),
+            "cmd" => notif_cmd = v,
             _ => {}
         }
     }
@@ -609,6 +611,18 @@ fn handle_connection<S: Read + Write>(
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
+        // Back-compat: default to 'say' when cmd is omitted by older clients/tests
+        if notif_cmd.is_empty() {
+            notif_cmd = "say".to_string();
+        }
+        if verbose {
+            log_stderr_and_file(&format!(
+                "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}\r\n\r",
+                notif_cmd,
+                shell_join(&argv),
+                cwd
+            ));
+        }
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
             let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
@@ -616,8 +630,11 @@ fn handle_connection<S: Read + Write>(
                 .and_then(|s| s.parse::<u64>().ok())
                 .filter(|&v| v > 0)
                 .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
-            match notifications::notifications_handle_request(&argv, verbose, notif_to) {
+            let started = std::time::Instant::now();
+            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to)
+            {
                 Ok((status_code, body_out)) => {
+                    log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                     let header = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                         status_code,
@@ -645,8 +662,12 @@ fn handle_connection<S: Read + Write>(
                     .and_then(|s| s.parse::<u64>().ok())
                     .filter(|&v| v > 0)
                     .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
-                match notifications::notifications_handle_request(&argv, verbose, notif_to) {
+                let started = std::time::Instant::now();
+                match notifications::notifications_handle_request(
+                    &notif_cmd, &argv, verbose, notif_to,
+                ) {
                     Ok((status_code, body_out)) => {
+                        log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                         let header = format!(
                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                             status_code,

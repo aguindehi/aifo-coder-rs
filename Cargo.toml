@@ -30,3 +30,10 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+split-debuginfo = "unpacked"
+
+[profile.test]
+split-debuginfo = "unpacked"
+opt-level = 1
+codegen-units = 32
+debug = 0

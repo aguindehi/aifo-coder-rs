@@ -92,6 +92,7 @@ mod args_tests {
             toolchain_unix_socket: false,
             toolchain_bootstrap: vec!["typescript=global".to_string()],
             verbose: true,
+            non_interactive: false,
             flavor: Some(crate::cli::Flavor::Slim),
             invalidate_registry_cache: false,
             dry_run: true,
