@@ -102,46 +102,61 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
     }
     // Emit concise guidance to stderr (color-aware)
     let use_err = aifo_coder::color_enabled_stderr();
+
+    // Header
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33;1m",
-            "warning: no language toolchain sidecars enabled (--toolchain)."
+            "Warning: no language toolchain sidecars enabled (--toolchain)."
         )
+    );
+    eprintln!();
+
+    // Body (indented)
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "  Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+        )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(use_err, "\x1b[33m", "  Enable toolchains as needed, e.g.:")
     );
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+            "    ./aifo-coder --toolchain rust --toolchain node --toolchain python aider -- [<aider arguments>]"
         )
+    );
+    eprintln!(
+        "{}",
+        aifo_coder::paint(use_err, "\x1b[33m", "  Pin toolchain versions:")
     );
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --"
+            "    --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
         )
     );
+    eprintln!("{}", aifo_coder::paint(use_err, "\x1b[33m", "  Options:"));
     eprintln!(
         "{}",
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+            "    --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
         )
     );
-    eprintln!(
-        "{}",
-        aifo_coder::paint(
-            use_err,
-            "\x1b[33m",
-            "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
-        )
-    );
+    eprintln!();
 }
 
 // Fork orchestrator preflight warning with single continue/abort prompt.
@@ -184,4 +199,87 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str)
     ];
     let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
     aifo_coder::warn_prompt_continue_or_quit(&lines)
+}
+
+// Warn (and optionally block) when LLM credentials are missing.
+// Returns true to continue, false to abort (when interactive and user declines).
+pub fn warn_if_missing_llm_credentials(interactive_block: bool) -> bool {
+    if std::env::var("AIFO_CODER_SUPPRESS_LLM_WARNING")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return true;
+    }
+
+    let is_set_nonempty = |k: &str| {
+        std::env::var(k)
+            .ok()
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    };
+
+    let mut missing: Vec<&str> = Vec::new();
+    if !is_set_nonempty("AIFO_API_KEY") {
+        missing.push("AIFO_API_KEY");
+    }
+    if !is_set_nonempty("AIFO_API_BASE") {
+        missing.push("AIFO_API_BASE");
+    }
+    if !is_set_nonempty("AIFO_API_VERSION") {
+        missing.push("AIFO_API_VERSION");
+    }
+
+    if missing.is_empty() {
+        return true;
+    }
+
+    let use_err = aifo_coder::color_enabled_stderr();
+
+    // Header
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "Warning: missing LLM credentials/environment variables:"
+        )
+    );
+    eprintln!();
+
+    // Missing list
+    for k in &missing {
+        eprintln!(
+            "{}",
+            aifo_coder::paint(use_err, "\x1b[33m", &format!("  Missing: {k}"))
+        );
+    }
+    eprintln!();
+
+    // Guidance
+    eprintln!(
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33;1m",
+            "Warning: set them in your shell or .env file, or run: aifo-coder doctor"
+        )
+    );
+    eprintln!();
+
+    if !interactive_block {
+        return true;
+    }
+
+    // Only prompt on a TTY; otherwise continue
+    if atty::is(atty::Stream::Stdin) {
+        eprint!("Press Enter to continue, or 'q' to abort: ");
+        let mut buf = String::new();
+        let _ = std::io::stdin().read_line(&mut buf);
+        let ans = buf.trim().to_ascii_lowercase();
+        if ans == "q" {
+            return false;
+        }
+    }
+    true
 }

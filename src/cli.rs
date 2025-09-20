@@ -214,6 +214,10 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) dry_run: bool,
 
+    /// Disable interactive LLM prompt (same as AIFO_CODER_SUPPRESS_LLM_WARNING=1)
+    #[arg(long = "non-interactive", alias = "no-llm-prompt")]
+    pub(crate) non_interactive: bool,
+
     /// Colorize output: auto|always|never
     #[arg(long = "color", value_enum)]
     pub(crate) color: Option<aifo_coder::ColorMode>,
