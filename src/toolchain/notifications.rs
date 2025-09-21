@@ -286,7 +286,7 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
     };
 
     // Normalize node to tokens (String or Seq<String>)
-    let mut tokens: Vec<String> = match node {
+    let tokens: Vec<String> = match node {
         YamlValue::Sequence(seq) => {
             let mut out: Vec<String> = Vec::new();
             for item in seq {
