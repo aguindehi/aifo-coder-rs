@@ -513,6 +513,19 @@ Tip:
 - When invoked, it asks the host listener to run say with the provided arguments, but only if the full command equals the notifications-command configured in ~/.aider.conf.yml.
 - If the configured command is missing or does not match, execution is rejected with a clear reason. This feature requires toolchains to be enabled so the internal proxy is running.
 
+Windows note:
+- The notifications-command parser requires the first token (the executable) to be an absolute
+  Unix-style path that starts with "/". Pure Windows paths like "C:\Program Files\..." are rejected.
+  This strictness is by design for v2.
+- On Windows, use one of the following approaches:
+  - Run the host under WSL2 and point to a Linux absolute path (e.g., /usr/bin/notify-send).
+  - Use a POSIX layer that exposes Unix-like paths (e.g., MSYS/Cygwin paths such as /usr/bin/… or
+    /cygdrive/c/…).
+  - Alternatively, run the host on Linux or macOS.
+- The allowlist defaults to the basename "say". You can extend it via
+  AIFO_NOTIFICATIONS_ALLOWLIST (comma-separated basenames), but the configured path must still be
+  absolute and Unix-style.
+
 ### Slim image variants
 
 For smaller footprints, use the -slim variants of each image:
