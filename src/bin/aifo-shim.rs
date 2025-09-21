@@ -1099,7 +1099,60 @@ fn main() {
             );
         }
         let args_vec: Vec<String> = std::env::args().skip(1).collect();
+        let async_mode = !verbose
+            && std::env::var("AIFO_SHIM_NOTIFY_ASYNC")
+                .ok()
+                .as_deref()
+                != Some("0");
+        if async_mode {
+            // Fire-and-forget notify via curl without waiting for response
+            let mut final_url = url.clone();
+            let mut curl_args: Vec<String> = Vec::new();
+            curl_args.push("-sS".to_string());
+            curl_args.push("-X".to_string());
+            curl_args.push("POST".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push(format!("Authorization: Bearer {}", token));
+            curl_args.push("-H".to_string());
+            curl_args.push("X-Aifo-Proto: 2".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push("Content-Type: application/x-www-form-urlencoded".to_string());
+            curl_args.push("--data-urlencode".to_string());
+            curl_args.push(format!("cmd={}", tool));
+            for a in &args_vec {
+                curl_args.push("--data-urlencode".to_string());
+                curl_args.push(format!("arg={}", a));
+            }
+            if final_url.starts_with("unix://") {
+                let sock_path = final_url.trim_start_matches("unix://").to_string();
+                curl_args.push("--unix-socket".to_string());
+                curl_args.push(sock_path);
+                final_url = "http://localhost/notify".to_string();
+            } else {
+                if let Some(idx) = final_url.rfind("/exec") {
+                    final_url.truncate(idx);
+                }
+                final_url.push_str("/notify");
+            }
+            curl_args.push(final_url);
+            let mut cmd = Command::new("curl");
+            cmd.args(&curl_args)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            if cmd.spawn().is_ok() {
+                process::exit(0);
+            }
+            // If spawning curl failed, fall back to synchronous behavior below
+        }
         if let Some(code) = try_notify_native(&url, &token, &tool, &args_vec, verbose) {
+            if verbose {
+                let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
+                    .ok()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .unwrap_or(0.1);
+                let ms = (delay * 1000.0) as u64;
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
             process::exit(code);
         }
         if verbose {
@@ -1175,6 +1228,14 @@ fn main() {
             exit_code = 1;
         }
         let _ = fs::remove_dir_all(&tmp_dir);
+        if verbose {
+            let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
+                .ok()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.1);
+            let ms = (delay * 1000.0) as u64;
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
         process::exit(exit_code);
     }
 
@@ -1224,8 +1285,8 @@ fn main() {
         );
         eprintln!("aifo-shim: tool={} cwd={} exec_id={}", tool, cwd, exec_id);
         eprintln!(
-            "aifo-shim: preparing request to {} (proto={})",
-            url, PROTO_VERSION
+            "aifo-shim: preparing request to /notify (proto={})",
+            PROTO_VERSION
         );
     }
 
