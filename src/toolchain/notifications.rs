@@ -6,16 +6,16 @@ executing a host notifications command (say) with a timeout, to be used by the
 proxy notifications endpoint.
 */
 
-use std::fs;
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::time::Duration;
 #[cfg(unix)]
 use nix::sys::signal::{kill, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use serde_yaml::Value as YamlValue;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use crate::{shell_like_split_args, strip_outer_quotes};
 
