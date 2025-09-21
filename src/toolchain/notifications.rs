@@ -7,10 +7,10 @@ proxy notifications endpoint.
 */
 
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use std::io::Read;
 
 use crate::{shell_like_split_args, strip_outer_quotes};
 
@@ -48,15 +48,24 @@ fn parse_notif_cfg() -> Result<NotifCfg, String> {
     }
     if has_placeholder {
         // Disallow any other "{args}" occurrences
-        for (i, t) in tokens.iter().enumerate().take(tokens.len().saturating_sub(1)) {
+        for (i, t) in tokens
+            .iter()
+            .enumerate()
+            .take(tokens.len().saturating_sub(1))
+        {
             if t == "{args}" {
-                return Err("invalid notifications-command: '{args}' placeholder must be trailing".to_string());
+                return Err(
+                    "invalid notifications-command: '{args}' placeholder must be trailing"
+                        .to_string(),
+                );
             }
         }
     } else {
         // Disallow non-trailing "{args}" anywhere (defensive)
         if tokens.iter().any(|t| t == "{args}") {
-            return Err("invalid notifications-command: '{args}' placeholder must be trailing".to_string());
+            return Err(
+                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
+            );
         }
     }
 
