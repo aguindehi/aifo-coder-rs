@@ -150,6 +150,7 @@ fn log_stderr_and_file(s: &str) {
             }
         }
     }
+    let _ = io::stderr().flush();
 }
 
 /// Best-effort: send a signal to the process group inside container for given exec id.

@@ -1149,7 +1149,7 @@ fn main() {
                 let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                     .ok()
                     .and_then(|s| s.parse::<f64>().ok())
-                    .unwrap_or(0.1);
+                    .unwrap_or(0.5);
                 let ms = (delay * 1000.0) as u64;
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
@@ -1232,7 +1232,7 @@ fn main() {
             let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                 .ok()
                 .and_then(|s| s.parse::<f64>().ok())
-                .unwrap_or(0.1);
+                .unwrap_or(0.5);
             let ms = (delay * 1000.0) as u64;
             std::thread::sleep(std::time::Duration::from_millis(ms));
         }

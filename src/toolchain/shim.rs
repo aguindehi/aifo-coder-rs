@@ -110,8 +110,8 @@ if [ "$is_notify" -eq 1 ]; then
     [ -n "$ec" ] || ec=1
     # In verbose mode, add a tiny delay to let proxy logs flush before returning
     if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
-      delay="${AIFO_NOTIFY_EXIT_DELAY_SECS:-0.1}"
-      awk "BEGIN { s=$delay+0; if (s>0) system(\"sleep \" s) }" >/dev/null 2>&1 || sleep 0.1
+      delay="${AIFO_NOTIFY_EXIT_DELAY_SECS:-0.5}"
+      awk "BEGIN { s=$delay+0; if (s>0) system(\"sleep \" s) }" >/dev/null 2>&1 || sleep 0.5
     fi
     exit "$ec"
   else
