@@ -679,7 +679,7 @@ lint:
 	esac; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
-	  rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; \
+	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check; \
 	  echo "Running cargo clippy (rustup stable) ..."; \
 	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings; \
@@ -721,7 +721,7 @@ lint-ultra:
 	esac; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
-	  rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; \
+	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check; \
 	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
 	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
