@@ -1285,7 +1285,7 @@ fn main() {
         );
         eprintln!("aifo-shim: tool={} cwd={} exec_id={}", tool, cwd, exec_id);
         eprintln!(
-            "aifo-shim: preparing request to /notify (proto={})",
+            "aifo-shim: preparing request to /exec (proto={})",
             PROTO_VERSION
         );
     }
