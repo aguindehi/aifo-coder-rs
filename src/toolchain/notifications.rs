@@ -11,6 +11,11 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
+#[cfg(unix)]
+use nix::sys::signal::{kill, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
+use serde_yaml::Value as YamlValue;
 
 use crate::{shell_like_split_args, strip_outer_quotes};
 
@@ -170,10 +175,29 @@ fn run_with_timeout(
             }
             Ok(None) => {
                 if timeout_secs > 0 && start.elapsed() >= Duration::from_secs(timeout_secs) {
-                    // Timeout: best-effort terminate and reap
-                    let _ = child.kill();
-                    // brief grace
-                    std::thread::sleep(Duration::from_millis(250));
+                    // Timeout: cooperative termination (TERM then KILL), ensure wait/reap
+                    #[cfg(unix)]
+                    {
+                        let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM);
+                        let deadline = std::time::Instant::now() + Duration::from_millis(250);
+                        loop {
+                            match child.try_wait() {
+                                Ok(Some(_)) => break,
+                                Ok(None) => {
+                                    if std::time::Instant::now() >= deadline {
+                                        break;
+                                    }
+                                }
+                                Err(_) => break,
+                            }
+                            std::thread::sleep(Duration::from_millis(25));
+                        }
+                        let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGKILL);
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        let _ = child.kill();
+                    }
                     let _ = child.wait();
                     return Err(NotifyError::Timeout);
                 }
@@ -194,7 +218,7 @@ fn run_with_timeout(
     }
 }
 
-/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
+/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens (serde_yaml).
 pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     // Allow tests (and power users) to override config path explicitly
     let path = if let Ok(p) = std::env::var("AIFO_NOTIFICATIONS_CONFIG") {
@@ -214,159 +238,62 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
     let content =
         fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
 
-    // Pre-split lines to allow simple multi-line parsing
-    let lines: Vec<&str> = content.lines().collect();
-    let mut i = 0usize;
-    while i < lines.len() {
-        let line = lines[i];
-        let l = line.trim_start();
-        if l.starts_with('#') || l.is_empty() {
-            i += 1;
-            continue;
-        }
-        if let Some(rest) = l.strip_prefix("notifications-command:") {
-            let mut val = rest.trim().to_string();
-            // Tolerate configs/tests that append a literal "\n" at end of line
-            if val.ends_with("\\n") {
-                val.truncate(val.len() - 2);
-            }
+    // Parse the YAML document and locate the notifications-command node.
+    let doc: YamlValue = serde_yaml::from_str(&content)
+        .map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
 
-            // Helper: parse inline JSON/YAML-like array ["say","--title","AIFO"]
-            let parse_inline_array = |val: &str| -> Result<Vec<String>, String> {
-                if val.len() < 2 {
-                    return Err("notifications-command parsed to an empty command".to_string());
-                }
-                let inner = &val[1..val.len() - 1];
-                let mut argv: Vec<String> = Vec::new();
-                let mut cur = String::new();
-                let mut in_single = false;
-                let mut in_double = false;
-                let mut esc = false;
-                for ch in inner.chars() {
-                    if esc {
-                        let c = match ch {
-                            'n' => '\n',
-                            'r' => '\r',
-                            't' => '\t',
-                            other => other,
-                        };
-                        cur.push(c);
-                        esc = false;
-                        continue;
-                    }
-                    match ch {
-                        '\\' if in_double || in_single => esc = true,
-                        '"' if !in_single => {
-                            if in_double {
-                                in_double = false;
-                                argv.push(cur.clone());
-                                cur.clear();
-                            } else {
-                                in_double = true;
-                            }
-                        }
-                        '\'' if !in_double => {
-                            if in_single {
-                                in_single = false;
-                                argv.push(cur.clone());
-                                cur.clear();
-                            } else {
-                                in_single = true;
-                            }
-                        }
-                        ',' if !in_single && !in_double => { /* separator */ }
-                        c => {
-                            if in_single || in_double {
-                                cur.push(c);
-                            }
+    fn node_to_tokens(node: &YamlValue) -> Result<Vec<String>, String> {
+        match node {
+            YamlValue::Sequence(seq) => {
+                let mut out: Vec<String> = Vec::new();
+                for item in seq {
+                    match item {
+                        YamlValue::String(s) => out.push(s.clone()),
+                        _ => {
+                            return Err(
+                                "notifications-command must be a sequence of strings".to_string()
+                            )
                         }
                     }
                 }
-                if !cur.is_empty() && !in_single && !in_double {
-                    argv.push(cur);
+                if out.is_empty() {
+                    Err("notifications-command is empty or malformed".to_string())
+                } else {
+                    Ok(out)
                 }
+            }
+            YamlValue::String(s) => {
+                let argv = shell_like_split_args(s);
                 if argv.is_empty() {
                     Err("notifications-command parsed to an empty command".to_string())
                 } else {
                     Ok(argv)
                 }
-            };
-
-            // Case 1: inline array
-            if val.starts_with('[') && val.ends_with(']') {
-                return parse_inline_array(&val);
             }
-
-            // Case 2: explicit block scalars '|' or '>'
-            if val == "|" || val == ">" || val.is_empty() {
-                // Collect subsequent indented lines; also support YAML list items beginning with '-'
-                let mut j = i + 1;
-                // Skip blank/comment lines until first candidate
-                while j < lines.len()
-                    && (lines[j].trim().is_empty() || lines[j].trim_start().starts_with('#'))
-                {
-                    j += 1;
-                }
-                if j >= lines.len() {
-                    return Err("notifications-command is empty or malformed".to_string());
-                }
-                let first = lines[j];
-                let is_list = first.trim_start().starts_with('-');
-                if is_list {
-                    let mut argv: Vec<String> = Vec::new();
-                    while j < lines.len() {
-                        let ln = lines[j];
-                        let t = ln.trim_start();
-                        if !t.starts_with('-') {
-                            break;
-                        }
-                        let item = t.trim_start_matches('-').trim();
-                        if !item.is_empty() {
-                            argv.push(strip_outer_quotes(item));
-                        }
-                        j += 1;
-                    }
-                    if argv.is_empty() {
-                        return Err("notifications-command list is empty".to_string());
-                    }
-                    return Ok(argv);
-                } else {
-                    // Block scalar: concatenate trimmed lines with spaces into a single command string
-                    let mut parts: Vec<String> = Vec::new();
-                    while j < lines.len() {
-                        let ln = lines[j];
-                        let t = ln.trim_start();
-                        if t.is_empty() || t.starts_with('#') {
-                            j += 1;
-                            continue;
-                        }
-                        // Stop if de-indented to column 0 and looks like a new key
-                        if !ln.starts_with(' ') && t.contains(':') {
-                            break;
-                        }
-                        parts.push(t.to_string());
-                        j += 1;
-                    }
-                    let joined = parts.join(" ");
-                    let argv = shell_like_split_args(&strip_outer_quotes(&joined));
-                    if argv.is_empty() {
-                        return Err("notifications-command parsed to an empty command".to_string());
-                    }
-                    return Ok(argv);
-                }
-            }
-
-            // Case 3: single-line scalar
-            let unquoted = strip_outer_quotes(&val);
-            let argv = shell_like_split_args(&unquoted);
-            if argv.is_empty() {
-                return Err("notifications-command parsed to an empty command".to_string());
-            }
-            return Ok(argv);
+            _ => Err("notifications-command must be a string or sequence".to_string()),
         }
-        i += 1;
     }
-    Err("notifications-command not found in ~/.aider.conf.yml".to_string())
+
+    match doc {
+        YamlValue::Mapping(map) => {
+            // Find the "notifications-command" key (string key)
+            let mut found: Option<&YamlValue> = None;
+            for (k, v) in map.iter() {
+                if let YamlValue::String(key) = k {
+                    if key == "notifications-command" {
+                        found = Some(v);
+                        break;
+                    }
+                }
+            }
+            if let Some(node) = found {
+                node_to_tokens(node)
+            } else {
+                Err("notifications-command not found in ~/.aider.conf.yml".to_string())
+            }
+        }
+        other => node_to_tokens(&other),
+    }
 }
 
 /// Validate and, if allowed, execute the requested host notification command with provided args.
