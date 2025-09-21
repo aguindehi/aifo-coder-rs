@@ -1,5 +1,5 @@
-use std::fs;
 use once_cell::sync::Lazy;
+use std::fs;
 use std::sync::Mutex;
 
 static NOTIF_CFG_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

@@ -180,7 +180,10 @@ fn test_parse_notifications_single_line_string() {
         std::fs::write(&say, "stub").expect("write say");
     }
 
-    let cfg = format!(r#"notifications-command: "{} --title AIFO"\n"#, say.display());
+    let cfg = format!(
+        r#"notifications-command: "{} --title AIFO"\n"#,
+        say.display()
+    );
     let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
