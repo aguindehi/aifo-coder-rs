@@ -612,10 +612,6 @@ fn handle_connection<S: Read + Write>(
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
-        // Back-compat: default to 'say' when cmd is omitted by older clients/tests
-        if notif_cmd.is_empty() {
-            notif_cmd = "say".to_string();
-        }
         if verbose {
             let client = req.headers.get("x-aifo-client").cloned();
             let client_sfx = client
@@ -695,7 +691,12 @@ fn handle_connection<S: Read + Write>(
         }
 
         match auth_res {
-            auth::AuthResult::Authorized { proto: _ } => {
+            auth::AuthResult::Authorized { proto } => {
+                if !matches!(proto, auth::Proto::V2) {
+                    respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
+                    let _ = stream.flush();
+                    return;
+                }
                 let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                     .ok()
                     .and_then(|s| s.parse::<u64>().ok())

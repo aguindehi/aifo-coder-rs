@@ -160,8 +160,17 @@ pub fn notifications_handle_request(
     verbose: bool,
     timeout_secs: u64,
 ) -> Result<(i32, Vec<u8>), String> {
-    // Back-compat wrapper: default to 'say' as the notification command; map structured errors to strings.
-    match notifications::notifications_handle_request("say", argv, verbose, timeout_secs) {
+    // Wrapper: derive basename(exec_abs) from config and dispatch; map structured errors to strings.
+    let cfg_argv = notifications::parse_notifications_command_config()?;
+    if cfg_argv.is_empty() {
+        return Err("notifications-command is empty".to_string());
+    }
+    let exec0 = &cfg_argv[0];
+    let basename = std::path::Path::new(exec0)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    match notifications::notifications_handle_request(&basename, argv, verbose, timeout_secs) {
         Ok(res) => Ok(res),
         Err(notif_err) => match notif_err {
             notifications::NotifyError::Policy(msg) => Err(msg),
