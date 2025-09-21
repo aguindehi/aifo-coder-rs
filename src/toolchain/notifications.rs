@@ -180,9 +180,13 @@ fn run_with_timeout(
                     {
                         let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM);
                         let deadline = std::time::Instant::now() + Duration::from_millis(250);
+                        let mut still_alive = true;
                         loop {
                             match child.try_wait() {
-                                Ok(Some(_)) => break,
+                                Ok(Some(_)) => {
+                                    still_alive = false;
+                                    break;
+                                }
                                 Ok(None) => {
                                     if std::time::Instant::now() >= deadline {
                                         break;
@@ -192,7 +196,9 @@ fn run_with_timeout(
                             }
                             std::thread::sleep(Duration::from_millis(25));
                         }
-                        let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGKILL);
+                        if still_alive {
+                            let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGKILL);
+                        }
                     }
                     #[cfg(not(unix))]
                     {

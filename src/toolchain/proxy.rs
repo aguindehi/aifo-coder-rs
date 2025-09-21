@@ -636,7 +636,12 @@ fn handle_connection<S: Read + Write>(
         if noauth {
             // Enforce X-Aifo-Proto: "2" even in noauth mode
             if req.headers.get("x-aifo-proto").map(|s| s.trim()) != Some("2") {
-                respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
+                respond_plain(
+                    stream,
+                    "426 Upgrade Required",
+                    86,
+                    b"unsupported notify protocol; expected 2\n",
+                );
                 let _ = stream.flush();
                 return;
             }
@@ -693,7 +698,12 @@ fn handle_connection<S: Read + Write>(
         match auth_res {
             auth::AuthResult::Authorized { proto } => {
                 if !matches!(proto, auth::Proto::V2) {
-                    respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
+                    respond_plain(
+                        stream,
+                        "426 Upgrade Required",
+                        86,
+                        b"unsupported notify protocol; expected 2\n",
+                    );
                     let _ = stream.flush();
                     return;
                 }
