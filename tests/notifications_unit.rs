@@ -12,22 +12,14 @@ fn test_notifications_handle_request_with_stub_say() {
     // Write minimal config pointing to say with fixed args
     let cfg = dir.join("aider.yml");
     let mut f = File::create(&cfg).expect("create cfg");
-    writeln!(
-        f,
-        "notifications-command: [\"say\",\"--title\",\"AIFO\"]"
-    )
-    .expect("write cfg");
+    writeln!(f, "notifications-command: [\"say\",\"--title\",\"AIFO\"]").expect("write cfg");
 
     // Create a stub 'say' that prints its first two args and exits 0
     let bindir = dir.join("bin");
     fs::create_dir_all(&bindir).expect("mkdir bin");
     let say = bindir.join("say");
     let mut s = File::create(&say).expect("create say");
-    writeln!(
-        s,
-        "#!/bin/sh\nprintf \"stub-say:%s %s\\n\" \"$1\" \"$2\""
-    )
-    .expect("write say");
+    writeln!(s, "#!/bin/sh\nprintf \"stub-say:%s %s\\n\" \"$1\" \"$2\"").expect("write say");
     fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).expect("chmod say");
 
     // Save and set environment

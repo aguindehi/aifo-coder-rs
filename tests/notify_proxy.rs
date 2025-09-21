@@ -32,8 +32,7 @@ fn test_proxy_notify_say_noauth_tcp() {
             "#!/bin/sh\nprintf \"stub-say:%s %s\\n\" \"$1\" \"$2\"\n",
         )
         .expect("write say");
-        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755))
-            .expect("chmod say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
     }
     #[cfg(not(unix))]
     {
@@ -81,9 +80,7 @@ fn test_proxy_notify_say_noauth_tcp() {
 
     // Connect and send
     let mut stream = std::net::TcpStream::connect(&addr).expect("connect");
-    stream
-        .write_all(req.as_bytes())
-        .expect("write request");
+    stream.write_all(req.as_bytes()).expect("write request");
     stream.flush().ok();
 
     // Read all response
