@@ -159,8 +159,11 @@ fn test_max_args_truncation_with_placeholder() {
 
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     let old_max = std::env::var("AIFO_NOTIFICATIONS_MAX_ARGS").ok();
+    let old_allow = std::env::var("AIFO_NOTIFICATIONS_ALLOWLIST").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     std::env::set_var("AIFO_NOTIFICATIONS_MAX_ARGS", "2");
+    // Extend allowlist for this test to include the stub 'echoargs' (default allowlist is ["say"])
+    std::env::set_var("AIFO_NOTIFICATIONS_ALLOWLIST", "say,echoargs");
 
     let args = vec!["A".to_string(), "B".to_string(), "C".to_string()];
     let (_code, out) =
@@ -186,5 +189,10 @@ fn test_max_args_truncation_with_placeholder() {
         std::env::set_var("AIFO_NOTIFICATIONS_MAX_ARGS", v);
     } else {
         std::env::remove_var("AIFO_NOTIFICATIONS_MAX_ARGS");
+    }
+    if let Some(v) = old_allow {
+        std::env::set_var("AIFO_NOTIFICATIONS_ALLOWLIST", v);
+    } else {
+        std::env::remove_var("AIFO_NOTIFICATIONS_ALLOWLIST");
     }
 }
