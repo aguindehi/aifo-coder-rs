@@ -27,7 +27,10 @@ fn test_parse_notifications_inline_array() {
         std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
         std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
     }
-    let cfg = format!(r#"notifications-command: ["{}", "--title", "AIFO"]\n"#, say.display());
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        say.display()
+    );
     let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
@@ -184,9 +187,13 @@ fn test_notifications_config_rejects_non_say() {
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::write(&notify, "#!/bin/sh\nexit 0\n").expect("write notify");
-        std::fs::set_permissions(&notify, std::fs::Permissions::from_mode(0o755)).expect("chmod notify");
+        std::fs::set_permissions(&notify, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod notify");
     }
-    let cfg = format!(r#"notifications-command: ["{}", "--title", "AIFO"]\n"#, notify.display());
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        notify.display()
+    );
     let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
