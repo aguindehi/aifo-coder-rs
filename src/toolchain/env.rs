@@ -68,14 +68,27 @@ pub(crate) fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 /// Apply normative Rust environment variables (do not override PATH).
 pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
     // Ensure host toolchain selection doesn't leak into the container (blocked by PROHIBITED_PASSTHROUGH_ENV).
-    // Prefer the stable toolchain inside sidecars to align rustup-driven tools with image defaults.
-    // Pin RUSTUP_HOME to the image's rustup location for robustness across arbitrary UIDs.
-    push_env(args, "RUSTUP_TOOLCHAIN", "stable");
-    push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
+    // Default: prefer stable toolchain pinned to image's RUSTUP_HOME for determinism.
+    // Opt-in developer mode: when AIFO_CODER_RUSTUP_MUTABLE=1, make rustup writable for on-demand installs.
+    let rustup_mutable = env::var("AIFO_CODER_RUSTUP_MUTABLE").ok().as_deref() == Some("1");
 
+    if rustup_mutable {
+        // Developer mode: use per-user rustup home; do not force RUSTUP_TOOLCHAIN to allow switching (e.g., nightly).
+        push_env(args, "RUSTUP_HOME", "/home/coder/.rustup");
+    } else {
+        // Deterministic mode: force stable and system rustup home.
+        push_env(args, "RUSTUP_TOOLCHAIN", "stable");
+        push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
+    }
+
+    // Cargo home remains per-user for writable caches/tools.
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
+
+    // Linker defaults
     push_env(args, "CC", "gcc");
     push_env(args, "CXX", "g++");
+
+    // Enable backtraces unless explicitly set
     let rb = env::var("RUST_BACKTRACE").ok();
     if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
         push_env(args, "RUST_BACKTRACE", "1");

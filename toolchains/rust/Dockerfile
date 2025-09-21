@@ -55,7 +55,7 @@ ENV LANG=C.UTF-8 \
 
 # Home and Cargo configuration
 ENV HOME=/home/coder \
-    CARGO_HOME=/home/coder/.cargo \
+    CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup
 
 # Prepare writable home/cargo directories (best-effort for arbitrary uid:gid at runtime)
@@ -63,8 +63,8 @@ RUN set -eux; \
     mkdir -p /home/coder/.cargo/bin; \
     chmod -R 0777 /home/coder /home/coder/.cargo || true
 
-# Ensure PATH exposes cargo-installed tools first, retain /usr/local/cargo/bin as fallback
-ENV PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+# Ensure PATH exposes user and system cargo bins
+ENV PATH="/home/coder/.cargo/bin:/usr/local/cargo/bin:${PATH}"
 
 # Preinstall rust components and cargo-nextest (idempotent on rebuild)
 RUN set -eux; \
