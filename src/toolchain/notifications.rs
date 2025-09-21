@@ -28,16 +28,20 @@ pub(crate) enum NotifyError {
     Timeout,
 }
 
-fn parse_notif_cfg() -> Result<NotifCfg, String> {
+fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
     // Reuse legacy tokenizer to obtain tokens; enforce new invariants on top.
-    let tokens = parse_notifications_command_config()?;
+    let tokens = parse_notifications_command_config().map_err(NotifyError::Policy)?;
     if tokens.is_empty() {
-        return Err("notifications-command is empty".to_string());
+        return Err(NotifyError::Policy(
+            "notifications-command is empty".to_string(),
+        ));
     }
     let exec = &tokens[0];
     // Enforce absolute executable path
     if !exec.starts_with('/') {
-        return Err("notifications-command executable must be an absolute path".to_string());
+        return Err(NotifyError::Policy(
+            "notifications-command executable must be an absolute path".to_string(),
+        ));
     }
     // Detect optional trailing "{args}" placeholder; it must be strictly last if present.
     let mut has_placeholder = false;
@@ -48,24 +52,25 @@ fn parse_notif_cfg() -> Result<NotifCfg, String> {
     }
     if has_placeholder {
         // Disallow any other "{args}" occurrences
-        for (i, t) in tokens
+        for (_i, t) in tokens
             .iter()
             .enumerate()
             .take(tokens.len().saturating_sub(1))
         {
             if t == "{args}" {
-                return Err(
+                return Err(NotifyError::Policy(
                     "invalid notifications-command: '{args}' placeholder must be trailing"
                         .to_string(),
-                );
+                ));
             }
         }
     } else {
         // Disallow non-trailing "{args}" anywhere (defensive)
         if tokens.iter().any(|t| t == "{args}") {
-            return Err(
-                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
-            );
+            return Err(NotifyError::Policy(
+                "invalid notifications-command: '{args}' placeholder must be trailing"
+                    .to_string(),
+            ));
         }
     }
 
