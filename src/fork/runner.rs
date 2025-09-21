@@ -501,7 +501,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                         "even-v" => "-V",
                         _ => {
                             // tiled: alternate for some balance
-                            if i % 2 == 0 {
+                            if i.is_multiple_of(2) {
                                 "-H"
                             } else {
                                 "-V"
@@ -1044,7 +1044,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             "even-h" => "-H",
                             "even-v" => "-V",
                             _ => {
-                                if i % 2 == 0 {
+                                if i.is_multiple_of(2) {
                                     "-H"
                                 } else {
                                     "-V"
