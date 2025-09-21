@@ -176,7 +176,7 @@ fn test_proxy_unix_socket_rust_and_node() {
                 .next()
                 .unwrap_or(size_str)
                 .trim_start_matches("0x");
-            let Ok(mut sz) = usize::from_str_radix(size_only, 16) else {
+            let Ok(sz) = usize::from_str_radix(size_only, 16) else {
                 // Malformed size; bail out
                 break;
             };

@@ -127,21 +127,27 @@ pub(crate) fn compose_merge_message_impl(
             }
         }
     }
+    // Build summary with prefix first, then enforce a conservative max length.
     let mut summary_line = if summary_parts.is_empty() {
         format!("Octopus merge of {} branch(es)", pane_branches.len())
     } else {
         let joined = summary_parts.join(" / ");
-        if joined.len() > 160 {
-            format!("{} …", &joined[..160].trim_end())
-        } else {
+        if joined
+            .to_ascii_lowercase()
+            .starts_with("octopus merge")
+        {
             joined
+        } else {
+            format!("Octopus merge: {}", joined)
         }
     };
-    if !summary_line
-        .to_ascii_lowercase()
-        .starts_with("octopus merge")
-    {
-        summary_line = format!("Octopus merge: {}", summary_line);
+    // Truncate to a reasonable maximum length (including prefix), preserving char boundaries.
+    const MAX_SUMMARY_LEN: usize = 120;
+    if summary_line.chars().count() > MAX_SUMMARY_LEN {
+        let take = MAX_SUMMARY_LEN.saturating_sub(2);
+        let mut cut = summary_line.chars().take(take).collect::<String>();
+        cut = cut.trim_end().to_string();
+        summary_line = format!("{} …", cut);
     }
     merge_message.push_str(&format!(
         "{}\n\nBranch summaries relative to {}:\n",
