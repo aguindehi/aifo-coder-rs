@@ -2,30 +2,14 @@
 fn test_toolchain_write_shims_creates_files() {
     let tmp = tempfile::tempdir().expect("tmpdir");
     aifo_coder::toolchain_write_shims(tmp.path()).expect("write shims");
-    for t in [
-        "aifo-shim",
-        "cargo",
-        "rustc",
-        "node",
-        "npm",
-        "npx",
-        "tsc",
-        "ts-node",
-        "python",
-        "pip",
-        "pip3",
-        "gcc",
-        "g++",
-        "clang",
-        "clang++",
-        "make",
-        "cmake",
-        "ninja",
-        "pkg-config",
-        "go",
-        "gofmt",
-        "say",
-    ] {
+
+    // Ensure primary shim exists
+    assert!(
+        tmp.path().join("aifo-shim").exists(),
+        "missing shim: aifo-shim"
+    );
+    // Ensure all tool shims are present according to the canonical list
+    for t in aifo_coder::shim_tool_names() {
         assert!(tmp.path().join(t).exists(), "missing shim: {}", t);
     }
 }
