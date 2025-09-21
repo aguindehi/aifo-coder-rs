@@ -160,7 +160,10 @@ fn test_notifications_args_mismatch_error() {
         std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
         std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
     }
-    let cfg = format!(r#"notifications-command: ["{}", "--title", "AIFO"]\n"#, say.display());
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        say.display()
+    );
     let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
