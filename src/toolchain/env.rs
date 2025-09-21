@@ -68,8 +68,9 @@ pub(crate) fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 /// Apply normative Rust environment variables (do not override PATH).
 pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
     // Ensure host toolchain selection doesn't leak into the container (blocked by PROHIBITED_PASSTHROUGH_ENV).
-    // Do not set RUSTUP_TOOLCHAIN here; let the image defaults apply.
+    // Prefer the stable toolchain inside sidecars to align rustup-driven tools with image defaults.
     // Pin RUSTUP_HOME to the image's rustup location for robustness across arbitrary UIDs.
+    push_env(args, "RUSTUP_TOOLCHAIN", "stable");
     push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
 
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");

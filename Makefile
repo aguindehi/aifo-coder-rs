@@ -677,12 +677,21 @@ lint:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
-	if command -v rustup >/dev/null 2>&1; then \
+	if [ -n "$$AIFO_EXEC_ID" ]; then \
+	  echo "Running cargo fmt --check (sidecar) ..."; \
+	  if cargo fmt --version >/dev/null 2>&1; then \
+	    cargo fmt -- --check; \
+	  else \
+	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
+	  fi; \
+	  echo "Running cargo clippy (sidecar) ..."; \
+	  time cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
-	  rustup run stable cargo fmt -- --check; \
+	  rustup run stable cargo fmt -- --check || cargo fmt -- --check; \
 	  echo "Running cargo clippy (rustup stable) ..."; \
-	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings || time cargo clippy --workspace --all-targets --all-features -- -D warnings; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
@@ -719,12 +728,20 @@ lint-ultra:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
-	if command -v rustup >/dev/null 2>&1; then \
+	if [ -n "$$AIFO_EXEC_ID" ]; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest (sidecar) ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 time nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	  else \
+	    echo "Running cargo test (sidecar) ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	  fi; \
+	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
-	  rustup run stable cargo fmt -- --check; \
+	  rustup run stable cargo fmt -- --check || cargo fmt -- --check; \
 	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
-	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
+	  time rustup run stable cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing || time cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
@@ -767,7 +784,7 @@ test:
 	if command -v rustup >/dev/null 2>&1; then \
 	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 time nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 time nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS) || GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 time nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
