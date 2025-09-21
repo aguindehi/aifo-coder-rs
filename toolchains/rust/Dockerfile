@@ -26,11 +26,20 @@ RUN set -eux; \
       libsqlite3-dev \
       libcurl4-openssl-dev \
       git \
+      git-lfs \
+      docker.io \
       ca-certificates \
       curl \
       tzdata \
       locales; \
     rm -rf /var/lib/apt/lists/*
+
+# Configure a default git identity and enable LFS filters system-wide for tests
+RUN set -eux; \
+    git config --system user.email "aifo-toolchain@test.invalid"; \
+    git config --system user.name "AIFO Toolchain"; \
+    git config --system init.defaultBranch main; \
+    git lfs install --system || true
 
 # Optionally trust corporate CA via BuildKit secret and update system trust store
 # Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
@@ -46,22 +55,25 @@ ENV LANG=C.UTF-8 \
 
 # Home and Cargo configuration
 ENV HOME=/home/coder \
-    CARGO_HOME=/home/coder/.cargo
+    CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup
 
 # Prepare writable home/cargo directories (best-effort for arbitrary uid:gid at runtime)
 RUN set -eux; \
     mkdir -p /home/coder/.cargo/bin; \
     chmod -R 0777 /home/coder /home/coder/.cargo || true
 
-# Ensure PATH exposes cargo-installed tools first, retain /usr/local/cargo/bin as fallback
-ENV PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+# Ensure PATH exposes user and system cargo bins
+ENV PATH="/home/coder/.cargo/bin:/usr/local/cargo/bin:${PATH}"
 
 # Preinstall rust components and cargo-nextest (idempotent on rebuild)
 RUN set -eux; \
     rustup --version; \
     rustc --version; \
     cargo --version; \
-    rustup component add clippy rustfmt rust-src llvm-tools-preview; \
+    rustup toolchain install stable --profile minimal; \
+    rustup default stable; \
+    rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
     cargo install cargo-nextest --locked
 
 # Default workdir mirrors sidecar runtime

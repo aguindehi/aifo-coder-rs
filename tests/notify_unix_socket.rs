@@ -49,6 +49,13 @@ fn test_notify_unix_socket_say_ok_linux_only() {
     // Start proxy with unix socket transport
     std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
     let sid = format!("notify-uds-{}", std::process::id());
+    // Ensure socket directory exists; skip if we cannot create it on this host.
+    let dir = format!("/run/aifo/aifo-{}", sid);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("skipping: cannot create {}: {}", dir, e);
+        std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
+        return;
+    }
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 

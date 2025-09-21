@@ -11,6 +11,13 @@ fn test_unix_socket_url_includes_session_dir() {
     std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
 
     let session = "unx12345";
+    // Ensure socket directory exists; skip if we cannot create it on this host.
+    let dir = format!("/run/aifo/aifo-{}", session);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("skipping: cannot create {}: {}", dir, e);
+        std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
+        return;
+    }
     let (url, _token, running, handle) =
         aifo_coder::toolexec_start_proxy(session, /*verbose=*/ false).expect("start proxy");
 

@@ -12,6 +12,15 @@ pub(crate) const PROXY_ENV_NAMES: &[&str] = &[
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
 ];
 
+/// Env vars that must not be forwarded from host into sidecars to avoid
+/// host-specific toolchain and cargo path interference.
+pub(crate) const PROHIBITED_PASSTHROUGH_ENV: &[&str] = &[
+    "RUSTUP_TOOLCHAIN",
+    "RUSTUP_HOME",
+    "CARGO_HOME",
+    "CARGO_TARGET_DIR",
+];
+
 /// Push an environment variable (-e KEY=VAL) into docker args.
 pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
     args.push("-e".to_string());
@@ -21,6 +30,10 @@ pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
 /// Pass through selected environment variables from host into docker args.
 pub(crate) fn apply_passthrough_envs(args: &mut Vec<String>, keys: &[&str]) {
     for name in keys {
+        // Do not forward host rustup/cargo environment into sidecars
+        if PROHIBITED_PASSTHROUGH_ENV.contains(name) {
+            continue;
+        }
         if let Ok(val) = env::var(name) {
             if !val.is_empty() {
                 push_env(args, name, &val);
@@ -54,9 +67,28 @@ pub(crate) fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 
 /// Apply normative Rust environment variables (do not override PATH).
 pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
+    // Ensure host toolchain selection doesn't leak into the container (blocked by PROHIBITED_PASSTHROUGH_ENV).
+    // Default: prefer stable toolchain pinned to image's RUSTUP_HOME for determinism.
+    // Opt-in developer mode: when AIFO_CODER_RUSTUP_MUTABLE=1, make rustup writable for on-demand installs.
+    let rustup_mutable = env::var("AIFO_CODER_RUSTUP_MUTABLE").ok().as_deref() == Some("1");
+
+    if rustup_mutable {
+        // Developer mode: use per-user rustup home; do not force RUSTUP_TOOLCHAIN to allow switching (e.g., nightly).
+        push_env(args, "RUSTUP_HOME", "/home/coder/.rustup");
+    } else {
+        // Deterministic mode: force stable and system rustup home.
+        push_env(args, "RUSTUP_TOOLCHAIN", "stable");
+        push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
+    }
+
+    // Cargo home remains per-user for writable caches/tools.
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
+
+    // Linker defaults
     push_env(args, "CC", "gcc");
     push_env(args, "CXX", "g++");
+
+    // Enable backtraces unless explicitly set
     let rb = env::var("RUST_BACKTRACE").ok();
     if rb.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
         push_env(args, "RUST_BACKTRACE", "1");
