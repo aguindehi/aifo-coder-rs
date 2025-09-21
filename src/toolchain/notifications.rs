@@ -138,16 +138,16 @@ fn run_with_timeout(
     cmd.args(args);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = {
-        // Retry a few times on transient EBUSY (e.g., freshly written script)
+        // Retry on transient EBUSY (Text file busy) a few times with small sleeps
         let mut attempts = 0usize;
         loop {
             match cmd.spawn() {
                 Ok(c) => break c,
                 Err(e) => {
-                    let ebusy = e.raw_os_error() == Some(26); // EBUSY on Unix
-                    if ebusy && attempts < 4 {
+                    let ebusy = e.raw_os_error() == Some(26); // ETXTBUSY on Unix
+                    if ebusy && attempts < 10 {
                         attempts += 1;
-                        std::thread::sleep(Duration::from_millis(25));
+                        std::thread::sleep(Duration::from_millis(50));
                         continue;
                     }
                     let bn = exec_abs

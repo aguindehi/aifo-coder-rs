@@ -16,6 +16,8 @@ fn test_notifications_handle_request_with_stub_say() {
     let mut s = File::create(&say).expect("create say");
     writeln!(s, "#!/bin/sh\nprintf \"stub-say:%s %s\\n\" \"$1\" \"$2\"").expect("write say");
     fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).expect("chmod say");
+    // Ensure the stub file is closed before attempting to execute it to avoid ETXTBUSY
+    drop(s);
 
     // Write minimal config pointing to absolute stub say with fixed args
     let cfg = dir.join("aider.yml");
