@@ -46,7 +46,8 @@ ENV LANG=C.UTF-8 \
 
 # Home and Cargo configuration
 ENV HOME=/home/coder \
-    CARGO_HOME=/home/coder/.cargo
+    CARGO_HOME=/home/coder/.cargo \
+    RUSTUP_HOME=/usr/local/rustup
 
 # Prepare writable home/cargo directories (best-effort for arbitrary uid:gid at runtime)
 RUN set -eux; \
@@ -61,7 +62,9 @@ RUN set -eux; \
     rustup --version; \
     rustc --version; \
     cargo --version; \
-    rustup component add clippy rustfmt rust-src llvm-tools-preview; \
+    rustup toolchain install stable --profile minimal; \
+    rustup default stable; \
+    rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
     cargo install cargo-nextest --locked
 
 # Default workdir mirrors sidecar runtime
