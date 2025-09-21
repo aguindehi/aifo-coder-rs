@@ -36,12 +36,12 @@ fn test_notify_verbose_logs_include_parsed_and_result() {
         fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // Config with expected args
-    fs::write(
-        home.join(".aider.conf.yml"),
-        "notifications-command: [\"say\", \"--title\", \"AIFO\"]\n",
-    )
-    .unwrap();
+    // Config with expected args (absolute stub path)
+    let cfg_content = format!(
+        "notifications-command: [\"{}\", \"--title\", \"AIFO\"]\n",
+        say.display()
+    );
+    fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
     // Prepare log path
     let logf = td.path().join("proxy.log");

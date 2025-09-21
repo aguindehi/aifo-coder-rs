@@ -17,8 +17,18 @@ fn test_parse_notifications_inline_array() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path config
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    let cfg = format!(r#"notifications-command: ["{}", "--title", "AIFO"]\n"#, say.display());
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let argv = aifo_coder::parse_notifications_command_config().expect("parse array");
@@ -166,8 +176,18 @@ fn test_notifications_config_rejects_non_say() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: ["notify", "--title", "AIFO"]\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'notify' and write absolute-path config
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let notify = bindir.join("notify");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&notify, "#!/bin/sh\nexit 0\n").expect("write notify");
+        std::fs::set_permissions(&notify, std::fs::Permissions::from_mode(0o755)).expect("chmod notify");
+    }
+    let cfg = format!(r#"notifications-command: ["{}", "--title", "AIFO"]\n"#, notify.display());
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let res =
@@ -175,7 +195,7 @@ fn test_notifications_config_rejects_non_say() {
     assert!(res.is_err(), "expected error when executable is not 'say'");
     let msg = res.err().unwrap();
     assert!(
-        msg.contains("only 'say' is allowed"),
+        msg.contains("command 'notify' not allowed for notifications"),
         "unexpected error: {}",
         msg
     );

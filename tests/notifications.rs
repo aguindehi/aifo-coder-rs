@@ -38,12 +38,12 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
         fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // ~/.aider.conf.yml with notifications-command
-    fs::write(
-        home.join(".aider.conf.yml"),
-        "notifications-command: [\"say\", \"--title\", \"AIFO\"]\n",
-    )
-    .unwrap();
+    // ~/.aider.conf.yml with notifications-command (absolute path to stub)
+    let cfg_content = format!(
+        "notifications-command: [\"{}\", \"--title\", \"AIFO\"]\n",
+        say.display()
+    );
+    fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
     // Start proxy without launching sidecars (notifications-cmd does not require sidecars)
     let sid = format!("notif-{}", std::process::id());
@@ -66,9 +66,9 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     {
         use std::net::TcpStream;
         let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-        let body = "arg=--title&arg=AIFO";
+        let body = "cmd=say&arg=--title&arg=AIFO";
         let req = format!(
-            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write");
@@ -92,9 +92,9 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
     {
         use std::net::TcpStream;
         let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect2");
-        let body = "arg=--oops";
+        let body = "cmd=say&arg=--oops";
         let req = format!(
-            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+            "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write2");
