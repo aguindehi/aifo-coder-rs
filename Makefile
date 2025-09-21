@@ -688,7 +688,7 @@ lint:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "Running cargo fmt --check (sidecar) ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check; \
+	    cargo fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -697,13 +697,13 @@ lint:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
-	  rustup run stable cargo fmt -- --check || cargo fmt -- --check; \
+	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable) ..."; \
 	  rustup run stable cargo clippy --workspace --all-features -- -D warnings || cargo clippy --workspace --all-features -- -D warnings; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check; \
+	    cargo fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -717,7 +717,7 @@ lint:
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
-	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
+	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
 	      cargo clippy --workspace --all-features -- -D warnings'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
@@ -739,7 +739,7 @@ lint-ultra:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "Running cargo fmt --check (sidecar) ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check; \
+	    cargo fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -748,13 +748,13 @@ lint-ultra:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
-	  rustup run stable cargo fmt -- --check || cargo fmt -- --check; \
+	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
 	  rustup run stable cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing || cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check; \
+	    cargo fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
