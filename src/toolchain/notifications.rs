@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use crate::{shell_like_split_args};
+use crate::shell_like_split_args;
 
 #[derive(Debug)]
 struct NotifCfg {
