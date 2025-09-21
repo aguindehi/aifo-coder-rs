@@ -214,7 +214,7 @@ CACHE_DIR ?= .buildx-cache
 NICENESS_CARGO_NEXTEST =? -1
 
 # Nextest arguments
-ARGS_NEXTEST ?= --no-fail-fast --success-output=never
+ARGS_NEXTEST ?= --no-fail-fast --status-level=fail
 
 # Detect docker buildx availability
 BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || echo 0)
