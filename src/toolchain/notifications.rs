@@ -236,7 +236,7 @@ fn run_with_timeout(
     }
 }
 
-—/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens (serde_yaml full-doc).
+/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens (serde_yaml full-doc).
 pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String> {
     // Resolve config path from env override or default ~/.aider.conf.yml
     let path = if let Ok(p) = std::env::var("AIFO_NOTIFICATIONS_CONFIG") {
