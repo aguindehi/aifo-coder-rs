@@ -1094,8 +1094,8 @@ fn main() {
                 std::env::args().skip(1).collect::<Vec<_>>().join(" ")
             );
             eprintln!(
-                "aifo-shim: preparing request to {} (proto={})",
-                url, PROTO_VERSION
+                "aifo-shim: preparing request to /notify (proto={})",
+                PROTO_VERSION
             );
         }
         let args_vec: Vec<String> = std::env::args().skip(1).collect();
