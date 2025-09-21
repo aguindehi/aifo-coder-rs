@@ -26,11 +26,20 @@ RUN set -eux; \
       libsqlite3-dev \
       libcurl4-openssl-dev \
       git \
+      git-lfs \
+      docker.io \
       ca-certificates \
       curl \
       tzdata \
       locales; \
     rm -rf /var/lib/apt/lists/*
+
+# Configure a default git identity and enable LFS filters system-wide for tests
+RUN set -eux; \
+    git config --system user.email "aifo-toolchain@test.invalid"; \
+    git config --system user.name "AIFO Toolchain"; \
+    git config --system init.defaultBranch main; \
+    git lfs install --system || true
 
 # Optionally trust corporate CA via BuildKit secret and update system trust store
 # Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
