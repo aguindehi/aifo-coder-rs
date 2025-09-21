@@ -254,8 +254,19 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
             .join(".aider.conf.yml")
     };
 
-    let content =
+    let content_raw =
         fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
+    // Tolerate a trailing literal "\n" token sometimes written by helpers
+    let content = {
+        let s = content_raw.trim_end_matches(|c| c == ' ' || c == '\t' || c == '\r' || c == '\n');
+        if s.ends_with("\\n") {
+            let mut t = s.to_string();
+            t.truncate(t.len().saturating_sub(2));
+            t
+        } else {
+            s.to_string()
+        }
+    };
 
     // Parse entire YAML document and locate the "notifications-command" node
     let doc: YamlValue = serde_yaml::from_str(&content)
