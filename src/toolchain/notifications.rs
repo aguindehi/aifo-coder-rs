@@ -8,10 +8,178 @@ proxy notifications endpoint.
 
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
+use std::io::Read;
 
 use crate::{shell_like_split_args, strip_outer_quotes};
+
+#[derive(Debug)]
+struct NotifCfg {
+    exec_abs: PathBuf,
+    fixed_args: Vec<String>,
+    has_trailing_args_placeholder: bool,
+}
+
+#[derive(Debug)]
+pub(crate) enum NotifyError {
+    Policy(String),
+    ExecSpawn(String),
+    Timeout,
+}
+
+fn parse_notif_cfg() -> Result<NotifCfg, String> {
+    // Reuse legacy tokenizer to obtain tokens; enforce new invariants on top.
+    let tokens = parse_notifications_command_config()?;
+    if tokens.is_empty() {
+        return Err("notifications-command is empty".to_string());
+    }
+    let exec = &tokens[0];
+    // Enforce absolute executable path
+    if !exec.starts_with('/') {
+        return Err("notifications-command executable must be an absolute path".to_string());
+    }
+    // Detect optional trailing "{args}" placeholder; it must be strictly last if present.
+    let mut has_placeholder = false;
+    if let Some(last) = tokens.last() {
+        if last == "{args}" {
+            has_placeholder = true;
+        }
+    }
+    if has_placeholder {
+        // Disallow any other "{args}" occurrences
+        for (i, t) in tokens.iter().enumerate().take(tokens.len().saturating_sub(1)) {
+            if t == "{args}" {
+                return Err("invalid notifications-command: '{args}' placeholder must be trailing".to_string());
+            }
+        }
+    } else {
+        // Disallow non-trailing "{args}" anywhere (defensive)
+        if tokens.iter().any(|t| t == "{args}") {
+            return Err("invalid notifications-command: '{args}' placeholder must be trailing".to_string());
+        }
+    }
+
+    let fixed_args: Vec<String> = if has_placeholder && tokens.len() >= 2 {
+        tokens[1..tokens.len() - 1].to_vec()
+    } else if tokens.len() >= 2 {
+        tokens[1..].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    Ok(NotifCfg {
+        exec_abs: PathBuf::from(exec),
+        fixed_args,
+        has_trailing_args_placeholder: has_placeholder,
+    })
+}
+
+fn compute_allowlist_basenames() -> Vec<String> {
+    // Default allowlist
+    let mut out: Vec<String> = vec!["say".to_string()];
+    if let Ok(extra) = std::env::var("AIFO_NOTIFICATIONS_ALLOWLIST") {
+        let mut seen = std::collections::HashSet::<String>::new();
+        // seed with defaults
+        for d in &out {
+            seen.insert(d.clone());
+        }
+        for part in extra.split(',') {
+            let name = part.trim().to_string();
+            if name.is_empty() {
+                continue;
+            }
+            if seen.insert(name.clone()) {
+                out.push(name);
+                if out.len() >= 16 {
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
+fn clamp_max_args() -> usize {
+    let mut max_args = 8usize;
+    if let Ok(v) = std::env::var("AIFO_NOTIFICATIONS_MAX_ARGS") {
+        if let Ok(n) = v.trim().parse::<usize>() {
+            let m = n.max(1).min(32);
+            max_args = m;
+        }
+    }
+    max_args
+}
+
+fn run_with_timeout(
+    exec_abs: &PathBuf,
+    args: &[String],
+    timeout_secs: u64,
+) -> Result<(i32, Vec<u8>), NotifyError> {
+    let mut cmd = Command::new(exec_abs);
+    cmd.args(args);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            let bn = exec_abs
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| exec_abs.display().to_string());
+            return Err(NotifyError::ExecSpawn(format!(
+                "host '{}' execution failed: {}",
+                bn, e
+            )));
+        }
+    };
+
+    let start = std::time::Instant::now();
+    // Poll until exit or timeout
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                // Read stdout and stderr; append stderr after stdout
+                let mut all: Vec<u8> = Vec::new();
+                if let Some(mut so) = child.stdout.take() {
+                    let mut buf = Vec::new();
+                    let _ = so.read_to_end(&mut buf);
+                    all.extend_from_slice(&buf);
+                }
+                if let Some(mut se) = child.stderr.take() {
+                    let mut buf = Vec::new();
+                    let _ = se.read_to_end(&mut buf);
+                    if !buf.is_empty() {
+                        all.extend_from_slice(&buf);
+                    }
+                }
+                let code = status.code().unwrap_or(1);
+                return Ok((code, all));
+            }
+            Ok(None) => {
+                if timeout_secs > 0 && start.elapsed() >= Duration::from_secs(timeout_secs) {
+                    // Timeout: best-effort terminate and reap
+                    let _ = child.kill();
+                    // brief grace
+                    std::thread::sleep(Duration::from_millis(250));
+                    let _ = child.wait();
+                    return Err(NotifyError::Timeout);
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(_e) => {
+                // Treat as spawn/exec error; propagate as generic spawn error text
+                let bn = exec_abs
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| exec_abs.display().to_string());
+                return Err(NotifyError::ExecSpawn(format!(
+                    "host '{}' execution failed: try_wait failed",
+                    bn
+                )));
+            }
+        }
+    }
+}
 
 /// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens.
 pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String> {
@@ -195,52 +363,47 @@ pub(crate) fn notifications_handle_request(
     argv: &[String],
     _verbose: bool,
     timeout_secs: u64,
-) -> Result<(i32, Vec<u8>), String> {
-    let cfg_argv = parse_notifications_command_config()?;
-    if cfg_argv.is_empty() {
-        return Err("notifications-command is empty".to_string());
-    }
-    let cfg_prog = cfg_argv[0].clone();
-    let cfg_args = &cfg_argv[1..];
+) -> Result<(i32, Vec<u8>), NotifyError> {
+    let cfg = parse_notif_cfg()?;
 
-    // Optional allowlist to guard surprises; start closed and add vetted tools over time.
-    let allowlist = ["say"];
-    if !allowlist.contains(&cmd) {
-        return Err(format!("command '{}' not allowed for notifications", cmd));
-    }
-
-    if cfg_prog != cmd {
-        // Back-compat with legacy behavior and tests: only 'say' is allowed
-        return Err("only 'say' is allowed as notifications-command executable".to_string());
-    }
-    if cfg_args != argv {
-        return Err(format!(
-            "arguments mismatch: configured {:?} vs requested {:?}",
-            cfg_args, argv
-        ));
+    // Allowlist: default ["say"] with env extension
+    let allowed = compute_allowlist_basenames();
+    let basename = cfg
+        .exec_abs
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    if !allowed.iter().any(|b| b == &basename) {
+        return Err(NotifyError::Policy(format!(
+            "command '{}' not allowed for notifications",
+            basename
+        )));
     }
 
-    // Execute on the host with a timeout.
-    let (tx, rx) = std::sync::mpsc::channel();
-    let args_vec: Vec<String> = argv.to_vec();
-    let cmd_str = cmd.to_string();
-    std::thread::spawn(move || {
-        let mut c = Command::new(cmd_str);
-        for a in &args_vec {
-            c.arg(a);
+    // Require request cmd to equal basename(exec_abs)
+    if cmd != basename {
+        return Err(NotifyError::Policy(format!(
+            "only executable basename '{}' is accepted (got '{}')",
+            basename, cmd
+        )));
+    }
+
+    // Argument policy
+    let final_args: Vec<String> = if cfg.has_trailing_args_placeholder {
+        let cap = clamp_max_args();
+        let mut args = cfg.fixed_args.clone();
+        args.extend(argv.iter().take(cap).cloned());
+        args
+    } else {
+        if cfg.fixed_args != argv {
+            return Err(NotifyError::Policy(format!(
+                "arguments mismatch: configured {:?} vs requested {:?}",
+                cfg.fixed_args, argv
+            )));
         }
-        let out = c.output();
-        let _ = tx.send(out);
-    });
-    match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
-        Ok(Ok(o)) => {
-            let mut b = o.stdout;
-            if !o.stderr.is_empty() {
-                b.extend_from_slice(&o.stderr);
-            }
-            Ok((o.status.code().unwrap_or(1), b))
-        }
-        Ok(Err(e)) => Err(format!("failed to execute host '{}': {}", cmd, e)),
-        Err(_timeout) => Err(format!("host '{}' execution timed out", cmd)),
-    }
+        cfg.fixed_args.clone()
+    };
+
+    // Execute with timeout; capture stdout+stderr
+    run_with_timeout(&cfg.exec_abs, &final_args, timeout_secs)
 }

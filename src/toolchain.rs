@@ -160,8 +160,15 @@ pub fn notifications_handle_request(
     verbose: bool,
     timeout_secs: u64,
 ) -> Result<(i32, Vec<u8>), String> {
-    // Back-compat wrapper: default to 'say' as the notification command
-    notifications::notifications_handle_request("say", argv, verbose, timeout_secs)
+    // Back-compat wrapper: default to 'say' as the notification command; map structured errors to strings.
+    match notifications::notifications_handle_request("say", argv, verbose, timeout_secs) {
+        Ok(res) => Ok(res),
+        Err(notif_err) => match notif_err {
+            notifications::NotifyError::Policy(msg) => Err(msg),
+            notifications::NotifyError::ExecSpawn(msg) => Err(msg),
+            notifications::NotifyError::Timeout => Err("timeout".to_string()),
+        },
+    }
 }
 
 /// Expose auth::authorization_value_matches for unit tests.

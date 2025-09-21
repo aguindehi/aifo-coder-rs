@@ -629,14 +629,19 @@ fn handle_connection<S: Read + Write>(
         }
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
+            // Enforce X-Aifo-Proto: "2" even in noauth mode
+            if req.headers.get("x-aifo-proto").map(|s| s.trim()) != Some("2") {
+                respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
+                let _ = stream.flush();
+                return;
+            }
             let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
                 .filter(|&v| v > 0)
                 .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
             let started = std::time::Instant::now();
-            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to)
-            {
+            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to) {
                 Ok((status_code, body_out)) => {
                     log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                     // Tiny nudge to improve host-log vs agent-UI ordering
@@ -657,10 +662,22 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
-                Err(reason) => {
-                    let mut body = reason.into_bytes();
-                    body.push(b'\n');
-                    respond_plain(stream, "403 Forbidden", 86, &body);
+                Err(notif_err) => {
+                    match notif_err {
+                        notifications::NotifyError::Policy(reason) => {
+                            let mut body = reason.into_bytes();
+                            body.push(b'\n');
+                            respond_plain(stream, "403 Forbidden", 86, &body);
+                        }
+                        notifications::NotifyError::ExecSpawn(reason) => {
+                            let mut body = reason.into_bytes();
+                            body.push(b'\n');
+                            respond_plain(stream, "500 Internal Server Error", 86, &body);
+                        }
+                        notifications::NotifyError::Timeout => {
+                            respond_plain(stream, "408 Request Timeout", 124, b"timeout\n");
+                        }
+                    }
                     let _ = stream.flush();
                     return;
                 }
@@ -698,10 +715,22 @@ fn handle_connection<S: Read + Write>(
                         let _ = stream.flush();
                         return;
                     }
-                    Err(reason) => {
-                        let mut body = reason.into_bytes();
-                        body.push(b'\n');
-                        respond_plain(stream, "403 Forbidden", 86, &body);
+                    Err(notif_err) => {
+                        match notif_err {
+                            notifications::NotifyError::Policy(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                respond_plain(stream, "403 Forbidden", 86, &body);
+                            }
+                            notifications::NotifyError::ExecSpawn(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                respond_plain(stream, "500 Internal Server Error", 86, &body);
+                            }
+                            notifications::NotifyError::Timeout => {
+                                respond_plain(stream, "408 Request Timeout", 124, b"timeout\n");
+                            }
+                        }
                         let _ = stream.flush();
                         return;
                     }

@@ -9,11 +9,6 @@ fn test_notifications_handle_request_with_stub_say() {
     let td = tempfile::tempdir().expect("tmpdir");
     let dir = td.path();
 
-    // Write minimal config pointing to say with fixed args
-    let cfg = dir.join("aider.yml");
-    let mut f = File::create(&cfg).expect("create cfg");
-    writeln!(f, "notifications-command: [\"say\",\"--title\",\"AIFO\"]").expect("write cfg");
-
     // Create a stub 'say' that prints its first two args and exits 0
     let bindir = dir.join("bin");
     fs::create_dir_all(&bindir).expect("mkdir bin");
@@ -21,6 +16,12 @@ fn test_notifications_handle_request_with_stub_say() {
     let mut s = File::create(&say).expect("create say");
     writeln!(s, "#!/bin/sh\nprintf \"stub-say:%s %s\\n\" \"$1\" \"$2\"").expect("write say");
     fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).expect("chmod say");
+
+    // Write minimal config pointing to absolute stub say with fixed args
+    let cfg = dir.join("aider.yml");
+    let cfg_line = format!("notifications-command: [\"{}\",\"--title\",\"AIFO\"]", say.display());
+    let mut f = File::create(&cfg).expect("create cfg");
+    writeln!(f, "{cfg_line}").expect("write cfg");
 
     // Save and set environment
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
