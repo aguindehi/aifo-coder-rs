@@ -12,6 +12,15 @@ pub(crate) const PROXY_ENV_NAMES: &[&str] = &[
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
 ];
 
+/// Env vars that must not be forwarded from host into sidecars to avoid
+/// host-specific toolchain and cargo path interference.
+pub(crate) const PROHIBITED_PASSTHROUGH_ENV: &[&str] = &[
+    "RUSTUP_TOOLCHAIN",
+    "RUSTUP_HOME",
+    "CARGO_HOME",
+    "CARGO_TARGET_DIR",
+];
+
 /// Push an environment variable (-e KEY=VAL) into docker args.
 pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
     args.push("-e".to_string());
@@ -21,6 +30,10 @@ pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
 /// Pass through selected environment variables from host into docker args.
 pub(crate) fn apply_passthrough_envs(args: &mut Vec<String>, keys: &[&str]) {
     for name in keys {
+        // Do not forward host rustup/cargo environment into sidecars
+        if PROHIBITED_PASSTHROUGH_ENV.contains(name) {
+            continue;
+        }
         if let Ok(val) = env::var(name) {
             if !val.is_empty() {
                 push_env(args, name, &val);
@@ -54,6 +67,9 @@ pub(crate) fn apply_rust_linker_flags_if_set(args: &mut Vec<String>) {
 
 /// Apply normative Rust environment variables (do not override PATH).
 pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
+    // Ensure host toolchain selection doesn't leak into the container
+    push_env(args, "RUSTUP_TOOLCHAIN", "");
+
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
     push_env(args, "CC", "gcc");
     push_env(args, "CXX", "g++");
