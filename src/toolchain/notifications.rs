@@ -236,9 +236,9 @@ fn run_with_timeout(
     }
 }
 
-/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens (serde_yaml on RHS).
+—/// Parse ~/.aider.conf.yml and extract notifications-command as argv tokens (serde_yaml full-doc).
 pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String> {
-    // Allow tests (and power users) to override config path explicitly
+    // Resolve config path from env override or default ~/.aider.conf.yml
     let path = if let Ok(p) = std::env::var("AIFO_NOTIFICATIONS_CONFIG") {
         let p = p.trim().to_string();
         if !p.is_empty() {
@@ -253,123 +253,94 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
             .ok_or_else(|| "home directory not found".to_string())?
             .join(".aider.conf.yml")
     };
+
     let content =
         fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
 
-    fn node_to_tokens(node: &YamlValue) -> Result<Vec<String>, String> {
-        match node {
-            YamlValue::Sequence(seq) => {
-                let mut out: Vec<String> = Vec::new();
-                for item in seq {
-                    match item {
-                        YamlValue::String(s) => out.push(s.clone()),
-                        _ => {
-                            return Err(
-                                "notifications-command must be a sequence of strings".to_string()
-                            )
-                        }
+    // Parse entire YAML document and locate the "notifications-command" node
+    let doc: YamlValue =
+        serde_yaml::from_str(&content).map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
+
+    // Extract node
+    let node = match &doc {
+        YamlValue::Mapping(map) => {
+            let mut found: Option<&YamlValue> = None;
+            for (k, v) in map {
+                if let YamlValue::String(ks) = k {
+                    if ks == "notifications-command" {
+                        found = Some(v);
+                        break;
                     }
                 }
-                if out.is_empty() {
-                    Err("notifications-command is empty or malformed".to_string())
-                } else {
-                    Ok(out)
+            }
+            match found {
+                Some(v) => v,
+                None => {
+                    return Err("notifications-command not found in ~/.aider.conf.yml".to_string())
                 }
             }
-            YamlValue::String(s) => {
-                let argv = shell_like_split_args(s);
-                if argv.is_empty() {
-                    Err("notifications-command parsed to an empty command".to_string())
-                } else {
-                    Ok(argv)
-                }
-            }
-            _ => Err("notifications-command must be a string or sequence".to_string()),
         }
-    }
-
-    // Scan lines to find the notifications-command key and parse its RHS.
-    let lines: Vec<&str> = content.lines().collect();
-    let mut i = 0usize;
-    while i < lines.len() {
-        let line = lines[i];
-        let l = line.trim_start();
-        if l.is_empty() || l.starts_with('#') {
-            i += 1;
-            continue;
+        _ => {
+            return Err("notifications-command not found in ~/.aider.conf.yml".to_string());
         }
-        if let Some(rest) = l.strip_prefix("notifications-command:") {
-            let mut rhs = rest.trim().to_string();
-            // Tolerate literal "\n" suffix used by some writers
-            if rhs.ends_with("\\n") {
-                rhs.truncate(rhs.len().saturating_sub(2));
-            }
+    };
 
-            // Case 1: Inline YAML (sequence or string) on the same line — parse RHS directly.
-            if !rhs.is_empty() && rhs != "|" && rhs != ">" {
-                let val: YamlValue = serde_yaml::from_str(&rhs)
-                    .map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
-                return node_to_tokens(&val);
-            }
-
-            // Case 2: Block scalar or list on following lines.
-            // Skip blank/comment lines to detect style
-            let mut j = i + 1;
-            while j < lines.len() {
-                let t = lines[j].trim_start();
-                if t.is_empty() || t.starts_with('#') {
-                    j += 1;
-                    continue;
+    // Normalize node to tokens (String or Seq<String>)
+    let mut tokens: Vec<String> = match node {
+        YamlValue::Sequence(seq) => {
+            let mut out: Vec<String> = Vec::new();
+            for item in seq {
+                match item {
+                    YamlValue::String(s) => out.push(s.clone()),
+                    _ => {
+                        return Err(
+                            "notifications-command must be a sequence of strings".to_string(),
+                        )
+                    }
                 }
-                break;
             }
-            if j >= lines.len() {
+            if out.is_empty() {
                 return Err("notifications-command is empty or malformed".to_string());
             }
-            let first = lines[j].trim_start();
-            if first.starts_with('-') {
-                // YAML list form: collect contiguous dash-prefixed items and parse as a YAML sequence
-                let mut list_doc = String::new();
-                while j < lines.len() {
-                    let t = lines[j].trim_start();
-                    if !t.starts_with('-') {
-                        break;
-                    }
-                    list_doc.push_str(t);
-                    list_doc.push('\n');
-                    j += 1;
-                }
-                let val: YamlValue = serde_yaml::from_str(&list_doc)
-                    .map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
-                return node_to_tokens(&val);
-            } else {
-                // Treat as a shell-like single string spanning subsequent non-empty, non-comment lines.
-                let mut parts: Vec<String> = Vec::new();
-                while j < lines.len() {
-                    let t = lines[j].trim_start();
-                    if t.is_empty() || t.starts_with('#') {
-                        j += 1;
-                        continue;
-                    }
-                    // Stop if de-indented to column 0 and looks like a new key
-                    if !lines[j].starts_with(' ') && t.contains(':') {
-                        break;
-                    }
-                    parts.push(t.to_string());
-                    j += 1;
-                }
-                let joined = parts.join(" ");
-                let argv = shell_like_split_args(&joined);
-                if argv.is_empty() {
-                    return Err("notifications-command parsed to an empty command".to_string());
-                }
-                return Ok(argv);
-            }
+            out
         }
-        i += 1;
+        YamlValue::String(s) => {
+            let argv = shell_like_split_args(s);
+            if argv.is_empty() {
+                return Err("notifications-command parsed to an empty command".to_string());
+            }
+            argv
+        }
+        _ => return Err("notifications-command must be a string or sequence".to_string()),
+    };
+
+    // Early validations per spec (Phase 1)
+    if tokens.is_empty() {
+        return Err("notifications-command is empty".to_string());
+    }
+    // Enforce absolute executable path
+    if !tokens[0].starts_with('/') {
+        return Err("notifications-command executable must be an absolute path".to_string());
     }
 
-    Err("notifications-command not found in ~/.aider.conf.yml".to_string())
+    // Validate single strictly-trailing "{args}" placeholder (if present)
+    if let Some(last) = tokens.last() {
+        if last == "{args}" {
+            // ensure no other occurrences earlier
+            if tokens[..tokens.len() - 1].iter().any(|t| t == "{args}") {
+                return Err(
+                    "invalid notifications-command: '{args}' placeholder must be trailing"
+                        .to_string(),
+                );
+            }
+        } else if tokens.iter().any(|t| t == "{args}") {
+            return Err(
+                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
+            );
+        }
+    }
+
+    Ok(tokens)
 }
 
 /// Validate and, if allowed, execute the requested host notification command with provided args.
