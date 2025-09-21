@@ -17,12 +17,31 @@ fn test_parse_notifications_inline_array() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path config
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        say.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let argv = aifo_coder::parse_notifications_command_config().expect("parse array");
-    assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+    assert_eq!(argv.len(), 3, "expected 3 tokens, got: {:?}", argv);
+    let bn = std::path::Path::new(&argv[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    assert_eq!(bn, "say", "expected basename 'say', got {}", argv[0]);
+    assert_eq!(&argv[1..], ["--title", "AIFO"]);
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
@@ -44,16 +63,36 @@ fn test_parse_notifications_nested_array_lines() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command:
-  - "say"
-  - --title
-  - AIFO
-"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path config (nested YAML list)
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&say, "stub").expect("write say");
+    }
+
+    let cfg = format!(
+        "notifications-command:\n  - \"{}\"\n  - --title\n  - AIFO\n",
+        say.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let argv = aifo_coder::parse_notifications_command_config().expect("parse nested array");
-    assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+    assert_eq!(argv.len(), 3, "expected 3 tokens");
+    let bn = std::path::Path::new(&argv[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    assert_eq!(bn, "say", "expected basename 'say', got {}", argv[0]);
+    assert_eq!(&argv[1..], ["--title", "AIFO"]);
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
@@ -75,14 +114,36 @@ fn test_parse_notifications_block_scalar() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: |
-  say --title "AIFO"
-"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path command in block scalar
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&say, "stub").expect("write say");
+    }
+
+    let cfg = format!(
+        "notifications-command: |\n  {} --title \"AIFO\"\n",
+        say.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let argv = aifo_coder::parse_notifications_command_config().expect("parse block");
-    assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+    assert_eq!(argv.len(), 3);
+    let bn = std::path::Path::new(&argv[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    assert_eq!(bn, "say");
+    assert_eq!(&argv[1..], ["--title", "AIFO"]);
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
@@ -104,12 +165,36 @@ fn test_parse_notifications_single_line_string() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: "say --title AIFO"\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path single string
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&say, "stub").expect("write say");
+    }
+
+    let cfg = format!(
+        r#"notifications-command: "{} --title AIFO"\n"#,
+        say.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let argv = aifo_coder::parse_notifications_command_config().expect("parse string");
-    assert_eq!(argv, vec!["say", "--title", "AIFO"]);
+    assert_eq!(argv.len(), 3);
+    let bn = std::path::Path::new(&argv[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    assert_eq!(bn, "say");
+    assert_eq!(&argv[1..], ["--title", "AIFO"]);
 
     if let Some(v) = old_cfg {
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
@@ -131,8 +216,21 @@ fn test_notifications_args_mismatch_error() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: ["say", "--title", "AIFO"]\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'say' and write absolute-path config
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let say = bindir.join("say");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&say, "#!/bin/sh\nexit 0\n").expect("write say");
+        std::fs::set_permissions(&say, std::fs::Permissions::from_mode(0o755)).expect("chmod say");
+    }
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        say.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
@@ -166,8 +264,22 @@ fn test_notifications_config_rejects_non_say() {
     let old_home = std::env::var("HOME").ok();
     std::env::set_var("HOME", &home);
 
-    let cfg = r#"notifications-command: ["notify", "--title", "AIFO"]\n"#;
-    let cfg_path = write_cfg(&home, cfg);
+    // Create absolute stub 'notify' and write absolute-path config
+    let bindir = home.join("bin");
+    std::fs::create_dir_all(&bindir).expect("mkdir bin");
+    let notify = bindir.join("notify");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&notify, "#!/bin/sh\nexit 0\n").expect("write notify");
+        std::fs::set_permissions(&notify, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod notify");
+    }
+    let cfg = format!(
+        r#"notifications-command: ["{}", "--title", "AIFO"]\n"#,
+        notify.display()
+    );
+    let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     let res =
@@ -175,7 +287,7 @@ fn test_notifications_config_rejects_non_say() {
     assert!(res.is_err(), "expected error when executable is not 'say'");
     let msg = res.err().unwrap();
     assert!(
-        msg.contains("only 'say' is allowed"),
+        msg.contains("command 'notify' not allowed for notifications"),
         "unexpected error: {}",
         msg
     );

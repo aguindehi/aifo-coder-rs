@@ -12,14 +12,6 @@ fn test_proxy_notify_say_noauth_tcp() {
     let td = tempfile::tempdir().expect("tmpdir");
     let dir = td.path();
 
-    // Config file
-    let cfg = dir.join("aider.yml");
-    std::fs::write(
-        &cfg,
-        "notifications-command: [\"say\",\"--title\",\"AIFO\"]\n",
-    )
-    .expect("write cfg");
-
     // Stub say script that prints its args
     let bindir = dir.join("bin");
     std::fs::create_dir_all(&bindir).expect("mkdir bin");
@@ -40,6 +32,14 @@ fn test_proxy_notify_say_noauth_tcp() {
         eprintln!("skipping: non-unix host for stub say");
         return;
     }
+
+    // Config file (absolute path to stub)
+    let cfg = dir.join("aider.yml");
+    let cfg_content = format!(
+        "notifications-command: [\"{}\",\"--title\",\"AIFO\"]\n",
+        say.display()
+    );
+    std::fs::write(&cfg, cfg_content).expect("write cfg");
 
     // Save env and set for proxy thread
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();

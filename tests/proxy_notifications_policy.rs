@@ -31,12 +31,12 @@ fn test_proxy_notifications_policy_auth_vs_noauth() {
         fs::set_permissions(&say, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // Config with expected args
-    fs::write(
-        home.join(".aider.conf.yml"),
-        "notifications-command: [\"say\", \"--title\", \"AIFO\"]\n",
-    )
-    .unwrap();
+    // Config with expected args (absolute stub path)
+    let cfg_content = format!(
+        "notifications-command: [\"{}\", \"--title\", \"AIFO\"]\n",
+        say.display()
+    );
+    fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
     // Start proxy
     let sid = format!("notifpol-{}", std::process::id());
@@ -100,9 +100,9 @@ fn test_proxy_notifications_policy_auth_vs_noauth() {
     {
         use std::net::TcpStream;
         let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect noauth");
-        let body = "arg=--oops";
+        let body = "cmd=say&arg=--oops";
         let req = format!(
-            "POST /notify HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
+            "POST /notify HTTP/1.1\r\nHost: localhost\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             body.len(), body
         );
         s.write_all(req.as_bytes()).expect("write");

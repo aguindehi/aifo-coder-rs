@@ -612,13 +612,12 @@ fn handle_connection<S: Read + Write>(
 
     // Notifications
     if matches!(endpoint, Some(http::Endpoint::Notifications)) {
-        // Back-compat: default to 'say' when cmd is omitted by older clients/tests
-        if notif_cmd.is_empty() {
-            notif_cmd = "say".to_string();
-        }
         if verbose {
             let client = req.headers.get("x-aifo-client").cloned();
-            let client_sfx = client.as_deref().map(|c| format!(" client={}", c)).unwrap_or_default();
+            let client_sfx = client
+                .as_deref()
+                .map(|c| format!(" client={}", c))
+                .unwrap_or_default();
             log_stderr_and_file(&format!(
                 "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}\r\n\r",
                 notif_cmd,
@@ -629,6 +628,23 @@ fn handle_connection<S: Read + Write>(
         }
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
+            // Enforce X-Aifo-Proto: "2" even in noauth mode
+            if req.headers.get("x-aifo-proto").map(|s| s.trim()) != Some("2") {
+                respond_plain(
+                    stream,
+                    "426 Upgrade Required",
+                    86,
+                    b"unsupported notify protocol; expected 2\n",
+                );
+                let _ = stream.flush();
+                return;
+            }
+            // In noauth mode, cmd is required (400 if missing)
+            if notif_cmd.is_empty() {
+                respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                let _ = stream.flush();
+                return;
+            }
             let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
@@ -657,10 +673,22 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
-                Err(reason) => {
-                    let mut body = reason.into_bytes();
-                    body.push(b'\n');
-                    respond_plain(stream, "403 Forbidden", 86, &body);
+                Err(notif_err) => {
+                    match notif_err {
+                        notifications::NotifyError::Policy(reason) => {
+                            let mut body = reason.into_bytes();
+                            body.push(b'\n');
+                            respond_plain(stream, "403 Forbidden", 86, &body);
+                        }
+                        notifications::NotifyError::ExecSpawn(reason) => {
+                            let mut body = reason.into_bytes();
+                            body.push(b'\n');
+                            respond_plain(stream, "500 Internal Server Error", 86, &body);
+                        }
+                        notifications::NotifyError::Timeout => {
+                            respond_plain(stream, "408 Request Timeout", 124, b"timeout\n");
+                        }
+                    }
                     let _ = stream.flush();
                     return;
                 }
@@ -668,7 +696,23 @@ fn handle_connection<S: Read + Write>(
         }
 
         match auth_res {
-            auth::AuthResult::Authorized { proto: _ } => {
+            auth::AuthResult::Authorized { proto } => {
+                if !matches!(proto, auth::Proto::V2) {
+                    respond_plain(
+                        stream,
+                        "426 Upgrade Required",
+                        86,
+                        b"unsupported notify protocol; expected 2\n",
+                    );
+                    let _ = stream.flush();
+                    return;
+                }
+                // After auth+proto checks, require cmd (400 if missing)
+                if notif_cmd.is_empty() {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                    let _ = stream.flush();
+                    return;
+                }
                 let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                     .ok()
                     .and_then(|s| s.parse::<u64>().ok())
@@ -698,10 +742,22 @@ fn handle_connection<S: Read + Write>(
                         let _ = stream.flush();
                         return;
                     }
-                    Err(reason) => {
-                        let mut body = reason.into_bytes();
-                        body.push(b'\n');
-                        respond_plain(stream, "403 Forbidden", 86, &body);
+                    Err(notif_err) => {
+                        match notif_err {
+                            notifications::NotifyError::Policy(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                respond_plain(stream, "403 Forbidden", 86, &body);
+                            }
+                            notifications::NotifyError::ExecSpawn(reason) => {
+                                let mut body = reason.into_bytes();
+                                body.push(b'\n');
+                                respond_plain(stream, "500 Internal Server Error", 86, &body);
+                            }
+                            notifications::NotifyError::Timeout => {
+                                respond_plain(stream, "408 Request Timeout", 124, b"timeout\n");
+                            }
+                        }
                         let _ = stream.flush();
                         return;
                     }

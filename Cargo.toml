@@ -1,6 +1,6 @@
 [package]
 name = "aifo-coder"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider) using Docker; includes Fork mode with tmux/Windows Terminal orchestration, per-pane state mounts, and repo-scoped locking"
@@ -19,6 +19,7 @@ libc = "0.2"
 dotenvy = "0.15"
 fs2 = "0.4"
 getrandom = "0.2"
+serde_yaml = "0.9"
 
 [dev-dependencies]
 urlencoding = "2"
