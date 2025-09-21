@@ -1086,11 +1086,21 @@ fn main() {
         let start = std::time::Instant::now();
         if verbose {
             let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
-            let client = if prefer_native { "rust-shim-native" } else { "rust-shim-curl" };
+            let client = if prefer_native {
+                "rust-shim-native"
+            } else {
+                "rust-shim-curl"
+            };
             // Emit aifo-coder-style parsed line on agent stdout to avoid cross-stream races
-            let cwd_verbose = env::current_dir().ok().map(|p| p.display().to_string()).unwrap_or_else(|| ".".to_string());
+            let cwd_verbose = env::current_dir()
+                .ok()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| ".".to_string());
             let argv_joined_verbose = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
-            println!("aifo-coder: proxy notify parsed cmd={} argv='{}' cwd={} client={}", tool, argv_joined_verbose, cwd_verbose, client);
+            println!(
+                "aifo-coder: proxy notify parsed cmd={} argv='{}' cwd={} client={}",
+                tool, argv_joined_verbose, cwd_verbose, client
+            );
             if std::env::var("AIFO_SHIM_LOG_VARIANT").ok().as_deref() == Some("1") {
                 println!(
                     "aifo-shim: variant=rust transport={}",
@@ -1105,16 +1115,12 @@ fn main() {
             );
             println!(
                 "aifo-shim: preparing request to /notify (proto={}) client={}",
-                PROTO_VERSION,
-                client
+                PROTO_VERSION, client
             );
         }
         let args_vec: Vec<String> = std::env::args().skip(1).collect();
-        let async_mode = !verbose
-            && std::env::var("AIFO_SHIM_NOTIFY_ASYNC")
-                .ok()
-                .as_deref()
-                != Some("0");
+        let async_mode =
+            !verbose && std::env::var("AIFO_SHIM_NOTIFY_ASYNC").ok().as_deref() != Some("0");
         if async_mode {
             // Fire-and-forget notify via curl without waiting for response
             let mut final_url = url.clone();
@@ -1160,7 +1166,10 @@ fn main() {
         if let Some(code) = try_notify_native(&url, &token, &tool, &args_vec, verbose) {
             if verbose {
                 let dur_ms = start.elapsed().as_millis();
-                println!("aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}", tool, code, dur_ms);
+                println!(
+                    "aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}",
+                    tool, code, dur_ms
+                );
                 let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                     .ok()
                     .and_then(|s| s.parse::<f64>().ok())
@@ -1247,7 +1256,10 @@ fn main() {
         let _ = fs::remove_dir_all(&tmp_dir);
         if verbose {
             let dur_ms = start.elapsed().as_millis();
-            println!("aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}", tool, exit_code, dur_ms);
+            println!(
+                "aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}",
+                tool, exit_code, dur_ms
+            );
             let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                 .ok()
                 .and_then(|s| s.parse::<f64>().ok())
