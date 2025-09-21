@@ -987,6 +987,7 @@ fn try_notify_native(
             "Host: {host}\r\n",
             "Authorization: Bearer {tok}\r\n",
             "X-Aifo-Proto: 2\r\n",
+            "X-Aifo-Client: rust-shim-native\r\n",
             "Content-Type: application/x-www-form-urlencoded\r\n",
             "Content-Length: {len}\r\n",
             "Connection: close\r\n",
@@ -1082,28 +1083,95 @@ fn main() {
 
     // Notification tools early path (native + curl)
     if NOTIFY_TOOLS.contains(&tool.as_str()) {
+        let start = std::time::Instant::now();
         if verbose {
             let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
-            eprintln!(
-                "aifo-shim: variant=rust transport={}",
-                if prefer_native { "native" } else { "curl" }
-            );
-            eprintln!(
-                "aifo-shim: notify cmd={} argv={}",
+            let client = if prefer_native { "rust-shim-native" } else { "rust-shim-curl" };
+            // Emit aifo-coder-style parsed line on agent stdout to avoid cross-stream races
+            let cwd_verbose = env::current_dir().ok().map(|p| p.display().to_string()).unwrap_or_else(|| ".".to_string());
+            let argv_joined_verbose = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+            println!("aifo-coder: proxy notify parsed cmd={} argv='{}' cwd={} client={}", tool, argv_joined_verbose, cwd_verbose, client);
+            if std::env::var("AIFO_SHIM_LOG_VARIANT").ok().as_deref() == Some("1") {
+                println!(
+                    "aifo-shim: variant=rust transport={}",
+                    if prefer_native { "native" } else { "curl" }
+                );
+            }
+            println!(
+                "aifo-shim: notify cmd={} argv={} client={}",
                 tool,
-                std::env::args().skip(1).collect::<Vec<_>>().join(" ")
+                std::env::args().skip(1).collect::<Vec<_>>().join(" "),
+                client
             );
-            eprintln!(
-                "aifo-shim: preparing request to {} (proto={})",
-                url, PROTO_VERSION
+            println!(
+                "aifo-shim: preparing request to /notify (proto={}) client={}",
+                PROTO_VERSION,
+                client
             );
         }
         let args_vec: Vec<String> = std::env::args().skip(1).collect();
+        let async_mode = !verbose
+            && std::env::var("AIFO_SHIM_NOTIFY_ASYNC")
+                .ok()
+                .as_deref()
+                != Some("0");
+        if async_mode {
+            // Fire-and-forget notify via curl without waiting for response
+            let mut final_url = url.clone();
+            let mut curl_args: Vec<String> = Vec::new();
+            curl_args.push("-sS".to_string());
+            curl_args.push("-X".to_string());
+            curl_args.push("POST".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push(format!("Authorization: Bearer {}", token));
+            curl_args.push("-H".to_string());
+            curl_args.push("X-Aifo-Proto: 2".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push("X-Aifo-Client: rust-shim-curl".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push("Content-Type: application/x-www-form-urlencoded".to_string());
+            curl_args.push("--data-urlencode".to_string());
+            curl_args.push(format!("cmd={}", tool));
+            for a in &args_vec {
+                curl_args.push("--data-urlencode".to_string());
+                curl_args.push(format!("arg={}", a));
+            }
+            if final_url.starts_with("unix://") {
+                let sock_path = final_url.trim_start_matches("unix://").to_string();
+                curl_args.push("--unix-socket".to_string());
+                curl_args.push(sock_path);
+                final_url = "http://localhost/notify".to_string();
+            } else {
+                if let Some(idx) = final_url.rfind("/exec") {
+                    final_url.truncate(idx);
+                }
+                final_url.push_str("/notify");
+            }
+            curl_args.push(final_url);
+            let mut cmd = Command::new("curl");
+            cmd.args(&curl_args)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            if cmd.spawn().is_ok() {
+                process::exit(0);
+            }
+            // If spawning curl failed, fall back to synchronous behavior below
+        }
         if let Some(code) = try_notify_native(&url, &token, &tool, &args_vec, verbose) {
+            if verbose {
+                let dur_ms = start.elapsed().as_millis();
+                println!("aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}", tool, code, dur_ms);
+                let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
+                    .ok()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .unwrap_or(0.5);
+                let ms = (delay * 1000.0) as u64;
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
             process::exit(code);
         }
         if verbose {
-            eprintln!("aifo-shim: native HTTP failed, falling back to curl");
+            println!("aifo-shim: native HTTP failed, falling back to curl");
         }
 
         // Prepare temp headers file
@@ -1127,6 +1195,8 @@ fn main() {
         args.push(format!("Authorization: Bearer {}", token));
         args.push("-H".to_string());
         args.push(format!("X-Aifo-Proto: {}", PROTO_VERSION));
+        args.push("-H".to_string());
+        args.push("X-Aifo-Client: rust-shim-curl".to_string());
         args.push("-H".to_string());
         args.push("Content-Type: application/x-www-form-urlencoded".to_string());
 
@@ -1175,6 +1245,16 @@ fn main() {
             exit_code = 1;
         }
         let _ = fs::remove_dir_all(&tmp_dir);
+        if verbose {
+            let dur_ms = start.elapsed().as_millis();
+            println!("aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}", tool, exit_code, dur_ms);
+            let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
+                .ok()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.5);
+            let ms = (delay * 1000.0) as u64;
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
         process::exit(exit_code);
     }
 
@@ -1224,8 +1304,8 @@ fn main() {
         );
         eprintln!("aifo-shim: tool={} cwd={} exec_id={}", tool, cwd, exec_id);
         eprintln!(
-            "aifo-shim: preparing request to {} (proto={})",
-            url, PROTO_VERSION
+            "aifo-shim: preparing request to /exec (proto={})",
+            PROTO_VERSION
         );
     }
 

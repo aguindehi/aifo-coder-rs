@@ -80,34 +80,62 @@ for nt in $NOTIFY_TOOLS; do
   fi
 done
 if [ "$is_notify" -eq 1 ]; then
-  if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
-    echo "aifo-shim: variant=posix transport=curl" >&2
-    printf "aifo-shim: notify cmd=%s argv=%s\n" "$tool" "$*" >&2
-    echo "aifo-shim: preparing request to ${AIFO_TOOLEEXEC_URL} (proto=2)" >&2
-  fi
-  tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
-  mkdir -p "$tmp"
-  cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "Content-Type: application/x-www-form-urlencoded")
-  if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
-    SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
-    cmd+=(--unix-socket "$SOCKET")
-    URL="http://localhost/notify"
+  if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ] || [ "${AIFO_SHIM_NOTIFY_ASYNC:-1}" = "0" ]; then
+    if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+      if [ "${AIFO_SHIM_LOG_VARIANT:-0}" = "1" ]; then
+        echo "aifo-shim: variant=posix transport=curl"
+      fi
+      printf "aifo-shim: notify cmd=%s argv=%s client=posix-shim-curl\n" "$tool" "$*"
+      echo "aifo-shim: preparing request to /notify (proto=2) client=posix-shim-curl"
+    fi
+    tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
+    mkdir -p "$tmp"
+    cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
+    if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
+      SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
+      cmd+=(--unix-socket "$SOCKET")
+      URL="http://localhost/notify"
+    else
+      base="$AIFO_TOOLEEXEC_URL"
+      base="${base%/exec}"
+      URL="${base}/notify"
+    fi
+    cmd+=(--data-urlencode "cmd=$tool")
+    for a in "$@"; do
+      cmd+=(--data-urlencode "arg=$a")
+    done
+    if ! "${cmd[@]}"; then
+      : # body printed by curl on error as well
+    fi
+    ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
+    rm -rf "$tmp"
+    [ -n "$ec" ] || ec=1
+    # In verbose mode, add a tiny delay to let proxy logs flush before returning
+    if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
+      delay="${AIFO_NOTIFY_EXIT_DELAY_SECS:-0.5}"
+      awk "BEGIN { s=$delay+0; if (s>0) system(\"sleep \" s) }" >/dev/null 2>&1 || sleep 0.5
+    fi
+    exit "$ec"
   else
-    base="$AIFO_TOOLEEXEC_URL"
-    base="${base%/exec}"
-    URL="${base}/notify"
+    # Non-verbose async: fire-and-forget notify request
+    cmd=(curl -sS -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
+    if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
+      SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
+      cmd+=(--unix-socket "$SOCKET")
+      URL="http://localhost/notify"
+    else
+      base="$AIFO_TOOLEEXEC_URL"
+      base="${base%/exec}"
+      URL="${base}/notify"
+    fi
+    cmd+=(--data-urlencode "cmd=$tool")
+    for a in "$@"; do
+      cmd+=(--data-urlencode "arg=$a")
+    done
+    ( "${cmd[@]}" >/dev/null 2>&1 ) &
+    disown 2>/dev/null || true
+    exit 0
   fi
-  cmd+=(--data-urlencode "cmd=$tool")
-  for a in "$@"; do
-    cmd+=(--data-urlencode "arg=$a")
-  done
-  if ! "${cmd[@]}"; then
-    : # body printed by curl on error as well
-  fi
-  ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)"
-  rm -rf "$tmp"
-  [ -n "$ec" ] || ec=1
-  exit "$ec"
 fi
 
 # Signal forwarding helpers and traps

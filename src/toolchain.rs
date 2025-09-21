@@ -6,6 +6,7 @@ The crate root re-exports these symbols with `pub use toolchain::*;`.
 */
 
 use std::time::{Duration, SystemTime};
+use std::io::{self, Write};
 
 pub(crate) use crate::create_session_id;
 use crate::shell_join;
@@ -50,6 +51,7 @@ fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exe
             exec_id
         );
         eprintln!("{}", line);
+        let _ = io::stderr().flush();
         if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
             if !p.trim().is_empty() {
                 if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -81,6 +83,7 @@ fn log_request_result(
             started.elapsed().as_millis()
         );
         eprintln!("{}", line);
+        let _ = io::stderr().flush();
         if let Ok(p) = std::env::var("AIFO_TEST_LOG_PATH") {
             if !p.trim().is_empty() {
                 if let Ok(mut f) = std::fs::OpenOptions::new()
