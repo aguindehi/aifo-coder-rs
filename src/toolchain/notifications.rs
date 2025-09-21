@@ -68,8 +68,7 @@ fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
         // Disallow non-trailing "{args}" anywhere (defensive)
         if tokens.iter().any(|t| t == "{args}") {
             return Err(NotifyError::Policy(
-                "invalid notifications-command: '{args}' placeholder must be trailing"
-                    .to_string(),
+                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
             ));
         }
     }

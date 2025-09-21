@@ -618,7 +618,10 @@ fn handle_connection<S: Read + Write>(
         }
         if verbose {
             let client = req.headers.get("x-aifo-client").cloned();
-            let client_sfx = client.as_deref().map(|c| format!(" client={}", c)).unwrap_or_default();
+            let client_sfx = client
+                .as_deref()
+                .map(|c| format!(" client={}", c))
+                .unwrap_or_default();
             log_stderr_and_file(&format!(
                 "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}\r\n\r",
                 notif_cmd,
@@ -641,7 +644,8 @@ fn handle_connection<S: Read + Write>(
                 .filter(|&v| v > 0)
                 .unwrap_or(if timeout_secs == 0 { 5 } else { timeout_secs });
             let started = std::time::Instant::now();
-            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to) {
+            match notifications::notifications_handle_request(&notif_cmd, &argv, verbose, notif_to)
+            {
                 Ok((status_code, body_out)) => {
                     log_request_result(verbose, &notif_cmd, "notify", status_code, &started);
                     // Tiny nudge to improve host-log vs agent-UI ordering
