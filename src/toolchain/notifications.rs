@@ -258,8 +258,8 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
         fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
 
     // Parse entire YAML document and locate the "notifications-command" node
-    let doc: YamlValue =
-        serde_yaml::from_str(&content).map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
+    let doc: YamlValue = serde_yaml::from_str(&content)
+        .map_err(|e| format!("cannot parse {}: {}", path.display(), e))?;
 
     // Extract node
     let node = match &doc {
@@ -294,7 +294,7 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
                     YamlValue::String(s) => out.push(s.clone()),
                     _ => {
                         return Err(
-                            "notifications-command must be a sequence of strings".to_string(),
+                            "notifications-command must be a sequence of strings".to_string()
                         )
                     }
                 }
