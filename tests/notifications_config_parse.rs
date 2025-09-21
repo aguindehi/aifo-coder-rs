@@ -1,4 +1,8 @@
 use std::fs;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static NOTIF_CFG_ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 fn with_home<F: FnOnce(&std::path::Path)>(f: F) {
     let old_home = std::env::var("HOME").ok();
@@ -14,6 +18,7 @@ fn with_home<F: FnOnce(&std::path::Path)>(f: F) {
 
 #[test]
 fn test_notifications_config_parse_inline_array() {
+    let _g = NOTIF_CFG_ENV_GUARD.lock().unwrap();
     with_home(|home| {
         // Create absolute stub 'say' and write absolute-path config
         let bindir = home.join("bin");
@@ -49,6 +54,7 @@ fn test_notifications_config_parse_inline_array() {
 
 #[test]
 fn test_notifications_config_parse_yaml_list() {
+    let _g = NOTIF_CFG_ENV_GUARD.lock().unwrap();
     with_home(|home| {
         // Create absolute stub 'say' and write absolute-path config (YAML list)
         let bindir = home.join("bin");
@@ -84,6 +90,7 @@ fn test_notifications_config_parse_yaml_list() {
 
 #[test]
 fn test_notifications_config_parse_block_scalar() {
+    let _g = NOTIF_CFG_ENV_GUARD.lock().unwrap();
     with_home(|home| {
         // Create absolute stub 'say' and write absolute-path block scalar
         let bindir = home.join("bin");
