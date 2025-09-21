@@ -626,12 +626,6 @@ fn handle_connection<S: Read + Write>(
                 client_sfx
             ));
         }
-        // Require cmd to be present for /notify requests
-        if notif_cmd.is_empty() {
-            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
-            let _ = stream.flush();
-            return;
-        }
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
             // Enforce X-Aifo-Proto: "2" even in noauth mode
@@ -642,6 +636,12 @@ fn handle_connection<S: Read + Write>(
                     86,
                     b"unsupported notify protocol; expected 2\n",
                 );
+                let _ = stream.flush();
+                return;
+            }
+            // In noauth mode, cmd is required (400 if missing)
+            if notif_cmd.is_empty() {
+                respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
                 let _ = stream.flush();
                 return;
             }
@@ -704,6 +704,12 @@ fn handle_connection<S: Read + Write>(
                         86,
                         b"unsupported notify protocol; expected 2\n",
                     );
+                    let _ = stream.flush();
+                    return;
+                }
+                // After auth+proto checks, require cmd (400 if missing)
+                if notif_cmd.is_empty() {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
                     let _ = stream.flush();
                     return;
                 }
