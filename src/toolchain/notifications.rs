@@ -258,7 +258,7 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
         fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
     // Tolerate a trailing literal "\n" token sometimes written by helpers
     let content = {
-        let s = content_raw.trim_end_matches(|c| c == ' ' || c == '\t' || c == '\r' || c == '\n');
+        let s = content_raw.trim_end_matches(&[' ', '\t', '\r', '\n'][..]);
         if s.ends_with("\\n") {
             let mut t = s.to_string();
             t.truncate(t.len().saturating_sub(2));
