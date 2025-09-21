@@ -19,7 +19,10 @@ fn test_notifications_handle_request_with_stub_say() {
 
     // Write minimal config pointing to absolute stub say with fixed args
     let cfg = dir.join("aider.yml");
-    let cfg_line = format!("notifications-command: [\"{}\",\"--title\",\"AIFO\"]", say.display());
+    let cfg_line = format!(
+        "notifications-command: [\"{}\",\"--title\",\"AIFO\"]",
+        say.display()
+    );
     let mut f = File::create(&cfg).expect("create cfg");
     writeln!(f, "{cfg_line}").expect("write cfg");
 
