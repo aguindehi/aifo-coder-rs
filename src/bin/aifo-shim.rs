@@ -987,6 +987,7 @@ fn try_notify_native(
             "Host: {host}\r\n",
             "Authorization: Bearer {tok}\r\n",
             "X-Aifo-Proto: 2\r\n",
+            "X-Aifo-Client: rust-shim-native\r\n",
             "Content-Type: application/x-www-form-urlencoded\r\n",
             "Content-Length: {len}\r\n",
             "Connection: close\r\n",
@@ -1084,18 +1085,23 @@ fn main() {
     if NOTIFY_TOOLS.contains(&tool.as_str()) {
         if verbose {
             let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
-            eprintln!(
-                "aifo-shim: variant=rust transport={}",
-                if prefer_native { "native" } else { "curl" }
-            );
-            eprintln!(
-                "aifo-shim: notify cmd={} argv={}",
+            let client = if prefer_native { "rust-shim-native" } else { "rust-shim-curl" };
+            if std::env::var("AIFO_SHIM_LOG_VARIANT").ok().as_deref() == Some("1") {
+                println!(
+                    "aifo-shim: variant=rust transport={}",
+                    if prefer_native { "native" } else { "curl" }
+                );
+            }
+            println!(
+                "aifo-shim: notify cmd={} argv={} client={}",
                 tool,
-                std::env::args().skip(1).collect::<Vec<_>>().join(" ")
+                std::env::args().skip(1).collect::<Vec<_>>().join(" "),
+                client
             );
-            eprintln!(
-                "aifo-shim: preparing request to /notify (proto={})",
-                PROTO_VERSION
+            println!(
+                "aifo-shim: preparing request to /notify (proto={}) client={}",
+                PROTO_VERSION,
+                client
             );
         }
         let args_vec: Vec<String> = std::env::args().skip(1).collect();
@@ -1115,6 +1121,8 @@ fn main() {
             curl_args.push(format!("Authorization: Bearer {}", token));
             curl_args.push("-H".to_string());
             curl_args.push("X-Aifo-Proto: 2".to_string());
+            curl_args.push("-H".to_string());
+            curl_args.push("X-Aifo-Client: rust-shim-curl".to_string());
             curl_args.push("-H".to_string());
             curl_args.push("Content-Type: application/x-www-form-urlencoded".to_string());
             curl_args.push("--data-urlencode".to_string());
@@ -1156,7 +1164,7 @@ fn main() {
             process::exit(code);
         }
         if verbose {
-            eprintln!("aifo-shim: native HTTP failed, falling back to curl");
+            println!("aifo-shim: native HTTP failed, falling back to curl");
         }
 
         // Prepare temp headers file
@@ -1180,6 +1188,8 @@ fn main() {
         args.push(format!("Authorization: Bearer {}", token));
         args.push("-H".to_string());
         args.push(format!("X-Aifo-Proto: {}", PROTO_VERSION));
+        args.push("-H".to_string());
+        args.push("X-Aifo-Client: rust-shim-curl".to_string());
         args.push("-H".to_string());
         args.push("Content-Type: application/x-www-form-urlencoded".to_string());
 

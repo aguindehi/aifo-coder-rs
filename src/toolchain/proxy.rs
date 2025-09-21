@@ -617,11 +617,14 @@ fn handle_connection<S: Read + Write>(
             notif_cmd = "say".to_string();
         }
         if verbose {
+            let client = req.headers.get("x-aifo-client").cloned();
+            let client_sfx = client.as_deref().map(|c| format!(" client={}", c)).unwrap_or_default();
             log_stderr_and_file(&format!(
-                "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}\r\n\r",
+                "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}\r\n\r",
                 notif_cmd,
                 shell_join(&argv),
-                cwd
+                cwd,
+                client_sfx
             ));
         }
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");

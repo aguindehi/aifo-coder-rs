@@ -82,13 +82,15 @@ done
 if [ "$is_notify" -eq 1 ]; then
   if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ] || [ "${AIFO_SHIM_NOTIFY_ASYNC:-1}" = "0" ]; then
     if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then
-      echo "aifo-shim: variant=posix transport=curl" >&2
-      printf "aifo-shim: notify cmd=%s argv=%s\n" "$tool" "$*" >&2
-      echo "aifo-shim: preparing request to /notify (proto=2)" >&2
+      if [ "${AIFO_SHIM_LOG_VARIANT:-0}" = "1" ]; then
+        echo "aifo-shim: variant=posix transport=curl"
+      fi
+      printf "aifo-shim: notify cmd=%s argv=%s client=posix-shim-curl\n" "$tool" "$*"
+      echo "aifo-shim: preparing request to /notify (proto=2) client=posix-shim-curl"
     fi
     tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
     mkdir -p "$tmp"
-    cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "Content-Type: application/x-www-form-urlencoded")
+    cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
     if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
       SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
       cmd+=(--unix-socket "$SOCKET")
@@ -116,7 +118,7 @@ if [ "$is_notify" -eq 1 ]; then
     exit "$ec"
   else
     # Non-verbose async: fire-and-forget notify request
-    cmd=(curl -sS -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "Content-Type: application/x-www-form-urlencoded")
+    cmd=(curl -sS -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
     if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
       SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
       cmd+=(--unix-socket "$SOCKET")
