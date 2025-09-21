@@ -122,7 +122,7 @@ fn clamp_max_args() -> usize {
     let mut max_args = 8usize;
     if let Ok(v) = std::env::var("AIFO_NOTIFICATIONS_MAX_ARGS") {
         if let Ok(n) = v.trim().parse::<usize>() {
-            let m = n.max(1).min(32);
+            let m = n.clamp(1, 32);
             max_args = m;
         }
     }
