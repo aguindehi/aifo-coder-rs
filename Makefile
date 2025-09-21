@@ -790,7 +790,15 @@ test:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
-	if command -v rustup >/dev/null 2>&1; then \
+	if [ -n "$$AIFO_EXEC_ID" ]; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest (sidecar) ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	  else \
+	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	  fi; \
+	elif command -v rustup >/dev/null 2>&1; then \
 	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS) || GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
