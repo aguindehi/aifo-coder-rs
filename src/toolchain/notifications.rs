@@ -203,15 +203,15 @@ fn run_with_timeout(
                 }
                 std::thread::sleep(Duration::from_millis(25));
             }
-            Err(_e) => {
+            Err(e) => {
                 // Treat as spawn/exec error; propagate as generic spawn error text
                 let bn = exec_abs
                     .file_name()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| exec_abs.display().to_string());
                 return Err(NotifyError::ExecSpawn(format!(
-                    "host '{}' execution failed: try_wait failed",
-                    bn
+                    "host '{}' execution failed: {}",
+                    bn, e
                 )));
             }
         }
