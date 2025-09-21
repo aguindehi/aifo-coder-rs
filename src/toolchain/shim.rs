@@ -39,6 +39,11 @@ const SHIM_TOOLS: &[&str] = &[
     "say",
 ];
 
+/// Expose shim tool list for tests and image checks.
+pub fn shim_tool_names() -> &'static [&'static str] {
+    SHIM_TOOLS
+}
+
 /// Write aifo-shim and tool wrappers into the given directory.
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;

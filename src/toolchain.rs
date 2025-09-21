@@ -38,7 +38,7 @@ mod proxy;
 pub use proxy::toolexec_start_proxy;
 
 mod shim;
-pub use shim::toolchain_write_shims;
+pub use shim::{toolchain_write_shims, shim_tool_names};
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exec_id: &str) {
     if verbose {
