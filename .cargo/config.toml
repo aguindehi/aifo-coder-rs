@@ -1,0 +1,4 @@
+# Use an executable target directory to avoid permission denied errors when
+# the workspace is on a noexec-mounted volume (affects nextest double-spawn).
+[build]
+target-dir = "/tmp/aifo-coder-target"
