@@ -132,10 +132,7 @@ pub(crate) fn compose_merge_message_impl(
         format!("Octopus merge of {} branch(es)", pane_branches.len())
     } else {
         let joined = summary_parts.join(" / ");
-        if joined
-            .to_ascii_lowercase()
-            .starts_with("octopus merge")
-        {
+        if joined.to_ascii_lowercase().starts_with("octopus merge") {
             joined
         } else {
             format!("Octopus merge: {}", joined)
