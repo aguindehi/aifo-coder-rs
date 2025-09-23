@@ -12,9 +12,10 @@ use which::which;
 use crate::cli::{Agent, Cli};
 use crate::fork_args::fork_build_child_args;
 use crate::guidance::print_inspect_merge_guidance;
+use crate::fork::orchestrators::Orchestrator;
 
 // Orchestrate tmux-based fork session (Linux/macOS/WSL) — moved from main.rs (Phase 1)
-#[allow(clippy::needless_return)]
+#[allow(clippy::needless_return, unreachable_code)]
 pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Pre-compute stderr color usage once per run
     let use_err_color = aifo_coder::color_enabled_stderr();

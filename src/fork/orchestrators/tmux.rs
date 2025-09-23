@@ -5,6 +5,8 @@ use std::process::Command;
 
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
+use crate::fork::env;
+use crate::fork::inner;
 
 /// tmux orchestrator (Unix): creates a session, splits panes, sets layout, and launches per-pane scripts.
 /// Waits for attach/switch to complete before returning (i.e., after user detaches).
@@ -89,9 +91,8 @@ impl Orchestrator for Tmux {
 
         // Prepare and send per-pane launch scripts
         for (idx, p) in panes.iter().enumerate() {
-            let container_name =
-                aifo_coder::fork::env::pane_container_name(&session.agent, &session.sid, p.index);
-            let script = aifo_coder::fork::inner::build_tmux_launch_script(
+            let container_name = env::pane_container_name(&session.agent, &session.sid, p.index);
+            let script = inner::build_tmux_launch_script(
                 &session.sid,
                 p.index,
                 &container_name,
