@@ -122,10 +122,22 @@ impl Orchestrator for Tmux {
         }
 
         // Attach or switch
-        let attach_cmd = if std::env::var("TMUX").ok().filter(|s| !s.is_empty()).is_some() {
-            vec!["switch-client".to_string(), "-t".to_string(), session.session_name.clone()]
+        let attach_cmd = if std::env::var("TMUX")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some()
+        {
+            vec![
+                "switch-client".to_string(),
+                "-t".to_string(),
+                session.session_name.clone(),
+            ]
         } else {
-            vec!["attach-session".to_string(), "-t".to_string(), session.session_name.clone()]
+            vec![
+                "attach-session".to_string(),
+                "-t".to_string(),
+                session.session_name.clone(),
+            ]
         };
         let mut att = Command::new(&tmux);
         for a in &attach_cmd {

@@ -460,8 +460,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         other => {
             println!("aifo-coder: fork session {} launched ({}).", sid, other);
             #[cfg(windows)]
-            let include_remote_examples =
-                matches!(selected, crate::fork::orchestrators::Selected::GitBashMintty { .. });
+            let include_remote_examples = matches!(
+                selected,
+                crate::fork::orchestrators::Selected::GitBashMintty { .. }
+            );
             #[cfg(not(windows))]
             let include_remote_examples = false;
             print_inspect_merge_guidance(
