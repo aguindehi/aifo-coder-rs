@@ -1,6 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
 //! Docker command construction and runtime detection.
 
+use crate::ensure_file_exists;
+use crate::path_pair;
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 use once_cell::sync::Lazy;
@@ -11,8 +13,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use which::which;
-use crate::path_pair;
-use crate::ensure_file_exists;
 
 // Pass-through environment variables to the containerized agent
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
@@ -507,4 +507,3 @@ pub fn build_docker_cmd(
 
     Ok((cmd, preview))
 }
-

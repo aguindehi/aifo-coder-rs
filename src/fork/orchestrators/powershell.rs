@@ -60,7 +60,11 @@ impl Orchestrator for PowerShell {
             if out.status.success() {
                 let pid = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 if pid.is_empty() {
-                    println!("[{}] started dir={} (PID unknown)", p.index, p.dir.display());
+                    println!(
+                        "[{}] started dir={} (PID unknown)",
+                        p.index,
+                        p.dir.display()
+                    );
                 } else {
                     println!("[{}] started PID={} dir={}", p.index, pid, p.dir.display());
                     pids.push(pid);

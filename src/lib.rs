@@ -18,6 +18,7 @@ mod util;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
+pub use errors::exit_code_for_io_error;
 pub use fork::*;
 pub use fork_strategy::MergingStrategy;
 #[cfg(windows)]
@@ -29,8 +30,7 @@ pub use lock::*;
 pub use registry::*;
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
-pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::docker_security::{docker_security_options_parse, DockerSecurityOptions};
+pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::id::create_session_id;
 pub use util::*;
-pub use errors::exit_code_for_io_error;
