@@ -1,3 +1,13 @@
+2025-09-24 03:40 user@example.com
+
+Phase 4: finalize error/logging refinement
+
+- Introduced lightweight error enums (ForkError, ToolchainError) in errors.rs along with mapping
+  helpers to preserve existing exit codes and user-visible messages.
+- Adopted color-aware logging helpers in post-merge paths (info/warn/error) without changing
+  any message text.
+- Runner decomposition remains complete from earlier steps.
+
 2025-09-24 03:10 user@example.com
 
 Phase 4: error/logging refinement and runner decomposition
