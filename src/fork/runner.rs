@@ -458,10 +458,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             );
         }
         other => {
-            println!(
-                "aifo-coder: fork session {} launched ({}).",
-                sid, other
-            );
+            println!("aifo-coder: fork session {} launched ({}).", sid, other);
             print_inspect_merge_guidance(
                 &repo_root,
                 &sid,
