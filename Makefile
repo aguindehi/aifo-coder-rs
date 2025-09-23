@@ -903,35 +903,35 @@ test-legacy: test-cargo
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
 	@echo "Running proxy smoke test (ignored by default) ..."
-	cargo test --test proxy_smoke -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored
 
 test-toolchain-live:
 	@echo "Running live toolchain tests (ignored by default) ..."
-	cargo test --test toolchain_live -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_live -- --ignored
 
 test-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
-	cargo test --test shim_embed -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test shim_embed -- --ignored
 
 test-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
 	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
-	  cargo test --test proxy_unix_socket -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_unix_socket -- --ignored; \
 	else \
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
-	  cargo test --test proxy_smoke -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored; \
 	fi
 
 test-proxy-errors:
 	@echo "Running proxy error semantics tests (ignored by default) ..."
-	cargo test --test proxy_error_semantics -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_error_semantics -- --ignored
 
 .PHONY: test-proxy-tcp
 test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
-	cargo test --test proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_streaming_tcp -- --ignored
 
 .PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
 
@@ -945,7 +945,7 @@ test-acceptance-suite:
 	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
 	@set -e; \
@@ -956,7 +956,7 @@ test-integration-suite:
 	else \
 	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/)' ; \
 	fi; \
-	cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
 
 test-e2e-suite:
@@ -967,16 +967,16 @@ test-e2e-suite:
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
-	cargo test --test dev_tool_routing -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test dev_tool_routing -- --ignored
 
 .PHONY: test-tsc-resolution
 test-tsc-resolution:
 	@echo "Running TypeScript local tsc resolution test (ignored by default) ..."
-	cargo test --test tsc_resolution -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test tsc_resolution -- --ignored
 
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
-	cargo test --test toolchain_cpp
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_cpp
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
