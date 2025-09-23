@@ -119,16 +119,16 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
 
     #[cfg(windows)]
     {
-        return warn_input_windows();
+        warn_input_windows()
     }
 
     #[cfg(unix)]
     {
-        return warn_input_unix();
+        warn_input_unix()
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        return warn_input_fallback();
+        warn_input_fallback()
     }
 }
