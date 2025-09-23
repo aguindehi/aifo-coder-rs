@@ -172,10 +172,7 @@ fn test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
     let global_cfg = home.join(".gitconfig-global");
     env::set_var("GIT_CONFIG_GLOBAL", &global_cfg);
 
-    write_global_gitconfig(
-        &global_cfg,
-        "[commit]\n\tgpgsign = false\n",
-    );
+    write_global_gitconfig(&global_cfg, "[commit]\n\tgpgsign = false\n");
 
     // Create isolated repo and enable repo signing
     let repo = home.join("repo");
