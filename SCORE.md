@@ -1,3 +1,100 @@
+# Source Code Scoring — 2025-09-24 01:00
+
+Executive summary
+- The codebase is in strong shape after Phase 1 and Phase 2. The refactors improved
+  modularity (orchestrators, fork decomposition), utility reuse (fs, docker security),
+  error mapping consistency, and test ergonomics (support helpers, sidecar noexec fixes).
+- User-facing behavior and strings are preserved. Cross-platform concerns (Unix/Windows)
+  are handled via cfg gating and orchestrator selection logic with platform-aware tests.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — B+ [8]
+
+Highlights and strengths
+- Clear separation between binary glue and library modules; orchestrators encapsulate
+  platform specifics; runner coordinates selection, metadata, post-merge.
+- Consistent error handling via exit_code_for_io_error; color-aware logs centralized.
+- Docker security options parsing consolidated and reused identically in doctor/banner.
+- Toolchain proxy is robust with v2 streaming, UDS on Linux, structured auth/proto checks,
+  and careful disconnect handling (double-spawn, escalation, PGID).
+- Tests are comprehensive; nextest setup stabilized on noexec mounts with targeted Makefile
+  overrides; helpers introduced in tests/support.
+
+Areas for improvement (actionable)
+- Notifications policy: complete consolidation so parse_notif_cfg enforces policy consistently
+  and public wrapper maps errors verbatim (Phase 3).
+- Error enums: begin light internal error enums (ForkError, ToolchainError) to replace ad-hoc
+  io::Error::other in deeper modules; keep external messages unchanged.
+- Orchestrator tests: add platform-gated unit tests to validate selection reasons and behavior
+  (Unix: tmux; Windows: WT/PowerShell/Git Bash via env flags).
+- Minor docs: add module-level docs for orchestrators and runner, and a short contributor guide
+  on phased refactors and golden-string sensitivity.
+
+Detailed assessment
+
+1) Architecture & Design — A [10]
+- Orchestrator architecture completed and integrated; runner delegates launch and gates post-merge
+  on waitability. Good modularity in fork_impl/* utilities (scan, git, clone, merge, clean).
+
+2) Rust Code Quality — A [10]
+- Idiomatic Rust; cfg-gated modules; small helpers for quoting/shell joining; careful use of OnceCell
+  caches; tidy parsing helpers in util::*. Minimal Clippy suppressions with clear rationale.
+
+3) Security Posture — A- [9]
+- AppArmor support detection and profile selection; Docker security options surfaced; proxy transport
+  supports Linux UDS; auth/proto checks enforced; safe timeouts and kill escalation.
+- Future: document invariants and keep allowlists consistent across proxy and shim.
+
+4) Containerization & Dockerfile — A- [9]
+- Multi-stage builds; slim/full variants; builder image; optional corporate CA; optimized layers.
+- Minor: ensure periodic cache cleanups and retention policy are documented for CI.
+
+5) Cross-Platform Support — A- [9]
+- Unix: tmux orchestrator; Windows: WT/PowerShell/Git Bash; selection compiles cross-platform.
+- Nice handling of Windows Terminal vs PowerShell waitability and guidance messages.
+
+6) Toolchain & Proxy — A- [9]
+- Sidecar lifecycle robust; named volume ownership initialization; venv preference for python;
+  rust bootstrap for official images when requested; proxy reliable with helpful diagnostics.
+
+7) Documentation — A- [9]
+- Strong inline docs and scoring notes; banner and doctor outputs are informative.
+- Add modest module-level docs for orchestrators and runner; short refactor guide for contributors.
+
+8) User Experience — A [10]
+- Clean, color-aware messages; clear guidance; prompts respect CI and env toggles.
+- Doctor provides meaningful environment checks and actionable tips.
+
+9) Performance & Footprint — A- [9]
+- Efficient spawning; minimal deps; reasonable defaults for caches, sccache optional path.
+
+10) Testing & CI — B+ [8]
+- Broad test coverage across preview, proxy, toolchains; helpers consolidated.
+- Room to add orchestrator selection tests and notifications policy edge cases.
+
+Risks and mitigations
+- Golden string drift: maintain exact user-facing text; tests protect many surfaces.
+- Platform drift for orchestrators: use cfg-gated tests and env-driven capability flags.
+
+Recommended next steps
+- Phase 3: consolidate notifications policy in parse_notif_cfg and ensure identical error texts.
+- Add orchestrator selection tests (Unix/Windows via env flags).
+- Introduce lightweight internal error enums and central mapping in glue (keep messages).
+- Add module docs for orchestrators, runner, and security parsing helper.
+
+Shall I proceed with these next steps?
+
 # Source Code Scoring — 2025-09-24 00:40
 
 Executive summary
