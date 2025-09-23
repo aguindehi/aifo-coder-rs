@@ -363,7 +363,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
     // Apply post-merge or print fallback guidance when non-waitable
     if merge_requested {
-        #[cfg(any(not(windows)))]
+        #[cfg(not(windows))]
         {
             let _ = crate::fork::post_merge::apply_post_merge(
                 &repo_root,
@@ -459,6 +459,11 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         }
         other => {
             println!("aifo-coder: fork session {} launched ({}).", sid, other);
+            #[cfg(windows)]
+            let include_remote_examples =
+                matches!(selected, crate::fork::orchestrators::Selected::GitBashMintty { .. });
+            #[cfg(not(windows))]
+            let include_remote_examples = false;
             print_inspect_merge_guidance(
                 &repo_root,
                 &sid,
@@ -466,7 +471,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 &base_ref_or_sha,
                 &clones,
                 false,
-                matches!(selected, #[cfg(windows)] crate::fork::orchestrators::Selected::GitBashMintty { .. } #[cfg(not(windows))] _ => false),
+                include_remote_examples,
                 true,
             );
         }
