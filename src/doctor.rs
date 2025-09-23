@@ -478,7 +478,11 @@ pub fn run_doctor(verbose: bool) {
             .stderr(Stdio::null())
             .output()
             .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().eq_ignore_ascii_case("true"))
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .eq_ignore_ascii_case("true")
+            })
             .unwrap_or(false);
 
         let repo_root: Option<PathBuf> = if in_repo {
@@ -513,7 +517,11 @@ pub fn run_doctor(verbose: bool) {
                     .ok()
                     .and_then(|o| {
                         let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                        if v.is_empty() { None } else { Some(v) }
+                        if v.is_empty() {
+                            None
+                        } else {
+                            Some(v)
+                        }
                     })
             })
         };
@@ -526,7 +534,11 @@ pub fn run_doctor(verbose: bool) {
                 .ok()
                 .and_then(|o| {
                     let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                    if v.is_empty() { None } else { Some(v) }
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v)
+                    }
                 })
         };
 
@@ -535,11 +547,21 @@ pub fn run_doctor(verbose: bool) {
         let repo_email = git_get_repo("user.email");
         let global_name = git_get_global("user.name");
         let global_email = git_get_global("user.email");
-        let env_name = std::env::var("GIT_AUTHOR_NAME").ok().filter(|v| !v.trim().is_empty());
-        let env_email = std::env::var("GIT_AUTHOR_EMAIL").ok().filter(|v| !v.trim().is_empty());
+        let env_name = std::env::var("GIT_AUTHOR_NAME")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let env_email = std::env::var("GIT_AUTHOR_EMAIL")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
 
-        let effective_name = env_name.clone().or(repo_name.clone()).or(global_name.clone());
-        let effective_email = env_email.clone().or(repo_email.clone()).or(global_email.clone());
+        let effective_name = env_name
+            .clone()
+            .or(repo_name.clone())
+            .or(global_name.clone());
+        let effective_email = env_email
+            .clone()
+            .or(repo_email.clone())
+            .or(global_email.clone());
 
         // Validation helpers
         let looks_name_ok = |v: &str| !v.trim().is_empty() && v.trim() != "Your Name";
@@ -550,16 +572,38 @@ pub fn run_doctor(verbose: bool) {
 
         // Formatting helpers
         let use_color = atty::is(atty::Stream::Stderr);
-        let blue = |s: &str| if use_color { format!("\x1b[34;1m{}\x1b[0m", s) } else { s.to_string() };
+        let blue = |s: &str| {
+            if use_color {
+                format!("\x1b[34;1m{}\x1b[0m", s)
+            } else {
+                s.to_string()
+            }
+        };
         let ok_cell = |set: bool| {
             if use_color {
-                if set { "\x1b[32m✅ set\x1b[0m".to_string() } else { "\x1b[31m❌ unset\x1b[0m".to_string() }
-            } else if set { "✅ set".to_string() } else { "❌ unset".to_string() }
+                if set {
+                    "\x1b[32m✅ set\x1b[0m".to_string()
+                } else {
+                    "\x1b[31m❌ unset\x1b[0m".to_string()
+                }
+            } else if set {
+                "✅ set".to_string()
+            } else {
+                "❌ unset".to_string()
+            }
         };
         let present_cell = |present: bool| {
             if use_color {
-                if present { "\x1b[32m✅ found\x1b[0m".to_string() } else { "\x1b[31m❌ missing\x1b[0m".to_string() }
-            } else if present { "✅ found".to_string() } else { "❌ missing".to_string() }
+                if present {
+                    "\x1b[32m✅ found\x1b[0m".to_string()
+                } else {
+                    "\x1b[31m❌ missing\x1b[0m".to_string()
+                }
+            } else if present {
+                "✅ found".to_string()
+            } else {
+                "❌ missing".to_string()
+            }
         };
 
         let label_w: usize = 16;
@@ -590,7 +634,11 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "effective author name",
-            format!("{} {}", eff_name_disp, ok_cell(effective_name.as_deref().map_or(false, looks_name_ok))),
+            format!(
+                "{} {}",
+                eff_name_disp,
+                ok_cell(effective_name.as_deref().map_or(false, looks_name_ok))
+            ),
             label_w = label_w,
             name_w = name_w
         );
@@ -620,7 +668,11 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "effective author email",
-            format!("{} {}", eff_mail_disp, ok_cell(effective_email.as_deref().map_or(false, looks_email_ok))),
+            format!(
+                "{} {}",
+                eff_mail_disp,
+                ok_cell(effective_email.as_deref().map_or(false, looks_email_ok))
+            ),
             label_w = label_w,
             name_w = name_w
         );
@@ -673,7 +725,15 @@ pub fn run_doctor(verbose: bool) {
         let sign_disp = |v: &Option<String>| {
             v.as_ref()
                 .map(|s| s.to_lowercase())
-                .map(|s| if s == "true" { "true".to_string() } else if s == "false" { "false".to_string() } else { s })
+                .map(|s| {
+                    if s == "true" {
+                        "true".to_string()
+                    } else if s == "false" {
+                        "false".to_string()
+                    } else {
+                        s
+                    }
+                })
                 .unwrap_or_else(|| "(unset)".to_string())
         };
 
@@ -744,7 +804,9 @@ pub fn run_doctor(verbose: bool) {
             }
             if desired_signing && key_effective.is_none() && secret_keys_available {
                 eprintln!("    tip: A secret key is available but user.signingkey is unset. Configure it to your fingerprint:");
-                eprintln!("    tip:   git config user.signingkey <FINGERPRINT>    # in repo or --global");
+                eprintln!(
+                    "    tip:   git config user.signingkey <FINGERPRINT>    # in repo or --global"
+                );
             }
             if desired_signing && !secret_keys_available {
                 eprintln!("    tip: No GPG secret keys found. Create or import a key, then set user.signingkey if needed.");
