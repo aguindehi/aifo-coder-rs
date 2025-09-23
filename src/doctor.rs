@@ -601,19 +601,6 @@ pub fn run_doctor(verbose: bool) {
                 "❌ unset".to_string()
             }
         };
-        let present_cell = |present: bool| {
-            if use_color {
-                if present {
-                    "\x1b[32m✅ found\x1b[0m".to_string()
-                } else {
-                    "\x1b[31m❌ missing\x1b[0m".to_string()
-                }
-            } else if present {
-                "✅ found".to_string()
-            } else {
-                "❌ missing".to_string()
-            }
-        };
 
         let env_cell = |present: bool, needed: bool| {
             if present {
