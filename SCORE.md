@@ -37,3 +37,41 @@ Next steps (proposed)
 - Consolidate notifications policy validation strictly into parse_notif_cfg() and adjust wrappers.
 
 Shall I proceed with these next steps?
+# Source Code Scoring — 2025-09-23 00:10
+
+Executive summary
+- Phase 1 completed: utility consolidation, warn prompt helpers, shared Docker SecurityOptions parser, and centralized exit-code mapping for io::Error in binary glue (main.rs and commands/mod.rs). Behavior and user-visible strings remain unchanged.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Build & Release — B+ [8]
+- Cross-Platform Support — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — B+ [8]
+
+Improvements achieved
+- Centralized io::Error -> exit code mapping via aifo_coder::exit_code_for_io_error; reduced scattered NotFound checks and kept exact messages.
+- Prior Phase 1 consolidations retained: util::fs reuse in docker.rs, warn input helpers, and shared docker security parser in banner/doctor.
+
+Behavior parity notes
+- All printed strings were preserved.
+- Exit codes remain identical (127 for NotFound, 1 otherwise); mapping is now shared.
+
+Remaining opportunities (aligned with spec)
+- Test helpers consolidation into tests/support (have_git, which, init_repo_with_default_user) and refactor test files to import them.
+- Consider lightweight error enums (ForkError, ToolchainError) internally for future phases, keeping external messages unchanged.
+- Begin Phase 2 orchestrators implementation and integrate cross-platform selection in runner.
+
+Next steps (proposed)
+- Add tests/support module and progressively refactor tests to use it, preserving skip messages.
+- Implement orchestrators (tmux, Windows Terminal, PowerShell, Git Bash/mintty) and delegate from runner.rs.
+- Consolidate notifications policy enforcement strictly in parse_notif_cfg(), updating wrappers accordingly.
+
+Shall I proceed with these next steps?

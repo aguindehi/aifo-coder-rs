@@ -91,7 +91,7 @@ pub fn run_toolchain_cache_clear(cli: &Cli) -> std::process::ExitCode {
         }
         Err(e) => {
             eprintln!("aifo-coder: failed to purge toolchain caches: {}", e);
-            std::process::ExitCode::from(1)
+            std::process::ExitCode::from(aifo_coder::exit_code_for_io_error(&e))
         }
     }
 }
@@ -133,11 +133,7 @@ pub fn run_toolchain(
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");
-            if e.kind() == io::ErrorKind::NotFound {
-                127
-            } else {
-                1
-            }
+            aifo_coder::exit_code_for_io_error(&e) as i32
         }
     };
     std::process::ExitCode::from((code & 0xff) as u8)

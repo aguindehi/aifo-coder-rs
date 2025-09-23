@@ -418,11 +418,8 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("{e}");
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
-            // Map docker-not-found to exit status 127 (command not found)
-            if e.kind() == io::ErrorKind::NotFound {
-                return ExitCode::from(127);
-            }
-            ExitCode::from(1)
+            let code = aifo_coder::exit_code_for_io_error(&e);
+            ExitCode::from(code)
         }
     }
 }

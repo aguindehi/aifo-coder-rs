@@ -1,6 +1,7 @@
 mod apparmor;
 mod color;
 mod docker;
+mod errors;
 mod fork;
 #[path = "fork/meta.rs"]
 pub mod fork_meta;
@@ -32,3 +33,4 @@ pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::docker_security::{docker_security_options_parse, DockerSecurityOptions};
 pub use util::id::create_session_id;
 pub use util::*;
+pub use errors::exit_code_for_io_error;

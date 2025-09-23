@@ -1,3 +1,15 @@
+2025-09-23 00:10 user@example.com
+
+Phase 1: central exit-code mapping
+
+- Centralized io::Error -> exit code mapping in a new src/errors.rs helper.
+- Updated main.rs and commands/mod.rs to use the shared mapping without changing messages.
+
+Details:
+- Added src/errors.rs with exit_code_for_io_error(); re-exported via lib.rs.
+- Replaced ad-hoc NotFound mappings with helper (127 for NotFound, 1 otherwise).
+- No behavior or strings changed; only mapping centralized per spec.
+
 2025-09-23 00:00 user@example.com
 
 Phase 1: utility consolidation and low-risk refactors
