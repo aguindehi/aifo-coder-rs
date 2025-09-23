@@ -19,6 +19,7 @@ use crate::guidance::print_inspect_merge_guidance;
 pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Pre-compute stderr color usage once per run
     let use_err_color = aifo_coder::color_enabled_stderr();
+    let _ = use_err_color;
     // Preflight
     if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
         return code;
