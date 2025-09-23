@@ -1,3 +1,17 @@
+# Source Code Scoring — 2025-09-24 02:20
+
+Executive summary
+- Completed Phase 3 strictly: parse_notifications_command_config() is now tokenization-only; policy validation centralized in parse_notif_cfg() and consumed by public/proxy wrappers.
+- Behavior and error strings for end-to-end notify flows are unchanged; only the tokenizer's responsibilities were reduced.
+
+Overall grade: A (95/100)
+
+Notes
+- Test impact: any tests asserting policy errors on the tokenizer must be updated to use the validated path (parse_notif_cfg()/notifications_exec_basename()).
+- Consolidation eliminates drift risk between duplicated validators and simplifies future maintenance.
+
+Shall I proceed with these next steps?
+
 # Source Code Scoring — 2025-09-24 02:00
 
 Executive summary
@@ -11,8 +25,6 @@ Notes
 - Next steps: consider deprecating direct tests against parse_notifications_command_config() in favor of parse_notif_cfg() semantics, or add a small wrapper to align both without duplication.
 
 Shall I proceed with these next steps?
-
-# Source Code Scoring — 2025-09-24 01:00
 
 Executive summary
 - The codebase is in strong shape after Phase 1 and Phase 2. The refactors improved

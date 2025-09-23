@@ -1,3 +1,14 @@
+2025-09-24 02:20 user@example.com
+
+Phase 3: strict notifications policy consolidation
+
+- Removed all policy checks from parse_notifications_command_config(); it now performs
+  tokenization only (YAML -> argv tokens).
+- Policy (absolute exec path, strictly-trailing "{args}") remains enforced exclusively
+  in parse_notif_cfg() and used by public/proxy wrappers.
+- Note for tests: assertions expecting policy errors should call the validated wrapper
+  (e.g., notifications_exec_basename()/parse_notif_cfg path) rather than the tokenizer.
+
 2025-09-24 02:00 user@example.com
 
 Fix: restore notifications policy checks for tests

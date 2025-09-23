@@ -348,28 +348,6 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
         return Err("notifications-command is empty".to_string());
     }
 
-    // Enforce absolute executable path (policy)
-    if !tokens[0].starts_with('/') {
-        return Err("notifications-command executable must be an absolute path".to_string());
-    }
-
-    // Validate single strictly-trailing "{args}" placeholder (if present) (policy)
-    if let Some(last) = tokens.last() {
-        if last == "{args}" {
-            // ensure no other occurrences earlier
-            if tokens[..tokens.len() - 1].iter().any(|t| t == "{args}") {
-                return Err(
-                    "invalid notifications-command: '{args}' placeholder must be trailing"
-                        .to_string(),
-                );
-            }
-        } else if tokens.iter().any(|t| t == "{args}") {
-            return Err(
-                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
-            );
-        }
-    }
-
     Ok(tokens)
 }
 
