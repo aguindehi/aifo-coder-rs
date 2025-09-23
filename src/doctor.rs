@@ -614,7 +614,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "git identity:",
             "repo user.name",
-            ok_cell(repo_name.as_deref().map_or(false, looks_name_ok)),
+            ok_cell(repo_name.as_deref().is_some_and(looks_name_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -622,7 +622,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "global user.name",
-            ok_cell(global_name.as_deref().map_or(false, looks_name_ok)),
+            ok_cell(global_name.as_deref().is_some_and(looks_name_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -631,14 +631,11 @@ pub fn run_doctor(verbose: bool) {
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
         eprintln!(
-            "  {:<label_w$} {:<name_w$} {}",
+            "  {:<label_w$} {:<name_w$} {} {}",
             "",
             "effective author name",
-            format!(
-                "{} {}",
-                eff_name_disp,
-                ok_cell(effective_name.as_deref().map_or(false, looks_name_ok))
-            ),
+            eff_name_disp,
+            ok_cell(effective_name.as_deref().is_some_and(looks_name_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -648,7 +645,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "repo user.email",
-            ok_cell(repo_email.as_deref().map_or(false, looks_email_ok)),
+            ok_cell(repo_email.as_deref().is_some_and(looks_email_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -656,7 +653,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "global user.email",
-            ok_cell(global_email.as_deref().map_or(false, looks_email_ok)),
+            ok_cell(global_email.as_deref().is_some_and(looks_email_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -665,14 +662,11 @@ pub fn run_doctor(verbose: bool) {
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
         eprintln!(
-            "  {:<label_w$} {:<name_w$} {}",
+            "  {:<label_w$} {:<name_w$} {} {}",
             "",
             "effective author email",
-            format!(
-                "{} {}",
-                eff_mail_disp,
-                ok_cell(effective_email.as_deref().map_or(false, looks_email_ok))
-            ),
+            eff_mail_disp,
+            ok_cell(effective_email.as_deref().is_some_and(looks_email_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -741,7 +735,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "git signing:",
             "desired",
-            blue(yesno(desired_signing)).to_string(),
+            blue(yesno(desired_signing)),
             label_w = label_w,
             name_w = name_w
         );
@@ -811,11 +805,9 @@ pub fn run_doctor(verbose: bool) {
             if desired_signing && !secret_keys_available {
                 eprintln!("    tip: No GPG secret keys found. Create or import a key, then set user.signingkey if needed.");
             }
-            if !desired_signing {
-                if sign_eff_true {
-                    eprintln!("    tip: Signing disabled by AIFO_CODER_GIT_SIGN=0 but repo enables it. Disable in repo if undesired:");
-                    eprintln!("    tip:   git config commit.gpgsign false");
-                }
+            if !desired_signing && sign_eff_true {
+                eprintln!("    tip: Signing disabled by AIFO_CODER_GIT_SIGN=0 but repo enables it. Disable in repo if undesired:");
+                eprintln!("    tip:   git config commit.gpgsign false");
             }
         }
     } else {
