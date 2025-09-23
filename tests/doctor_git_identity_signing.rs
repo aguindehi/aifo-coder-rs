@@ -15,7 +15,6 @@ fn git_available() -> bool {
         .unwrap_or(false)
 }
 
-
 fn write_global_gitconfig(p: &PathBuf, content: &str) {
     if let Some(parent) = p.parent() {
         let _ = fs::create_dir_all(parent);
