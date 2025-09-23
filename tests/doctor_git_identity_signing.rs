@@ -67,6 +67,20 @@ fn run_git_in(dir: &PathBuf, args: &[&str]) {
     assert!(status.success(), "git command failed: {:?}", args);
 }
 
+fn run_doctor_capture(verbose: bool) -> String {
+    let mut cmd = Command::new("./aifo-coder");
+    cmd.arg("doctor");
+    if verbose {
+        cmd.arg("--verbose");
+    }
+    let output = cmd
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("run doctor");
+    String::from_utf8_lossy(&output.stderr).to_string()
+}
+
 #[test]
 fn test_doctor_identity_precedence_and_signing_repo_over_global() {
     if !git_available() {
@@ -102,9 +116,7 @@ fn test_doctor_identity_precedence_and_signing_repo_over_global() {
     // Ensure we run doctor inside the repo
     std::env::set_current_dir(&repo).expect("chdir repo");
 
-    let output = capture_stderr(|| {
-        aifo_coder::run_doctor(false);
-    });
+    let output = run_doctor_capture(false);
 
     // Identity precedence: env > repo > global
     assert!(
@@ -188,9 +200,7 @@ fn test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
     // Ensure we run doctor inside the repo
     std::env::set_current_dir(&repo).expect("chdir repo");
 
-    let output = capture_stderr(|| {
-        aifo_coder::run_doctor(true);
-    });
+    let output = run_doctor_capture(true);
 
     // Tip should be printed when desired_signing=false but repo enables signing
     assert!(
