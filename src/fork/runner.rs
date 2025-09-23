@@ -15,10 +15,10 @@ use crate::fork_args::fork_build_child_args;
 use crate::guidance::print_inspect_merge_guidance;
 
 // Orchestrate tmux-based fork session (Linux/macOS/WSL) — moved from main.rs (Phase 1)
-#[allow(clippy::needless_return, unreachable_code)]
+#[allow(clippy::needless_return, unreachable_code, unused_assignments)]
 pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Pre-compute stderr color usage once per run
-    let use_err_color = aifo_coder::color_enabled_stderr();
+    let _use_err_color = aifo_coder::color_enabled_stderr();
     // Preflight
     if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
         return code;
@@ -294,6 +294,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
                 launched_in = "tmux";
+                let _ = orch.supports_post_merge();
             }
         }
     }
@@ -318,6 +319,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
                 launched_in = "Windows Terminal";
+                let _ = orch.supports_post_merge();
             }
             crate::fork::orchestrators::Selected::PowerShell { .. } => {
                 let orch = crate::fork::orchestrators::powershell::PowerShell {
@@ -338,6 +340,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
                 launched_in = "PowerShell windows";
+                let _ = orch.supports_post_merge();
             }
             crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
                 let orch = crate::fork::orchestrators::gitbash_mintty::GitBashMintty {
@@ -358,6 +361,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     return ExitCode::from(1);
                 }
                 launched_in = "Git Bash";
+                let _ = orch.supports_post_merge();
             }
         }
     }

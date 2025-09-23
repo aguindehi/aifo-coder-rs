@@ -23,6 +23,7 @@ pub trait Orchestrator {
     fn supports_post_merge(&self) -> bool;
 }
 
+#[allow(dead_code)]
 pub enum Selected {
     #[cfg(not(windows))]
     Tmux { reason: String },
