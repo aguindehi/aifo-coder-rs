@@ -75,3 +75,17 @@ pub fn paint(enabled: bool, code: &str, s: &str) -> String {
         s.to_string()
     }
 }
+
+/// Minimal logging helpers for consistent, color-aware stderr output without changing message text.
+/// Use only when the message strings are fully identical to existing prints.
+pub fn log_info_stderr(use_color: bool, msg: &str) {
+    eprintln!("{}", paint(use_color, "\x1b[36;1m", msg));
+}
+
+pub fn log_warn_stderr(use_color: bool, msg: &str) {
+    eprintln!("{}", paint(use_color, "\x1b[33m", msg));
+}
+
+pub fn log_error_stderr(use_color: bool, msg: &str) {
+    eprintln!("{}", paint(use_color, "\x1b[31;1m", msg));
+}
