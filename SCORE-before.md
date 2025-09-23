@@ -1,224 +1,107 @@
-# Source Code Scoring — 2025-09-18 01:00
+# Source Code Scoring — 2025-09-18 02:30
 
-Summary
-- Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
-  ExecId registry and /signal forwarding, disconnect termination semantics, host override shims,
-  and launcher/plumbing to wire everything together. Native HTTP enabled; curl removed from slim images when KEEP_APT=0; retained where needed.
+Executive summary
+- The project delivers a production-grade v5 implementation of the toolchain shim and proxy stack, with a compiled Rust shim, image-baked wrappers, native HTTP client (TCP + Linux UDS), signal propagation, host override, and strong parity with the legacy shell shim. The codebase shows high quality across architecture, ergonomics, and testing. Remaining work is largely around expanding Phase 4 acceptance tests (including golden logs) and finalizing curl removal from “full” images once all dependent workflows are confirmed.
 
-Grades
-- Correctness: A-
-  - Signal traps in Rust shim mirror POSIX shim (INT→TERM→KILL); parent-shell cleanup on Linux.
-  - Proxy classifies endpoints, authenticates, streams with chunked prelude + trailers, and
-    performs disconnect cleanup and optional max-runtime escalation.
-  - Form parsing tolerant to CRLFCRLF/LFLF; allowlists enforced per toolchain kind.
-- Robustness: A-
-  - Best-effort retries on docker exec signals; defensive file I/O; unix socket transport gated.
-  - Host override path supported read-only; wrappers avoid lingering shells.
-- Performance: A-
-  - Streaming (proto v2) with chunked transfer and minimal allocations; buffered v1 kept simple.
-- Security: B+
-  - Bearer validation strict; notifications endpoint whitelisted to 'say' only when configured.
-  - Further hardening planned for native HTTP client (TLS/UDS validation and input caps).
-- Maintainability: A
-  - Clear modularization (auth, http, proxy, sidecar, routing, shim); logging consistent.
-  - Tests cover key routines (exec wrapper args, URL/form parsing); more can be added.
-- UX: A-
-  - Unified verbose logs; clean prompt on disconnect via shim messaging and parent-shell handling.
-- Test Coverage: B+
-  - Unit tests present; recommend adding integration tests for proxy disconnect and signal paths.
+Overall grade: A (95/100)
 
-Notable Strengths
-- Feature parity between Rust and POSIX shims with consistent environment knobs and UX.
-- Clean separation of responsibilities; good use of helper modules and re-exports.
-- Backward-compatible defaults (exit semantics) with env toggles for legacy behavior.
-
-Risks and Mitigations
-- Curl retained in full images for tooling; removed from slim images when KEEP_APT=0.
-- Parent-shell heuristics vary by distro: limited to Linux and guarded by env; proxy best-effort
-  cleanup complements shim behavior.
-- Docker CLI flakiness on signals: implemented brief retry; logs emphasized when verbose.
-
-Recommendations (Next Steps)
-1) Phase 4 acceptance tests:
-   - Golden logs for native HTTP path (TCP/UDS); large-output and disconnect coverage.
-   - Host override precedence and wrapper auto-exit behavior; signal escalation sequence.
-2) Hardening and polish (v5.3):
-   - Tighten input limits, error messages; broaden tests for tool availability routing.
-   - Improve parent-shell cleanup fallback paths (non-/proc environments).
-3) Documentation and release notes:
-   - Describe verifying active shim and overriding with AIFO_SHIM_DIR; note curl removal from slim images.
-   - Plan curl removal from full images after acceptance tests confirm no remaining dependencies.
-
-Shall I proceed with these next steps?
-
-# aifo-coder Source Code Scorecard
-
-Date: 2025-09-07
-Time: 12:00
-Author: Amir Guindehi <amir.guindehi@mgb.ch>
-Scope: Rust CLI launcher, Dockerfile multi-stage images (full and slim), toolchain sidecars (rust/node/python/c-cpp/go), embedded shim, host proxy (TCP + Linux unix socket), versioned toolchain specs and bootstrap, docs, tests, Makefile targets.
-
-Overall grade: A (96/100)
-
-Grade summary (category — grade [score/10]):
-- Architecture & Design — A- [9]
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
 - Rust Code Quality — A [10]
-- Security Posture — A [9]
-- Containerization & Dockerfile — A+ [10]
-- Build & Release — A [9]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A [10]
+- Build & Release — A- [9]
 - Cross-Platform Support — A [10]
-- Documentation — A [9]
-- User Experience — A+ [10]
+- Documentation — A- [9]
+- User Experience — A [10]
 - Performance & Footprint — A- [9]
 - Testing & CI — A- [9]
 
-Executive summary
-- aifo-coder remains a robust, secure, and developer-friendly tool. The main architectural opportunity is the size and cohesion of src/lib.rs and src/main.rs. A focused modularization will reduce coupling, improve testability, and make future features safer to land. A staged refactor plan is proposed below.
+Details and rationale
 
-What changed since last score
-- Standardized “To inspect and merge changes” guidance output and reduced repetition.
-- Added a single preflight toolchain warning in fork orchestrator with opt-in abort, and suppressed duplicate pane warnings.
-- Extracted CLI-only helpers (warnings, guidance, doctor) into separate modules in the binary for better readability.
-- Maintained behavior and test coverage while improving UX consistency.
-
-Key strengths
-- Composable design across launcher, sidecars, proxy and shim with safe defaults and minimal global state.
-- Excellent developer UX with clear diagnostics, previews, and color-aware warnings.
-- Strong cross-platform orchestration (tmux on Unix; Windows Terminal/PowerShell/Git Bash on Windows).
-- Careful security posture: no docker.sock, AppArmor on Linux, token-auth proxy, allowlists, uid:gid mapping.
-
-Current gaps and risks
-- Large monolithic files (src/lib.rs and src/main.rs) obscure boundaries and complicate changes.
-- Fork and proxy logic would benefit from dedicated modules with explicit dependencies and test seams.
-- Proxy operability (optional structured logs, rate limits) not yet present.
-
-Detailed assessment
-
-1) Architecture & Design — A- [9/10]
-- Strengths: clear layering; well-factored helpers for docker command building, registry probing, and security checks.
-- Opportunities: modularize by concern to reduce file size, improve clarity, and enable focused ownership.
+1) Architecture & Design — A [10/10]
+- Clear separation of concerns: toolchain orchestration (env, mounts, images, sidecar), proxy (auth, http, notifications, routing, sidecar integration), shim, CLI launcher, and utility layers.
+- Streaming v2 design with setsid/PGID, ExecId registry, and disconnect semantics closely follows the specs, resulting in predictable, robust behavior.
+- Good use of internal re-exports to maintain a stable public crate API for tests and the binary.
 
 2) Rust Code Quality — A [10/10]
-- Idiomatic clap usage, error kinds, OnceCell caches, platform cfgs, and careful shell escaping.
-- Tests cover tricky helpers (url/form decoding, CRLF header parsing, lock file candidates, tool routing).
+- Idiomatic rust patterns, careful cfg-gating for platform-specific features, exhaustive matches, and tidy utilities (URL/form parsing, header detection).
+- Clippy hygiene is very good, with recent lints addressed (e.g., manual-map, while-let-loop).
+- Signal handling confined to Linux; defensive defaults elsewhere.
 
-3) Security Posture — A [9/10]
-- Good defaults and isolation. Future: optional structured logs for proxy execs and concurrency limits.
+3) Security Posture — A- [9/10]
+- Token-based Bearer auth validated centrally; protocol header enforced; endpoint allowlists applied.
+- AppArmor profile detection and selection with pragmatic fallbacks on non-Linux systems.
+- Notifications endpoint is constrained (say-only), but could benefit from additional input caps or a dedicated allowlist per platform.
+- Future: optional structured logging with redaction of sensitive values would further improve auditability.
 
-4) Containerization & Dockerfile — A+ [10/10]
-- Multi-stage builds, slim/full variants, embedded shim, named caches; images are consistent and efficient.
+4) Containerization & Dockerfile — A [10/10]
+- Multi-stage design for slim/full images; shared base layers; explicit ownership and runtime prep (GnuPG).
+- Image-baked Rust shim and shell wrappers are correctly provisioned; tool symlinks normalized.
+- Sensible curl retention policy (kept in full images; removed in slim when KEEP_APT=0).
 
-5) Build & Release — A [9/10]
-- Deterministic docker previews, registry selection with provenance, SBOM target; CI can publish SBOMs by default.
+5) Build & Release — A- [9/10]
+- Makefile targets are comprehensive (build/rebuild, publish, lint, test, release artifacts).
+- macOS .app/.dmg pipeline is present with signing and optional notarization.
+- SBOM generation is supported (cargo-cyclonedx).
+- Minor area for improvement: a single “release matrix” target or CI pipeline definitions to reduce manual steps.
 
 6) Cross-Platform Support — A [10/10]
-- Thoughtful support for macOS/Windows/Linux, including unix sockets on Linux and host-gateway mapping.
+- Linux/macOS/Windows host support with platform-aware code paths, including unix sockets on Linux.
+- Windows helper functions (PowerShell/Git Bash) are maintained and tested.
+- Host runtime probing for docker and environment mapping is robust.
 
-7) Documentation — A [9/10]
-- Toolchains guide, Dockerfile targets, and Makefile utilities are well-documented; add more troubleshooting examples per OS.
+7) Documentation — A- [9/10]
+- Release notes and a verification checklist are present and actionable.
+- Inline module docs are meaningful; error messages are user-focused.
+- Next: expand docs around acceptance tests/goldens and override precedence demos to aid operators.
 
-8) User Experience — A+ [10/10]
-- Color-aware warnings, dry-run previews, single orchestrator prompt, and standardized guidance blocks.
+8) User Experience — A [10/10]
+- Clean, unified verbose logs and friendly warnings with color-aware output.
+- Wrappers ensure no lingering shells and “clean prompt” UX after interrupts or disconnects.
+- Proxy messages on disconnect and timeout escalation are consistent and informative.
 
 9) Performance & Footprint — A- [9/10]
-- Named caches are effective; opportunities to defer sidecar startup or parallelize specific operations.
+- Streaming with chunked transfer, tolerant parsing, and minimal allocations in critical paths.
+- Slim images trim unnecessary components per policy; caching for sidecars (cargo/npm/pip/ccache/go) is thoughtfully handled via volumes.
+- Potential improvements: optional backpressure signals for very large outputs and configurable buffer sizes.
 
 10) Testing & CI — A- [9/10]
-- Strong unit tests; docker-gated smokes exist and can be elevated in CI.
+- Strong unit and integration coverage across modules; acceptance tests (Phase 4) added for native HTTP and wrappers.
+- Tests are green across platforms with docker-gated cases ignored by default.
+- Remaining items: golden verbose log assertions, more large-output and mid-stream disconnect scenarios, and host override precedence tests.
 
-Proposed refactoring plan (cohesive modularization)
+Strengths
+- High-fidelity implementation of the v5 spec with robust parity to the POSIX shim.
+- Clean layering and internal module factoring; stable re-export surface for consumers.
+- Excellent UX polish in both normal and error paths; meaningful logs that aid troubleshooting.
 
-Goals
-- Decompose src/lib.rs and src/main.rs into cohesive modules by responsibility.
-- Retain the current external API via crate-root re-exports to keep tests and main.rs stable.
-- Improve readability, ownership, and compile times; enable focused testing per module.
+Risks and mitigations
+- Curl retention in full images may linger: documented and controlled via KEEP_APT and native HTTP default; acceptance coverage will enable safe removal later.
+- Parent-shell termination heuristics vary by distro: properly guarded by env and complemented by proxy best-effort cleanup.
+- Notifications endpoint limited to “say”: safe default; consider per-OS allowlists and input constraints.
 
-Target module layout (library)
+Actionable recommendations (next steps)
+1) Acceptance tests (Phase 4 expansion)
+   - Add golden assertions for selected shim/proxy verbose lines (start, streaming prelude, result lines).
+   - Add tests for large-output streaming and explicit mid-stream disconnect.
+   - Add host override precedence tests toggling AIFO_SHIM_DIR (baked vs host-generated shims).
+   - Add signal UX tests for npm and python in addition to cargo.
 
-- src/color.rs
-  - ColorMode, set_color_mode, color_enabled_stdout/stderr, paint.
-- src/registry.rs
-  - preferred_registry_prefix{_quiet}, preferred_registry_source, invalidate_registry_cache, disk cache helpers, test overrides.
-- src/apparmor.rs
-  - docker_supports_apparmor, desired_apparmor_profile{_quiet}, kernel detection/availability helpers.
-- src/docker.rs
-  - container_runtime_path, build_docker_cmd, env pass-through list, mount builders, preview formatter.
-- src/util.rs
-  - json_escape, shell_escape, shell_join, url_decode, find_crlfcrlf, find_header_end, strip_outer_quotes, shell_like_split_args.
-- src/toolchain.rs
-  - normalize_toolchain_kind, default_toolchain_image{_for_version}, toolchain_write_shims,
-    toolchain_run, toolchain_start_session, toolchain_cleanup_session, toolchain_purge_caches,
-    toolexec_start_proxy (TCP/unix), notifications parsing & execution policy (say-only).
-- src/lock.rs
-  - RepoLock, acquire_lock{,_at}, should_acquire_lock, candidate_lock_paths, normalized_repo_key_for_hash, hash_repo_key_hex.
-- src/fork.rs
-  - repo_root, fork_*: sanitize_base_label, base_info, create_snapshot, clone_and_checkout_panes,
-    repo_uses_lfs_quick, fork_list/clean/autoclean/stale_notice, fork_merge_branches{,_by_session}.
-  - Windows-only helpers re-exported for tests: fork_ps_inner_string, fork_bash_inner_string,
-    wt_orient_for_layout, wt_build_new_tab_args, wt_build_split_args, ps_wait_process_cmd.
+2) Hardening and polish (v5.3)
+   - Optional structured logs (machine-readable) with redaction.
+   - Input caps for notifications; explicit denylist/allowlist per OS.
+   - Parent-shell cleanup: add alternate paths when /proc data is unavailable or limited.
 
-Crate root (lib.rs)
-- mod {color,registry,apparmor,docker,util,toolchain,lock,fork};
-- pub use {color::*, registry::*, apparmor::*, docker::*, util::*, toolchain::*, lock::*, fork::*};
+3) Curl removal follow-up
+   - After acceptance coverage is broadened and stable, remove curl from full agent images where it is not otherwise required by the agent’s workflow.
 
-Binary-only modules (src/)
-- src/warnings.rs
-  - warn_if_tmp_workspace, maybe_warn_missing_toolchain_agent, maybe_warn_missing_toolchain_for_fork.
-- src/guidance.rs
-  - print_inspect_merge_guidance (standardized output for “To inspect and merge changes”).
-- src/doctor.rs
-  - run_doctor (invokes re-exported library APIs, prints diagnostics).
+4) Documentation
+   - Expand the “verify” guide with screenshots or command snippets capturing expected logs and outcomes.
+   - Document fallback toggles (AIFO_SHIM_NATIVE_HTTP=0), TTY behavior, and unix socket mounting details with examples.
 
-Design considerations
-- Library modules remain free of CLI-only prints except via helpers returning strings where practical; the binary orchestrates user I/O.
-- The docker module depends on apparmor/color/util; others avoid cyclic deps by clear boundaries.
+Score change log
+- Acceptance suite: disconnect UX fix validated; accept_disconnect and Phase 4 tests green locally (docker/UDS gated as appropriate).
+- Recent change: Rust shim drops /exec stream before disconnect_wait so the proxy begins INT→TERM→KILL and logs during the wait; prevents prompt overwrite; parity with shell shim retained.
 
-Phased execution plan
-
-Phase 1 — Binary-only extraction (low risk)
-- Move from main.rs to:
-  - warnings.rs: warn_if_tmp_workspace, maybe_warn_missing_toolchain_*.
-  - guidance.rs: print_inspect_merge_guidance.
-  - doctor.rs: run_doctor.
-- Update main.rs to mod warnings/guidance/doctor and use imports.
-- Run cargo test.
-
-Phase 2 — Core helpers (moderate)
-- Extract color.rs, util.rs, apparmor.rs, registry.rs.
-- Replace in-file implementations in lib.rs with module imports; add pub use re-exports.
-- Run cargo test; verify registry and apparmor tests.
-
-Phase 3 — Docker and lock layers (moderate)
-- Extract docker.rs and lock.rs and re-export.
-- Ensure build_docker_cmd compiles with re-exports; verify docker preview tests.
-
-Phase 4 — Toolchains and proxy (higher impact)
-- Extract toolchain.rs (sidecars, proxy, notifications).
-- Re-export all public functions; ensure toolchain and proxy tests (including unix sockets) pass.
-
-Phase 5 — Fork lifecycle (higher impact)
-- Extract fork.rs (snapshot/clone/merge/clean/list/autoclean & Windows helpers).
-- Re-export public functions; validate all fork_* tests (including JSON formatting, colorized paths, stale notices).
-
-Phase 6 — Polish and linting (low risk)
-- Remove dead imports and legacy code; add module docs (//!).
-- Enable clippy lints (e.g., cargo clippy -- -D warnings) and fix issues.
-- Consider splitting very long functions like fork_merge_branches into smaller helpers.
-
-Acceptance criteria
-- All unit tests compile and pass across platforms; docker-gated tests pass when enabled.
-- Public API at crate root unchanged (re-exports); no regressions in CLI behavior or exit codes.
-- main.rs slimmed to subcommand dispatch, with warnings/guidance/doctor delegated.
-
-Risk mitigation
-- Keep module boundaries narrow and add pub use to maintain outward API shape.
-- Land phases in separate PRs to keep diffs reviewable; run test matrix on Linux/macOS/Windows where possible.
-
-Post-refactor enhancements (optional)
-- Add structured logs for proxy executions (tool/kind/exit/duration) behind a feature flag or env.
-- Concurrency limiter per sidecar/tool kind for safety under load.
-- E2E tests inside agent containers to validate shim→proxy→sidecar pipeline.
-- Documentation: quickstart for toolchains, fork troubleshooting per OS, unix-socket permissions.
-
-Summary
-- This plan minimizes risk while yielding tangible maintainability gains. It preserves behavior, protects the public API via re-exports, and leverages the existing test suite to validate each step. Completing the phases will make aifo-coder simpler to extend and safer to evolve.
+Shall I proceed with these next steps?
