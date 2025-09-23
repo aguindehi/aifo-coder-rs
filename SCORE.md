@@ -1,3 +1,17 @@
+# Source Code Scoring — 2025-09-24 02:00
+
+Executive summary
+- Minor fix to satisfy existing tests: restored policy validations (absolute exec path and trailing "{args}") in parse_notifications_command_config().
+- Internal consolidation remains effective via parse_notif_cfg(); external behavior and error texts unchanged.
+
+Overall grade: A (95/100)
+
+Notes
+- Risk: duplicate validation between parse_notifications_command_config() and parse_notif_cfg(); acceptable to maintain backward compatibility with tests.
+- Next steps: consider deprecating direct tests against parse_notifications_command_config() in favor of parse_notif_cfg() semantics, or add a small wrapper to align both without duplication.
+
+Shall I proceed with these next steps?
+
 # Source Code Scoring — 2025-09-24 01:00
 
 Executive summary

@@ -1,3 +1,13 @@
+2025-09-24 02:00 user@example.com
+
+Fix: restore notifications policy checks for tests
+
+- Reintroduced absolute-path and trailing "{args}" validation into
+  parse_notifications_command_config() so existing tests expecting policy
+  errors continue to pass.
+- Kept parse_notif_cfg() as the single internal policy authority; no behavior
+  changes for callers, error texts preserved.
+
 2025-09-24 01:35 user@example.com
 
 Fix: private-interfaces: make parse_notif_cfg private
