@@ -70,29 +70,8 @@ pub fn run_doctor(verbose: bool) {
             .output()
         {
             let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            // Extract JSON string array items without external deps
-            let mut items: Vec<String> = Vec::new();
-            let mut in_str = false;
-            let mut esc = false;
-            let mut buf = String::new();
-            for ch in raw.chars() {
-                if in_str {
-                    if esc {
-                        buf.push(ch);
-                        esc = false;
-                    } else if ch == '\\' {
-                        esc = true;
-                    } else if ch == '"' {
-                        items.push(buf.clone());
-                        buf.clear();
-                        in_str = false;
-                    } else {
-                        buf.push(ch);
-                    }
-                } else if ch == '"' {
-                    in_str = true;
-                }
-            }
+            let parsed = aifo_coder::docker_security_options_parse(&raw);
+            let items = parsed.items.clone();
             let pretty: Vec<String> = items
                 .iter()
                 .cloned()
@@ -126,34 +105,10 @@ pub fn run_doctor(verbose: bool) {
             let joined_val = joined.clone();
             eprintln!("  docker security options: {}", joined_val);
             {
-                let has_apparmor = items.iter().any(|s| s.contains("apparmor"));
-                // Extract seccomp profile if present
-                let mut seccomp = String::from("(unknown)");
-                for s in &items {
-                    if s.contains("name=seccomp") {
-                        for part in s.split(',') {
-                            if let Some(v) = part.strip_prefix("profile=") {
-                                seccomp = v.to_string();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-                // Extract cgroupns mode if present
-                let mut cgroupns = String::from("(unknown)");
-                for s in &items {
-                    if s.contains("name=cgroupns") {
-                        for part in s.split(',') {
-                            if let Some(v) = part.strip_prefix("mode=") {
-                                cgroupns = v.to_string();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-                let rootless = items.iter().any(|s| s.contains("rootless"));
+                let has_apparmor = parsed.has_apparmor;
+                let seccomp = parsed.seccomp_profile.clone();
+                let cgroupns = parsed.cgroupns_mode.clone();
+                let rootless = parsed.rootless;
                 eprintln!(
                     "  docker security details: AppArmor={}, Seccomp={}, cgroupns={}, rootless={}",
                     if has_apparmor { "yes" } else { "no" },
@@ -163,20 +118,8 @@ pub fn run_doctor(verbose: bool) {
                 );
             }
             if verbose {
-                let has_apparmor = items.iter().any(|s| s.contains("apparmor"));
-                // Extract seccomp profile if present
-                let mut seccomp = String::from("(unknown)");
-                for s in &items {
-                    if s.contains("name=seccomp") {
-                        for part in s.split(',') {
-                            if let Some(v) = part.strip_prefix("profile=") {
-                                seccomp = v.to_string();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
+                let has_apparmor = parsed.has_apparmor;
+                let seccomp = parsed.seccomp_profile.clone();
 
                 // security details were printed above in non-verbose section; only show tips here
                 if !has_apparmor {

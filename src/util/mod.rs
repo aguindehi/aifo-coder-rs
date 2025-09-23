@@ -3,6 +3,7 @@
 
 pub mod fs;
 pub mod id;
+pub mod docker_security;
 
 pub fn shell_join(args: &[String]) -> String {
     args.iter()

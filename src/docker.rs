@@ -11,6 +11,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use which::which;
+use crate::path_pair;
+use crate::ensure_file_exists;
 
 // Pass-through environment variables to the containerized agent
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
@@ -506,18 +508,3 @@ pub fn build_docker_cmd(
     Ok((cmd, preview))
 }
 
-// Local helper: Render a docker -v host:container pair.
-fn path_pair(host: &Path, container: &str) -> OsString {
-    OsString::from(format!("{}:{container}", host.display()))
-}
-
-// Local helper: Ensure a file exists by creating parent directories as needed.
-fn ensure_file_exists(p: &Path) -> io::Result<()> {
-    if !p.exists() {
-        if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::File::create(p)?;
-    }
-    Ok(())
-}

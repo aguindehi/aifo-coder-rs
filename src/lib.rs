@@ -29,5 +29,6 @@ pub use registry::*;
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
 pub use util::fs::{ensure_file_exists, path_pair};
+pub use util::docker_security::{docker_security_options_parse, DockerSecurityOptions};
 pub use util::id::create_session_id;
 pub use util::*;
