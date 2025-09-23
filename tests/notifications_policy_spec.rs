@@ -13,7 +13,7 @@ fn test_parse_rejects_non_absolute_exec() {
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
-    let err = aifo_coder::parse_notifications_command_config()
+    let err = aifo_coder::notifications_handle_request(&[], false, 2)
         .err()
         .unwrap();
     assert!(
@@ -65,7 +65,7 @@ fn test_placeholder_must_be_trailing() {
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
-    let err = aifo_coder::parse_notifications_command_config()
+    let err = aifo_coder::notifications_handle_request(&[], false, 2)
         .err()
         .unwrap();
     assert!(

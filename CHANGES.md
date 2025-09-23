@@ -1,3 +1,11 @@
+2025-09-24 02:35 user@example.com
+
+tests: update notifications policy tests to validated path
+
+- Updated notifications_policy_spec to assert policy errors via the validated wrapper
+  (notifications_handle_request), which uses parse_notif_cfg() internally.
+- Preserved expected error texts; removed reliance on tokenizer enforcing policy.
+
 2025-09-24 02:20 user@example.com
 
 Phase 3: strict notifications policy consolidation
