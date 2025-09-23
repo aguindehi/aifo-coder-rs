@@ -4,14 +4,14 @@ use which::which;
 use super::types::{ForkSession, Pane};
 use crate::cli::Cli;
 
+#[cfg(windows)]
+pub mod gitbash_mintty;
+#[cfg(windows)]
+pub mod powershell;
 #[cfg(not(windows))]
 pub mod tmux;
 #[cfg(windows)]
 pub mod windows_terminal;
-#[cfg(windows)]
-pub mod powershell;
-#[cfg(windows)]
-pub mod gitbash_mintty;
 
 pub trait Orchestrator {
     fn launch(
