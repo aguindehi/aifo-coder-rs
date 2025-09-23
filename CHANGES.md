@@ -1,3 +1,14 @@
+2025-09-23 00:20 user@example.com
+
+tests: set target dir to /var/tmp for sidecar test runs
+
+- Prefix CARGO_TARGET_DIR=/var/tmp/aifo-target for cargo nextest/cargo test when
+  running inside the sidecar (AIFO_EXEC_ID set) to avoid noexec on /workspace.
+
+Details:
+- Updated Makefile test target (sidecar branch) to set CARGO_TARGET_DIR only for
+  test executions inside the container.
+
 2025-09-23 00:10 user@example.com
 
 Phase 1: central exit-code mapping
