@@ -1,5 +1,3 @@
-use std::io;
-
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Cli, ToolchainKind};

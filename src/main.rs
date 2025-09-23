@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
 // Internal modules
