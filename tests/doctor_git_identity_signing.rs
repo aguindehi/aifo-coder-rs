@@ -15,40 +15,6 @@ fn git_available() -> bool {
         .unwrap_or(false)
 }
 
-fn capture_stderr<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen, STDERR_FILENO};
-    use std::os::fd::RawFd;
-
-    unsafe {
-        // Open a temporary file
-        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stderr-doctor.tmp").unwrap();
-        let mode = std::ffi::CString::new("w+").unwrap();
-        let file = fopen(path.as_ptr(), mode.as_ptr());
-        assert!(!file.is_null(), "failed to open temp file for capture");
-        let fd: RawFd = fileno(file);
-
-        // Save the original stderr fd and redirect to our temp file
-        let old_fd = dup(STDERR_FILENO);
-        assert!(old_fd >= 0, "dup(STDERR_FILENO) failed");
-
-        assert!(
-            dup2(fd, STDERR_FILENO) >= 0,
-            "dup2(temp, STDERR_FILENO) failed"
-        );
-
-        // Execute the function while stderr is redirected
-        f();
-
-        // Flush buffers and restore stderr
-        fflush(file);
-        assert!(dup2(old_fd, STDERR_FILENO) >= 0, "restore stderr failed");
-        let _ = libc::close(old_fd);
-    }
-
-    // Read captured output
-    std::fs::read_to_string("/tmp/aifo-coder-test-stderr-doctor.tmp")
-        .unwrap_or_else(|_| String::new())
-}
 
 fn write_global_gitconfig(p: &PathBuf, content: &str) {
     if let Some(parent) = p.parent() {
@@ -68,7 +34,17 @@ fn run_git_in(dir: &PathBuf, args: &[&str]) {
 }
 
 fn run_doctor_capture(verbose: bool) -> String {
-    let mut cmd = Command::new("./aifo-coder");
+    // Resolve wrapper path from the project root regardless of current directory.
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut wrapper = project_root.join("aifo-coder");
+
+    // Add .exe suffix for Windows environments if needed
+    #[cfg(windows)]
+    {
+        wrapper = wrapper.with_extension("exe");
+    }
+
+    let mut cmd = Command::new(wrapper);
     cmd.arg("doctor");
     if verbose {
         cmd.arg("--verbose");
