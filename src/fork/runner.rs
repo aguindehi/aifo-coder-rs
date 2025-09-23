@@ -18,7 +18,7 @@ use crate::guidance::print_inspect_merge_guidance;
 #[allow(clippy::needless_return, unreachable_code, unused_assignments)]
 pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Pre-compute stderr color usage once per run
-    let _use_err_color = aifo_coder::color_enabled_stderr();
+    let use_err_color = aifo_coder::color_enabled_stderr();
     // Preflight
     if let Err(code) = crate::fork::preflight::ensure_git_and_orchestrator_present_on_platform() {
         return code;
