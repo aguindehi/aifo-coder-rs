@@ -615,6 +615,26 @@ pub fn run_doctor(verbose: bool) {
             }
         };
 
+        let env_cell = |present: bool, needed: bool| {
+            if present {
+                if use_color {
+                    "\x1b[32m✅ found\x1b[0m".to_string()
+                } else {
+                    "✅ found".to_string()
+                }
+            } else if !needed {
+                if use_color {
+                    "\x1b[34;1m➖ not needed\x1b[0m".to_string()
+                } else {
+                    "➖ not needed".to_string()
+                }
+            } else if use_color {
+                "\x1b[31m❌ missing\x1b[0m".to_string()
+            } else {
+                "❌ missing".to_string()
+            }
+        };
+
         let label_w: usize = 16;
         let name_w: usize = 44;
 
@@ -639,12 +659,15 @@ pub fn run_doctor(verbose: bool) {
             .as_deref()
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
+        let eff_name_ok = effective_name
+            .as_deref()
+            .is_some_and(looks_name_ok);
         eprintln!(
-            "  {:<label_w$} {:<name_w$} {} {}",
+            "  {:<label_w$} {:<name_w$} {} ({})",
             "",
             "effective author name",
+            ok_cell(eff_name_ok),
             eff_name_disp,
-            ok_cell(effective_name.as_deref().is_some_and(looks_name_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -670,12 +693,15 @@ pub fn run_doctor(verbose: bool) {
             .as_deref()
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
+        let eff_mail_ok = effective_email
+            .as_deref()
+            .is_some_and(looks_email_ok);
         eprintln!(
-            "  {:<label_w$} {:<name_w$} {} {}",
+            "  {:<label_w$} {:<name_w$} {} ({})",
             "",
             "effective author email",
+            ok_cell(eff_mail_ok),
             eff_mail_disp,
-            ok_cell(effective_email.as_deref().is_some_and(looks_email_ok)),
             label_w = label_w,
             name_w = name_w
         );
@@ -685,7 +711,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "environment:",
             "GIT_AUTHOR_NAME",
-            present_cell(env_name.is_some()),
+            env_cell(env_name.is_some(), !eff_name_ok),
             label_w = label_w,
             name_w = name_w
         );
@@ -693,7 +719,7 @@ pub fn run_doctor(verbose: bool) {
             "  {:<label_w$} {:<name_w$} {}",
             "",
             "GIT_AUTHOR_EMAIL",
-            present_cell(env_email.is_some()),
+            env_cell(env_email.is_some(), !eff_mail_ok),
             label_w = label_w,
             name_w = name_w
         );
