@@ -9,6 +9,15 @@ use std::process::{Command, Stdio};
 use crate::agent_images::default_image_for_quiet;
 
 pub fn run_doctor(verbose: bool) {
+    let verbose_env = std::env::var("AIFO_CODER_DOCTOR_VERBOSE")
+        .ok()
+        .map(|v| {
+            let vl = v.to_lowercase();
+            matches!(vl.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false);
+    let verbose = verbose || verbose_env;
+
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
     eprintln!();

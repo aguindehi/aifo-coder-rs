@@ -35,19 +35,23 @@ fn run_git_in(dir: &PathBuf, args: &[&str]) {
 fn run_doctor_capture(verbose: bool) -> String {
     // Resolve wrapper path from the project root regardless of current directory.
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut wrapper = project_root.join("aifo-coder");
+    let wrapper = {
+        let p = project_root.join("aifo-coder");
+        #[cfg(windows)]
+        {
+            p.with_extension("exe")
+        }
+        #[cfg(not(windows))]
+        {
+            p
+        }
+    };
 
-    // Add .exe suffix for Windows environments if needed
-    #[cfg(windows)]
-    {
-        wrapper = wrapper.with_extension("exe");
+    if verbose {
+        env::set_var("AIFO_CODER_DOCTOR_VERBOSE", "1");
     }
-
     let mut cmd = Command::new(wrapper);
     cmd.arg("doctor");
-    if verbose {
-        cmd.arg("--verbose");
-    }
     let output = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
