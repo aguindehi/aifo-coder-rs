@@ -13,12 +13,14 @@ pub fn exit_code_for_io_error(e: &io::Error) -> u8 {
 
 /// Lightweight error enums to improve internal error clarity without changing external messages.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ForkError {
     Io(std::io::Error),
     Message(String),
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ToolchainError {
     Io(std::io::Error),
     Message(String),
@@ -37,6 +39,7 @@ impl From<std::io::Error> for ToolchainError {
 }
 
 /// Convert ForkError to exit code (parity with io::Error mapping).
+#[allow(dead_code)]
 pub fn exit_code_for_fork_error(e: &ForkError) -> u8 {
     match e {
         ForkError::Io(ioe) => exit_code_for_io_error(ioe),
@@ -45,6 +48,7 @@ pub fn exit_code_for_fork_error(e: &ForkError) -> u8 {
 }
 
 /// Convert ToolchainError to exit code (parity with io::Error mapping).
+#[allow(dead_code)]
 pub fn exit_code_for_toolchain_error(e: &ToolchainError) -> u8 {
     match e {
         ToolchainError::Io(ioe) => exit_code_for_io_error(ioe),
@@ -53,6 +57,7 @@ pub fn exit_code_for_toolchain_error(e: &ToolchainError) -> u8 {
 }
 
 /// Render a user-facing string for ForkError without changing existing texts.
+#[allow(dead_code)]
 pub fn display_for_fork_error(e: &ForkError) -> String {
     match e {
         ForkError::Io(ioe) => ioe.to_string(),
@@ -61,6 +66,7 @@ pub fn display_for_fork_error(e: &ForkError) -> String {
 }
 
 /// Render a user-facing string for ToolchainError without changing existing texts.
+#[allow(dead_code)]
 pub fn display_for_toolchain_error(e: &ToolchainError) -> String {
     match e {
         ToolchainError::Io(ioe) => ioe.to_string(),

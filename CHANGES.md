@@ -1,3 +1,10 @@
+2025-09-24 04:05 user@example.com
+
+Fix: silence dead_code warnings for new error enums
+
+- Added #[allow(dead_code)] on ForkError/ToolchainError and their helper functions to
+  keep clippy green while broader adoption is pending.
+
 2025-09-24 03:40 user@example.com
 
 Phase 4: finalize error/logging refinement
