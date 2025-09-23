@@ -33,7 +33,7 @@ pub(crate) enum NotifyError {
     Timeout,
 }
 
-pub(crate) fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
+fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
     // Reuse legacy tokenizer to obtain tokens; enforce new invariants on top.
     let tokens = parse_notifications_command_config().map_err(NotifyError::Policy)?;
     if tokens.is_empty() {

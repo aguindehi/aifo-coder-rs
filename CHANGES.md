@@ -1,3 +1,11 @@
+2025-09-24 01:35 user@example.com
+
+Fix: private-interfaces: make parse_notif_cfg private
+
+- Downgraded parse_notif_cfg() visibility to module-private to avoid exposing
+  private NotifCfg in signature under -D private-interfaces.
+- No behavior changes; notifications policy consolidation remains intact.
+
 2025-09-24 01:20 user@example.com
 
 Phase 3: notifications policy consolidation
