@@ -646,9 +646,7 @@ pub fn run_doctor(verbose: bool) {
             .as_deref()
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
-        let eff_name_ok = effective_name
-            .as_deref()
-            .is_some_and(looks_name_ok);
+        let eff_name_ok = effective_name.as_deref().is_some_and(looks_name_ok);
         eprintln!(
             "  {:<label_w$} {:<name_w$} {} ({})",
             "",
@@ -680,9 +678,7 @@ pub fn run_doctor(verbose: bool) {
             .as_deref()
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
-        let eff_mail_ok = effective_email
-            .as_deref()
-            .is_some_and(looks_email_ok);
+        let eff_mail_ok = effective_email.as_deref().is_some_and(looks_email_ok);
         eprintln!(
             "  {:<label_w$} {:<name_w$} {} ({})",
             "",
