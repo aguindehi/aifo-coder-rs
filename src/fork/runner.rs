@@ -238,6 +238,244 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     // Print per-pane info lines
     crate::fork::summary::print_per_pane_blocks(agent, &sid, &state_base, &clones, use_color_out);
 
+    // Phase 2: delegate orchestration to platform-specific orchestrators
+    let session = crate::fork::session::make_session(
+        &sid,
+        &session_name,
+        &base_label,
+        &base_ref_or_sha,
+        &base_commit_sha,
+        created_at,
+        &layout,
+        agent,
+        &session_dir,
+    );
+    let mut panes_vec: Vec<crate::fork::types::Pane> = Vec::new();
+    for (idx, (pane_dir, branch)) in clones.iter().enumerate() {
+        let i = idx + 1;
+        let pane_state_dir = crate::fork::env::pane_state_dir(&state_base, &sid, i);
+        let container_name = crate::fork::env::pane_container_name(agent, &sid, i);
+        panes_vec.push(crate::fork::session::make_pane(
+            i,
+            pane_dir.as_path(),
+            branch,
+            &pane_state_dir,
+            &container_name,
+        ));
+    }
+    let selected = crate::fork::orchestrators::select_orchestrator(cli, &layout);
+    let merge_requested = !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None);
+
+    #[allow(unused_mut)]
+    let mut launched_in: &'static str = if cfg!(target_os = "windows") {
+        "Windows Terminal"
+    } else {
+        "tmux"
+    };
+
+    #[cfg(not(windows))]
+    {
+        match selected {
+            crate::fork::orchestrators::Selected::Tmux { .. } => {
+                let orch = crate::fork::orchestrators::tmux::Tmux;
+                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                    eprintln!("aifo-coder: {}", e);
+                    crate::fork::cleanup::cleanup_and_update_meta(
+                        &repo_root,
+                        &sid,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
+                        snapshot_sha.as_deref(),
+                        &layout,
+                        false,
+                    );
+                    return ExitCode::from(1);
+                }
+                launched_in = "tmux";
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        match selected {
+            crate::fork::orchestrators::Selected::WindowsTerminal { .. } => {
+                let orch = crate::fork::orchestrators::windows_terminal::WindowsTerminal;
+                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                    eprintln!("aifo-coder: {}", e);
+                    crate::fork::cleanup::cleanup_and_update_meta(
+                        &repo_root,
+                        &sid,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
+                        snapshot_sha.as_deref(),
+                        &layout,
+                        false,
+                    );
+                    return ExitCode::from(1);
+                }
+                launched_in = "Windows Terminal";
+            }
+            crate::fork::orchestrators::Selected::PowerShell { .. } => {
+                let orch = crate::fork::orchestrators::powershell::PowerShell {
+                    wait: merge_requested,
+                };
+                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                    eprintln!("aifo-coder: {}", e);
+                    crate::fork::cleanup::cleanup_and_update_meta(
+                        &repo_root,
+                        &sid,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
+                        snapshot_sha.as_deref(),
+                        &layout,
+                        false,
+                    );
+                    return ExitCode::from(1);
+                }
+                launched_in = "PowerShell windows";
+            }
+            crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
+                let orch = crate::fork::orchestrators::gitbash_mintty::GitBashMintty {
+                    exec_shell_tail: !merge_requested,
+                };
+                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                    eprintln!("aifo-coder: {}", e);
+                    crate::fork::cleanup::cleanup_and_update_meta(
+                        &repo_root,
+                        &sid,
+                        &clones,
+                        cli.fork_keep_on_failure,
+                        &session_dir,
+                        snapshot_sha.as_deref(),
+                        &layout,
+                        false,
+                    );
+                    return ExitCode::from(1);
+                }
+                launched_in = "Git Bash";
+            }
+        }
+    }
+
+    // Apply post-merge or print fallback guidance when non-waitable
+    if merge_requested {
+        #[cfg(any(not(windows)))]
+        {
+            let _ = crate::fork::post_merge::apply_post_merge(
+                &repo_root,
+                &sid,
+                cli.fork_merging_strategy,
+                cli.fork_merging_autoclean,
+                cli.dry_run,
+                cli.verbose,
+                false,
+            );
+        }
+        #[cfg(windows)]
+        {
+            match selected {
+                crate::fork::orchestrators::Selected::PowerShell { .. } => {
+                    let _ = crate::fork::post_merge::apply_post_merge(
+                        &repo_root,
+                        &sid,
+                        cli.fork_merging_strategy,
+                        cli.fork_merging_autoclean,
+                        cli.dry_run,
+                        cli.verbose,
+                        false,
+                    );
+                }
+                crate::fork::orchestrators::Selected::WindowsTerminal { .. }
+                | crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    eprintln!(
+                        "{}",
+                        aifo_coder::paint(
+                            use_err,
+                            "\x1b[33m",
+                            &format!(
+                                concat!(
+                                    "aifo-coder: note: no waitable orchestrator found; ",
+                                    "automatic post-fork merging ({}) is unavailable."
+                                ),
+                                match cli.fork_merging_strategy {
+                                    aifo_coder::MergingStrategy::Fetch => "fetch",
+                                    aifo_coder::MergingStrategy::Octopus => "octopus",
+                                    _ => "none",
+                                }
+                            )
+                        )
+                    );
+                    eprintln!(
+                        "{}",
+                        aifo_coder::paint(
+                            use_err,
+                            "\x1b[33m",
+                            &format!(
+                                concat!(
+                                    "aifo-coder: after you close all panes, run: ",
+                                    "aifo-coder fork merge --session {} --strategy {}"
+                                ),
+                                sid,
+                                match cli.fork_merging_strategy {
+                                    aifo_coder::MergingStrategy::Fetch => "fetch",
+                                    aifo_coder::MergingStrategy::Octopus => "octopus",
+                                    _ => "none",
+                                }
+                            )
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    println!();
+    match launched_in {
+        "tmux" => {
+            if use_color_out {
+                println!(
+                    "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m completed.",
+                    sid
+                );
+            } else {
+                println!("aifo-coder: fork session {} completed.", sid);
+            }
+            println!();
+            print_inspect_merge_guidance(
+                &repo_root,
+                &sid,
+                &base_label,
+                &base_ref_or_sha,
+                &clones,
+                use_color_out,
+                false,
+                true,
+            );
+        }
+        other => {
+            println!(
+                "aifo-coder: fork session {} launched ({}).",
+                sid, other
+            );
+            print_inspect_merge_guidance(
+                &repo_root,
+                &sid,
+                &base_label,
+                &base_ref_or_sha,
+                &clones,
+                false,
+                matches!(selected, #[cfg(windows)] crate::fork::orchestrators::Selected::GitBashMintty { .. } #[cfg(not(windows))] _ => false),
+                true,
+            );
+        }
+    }
+    return ExitCode::from(0);
+
     // Orchestrate panes (Windows uses Windows Terminal or PowerShell; Unix-like uses tmux)
     if cfg!(target_os = "windows") {
         // Helper to PowerShell-quote a single token

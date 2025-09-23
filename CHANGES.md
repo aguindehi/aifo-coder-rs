@@ -1,3 +1,16 @@
+2025-09-24 00:40 user@example.com
+
+Phase 2: orchestrators implementation and selection integration
+
+- Implemented tmux (Unix), Windows Terminal, PowerShell, and Git Bash/mintty orchestrators.
+- Delegated fork pane launch to orchestrators; integrated selection cross-platform.
+- Preserved user-visible messages and post-merge guidance; gated automatic post-merge by orchestrator waitability.
+
+Details:
+- Added implementations in src/fork/orchestrators/{tmux.rs,windows_terminal.rs,powershell.rs,gitbash_mintty.rs}.
+- Updated src/fork/orchestrators/mod.rs to expose orchestrator modules on relevant platforms.
+- Refactored src/fork/runner.rs to select and launch via orchestrators; kept guidance strings intact.
+
 2025-09-23 00:30 user@example.com
 
 Phase 1 verification: all tests green

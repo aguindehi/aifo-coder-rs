@@ -1,18 +1,21 @@
-# Source Code Scoring — 2025-09-23 00:30
+# Source Code Scoring — 2025-09-24 00:40
 
 Executive summary
-- Phase 1 verified complete. All deliverables implemented: docker helper consolidation, warn prompt helpers, shared Docker SecurityOptions parser in banner/doctor, and centralized io::Error -> exit-code mapping in binary glue. Test execution fixed on noexec mounts via CARGO_TARGET_DIR=/var/tmp for sidecar runs.
+- Phase 2 implemented: orchestrators for tmux (Unix), Windows Terminal, PowerShell, and Git Bash/mintty are now functional and integrated. Runner delegates pane launch to orchestrators; selection compiles cross-platform. Post-merge flows are gated by orchestrator waitability, preserving prior messages and guidance.
 
 Overall grade: A (95/100)
 
-Highlights
-- Stability: 246 tests passed, 32 skipped.
-- Maintainability: reduced duplication across utilities and helpers; consistent error mapping.
+Improvements achieved
+- Eliminated monolithic orchestration logic duplication in runner by delegating to orchestrators.
+- Clear separation of concerns: selection, launch, and post-merge handling.
+- Cross-platform compilation of orchestrator selection with platform-gated implementations.
 
-Next steps (proposed)
-- Consolidate test helpers into tests/support (have_git, which, init_repo_with_default_user) while preserving skip messages.
-- Begin Phase 2: implement orchestrators (tmux, Windows Terminal, PowerShell, Git Bash/mintty) as full modules and integrate selection cross-platform.
-- Phase 3: consolidate notifications policy enforcement into parse_notif_cfg() and adjust wrappers.
+Behavior parity notes
+- Messages for launch and post-merge guidance retained; Windows Terminal remains non-waitable with explicit guidance to merge after closing panes.
+- Tmux path remains waitable and applies post-merge automatically when requested.
+
+Next steps
+- Proceed to Phase 3: consolidate notifications policy enforcement strictly in parse_notif_cfg() and adjust wrappers; expand tests for orchestrator selection (Unix and Windows).
 
 Shall I proceed with these next steps?
 
