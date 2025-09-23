@@ -160,16 +160,8 @@ pub fn notifications_handle_request(
     verbose: bool,
     timeout_secs: u64,
 ) -> Result<(i32, Vec<u8>), String> {
-    // Wrapper: derive basename(exec_abs) from config and dispatch; map structured errors to strings.
-    let cfg_argv = notifications::parse_notifications_command_config()?;
-    if cfg_argv.is_empty() {
-        return Err("notifications-command is empty".to_string());
-    }
-    let exec0 = &cfg_argv[0];
-    let basename = std::path::Path::new(exec0)
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    // Wrapper: validate policy via parse_notif_cfg() and use the resulting basename.
+    let basename = notifications::notifications_exec_basename()?;
     match notifications::notifications_handle_request(&basename, argv, verbose, timeout_secs) {
         Ok(res) => Ok(res),
         Err(notif_err) => match notif_err {

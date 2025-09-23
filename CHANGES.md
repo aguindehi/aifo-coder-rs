@@ -1,3 +1,12 @@
+2025-09-24 01:20 user@example.com
+
+Phase 3: notifications policy consolidation
+
+- Moved all notifications policy checks into parse_notif_cfg(); tokenization now in
+  parse_notifications_command_config() only.
+- Added notifications_exec_basename() helper and updated public wrapper to use it.
+- Preserved all error texts; proxy and wrapper map structured errors to identical strings.
+
 2025-09-24 00:40 user@example.com
 
 Phase 2: orchestrators implementation and selection integration
