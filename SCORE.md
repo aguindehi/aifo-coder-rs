@@ -235,3 +235,107 @@ Risks and mitigations
 
 Next steps
 - Consider applying the same CARGO_TARGET_DIR override to any other sidecar-based test helpers if needed (e.g., specialized test targets), keeping scope limited to tests.
+# Source Code Scoring — 2025-09-24 02:50
+
+Executive summary
+- The codebase is in excellent shape. Phases 1–3 are implemented with strict notifications policy consolidation, cross-platform orchestrators, utility refactors, and consistent error/logging behavior. All tests are green (246 passed, 32 skipped).
+- User-visible strings and behaviors are preserved across refactors. The architecture is modular, maintainable, and aligned with the spec’s constraints and goals.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — A- [9]
+
+Highlights and strengths
+- Orchestrators complete and integrated:
+  - Unix: tmux session creation, layout, per-pane send-keys; waitable flow for post-merge.
+  - Windows: Windows Terminal (non-waitable), PowerShell (waitable), Git Bash/mintty; consistent inner builders and SUPPRESS env injection.
+- Notifications policy consolidation (Phase 3 strict):
+  - Tokenization limited to parse_notifications_command_config().
+  - Policy enforced exclusively in parse_notif_cfg(), wrappers map structured errors to identical strings.
+  - Tests adjusted to assert policy errors via validated wrapper paths.
+- Utility consolidation and readability:
+  - Shared docker security options parser reused in banner and doctor.
+  - Warn prompt input helpers extracted; color-aware logging consistent.
+  - fs helpers reused (path_pair, ensure_file_exists) to reduce duplication.
+- Proxy/shim robustness:
+  - Native HTTP paths for TCP/UDS; structured auth/proto; streaming prelude and exit-code trailers; disconnect escalation with signal grace and agent shell cleanup.
+
+Detailed assessment
+
+1) Architecture & Design — A [10]
+- Clear boundaries: binary glue vs library modules; runner delegates to orchestrators; shared helpers under util::*.
+- Notifications policy centralized; proxy/wrappers consume validated config flows.
+- Maintains behavior parity and preserves user-visible strings.
+
+2) Rust Code Quality — A [10]
+- Idiomatic Rust; careful cfg gating for platforms; small, cohesive modules.
+- Thoughtful error handling with mapping helpers; minimized unwraps in critical paths.
+- Limited Clippy warnings; consistent formatting and naming conventions respected.
+
+3) Security Posture — A- [9]
+- AppArmor detection and profile selection (including doctor verification).
+- Proxy auth/proto enforcement; timeouts and safe escalation; UDS support on Linux.
+- Conservative environment handling; informative warnings and guidance.
+
+4) Containerization & Dockerfile — A- [9]
+- Multi-stage builds (fat/slim); builder image for cross-compilation; optional enterprise CA support.
+- Cleanup steps for slim images to reduce footprint; pinned base versions for reproducibility.
+
+5) Cross-Platform Support — A- [9]
+- Orchestrators compile cross-platform; Windows flows handle WT non-waitable vs PowerShell waitable.
+- Git Bash/mintty paths implemented with inner builders and tail trimming when needed.
+
+6) Toolchain & Proxy — A- [9]
+- Sidecar lifecycle: start/exec/stop; named volume ownership init; bootstrap for official Rust images.
+- Robust proxy: structured logs, chunked streaming, signal endpoints, exit-code trailers.
+
+7) Documentation — A- [9]
+- Inline comments and module docstrings explain intent and constraints.
+- Diagnostic outputs (doctor/banner) are informative; next steps documented in scoring.
+
+8) User Experience — A [10]
+- Color-aware, clear messages; consistent guidance; interactive prompts respect CI/env toggles.
+- Doctor output practical and actionable; fork mode guidance precise and helpful.
+
+9) Performance & Footprint — A- [9]
+- Efficient docker invocation; minimal per-request overhead in proxy; caching via OnceCell for registry.
+- Slim images reduce footprint; tooling only where needed.
+
+10) Testing & CI — A- [9]
+- Comprehensive tests across proxy, routing, docker previews, toolchains, fork flows.
+- Adjusted notifications tests to validated path without changing error texts.
+- All tests pass (246), with platform gating for UDS and sidecar flows where appropriate.
+
+Findings and improvement opportunities
+- Minor: consider documenting orchestrator and runner modules more extensively for contributors.
+- Minor: increase targeted edge-case coverage for notifications (error mapping parity across layers).
+- Minor: lightweight internal error enums in deeper subsystems could further reduce ad-hoc io::Error::other (messages must stay identical).
+- Minor: add small test helpers adoption across duplicated patterns (ongoing consolidation looks good).
+
+Risks and mitigations
+- Golden string drift: mitigated by preserving strings verbatim and comprehensive tests.
+- Platform drift (Windows flows): mitigated by cfg-gated tests and clear selection logic.
+- Refactor regressions: phased approach and incremental tests maintained confidence.
+
+Recommended next steps
+- Documentation
+  - Add concise module-level docs for orchestrators (tmux, Windows Terminal, PowerShell, Git Bash/mintty) and runner decomposition overview.
+  - Document environment invariants (AIFO_TOOLEEXEC_*, AppArmor profile expectations).
+- Notifications tests
+  - Add edge-case tests for parse_notif_cfg() (absolute path checks, trailing {args}, duplicate placeholders) via the public wrapper, preserving error texts.
+- Error handling refinement
+  - Introduce minimal internal error enums (ForkError, ToolchainError) for sentinel cases, mapping to existing exit codes/messages at the boundary.
+- Test helpers adoption
+  - Continue migrating tests to tests/support helpers (have_git, which, init_repo_with_default_user), reducing local duplication.
+
+Shall I proceed with these next steps?

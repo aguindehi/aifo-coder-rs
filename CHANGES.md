@@ -1,3 +1,11 @@
+2025-09-24 02:50 user@example.com
+
+Scoring: comprehensive source code assessment and next steps
+
+- Wrote a comprehensive source code scoring to SCORE.md and moved previous
+  scoring to SCORE-before.md.
+- Proposed actionable next steps in SCORE.md.
+
 2025-09-24 02:35 user@example.com
 
 tests: update notifications policy tests to validated path
