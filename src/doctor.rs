@@ -9,6 +9,15 @@ use std::process::{Command, Stdio};
 use crate::agent_images::default_image_for_quiet;
 
 pub fn run_doctor(verbose: bool) {
+    let verbose_env = std::env::var("AIFO_CODER_DOCTOR_VERBOSE")
+        .ok()
+        .map(|v| {
+            let vl = v.to_lowercase();
+            matches!(vl.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false);
+    let verbose = verbose || verbose_env;
+
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("aifo-coder doctor");
     eprintln!();
@@ -459,6 +468,372 @@ pub fn run_doctor(verbose: bool) {
 
     show("git config:", home.join(".gitconfig"), mount_git);
     show("gnupg config:", home.join(".gnupg"), mount_gnupg);
+    eprintln!();
+
+    // Git configuration (repo-first precedence) and signing diagnostics
+    let git_available = Command::new("git")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if git_available {
+        // Detect if we are inside a git repository and determine repo root
+        let in_repo = Command::new("git")
+            .args(["rev-parse", "--is-inside-work-tree"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .eq_ignore_ascii_case("true")
+            })
+            .unwrap_or(false);
+
+        let repo_root: Option<PathBuf> = if in_repo {
+            Command::new("git")
+                .args(["rev-parse", "--show-toplevel"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+                .ok()
+                .and_then(|o| {
+                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(PathBuf::from(s))
+                    }
+                })
+        } else {
+            None
+        };
+
+        // Helpers to read git configuration
+        let git_get_repo = |key: &str| -> Option<String> {
+            repo_root.as_ref().and_then(|root| {
+                Command::new("git")
+                    .arg("-C")
+                    .arg(root)
+                    .args(["config", "--get", key])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                        if v.is_empty() {
+                            None
+                        } else {
+                            Some(v)
+                        }
+                    })
+            })
+        };
+        let git_get_global = |key: &str| -> Option<String> {
+            Command::new("git")
+                .args(["config", "--global", "--get", key])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+                .ok()
+                .and_then(|o| {
+                    let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v)
+                    }
+                })
+        };
+
+        // Gather identity values
+        let repo_name = git_get_repo("user.name");
+        let repo_email = git_get_repo("user.email");
+        let global_name = git_get_global("user.name");
+        let global_email = git_get_global("user.email");
+        let env_name = std::env::var("GIT_AUTHOR_NAME")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let env_email = std::env::var("GIT_AUTHOR_EMAIL")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+
+        let effective_name = env_name
+            .clone()
+            .or(repo_name.clone())
+            .or(global_name.clone());
+        let effective_email = env_email
+            .clone()
+            .or(repo_email.clone())
+            .or(global_email.clone());
+
+        // Validation helpers
+        let looks_name_ok = |v: &str| !v.trim().is_empty() && v.trim() != "Your Name";
+        let looks_email_ok = |v: &str| {
+            let t = v.trim();
+            !t.is_empty() && t != "you@example.com" && t.contains('@')
+        };
+
+        // Formatting helpers
+        let use_color = atty::is(atty::Stream::Stderr);
+        let blue = |s: &str| {
+            if use_color {
+                format!("\x1b[34;1m{}\x1b[0m", s)
+            } else {
+                s.to_string()
+            }
+        };
+        let ok_cell = |set: bool| {
+            if use_color {
+                if set {
+                    "\x1b[32m✅ set\x1b[0m".to_string()
+                } else {
+                    "\x1b[31m❌ unset\x1b[0m".to_string()
+                }
+            } else if set {
+                "✅ set".to_string()
+            } else {
+                "❌ unset".to_string()
+            }
+        };
+
+        let env_cell = |present: bool, needed: bool| {
+            if present {
+                if use_color {
+                    "\x1b[32m✅ found\x1b[0m".to_string()
+                } else {
+                    "✅ found".to_string()
+                }
+            } else if !needed {
+                if use_color {
+                    "\x1b[34;1m➖ not needed\x1b[0m".to_string()
+                } else {
+                    "➖ not needed".to_string()
+                }
+            } else if use_color {
+                "\x1b[31m❌ missing\x1b[0m".to_string()
+            } else {
+                "❌ missing".to_string()
+            }
+        };
+
+        let label_w: usize = 16;
+        let name_w: usize = 44;
+
+        // Identity rows: name
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "git identity:",
+            "repo user.name",
+            ok_cell(repo_name.as_deref().is_some_and(looks_name_ok)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "global user.name",
+            ok_cell(global_name.as_deref().is_some_and(looks_name_ok)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        let eff_name_disp = effective_name
+            .as_deref()
+            .map(blue)
+            .unwrap_or_else(|| "(unset)".to_string());
+        let eff_name_ok = effective_name.as_deref().is_some_and(looks_name_ok);
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {} ({})",
+            "",
+            "effective author name",
+            ok_cell(eff_name_ok),
+            eff_name_disp,
+            label_w = label_w,
+            name_w = name_w
+        );
+
+        // Identity rows: email
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "repo user.email",
+            ok_cell(repo_email.as_deref().is_some_and(looks_email_ok)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "global user.email",
+            ok_cell(global_email.as_deref().is_some_and(looks_email_ok)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        let eff_mail_disp = effective_email
+            .as_deref()
+            .map(blue)
+            .unwrap_or_else(|| "(unset)".to_string());
+        let eff_mail_ok = effective_email.as_deref().is_some_and(looks_email_ok);
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {} ({})",
+            "",
+            "effective author email",
+            ok_cell(eff_mail_ok),
+            eff_mail_disp,
+            label_w = label_w,
+            name_w = name_w
+        );
+
+        // Show env overrides presence
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "environment:",
+            "GIT_AUTHOR_NAME",
+            env_cell(env_name.is_some(), !eff_name_ok),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "GIT_AUTHOR_EMAIL",
+            env_cell(env_email.is_some(), !eff_mail_ok),
+            label_w = label_w,
+            name_w = name_w
+        );
+
+        // Signing diagnostics
+        let desired_signing = match std::env::var("AIFO_CODER_GIT_SIGN") {
+            Ok(v) => {
+                let vl = v.to_lowercase();
+                !matches!(vl.as_str(), "0" | "false" | "no" | "off")
+            }
+            Err(_) => true, // default desire: enabled
+        };
+        let repo_sign = git_get_repo("commit.gpgsign");
+        let global_sign = git_get_global("commit.gpgsign");
+        let sign_effective = repo_sign.clone().or(global_sign.clone());
+
+        let repo_key = git_get_repo("user.signingkey");
+        let global_key = git_get_global("user.signingkey");
+        let key_effective = repo_key.clone().or(global_key.clone());
+
+        // Secret key availability via gpg
+        let secret_keys_available = Command::new("gpg")
+            .args(["--list-secret-keys", "--with-colons"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("\nfpr:"))
+            .unwrap_or(false);
+
+        let yesno = |b: bool| if b { "yes" } else { "no" };
+        let sign_disp = |v: &Option<String>| {
+            v.as_ref()
+                .map(|s| s.to_lowercase())
+                .map(|s| {
+                    if s == "true" {
+                        "true".to_string()
+                    } else if s == "false" {
+                        "false".to_string()
+                    } else {
+                        s
+                    }
+                })
+                .unwrap_or_else(|| "(unset)".to_string())
+        };
+
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "git signing:",
+            "desired",
+            blue(yesno(desired_signing)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "commit.gpgsign (repo)",
+            blue(&sign_disp(&repo_sign)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "commit.gpgsign (global)",
+            blue(&sign_disp(&global_sign)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "commit.gpgsign (effective)",
+            blue(&sign_disp(&sign_effective)),
+            label_w = label_w,
+            name_w = name_w
+        );
+
+        let key_eff_disp = key_effective
+            .as_deref()
+            .map(blue)
+            .unwrap_or_else(|| "(unset)".to_string());
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "signing key (effective)",
+            key_eff_disp,
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "secret keys available",
+            blue(yesno(secret_keys_available)),
+            label_w = label_w,
+            name_w = name_w
+        );
+
+        if verbose {
+            // Tips
+            let sign_eff_true = sign_effective
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            if desired_signing && !sign_eff_true {
+                eprintln!("    tip: Signing desired but commit.gpgsign is not 'true'. Set it at repo or global level:");
+                eprintln!("    tip:   git config commit.gpgsign true    # in repo");
+                eprintln!("    tip:   git config --global commit.gpgsign true");
+            }
+            if desired_signing && key_effective.is_none() && secret_keys_available {
+                eprintln!("    tip: A secret key is available but user.signingkey is unset. Configure it to your fingerprint:");
+                eprintln!(
+                    "    tip:   git config user.signingkey <FINGERPRINT>    # in repo or --global"
+                );
+            }
+            if desired_signing && !secret_keys_available {
+                eprintln!("    tip: No GPG secret keys found. Create or import a key, then set user.signingkey if needed.");
+            }
+            if !desired_signing && sign_eff_true {
+                eprintln!("    tip: Signing disabled by AIFO_CODER_GIT_SIGN=0 but repo enables it. Disable in repo if undesired:");
+                eprintln!("    tip:   git config commit.gpgsign false");
+            }
+        }
+    } else {
+        eprintln!("  git: (not found)");
+        if verbose {
+            eprintln!("    tip: Install Git and ensure 'git' is in your PATH.");
+        }
+    }
     eprintln!();
 
     // Aider files
