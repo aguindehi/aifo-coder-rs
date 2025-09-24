@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Return true if `git` is available on PATH.
+#[allow(dead_code)]
 pub fn have_git() -> bool {
     Command::new("git")
         .arg("--version")
@@ -26,6 +27,7 @@ pub fn have_git() -> bool {
 
 /// Cross-platform which() helper.
 /// On Windows uses `where`, on other platforms uses `which`.
+#[allow(dead_code)]
 pub fn which(bin: &str) -> Option<PathBuf> {
     #[cfg(windows)]
     let cmd = "where";
@@ -54,6 +56,7 @@ pub fn which(bin: &str) -> Option<PathBuf> {
 
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
+#[allow(dead_code)]
 pub fn init_repo_with_default_user(dir: &Path) -> io::Result<()> {
     std::fs::create_dir_all(dir)?;
     // git init (ignore if already a repo)

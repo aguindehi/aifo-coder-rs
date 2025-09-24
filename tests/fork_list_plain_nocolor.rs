@@ -1,6 +1,4 @@
 use std::fs;
-use std::io::{Read, Seek};
-use std::os::fd::{FromRawFd, RawFd};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod support;
