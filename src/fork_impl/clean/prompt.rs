@@ -19,10 +19,12 @@ pub fn check_and_prompt(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) -> Re
         }
         if protected > 0 {
             let use_err = color_enabled_stderr();
-            eprintln!(
-                "{}: {} pane(s) are protected (dirty/ahead/base-unknown).",
-                paint(use_err, "\x1b[31;1m", "aifo-coder: refusing to delete"),
-                protected
+            aifo_coder::log_error_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: refusing to delete: {} pane(s) are protected (dirty/ahead/base-unknown).",
+                    protected
+                ),
             );
             aifo_coder::log_warn_stderr(
                 use_err,

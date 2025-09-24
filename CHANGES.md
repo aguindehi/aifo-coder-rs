@@ -1,3 +1,10 @@
+2025-09-24 05:30 user@example.com
+
+Phase 4: complete logging helper adoption in errors
+
+- Switched refusal header in fork clean prompt to log_error_stderr (red) with identical text.
+- Adopted log_error_stderr in toolchain command error paths (cache clear and run), preserving messages.
+
 2025-09-24 05:00 user@example.com
 
 Phase 4: finalize by adopting logging helper in clean prompt
