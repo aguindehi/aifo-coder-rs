@@ -6,43 +6,43 @@ use std::path::Path;
 pub fn apply_post_merge(
     repo_root: &Path,
     sid: &str,
-    strategy: aifo_coder::MergingStrategy,
+    strategy: crate::MergingStrategy,
     autoclean: bool,
     dry_run: bool,
     verbose: bool,
     plain: bool,
 ) -> Result<(), String> {
-    if matches!(strategy, aifo_coder::MergingStrategy::None) {
+    if matches!(strategy, crate::MergingStrategy::None) {
         return Ok(());
     }
     let strat = match strategy {
-        aifo_coder::MergingStrategy::None => "none",
-        aifo_coder::MergingStrategy::Fetch => "fetch",
-        aifo_coder::MergingStrategy::Octopus => "octopus",
+        crate::MergingStrategy::None => "none",
+        crate::MergingStrategy::Fetch => "fetch",
+        crate::MergingStrategy::Octopus => "octopus",
     };
     {
-        let use_err = aifo_coder::color_enabled_stderr();
-        aifo_coder::log_info_stderr(
+        let use_err = crate::color_enabled_stderr();
+        crate::log_info_stderr(
             use_err,
             &format!("aifo-coder: applying post-fork merge strategy: {}", strat),
         );
     }
-    match aifo_coder::fork_merge_branches_by_session(repo_root, sid, strategy, verbose, dry_run) {
+    match crate::fork_merge_branches_by_session(repo_root, sid, strategy, verbose, dry_run) {
         Ok(()) => {
             if plain {
                 eprintln!("aifo-coder: merge strategy '{}' completed.", strat);
             } else {
-                let use_err = aifo_coder::color_enabled_stderr();
+                let use_err = crate::color_enabled_stderr();
                 eprintln!(
                     "{}",
-                    aifo_coder::paint(
+                    crate::paint(
                         use_err,
                         "\x1b[32;1m",
                         &format!("aifo-coder: merge strategy '{}' completed.", strat)
                     )
                 );
             }
-            if matches!(strategy, aifo_coder::MergingStrategy::Octopus) && autoclean && !dry_run {
+            if matches!(strategy, crate::MergingStrategy::Octopus) && autoclean && !dry_run {
                 eprintln!();
                 if plain {
                     eprintln!(
@@ -50,10 +50,10 @@ pub fn apply_post_merge(
                         sid
                     );
                 } else {
-                    let use_err = aifo_coder::color_enabled_stderr();
+                    let use_err = crate::color_enabled_stderr();
                     eprintln!(
                         "{}",
-                        aifo_coder::paint(
+                        crate::paint(
                             use_err,
                             "\x1b[36;1m",
                             &format!(
@@ -63,7 +63,7 @@ pub fn apply_post_merge(
                         )
                     );
                 }
-                let opts = aifo_coder::ForkCleanOpts {
+                let opts = crate::ForkCleanOpts {
                     session: Some(sid.to_string()),
                     older_than_days: None,
                     all: false,
@@ -73,12 +73,12 @@ pub fn apply_post_merge(
                     keep_dirty: false,
                     json: false,
                 };
-                match aifo_coder::fork_clean(repo_root, &opts) {
+                match crate::fork_clean(repo_root, &opts) {
                     Ok(_) => {
-                        let use_err = aifo_coder::color_enabled_stderr();
+                        let use_err = crate::color_enabled_stderr();
                         eprintln!(
                             "{}",
-                            aifo_coder::paint(
+                            crate::paint(
                                 use_err,
                                 "\x1b[32;1m",
                                 &format!("aifo-coder: disposed fork session {}.", sid)
@@ -86,8 +86,8 @@ pub fn apply_post_merge(
                         );
                     }
                     Err(e) => {
-                        let use_err = aifo_coder::color_enabled_stderr();
-                        aifo_coder::log_warn_stderr(
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
                             use_err,
                             &format!(
                                 "aifo-coder: warning: failed to dispose fork session {}: {}",
@@ -103,8 +103,8 @@ pub fn apply_post_merge(
             if plain {
                 eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
             } else {
-                let use_err = aifo_coder::color_enabled_stderr();
-                aifo_coder::log_error_stderr(
+                let use_err = crate::color_enabled_stderr();
+                crate::log_error_stderr(
                     use_err,
                     &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e),
                 );

@@ -22,17 +22,22 @@ pub mod tmux;
 #[cfg(windows)]
 pub mod windows_terminal;
 
+/// Trait defining platform-specific launchers for fork panes.
+/// Implementors may be waitable or non-waitable; strings/messages must be preserved.
 pub trait Orchestrator {
+    /// Launch the orchestrator for the given session and panes with provided child args.
     fn launch(
         &self,
         session: &ForkSession,
         panes: &[Pane],
         child_args: &[String],
     ) -> Result<(), String>;
+    /// Return true if the orchestrator supports running post-merge tasks synchronously.
+    /// For non-waitable orchestrators, this must return false to ensure higher-level code
+    /// prints guidance instead of attempting post-merge work.
     fn supports_post_merge(&self) -> bool;
 }
 
-#[allow(dead_code)]
 pub enum Selected {
     #[cfg(not(windows))]
     Tmux { reason: String },
@@ -110,7 +115,7 @@ pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
         }
 
         if have_any(["wt", "wt.exe"]) {
-            if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
+            if !matches!(cli.fork_merging_strategy, crate::MergingStrategy::None) {
                 // Fallback to PowerShell to support waiting
                 if have_any(["pwsh", "powershell", "powershell.exe"]) {
                     return Selected::PowerShell {

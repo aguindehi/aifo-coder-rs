@@ -1,3 +1,7 @@
+#![doc = "Error mapping guide:\n\
+- Map io::ErrorKind::NotFound to exit code 127; all others to 1.\n\
+- Prefer ForkError/ToolchainError for internal clarity while preserving user-visible strings via display_* helpers.\n\
+- Keep mapping/styling consistent with v1; no behavior changes."]
 use std::io;
 
 /// Map an io::Error to a process exit code, preserving current behavior:
