@@ -40,24 +40,42 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
     let mut ahead = false;
     let mut base_unknown = false;
     if let Some(base_sha) = base_commit {
-        let out = {
+        // First, ensure the recorded base commit is an ancestor of HEAD in this pane.
+        // This is robust and avoids false base-unknown when the commit exists but rev-list parsing fails.
+        let is_anc = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-            cmd.arg("rev-list")
-                .arg("--count")
-                .arg(format!("{}..HEAD", base_sha))
-                .output()
-                .ok()
+            cmd.arg("merge-base")
+                .arg("--is-ancestor")
+                .arg(base_sha)
+                .arg("HEAD");
+            cmd.status().ok()
         };
-        if let Some(o) = out {
-            if o.status.success() {
-                let c = String::from_utf8_lossy(&o.stdout)
-                    .trim()
-                    .parse::<u64>()
-                    .unwrap_or(0);
-                if c > 0 {
-                    ahead = true;
+        if let Some(st) = is_anc {
+            if st.success() {
+                // Base is known and an ancestor; compute ahead count relative to base.
+                let out = {
+                    let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                    cmd.arg("rev-list")
+                        .arg("--count")
+                        .arg(format!("{}..HEAD", base_sha));
+                    cmd.output().ok()
+                };
+                if let Some(o) = out {
+                    if o.status.success() {
+                        let c = String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<u64>()
+                            .unwrap_or(0);
+                        if c > 0 {
+                            ahead = true;
+                        }
+                    } else {
+                        // Treat non-success as not-ahead rather than base-unknown when ancestor check succeeded
+                        ahead = false;
+                    }
                 }
             } else {
+                // Not an ancestor or error -> conservatively mark base-unknown
                 base_unknown = true;
             }
         } else {
