@@ -1,3 +1,12 @@
+2025-09-24 06:00 user@example.com
+
+Phase 4: re-export error enums and adopt logging helpers in warnings
+
+- Re-exported ForkError/ToolchainError and helper mapping/display functions via lib.rs for
+  internal use across subsystems without changing external APIs or messages.
+- Adopted log_warn_stderr for key warning headers in warnings.rs (sidecars and LLM credentials)
+  to standardize color-aware stderr logging while preserving exact strings.
+
 2025-09-24 05:30 user@example.com
 
 Phase 4: complete logging helper adoption in errors

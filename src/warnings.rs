@@ -104,13 +104,9 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
     let use_err = aifo_coder::color_enabled_stderr();
 
     // Header
-    eprintln!(
-        "{}",
-        aifo_coder::paint(
-            use_err,
-            "\x1b[33;1m",
-            "Warning: no language toolchain sidecars enabled (--toolchain)."
-        )
+    aifo_coder::log_warn_stderr(
+        use_err,
+        "Warning: no language toolchain sidecars enabled (--toolchain).",
     );
     eprintln!();
 
@@ -237,13 +233,9 @@ pub fn warn_if_missing_llm_credentials(interactive_block: bool) -> bool {
     let use_err = aifo_coder::color_enabled_stderr();
 
     // Header
-    eprintln!(
-        "{}",
-        aifo_coder::paint(
-            use_err,
-            "\x1b[33;1m",
-            "Warning: missing LLM credentials/environment variables:"
-        )
+    aifo_coder::log_warn_stderr(
+        use_err,
+        "Warning: missing LLM credentials/environment variables:",
     );
     eprintln!();
 
@@ -257,13 +249,9 @@ pub fn warn_if_missing_llm_credentials(interactive_block: bool) -> bool {
     eprintln!();
 
     // Guidance
-    eprintln!(
-        "{}",
-        aifo_coder::paint(
-            use_err,
-            "\x1b[33;1m",
-            "Warning: set them in your shell or .env file, or run: aifo-coder doctor"
-        )
+    aifo_coder::log_warn_stderr(
+        use_err,
+        "Warning: set them in your shell or .env file, or run: aifo-coder doctor",
     );
     eprintln!();
 
