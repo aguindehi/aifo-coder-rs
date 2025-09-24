@@ -4,10 +4,8 @@
 //! user-visible behavior unchanged.
 
 use std::env;
-use std::fs;
 use std::path::PathBuf;
-use std::process::{Command, ExitCode};
-use which::which;
+use std::process::ExitCode;
 
 use crate::cli::{Agent, Cli};
 use crate::fork::orchestrators::Orchestrator;

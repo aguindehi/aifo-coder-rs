@@ -3,6 +3,7 @@ use std::path::Path;
 #[cfg(windows)]
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
+#[allow(dead_code)]
 pub fn build_inner_powershell(
     agent: &str,
     sid: &str,
@@ -33,6 +34,7 @@ pub fn build_inner_powershell(
 }
 
 #[cfg(not(windows))]
+#[allow(dead_code)]
 pub fn build_inner_powershell(
     _agent: &str,
     _sid: &str,
@@ -72,6 +74,7 @@ fn test_gitbash_inner_keeps_exec_tail_when_no_post_merge() {
 /// Build a Git Bash inner command string using the library helper,
 /// then inject export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1; before the agent command.
 /// When exec_shell_tail=false, trim the trailing "; exec bash" from the inner string.
+#[allow(dead_code)]
 pub fn build_inner_gitbash(
     agent: &str,
     sid: &str,
@@ -108,6 +111,7 @@ pub fn build_inner_gitbash(
 }
 
 #[cfg(not(windows))]
+#[allow(dead_code)]
 pub fn build_inner_gitbash(
     _agent: &str,
     _sid: &str,
