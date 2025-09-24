@@ -115,7 +115,7 @@ pub fn select_orchestrator(cli: &Cli, _layout_requested: &str) -> Selected {
         }
 
         if have_any(["wt", "wt.exe"]) {
-            if !matches!(cli.fork_merging_strategy, crate::MergingStrategy::None) {
+            if !matches!(cli.fork_merging_strategy, aifo_coder::MergingStrategy::None) {
                 // Fallback to PowerShell to support waiting
                 if have_any(["pwsh", "powershell", "powershell.exe"]) {
                     return Selected::PowerShell {

@@ -37,7 +37,7 @@ pub fn guard_panes_count_and_prompt(panes: usize) -> Result<(), ExitCode> {
             "Launching {} panes may impact disk/memory and I/O performance.",
             panes
         );
-        if !crate::warn_prompt_continue_or_quit(&[&msg]) {
+        if !aifo_coder::warn_prompt_continue_or_quit(&[&msg]) {
             return Err(ExitCode::from(1));
         }
     }

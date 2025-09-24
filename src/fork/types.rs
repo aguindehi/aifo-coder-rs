@@ -7,7 +7,7 @@
 //!
 //! Note: keep these types small and self-explanatory; avoid embedding behavior.
 
-use crate::MergingStrategy;
+use aifo_coder::MergingStrategy;
 use std::path::PathBuf;
 
 /// High-level fork session information captured at creation time.
