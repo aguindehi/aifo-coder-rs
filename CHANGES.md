@@ -1,3 +1,11 @@
+2025-09-24 11:55 user@example.com
+
+Phase 2: error-surface audit and tiny refactors
+
+- Wrapped proxy bind/address io::Error constructions via display_for_toolchain_error (no text change).
+- Kept internal runtime errors localized; no user-visible changes.
+- No changes to HTTP responses or log strings; CI expected to remain green.
+
 2025-09-24 11:20 user@example.com
 
 Phase 1: hygiene and consistency completed

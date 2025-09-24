@@ -373,7 +373,14 @@ pub fn toolexec_start_proxy(
             let sock_path = format!("{}/toolexec.sock", host_dir);
             let _ = fs::remove_file(&sock_path);
             let listener = UnixListener::bind(&sock_path)
-                .map_err(|e| io::Error::new(e.kind(), format!("proxy unix bind failed: {e}")))?;
+                .map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        crate::display_for_toolchain_error(&crate::ToolchainError::Message(
+                            format!("proxy unix bind failed: {e}"),
+                        )),
+                    )
+                })?;
             let _ = listener.set_nonblocking(true);
             std_env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
             let running_cl2 = running.clone();
@@ -458,11 +465,22 @@ pub fn toolexec_start_proxy(
     } else {
         "127.0.0.1"
     };
-    let listener = TcpListener::bind((bind_host, 0))
-        .map_err(|e| io::Error::new(e.kind(), format!("proxy bind failed: {e}")))?;
-    let addr = listener
-        .local_addr()
-        .map_err(|e| io::Error::new(e.kind(), format!("proxy addr failed: {e}")))?;
+    let listener = TcpListener::bind((bind_host, 0)).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            crate::display_for_toolchain_error(&crate::ToolchainError::Message(format!(
+                "proxy bind failed: {e}"
+            ))),
+        )
+    })?;
+    let addr = listener.local_addr().map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            crate::display_for_toolchain_error(&crate::ToolchainError::Message(format!(
+                "proxy addr failed: {e}"
+            ))),
+        )
+    })?;
     let port = addr.port();
     let _ = listener.set_nonblocking(true);
     let running_cl = running.clone();
