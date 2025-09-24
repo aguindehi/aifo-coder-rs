@@ -80,3 +80,42 @@ pub fn init_repo_with_default_user(dir: &Path) -> io::Result<()> {
 
     Ok(())
 }
+
+#[cfg(unix)]
+/// Capture stdout to a temporary file while running `f`, returning the captured text.
+/// Intended for integration tests; mirrors repeated inline helpers.
+pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
+    use std::os::fd::{FromRawFd, RawFd};
+    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
+    unsafe {
+        // Open a temporary file
+        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout.tmp").unwrap();
+        let mode = std::ffi::CString::new("w+").unwrap();
+        let file = fopen(path.as_ptr(), mode.as_ptr());
+        assert!(!file.is_null(), "failed to open temp file for capture");
+        let fd: RawFd = fileno(file);
+
+        // Duplicate current stdout
+        let stdout_fd = STDOUT_FILENO;
+        let saved = dup(stdout_fd);
+        assert!(saved >= 0, "dup(stdout) failed");
+
+        // Redirect stdout to file
+        assert!(dup2(fd, stdout_fd) >= 0, "dup2 failed");
+
+        // Run the function
+        f();
+
+        // Flush and restore stdout
+        fflush(std::ptr::null_mut());
+        assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
+
+        // Read back the file
+        let mut f = std::fs::File::from_raw_fd(fd);
+        use std::io::{Read, Seek};
+        let mut s = String::new();
+        let _ = f.rewind();
+        f.read_to_string(&mut s).expect("read captured");
+        s
+    }
+}

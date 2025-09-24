@@ -1,3 +1,11 @@
+2025-09-24 12:40 user@example.com
+
+Phase 3: tests consolidation (incremental)
+
+- Added shared tests/support::capture_stdout() helper (Unix) to eliminate duplicated inline stdout-capture code.
+- Updated tests/fork_list_plain_nocolor.rs to import tests/support and use the shared helper.
+- Kept all user-visible messages and assertions unchanged.
+
 2025-09-24 12:15 user@example.com
 
 Phase 2 completion confirmation
