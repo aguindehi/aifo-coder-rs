@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[ignore]
 #[test]
 fn test_proxy_shim_route_rust_and_node() {
