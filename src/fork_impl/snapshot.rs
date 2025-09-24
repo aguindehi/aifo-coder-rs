@@ -1,9 +1,9 @@
 //! Snapshot helper: create a temporary commit including dirty index/working tree via a temporary index.
+use crate::ForkError;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use crate::ForkError;
 
 pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io::Result<String> {
     // Create a unique temporary index path (under .git when possible)
