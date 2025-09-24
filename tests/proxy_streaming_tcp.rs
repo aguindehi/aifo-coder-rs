@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -49,14 +51,10 @@ fn test_proxy_tcp_streaming_rust_and_node() {
         let mut stream =
             TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-        let mut body = format!(
-            "tool={}&cwd={}",
-            urlencoding::Encoded::new(tool),
-            urlencoding::Encoded::new(".")
-        );
+        let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
         for a in args {
             body.push('&');
-            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+            body.push_str(&format!("arg={}", urlencode(a)));
         }
 
         let req = format!(
