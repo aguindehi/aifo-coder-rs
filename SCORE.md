@@ -1,4 +1,48 @@
-# Source Code Scoring — 2025-09-24 06:50
+# Source Code Scoring — 2025-09-24 07:40
+
+Executive summary
+- Phase 5 (documentation and style) completed: crate-level docs and module headers added for key areas (fork types/env, agent images, fork child args, toolchain session). No user-visible strings changed. Tests remain green (246 passed, 32 skipped).
+
+Overall grade: A (96/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A [10]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — A- [9]
+
+Documentation improvements
+- Crate-level overview (src/lib.rs) now documents architecture, module map and environment invariants (AIFO_TOOLEEXEC_*, session network, color).
+- Module-level docs added to:
+  - src/fork/types.rs (invariants for ForkSession/Pane/ForkOptions)
+  - src/fork/env.rs (env keys semantics and Windows inner builder note)
+  - src/agent_images.rs (image selection rules and registry usage)
+  - src/fork_args.rs (child args builder semantics)
+  - src/toolchain_session.rs (RAII and cleanup behavior)
+- Style: kept line lengths reasonable in doc blocks; preserved golden-sensitive strings.
+
+Highlights and strengths (unchanged from previous score)
+- Orchestrators are complete and integrated; runner decomposed and readable.
+- Notifications policy remains centralized and strict; proxy/shim paths solid.
+- Consistent color-aware logging wrappers without string changes.
+
+Areas for improvement (actionable)
+- Broaden internal adoption of error enums (ForkError/ToolchainError) in remaining sentinel io::Error::other sites for uniformity.
+- Consider adding short module docs to a few remaining helpers where appropriate (e.g., warnings.rs already documented; preflight covered).
+- Maintain style hygiene by periodically running rustfmt; ensure import ordering aligns with project conventions.
+
+Next steps (proposed)
+1) Continue error enum adoption in fork_impl/* and toolchain/* where plain io::Error::other remains, mapping to display helpers at boundaries.
+2) Audit remaining long lines in non-golden code and gently reflow where safe; add ignore comments only in tests when needed.
+3) Add a brief CONTRIBUTING.md section (or module docs) outlining environment invariants and how to run tests locally.
+
+Shall I proceed with these next steps?
 
 Executive summary
 - The codebase is in excellent shape after Phases 1–4. Utilities have been consolidated, orchestrators are implemented and delegated cleanly, notifications policy is strictly centralized, and error/logging refinement plus runner decomposition are complete. Color-aware logging helpers are adopted across key paths without changing user-visible strings. All tests are green (246 passed, 32 skipped).

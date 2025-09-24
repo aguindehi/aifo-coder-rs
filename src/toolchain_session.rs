@@ -1,3 +1,10 @@
+ //! Toolchain session RAII: start sidecars, start proxy, export env, stop on drop.
+ //!
+ //! Behavior
+ //! - Honors CLI flags (unix socket on Linux, no-cache, bootstrap) without changing user strings.
+ //! - Exports AIFO_TOOLEEXEC_URL/TOKEN for agent and shims; sets AIFO_SESSION_NETWORK.
+ //! - Cleans up proxy, sidecars and unix socket dir in Drop unless running inside a fork pane.
+
 use std::io;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

@@ -1,3 +1,12 @@
+ //! Data structures used across fork orchestration.
+ //!
+ //! Invariants
+ //! - ForkSession captures immutable creation-time facts (sid, base refs, layout, agent).
+ //! - Pane indexes are 1-based; container names and state dirs derive from (agent, sid, index).
+ //! - ForkOptions is a read-only snapshot for runner coordination; do not mutate during runs.
+ //!
+ //! Note: keep these types small and self-explanatory; avoid embedding behavior.
+
 use aifo_coder::MergingStrategy;
 use std::path::PathBuf;
 
