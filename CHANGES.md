@@ -1,3 +1,11 @@
+2025-09-24 04:30 user@example.com
+
+Phase 4: adopt logging helpers in runner and merge failure
+
+- Replaced ad-hoc ANSI prints with log_warn_stderr in fork runner guidance lines and
+  log_error_stderr for fork merge failure in main.rs, preserving exact messages and colors.
+- Completes the Phase 4 logging refinement with consistent wrappers where messages are identical.
+
 2025-09-24 04:05 user@example.com
 
 Fix: silence dead_code warnings for new error enums

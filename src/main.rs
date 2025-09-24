@@ -186,13 +186,9 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                         return Some(ExitCode::from(0));
                     }
                     Err(e) => {
-                        eprintln!(
-                            "{}",
-                            aifo_coder::paint(
-                                use_err_color,
-                                "\x1b[31;1m",
-                                &format!("aifo-coder: fork merge failed: {}", e)
-                            )
+                        aifo_coder::log_error_stderr(
+                            use_err_color,
+                            &format!("aifo-coder: fork merge failed: {}", e),
                         );
                         return Some(ExitCode::from(1));
                     }

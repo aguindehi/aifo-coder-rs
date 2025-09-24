@@ -396,23 +396,19 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                 crate::fork::orchestrators::Selected::WindowsTerminal { .. }
                 | crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
                     let use_err = aifo_coder::color_enabled_stderr();
-                    eprintln!(
-                        "{}",
-                        aifo_coder::paint(
-                            use_err,
-                            "\x1b[33m",
-                            &format!(
-                                concat!(
-                                    "aifo-coder: note: no waitable orchestrator found; ",
-                                    "automatic post-fork merging ({}) is unavailable."
-                                ),
-                                match cli.fork_merging_strategy {
-                                    aifo_coder::MergingStrategy::Fetch => "fetch",
-                                    aifo_coder::MergingStrategy::Octopus => "octopus",
-                                    _ => "none",
-                                }
-                            )
-                        )
+                    aifo_coder::log_warn_stderr(
+                        use_err,
+                        &format!(
+                            concat!(
+                                "aifo-coder: note: no waitable orchestrator found; ",
+                                "automatic post-fork merging ({}) is unavailable."
+                            ),
+                            match cli.fork_merging_strategy {
+                                aifo_coder::MergingStrategy::Fetch => "fetch",
+                                aifo_coder::MergingStrategy::Octopus => "octopus",
+                                _ => "none",
+                            }
+                        ),
                     );
                     eprintln!(
                         "{}",
