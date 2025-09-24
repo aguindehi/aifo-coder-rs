@@ -1,3 +1,12 @@
+2025-09-24 11:20 user@example.com
+
+Phase 1: hygiene and consistency completed
+
+- Prefer crate:: for intra-crate references in library modules; kept aifo_coder:: in shared fork modules compiled into the binary to preserve the build.
+- Added orchestrator trait docs clarifying supports_post_merge semantics; documented warn module stty best-effort behavior; added error mapping guide header in errors.rs.
+- Removed unnecessary #[allow(dead_code)] on ToolchainError and display_for_toolchain_error; retained allowances where platform gating may hide usage.
+- Verified no remaining aifo_coder:: references in library-only modules; small hygiene clean-ups as needed.
+
 2025-09-24 10:35 user@example.com
 
 Refactor v2: comprehensive, phase-optimized specification
