@@ -19,9 +19,9 @@ pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
 pub use errors::exit_code_for_io_error;
-pub use errors::{ForkError, ToolchainError};
-pub use errors::{exit_code_for_fork_error, exit_code_for_toolchain_error};
 pub use errors::{display_for_fork_error, display_for_toolchain_error};
+pub use errors::{exit_code_for_fork_error, exit_code_for_toolchain_error};
+pub use errors::{ForkError, ToolchainError};
 pub use fork::*;
 pub use fork_strategy::MergingStrategy;
 #[cfg(windows)]
