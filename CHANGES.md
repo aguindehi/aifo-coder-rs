@@ -1,3 +1,10 @@
+2025-09-24 08:45 user@example.com
+
+Error-surface consistency: wrap remaining io::Error::other messages
+
+- Wrapped NotFound and empty pane directories errors in src/fork_impl/merge.rs using display_for_fork_error(ForkError::Message) for uniformity.
+- No user-visible strings changed; preserves exit codes and behavior.
+
 2025-09-24 08:20 user@example.com
 
 Phase 5 follow-up: error-surface consistency and proxy helpers
