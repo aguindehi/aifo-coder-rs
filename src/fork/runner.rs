@@ -410,24 +410,20 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                             }
                         ),
                     );
-                    eprintln!(
-                        "{}",
-                        aifo_coder::paint(
-                            use_err,
-                            "\x1b[33m",
-                            &format!(
-                                concat!(
-                                    "aifo-coder: after you close all panes, run: ",
-                                    "aifo-coder fork merge --session {} --strategy {}"
-                                ),
-                                sid,
-                                match cli.fork_merging_strategy {
-                                    aifo_coder::MergingStrategy::Fetch => "fetch",
-                                    aifo_coder::MergingStrategy::Octopus => "octopus",
-                                    _ => "none",
-                                }
-                            )
-                        )
+                    aifo_coder::log_warn_stderr(
+                        use_err,
+                        &format!(
+                            concat!(
+                                "aifo-coder: after you close all panes, run: ",
+                                "aifo-coder fork merge --session {} --strategy {}"
+                            ),
+                            sid,
+                            match cli.fork_merging_strategy {
+                                aifo_coder::MergingStrategy::Fetch => "fetch",
+                                aifo_coder::MergingStrategy::Octopus => "octopus",
+                                _ => "none",
+                            }
+                        ),
                     );
                 }
             }
