@@ -24,13 +24,9 @@ pub fn check_and_prompt(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) -> Re
                 paint(use_err, "\x1b[31;1m", "aifo-coder: refusing to delete"),
                 protected
             );
-            eprintln!(
-                "{}",
-                paint(
-                    use_err,
-                    "\x1b[33m",
-                    "Use --keep-dirty to remove only clean panes, or --force to delete everything."
-                )
+            aifo_coder::log_warn_stderr(
+                use_err,
+                "Use --keep-dirty to remove only clean panes, or --force to delete everything.",
             );
             // Print summary
             for sp in plan {

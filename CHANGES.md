@@ -1,3 +1,12 @@
+2025-09-24 05:00 user@example.com
+
+Phase 4: finalize by adopting logging helper in clean prompt
+
+- Replaced a paint-based warning in fork clean confirmation with log_warn_stderr,
+  preserving the exact message text and color semantics where identical.
+- Error enums (ForkError, ToolchainError) remain available for progressive adoption;
+  no user-visible string changes.
+
 2025-09-24 04:30 user@example.com
 
 Phase 4: adopt logging helpers in runner and merge failure
