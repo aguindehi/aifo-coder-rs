@@ -240,10 +240,12 @@ pub(crate) fn fork_merge_branches_impl(
             }
             let st = cmd.status()?;
             if !st.success() {
-                return Err(io::Error::other(format!(
-                    "git fetch failed for pane {} (branch {})",
-                    pdir.display(),
-                    br
+                return Err(io::Error::other(crate::display_for_fork_error(
+                    &ForkError::Message(format!(
+                        "git fetch failed for pane {} (branch {})",
+                        pdir.display(),
+                        br
+                    )),
                 )));
             }
         }

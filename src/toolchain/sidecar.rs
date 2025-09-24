@@ -616,9 +616,11 @@ pub fn toolchain_run(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::other(format!(
-                        "sidecar container failed to start (exit: {:?})",
-                        status.code()
+                    return Err(io::Error::other(crate::display_for_toolchain_error(
+                        &ToolchainError::Message(format!(
+                            "sidecar container failed to start (exit: {:?})",
+                            status.code()
+                        )),
                     )));
                 }
             }
