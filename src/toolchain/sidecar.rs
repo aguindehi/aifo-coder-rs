@@ -17,6 +17,7 @@ use nix::unistd::{getgid, getuid};
 
 use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
 use crate::{container_runtime_path, shell_join};
+use crate::ToolchainError;
 
 use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
@@ -592,7 +593,7 @@ pub fn toolchain_run(
             let status = run_cmd.status().map_err(|e| {
                 io::Error::new(
                     e.kind(),
-                    aifo_coder::display_for_toolchain_error(&aifo_coder::ToolchainError::Message(
+                    crate::display_for_toolchain_error(&ToolchainError::Message(
                         format!("failed to start sidecar: {e}"),
                     )),
                 )
@@ -648,7 +649,7 @@ pub fn toolchain_run(
         let status = exec_cmd.status().map_err(|e| {
             io::Error::new(
                 e.kind(),
-                aifo_coder::display_for_toolchain_error(&aifo_coder::ToolchainError::Message(
+                crate::display_for_toolchain_error(&ToolchainError::Message(
                     format!("failed to exec in sidecar: {e}"),
                 )),
             )
@@ -765,8 +766,8 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::other(aifo_coder::display_for_toolchain_error(
-                        &aifo_coder::ToolchainError::Message(
+                    return Err(io::Error::other(crate::display_for_toolchain_error(
+                        &ToolchainError::Message(
                             "failed to start one or more sidecars".to_string(),
                         ),
                     )));
