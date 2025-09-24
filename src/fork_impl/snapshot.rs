@@ -89,9 +89,11 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     // Clean up temporary index (best-effort)
     let _ = fs::remove_file(&tmp_idx);
     if !ct_out.status.success() {
-        return Err(std::io::Error::other(format!(
-            "git commit-tree failed for snapshot: {}",
-            String::from_utf8_lossy(&ct_out.stderr)
+        return Err(std::io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message(format!(
+                "git commit-tree failed for snapshot: {}",
+                String::from_utf8_lossy(&ct_out.stderr)
+            )),
         )));
     }
     let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
