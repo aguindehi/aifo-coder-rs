@@ -1,3 +1,14 @@
+2025-09-24 10:35 user@example.com
+
+Refactor v2: comprehensive, phase-optimized specification
+
+- Wrote an expanded, risk-aware, phase-optimized refactor plan covering:
+  Windows orchestrators SUPPRESS injection, proxy bind configurability on Linux,
+  default image alignment (Node 22), prompt/input consistency, final error
+  surface audit, test helper consolidation, hygiene, and optional metrics/CI.
+- Added the full specification to spec/aifo-coder-refactor-whole-codebase-v2.spec.
+- No runtime behavior changed in this step; documentation/spec only.
+
 2025-09-24 08:45 user@example.com
 
 Error-surface consistency: wrap remaining io::Error::other messages
