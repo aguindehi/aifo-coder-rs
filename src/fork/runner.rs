@@ -1,7 +1,17 @@
 #![allow(clippy::module_name_repetitions)]
-//! Fork orchestrator for launching panes (tmux on Unix; Windows Terminal/PowerShell/Git Bash on Windows).
-//! This is binary-side code that leverages the public library facade (aifo_coder::*) and keeps
-//! user-visible behavior unchanged.
+//! Fork launcher and runner decomposition.
+//!
+//! Overview
+//! - Coordinates fork session lifecycle: preflight checks, base detection, optional snapshot,
+//!   cloning, metadata writing, orchestrator selection/launch, post-merge application, and guidance.
+//! - Platforms: tmux on Unix; Windows Terminal (non-waitable), PowerShell (waitable), Git Bash/mintty.
+//!
+//! Design
+//! - Delegates pane launch to orchestrators selected by crate::fork::orchestrators::select_orchestrator.
+//! - Preserves all user-visible strings and behavior; color usage and guidance text remain verbatim.
+//! - Binary-side glue leverages public aifo_coder::* helpers; internal helpers live under fork_impl/*.
+//!
+//! The module keeps the external CLI stable and focuses on maintainability and clarity for contributors.
 
 use std::env;
 use std::path::PathBuf;

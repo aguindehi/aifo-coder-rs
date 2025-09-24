@@ -42,7 +42,9 @@ pub(crate) fn collect_pane_branches_impl(
     }
     if pane_branches.is_empty() {
         return Err(io::Error::other(
-            "no pane branches to process (empty pane set or detached HEAD)",
+            aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                "no pane branches to process (empty pane set or detached HEAD)".to_string(),
+            )),
         ));
     }
     Ok(pane_branches)
@@ -73,7 +75,9 @@ pub(crate) fn preflight_clean_working_tree_impl(repo_root: &Path) -> io::Result<
     };
     if dirty {
         return Err(io::Error::other(
-            "octopus merge requires a clean working tree in the original repository",
+            aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                "octopus merge requires a clean working tree in the original repository".to_string(),
+            )),
         ));
     }
     Ok(())
@@ -288,7 +292,11 @@ pub(crate) fn fork_merge_branches_impl(
             cmd.status()?
         };
         if !st.success() {
-            return Err(io::Error::other("failed to checkout merge target branch"));
+            return Err(io::Error::other(
+                aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                    "failed to checkout merge target branch".to_string(),
+                )),
+            ));
         }
     }
 
@@ -367,7 +375,10 @@ pub(crate) fn fork_merge_branches_impl(
                 ),
             );
             return Err(io::Error::other(
-                "octopus merge failed (conflicts likely). Resolve manually and retry.",
+                aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                    "octopus merge failed (conflicts likely). Resolve manually and retry."
+                        .to_string(),
+                )),
             ));
         }
     }

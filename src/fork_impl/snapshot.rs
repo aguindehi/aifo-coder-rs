@@ -47,14 +47,22 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     let add_out = with_tmp_index(&["add", "-A"])?;
     if !add_out.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other("git add -A failed for snapshot"));
+        return Err(std::io::Error::other(
+            aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                "git add -A failed for snapshot".to_string(),
+            )),
+        ));
     }
 
     // 2) write-tree
     let wt = with_tmp_index(&["write-tree"])?;
     if !wt.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other("git write-tree failed for snapshot"));
+        return Err(std::io::Error::other(
+            aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                "git write-tree failed for snapshot".to_string(),
+            )),
+        ));
     }
     let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
 
@@ -91,7 +99,11 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     }
     let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
     if sha.is_empty() {
-        return Err(std::io::Error::other("empty snapshot SHA from commit-tree"));
+        return Err(std::io::Error::other(
+            aifo_coder::display_for_fork_error(&aifo_coder::ForkError::Message(
+                "empty snapshot SHA from commit-tree".to_string(),
+            )),
+        ));
     }
     Ok(sha)
 }

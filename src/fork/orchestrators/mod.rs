@@ -1,3 +1,12 @@
+#![allow(clippy::module_name_repetitions)]
+//! Orchestrators overview: platform-specific launchers for fork panes.
+//!
+//! - Unix: tmux orchestrator (waitable), applies layout and sends per-pane scripts.
+//! - Windows: Windows Terminal (non-waitable), PowerShell (waitable), Git Bash/mintty (non-waitable).
+//!
+//! Selection compiles cross‑platform and returns a Selected variant with a reason string.
+//! Runner delegates to these orchestrators; user-facing messages are preserved.
+
 #[cfg(windows)]
 use which::which;
 

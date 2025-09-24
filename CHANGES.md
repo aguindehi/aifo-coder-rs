@@ -1,3 +1,12 @@
+2025-09-24 07:20 user@example.com
+
+Phase 4: error enums adoption and contributor docs
+
+- Adopted lightweight error enums (ForkError, ToolchainError) internally in fork_impl/* and
+  toolchain/* for sentinel cases, mapping to identical strings at boundaries.
+- Added module-level docs for orchestrators overview and runner decomposition to aid contributors.
+- Continued measured logging-helper adoption where message text is identical (no string changes).
+
 2025-09-24 06:30 user@example.com
 
 Phase 4: finalize logging helpers adoption in toolchain session
