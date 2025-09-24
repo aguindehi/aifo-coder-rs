@@ -24,7 +24,6 @@ pub enum ForkError {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ToolchainError {
     Io(std::io::Error),
     Message(String),
@@ -70,7 +69,6 @@ pub fn display_for_fork_error(e: &ForkError) -> String {
 }
 
 /// Render a user-facing string for ToolchainError without changing existing texts.
-#[allow(dead_code)]
 pub fn display_for_toolchain_error(e: &ToolchainError) -> String {
     match e {
         ToolchainError::Io(ioe) => ioe.to_string(),
