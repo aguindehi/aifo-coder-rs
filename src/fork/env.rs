@@ -1,12 +1,13 @@
- //! Environment helpers for fork panes and inner builders.
- //!
- //! Invariants
- //! - AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 is exported to panes (suppress startup hints).
- //! - AIFO_CODER_SKIP_LOCK=1 avoids acquiring the repo lock in child panes.
- //! - Per-pane state directory (AIFO_CODER_FORK_STATE_DIR) is used by orchestrators and shells.
- //! - Container naming is stable: aifo-coder-<agent>-<sid>-<index>.
- //!
- //! Windows inner builders exclude SUPPRESS by design; orchestrators inject SUPPRESS in the pane env.
+
+//! Environment helpers for fork panes and inner builders.
+//!
+//! Invariants
+//! - AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 is exported to panes (suppress startup hints).
+//! - AIFO_CODER_SKIP_LOCK=1 avoids acquiring the repo lock in child panes.
+//! - Per-pane state directory (AIFO_CODER_FORK_STATE_DIR) is used by orchestrators and shells.
+//! - Container naming is stable: aifo-coder-<agent>-<sid>-<index>.
+//!
+//! Windows inner builders exclude SUPPRESS by design; orchestrators inject SUPPRESS in the pane env.
 
 use std::path::{Path, PathBuf};
 

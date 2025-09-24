@@ -1,9 +1,9 @@
 //! Clone and checkout helpers for creating fork panes with LFS/submodules best-effort support.
+use crate::ForkError;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::Stdio;
-use crate::ForkError;
 
 pub(crate) fn fork_clone_and_checkout_panes_impl(
     repo_root: &Path,
