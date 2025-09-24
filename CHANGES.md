@@ -1,3 +1,12 @@
+2025-09-24 06:30 user@example.com
+
+Phase 4: finalize logging helpers adoption in toolchain session
+
+- Adopted log_error_stderr for toolchain startup failures (sidecars/proxy) in toolchain_session.rs,
+  preserving exact message text and adding consistent color-aware stderr output.
+- Phase 4 is now complete: runner decomposition, logging helpers, and targeted adoption across
+  fork and toolchain paths without changing user-visible strings.
+
 2025-09-24 06:00 user@example.com
 
 Phase 4: re-export error enums and adopt logging helpers in warnings

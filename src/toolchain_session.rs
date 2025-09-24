@@ -109,7 +109,11 @@ impl ToolchainSession {
         ) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!("aifo-coder: failed to start toolchain sidecars: {}", e),
+                );
                 return Err(e);
             }
         };
@@ -142,7 +146,11 @@ impl ToolchainSession {
         let (url, token, flag, handle) = match aifo_coder::toolexec_start_proxy(&sid, cli.verbose) {
             Ok(t) => t,
             Err(e) => {
-                eprintln!("aifo-coder: failed to start toolexec proxy: {}", e);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!("aifo-coder: failed to start toolexec proxy: {}", e),
+                );
                 aifo_coder::toolchain_cleanup_session(&sid, cli.verbose);
                 return Err(e);
             }
