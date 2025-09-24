@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::Command;
+mod support;
+use support::urlencode;
 
 fn docker_present() -> bool {
     aifo_coder::container_runtime_path().is_ok()
@@ -36,14 +38,10 @@ fn post_exec(url: &str, token: &str, tool: &str, args: &[&str]) -> (i32, String)
     };
     let mut stream = TcpStream::connect((connect_host, port)).expect("connect failed");
 
-    let mut body = format!(
-        "tool={}&cwd={}",
-        urlencoding::Encoded::new(tool),
-        urlencoding::Encoded::new(".")
-    );
+    let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
     for a in args {
         body.push('&');
-        body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+        body.push_str(&format!("arg={}", urlencode(a)));
     }
     let req = format!(
         "POST {} HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
