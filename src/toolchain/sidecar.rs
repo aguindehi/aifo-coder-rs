@@ -750,9 +750,9 @@ pub fn toolchain_start_session(
             let st = run_cmd.status().map_err(|e| {
                 io::Error::new(
                     e.kind(),
-                    crate::display_for_toolchain_error(&ToolchainError::Message(
-                        format!("failed to start sidecar: {e}"),
-                    )),
+                    crate::display_for_toolchain_error(&ToolchainError::Message(format!(
+                        "failed to start sidecar: {e}"
+                    ))),
                 )
             })?;
             if !st.success() {
