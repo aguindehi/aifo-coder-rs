@@ -1,14 +1,6 @@
 use std::process::Command;
-
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
+mod support;
+use support::{have_git, init_repo_with_default_user};
 
 #[test]
 fn test_fork_base_info_branch_and_detached() {
@@ -20,22 +12,7 @@ fn test_fork_base_info_branch_and_detached() {
     let repo = td.path();
 
     // init repo
-    assert!(Command::new("git")
-        .args(["init"])
-        .current_dir(repo)
-        .status()
-        .expect("git init")
-        .success());
-
-    // configure identity
-    let _ = Command::new("git")
-        .args(["config", "user.name", "AIFO Test"])
-        .current_dir(repo)
-        .status();
-    let _ = Command::new("git")
-        .args(["config", "user.email", "aifo@example.com"])
-        .current_dir(repo)
-        .status();
+    let _ = init_repo_with_default_user(repo);
 
     // make initial commit
     std::fs::write(repo.join("README.md"), "hello\n").expect("write");

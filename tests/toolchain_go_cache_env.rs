@@ -3,8 +3,6 @@ use std::net::TcpStream;
 use std::process::Command;
 mod support;
 use support::urlencode;
-mod support;
-use support::urlencode;
 
 fn docker_present() -> bool {
     aifo_coder::container_runtime_path().is_ok()

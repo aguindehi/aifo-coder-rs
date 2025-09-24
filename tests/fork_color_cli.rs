@@ -1,34 +1,10 @@
 use std::process::Command;
+mod support;
+use support::{have_git, init_repo_with_default_user};
 
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
 
 fn init_repo(dir: &std::path::Path) {
-    let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
+    let _ = init_repo_with_default_user(dir);
 }
 
 #[test]
