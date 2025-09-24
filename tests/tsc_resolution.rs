@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -74,8 +76,8 @@ fn test_tsc_local_resolution_tcp_v2() {
 
     let body = format!(
         "tool={}&cwd={}",
-        urlencoding::Encoded::new("tsc"),
-        urlencoding::Encoded::new(".")
+        urlencode("tsc"),
+        urlencode(".")
     );
 
     let req = format!(

@@ -84,6 +84,11 @@ pub fn init_repo_with_default_user(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+pub fn urlencode(s: &str) -> String {
+    urlencoding::encode(s).into_owned()
+}
+
 #[cfg(unix)]
 /// Capture stdout to a temporary file while running `f`, returning the captured text.
 /// Intended for integration tests; mirrors repeated inline helpers.
