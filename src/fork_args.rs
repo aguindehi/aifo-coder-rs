@@ -1,3 +1,13 @@
+
+//! Build child argument vector for panes launched by fork orchestrators.
+//!
+//! Semantics
+//! - Preserves agent subcommand and its args verbatim.
+//! - Strips fork-only flags (layout, session, dissociate, merge options).
+//! - Includes global flags (image/flavor/toolchains/verbosity) as the agent expects.
+//!
+//! Note: keep golden-sensitive strings intact; tests assert ordering and presence of specific flags.
+
 pub(crate) fn fork_build_child_args(cli: &crate::cli::Cli) -> Vec<String> {
     use crate::cli::{Agent, Flavor};
 

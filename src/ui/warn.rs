@@ -17,6 +17,77 @@ fn finish_prompt_line() {
     eprintln!();
 }
 
+// Platform-specific single-key input helpers extracted for clarity and reuse.
+
+#[cfg(windows)]
+fn warn_input_windows() -> bool {
+    unsafe {
+        #[link(name = "msvcrt")]
+        extern "C" {
+            fn _getch() -> i32;
+        }
+        let ch = _getch();
+        let ch = (ch as u8) as char;
+        if ch == 'q' || ch == 'Q' {
+            finish_prompt_line();
+            false
+        } else {
+            finish_prompt_line();
+            true
+        }
+    }
+}
+
+#[cfg(unix)]
+fn warn_input_unix() -> bool {
+    // Save current stty state
+    let saved = std::process::Command::new("stty")
+        .arg("-g")
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    // Best-effort: set non-canonical mode, no echo, 1-byte min
+    let _ = std::process::Command::new("stty")
+        .args(["-icanon", "min", "1", "-echo"])
+        .status();
+
+    let mut buf = [0u8; 1];
+    let _ = std::io::stdin().read(&mut buf);
+
+    // Restore previous stty state (or sane fallback)
+    if let Some(state) = saved {
+        let _ = std::process::Command::new("stty").arg(&state).status();
+    } else {
+        let _ = std::process::Command::new("stty").arg("sane").status();
+    }
+
+    let ch = buf[0] as char;
+    if ch == 'q' || ch == 'Q' {
+        finish_prompt_line();
+        false
+    } else {
+        finish_prompt_line();
+        true
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn warn_input_fallback() -> bool {
+    // Fallback: line-based input (non-tty or platforms without single-key support)
+    let mut s = String::new();
+    let _ = std::io::stdin().read_line(&mut s);
+    finish_prompt_line();
+    let c = s.trim().chars().next().unwrap_or('\n');
+    c != 'q' && c != 'Q'
+}
+
 /// Print warning lines and, when interactive, prompt the user to continue or abort.
 /// Returns true to continue, false to abort.
 pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
@@ -46,74 +117,18 @@ pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
     );
     let _ = std::io::stderr().flush();
 
-    // Windows: read a single key without waiting for Enter using _getch
     #[cfg(windows)]
     {
-        unsafe {
-            #[link(name = "msvcrt")]
-            extern "C" {
-                fn _getch() -> i32;
-            }
-            let ch = _getch();
-            let ch = (ch as u8) as char;
-            if ch == 'q' || ch == 'Q' {
-                finish_prompt_line();
-                false
-            } else {
-                finish_prompt_line();
-                true
-            }
-        }
+        warn_input_windows()
     }
 
-    // Unix: temporarily switch terminal to non-canonical, no-echo mode to read a single byte
     #[cfg(unix)]
     {
-        // Save current stty state
-        let saved = std::process::Command::new("stty")
-            .arg("-g")
-            .output()
-            .ok()
-            .and_then(|o| {
-                if o.status.success() {
-                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                } else {
-                    None
-                }
-            });
-
-        // Best-effort: set non-canonical mode, no echo, 1-byte min
-        let _ = std::process::Command::new("stty")
-            .args(["-icanon", "min", "1", "-echo"])
-            .status();
-
-        let mut buf = [0u8; 1];
-        let _ = std::io::stdin().read(&mut buf);
-
-        // Restore previous stty state (or sane fallback)
-        if let Some(state) = saved {
-            let _ = std::process::Command::new("stty").arg(&state).status();
-        } else {
-            let _ = std::process::Command::new("stty").arg("sane").status();
-        }
-
-        let ch = buf[0] as char;
-        if ch == 'q' || ch == 'Q' {
-            finish_prompt_line();
-            false
-        } else {
-            finish_prompt_line();
-            true
-        }
+        warn_input_unix()
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        // Fallback: line-based input (non-tty or platforms without single-key support)
-        let mut s = String::new();
-        let _ = std::io::stdin().read_line(&mut s);
-        finish_prompt_line();
-        let c = s.trim().chars().next().unwrap_or('\n');
-        c != 'q' && c != 'Q'
+        warn_input_fallback()
     }
 }

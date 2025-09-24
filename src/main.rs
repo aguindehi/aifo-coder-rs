@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
 // Internal modules
@@ -187,13 +186,9 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
                         return Some(ExitCode::from(0));
                     }
                     Err(e) => {
-                        eprintln!(
-                            "{}",
-                            aifo_coder::paint(
-                                use_err_color,
-                                "\x1b[31;1m",
-                                &format!("aifo-coder: fork merge failed: {}", e)
-                            )
+                        aifo_coder::log_error_stderr(
+                            use_err_color,
+                            &format!("aifo-coder: fork merge failed: {}", e),
                         );
                         return Some(ExitCode::from(1));
                     }
@@ -418,11 +413,8 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("{e}");
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
-            // Map docker-not-found to exit status 127 (command not found)
-            if e.kind() == io::ErrorKind::NotFound {
-                return ExitCode::from(127);
-            }
-            ExitCode::from(1)
+            let code = aifo_coder::exit_code_for_io_error(&e);
+            ExitCode::from(code)
         }
     }
 }

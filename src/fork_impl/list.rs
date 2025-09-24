@@ -88,13 +88,19 @@ pub(crate) fn fork_list_to_string_impl(
 
     if all_repos {
         // Workspace scan requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory
-        let ws = env::var("AIFO_CODER_WORKSPACE_ROOT")
-            .map_err(|_| std::io::Error::other("workspace root env missing"))?;
+        let ws = env::var("AIFO_CODER_WORKSPACE_ROOT").map_err(|_| {
+            std::io::Error::other(crate::display_for_fork_error(&crate::ForkError::Message(
+                "workspace root env missing".to_string(),
+            )))
+        })?;
         let ws_path = Path::new(&ws);
         if !ws_path.is_dir() {
-            return Err(std::io::Error::other(
-                "--all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.",
-            ));
+            return Err(std::io::Error::other(crate::display_for_fork_error(
+                &crate::ForkError::Message(
+                    "--all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory."
+                        .to_string(),
+                ),
+            )));
         }
 
         if json {

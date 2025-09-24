@@ -45,6 +45,7 @@ pub fn guard_panes_count_and_prompt(panes: usize) -> Result<(), ExitCode> {
 }
 
 /// Guard against zero panes, printing the exact message and returning ExitCode 1.
+#[allow(dead_code)]
 pub fn guard_no_panes(clones_len: usize) -> Result<(), ExitCode> {
     if clones_len == 0 {
         eprintln!("aifo-coder: no panes to create.");

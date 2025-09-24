@@ -22,13 +22,9 @@ pub fn apply_post_merge(
     };
     {
         let use_err = aifo_coder::color_enabled_stderr();
-        eprintln!(
-            "{}",
-            aifo_coder::paint(
-                use_err,
-                "\x1b[36;1m",
-                &format!("aifo-coder: applying post-fork merge strategy: {}", strat)
-            )
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: applying post-fork merge strategy: {}", strat),
         );
     }
     match aifo_coder::fork_merge_branches_by_session(repo_root, sid, strategy, verbose, dry_run) {
@@ -91,16 +87,12 @@ pub fn apply_post_merge(
                     }
                     Err(e) => {
                         let use_err = aifo_coder::color_enabled_stderr();
-                        eprintln!(
-                            "{}",
-                            aifo_coder::paint(
-                                use_err,
-                                "\x1b[33m",
-                                &format!(
-                                    "aifo-coder: warning: failed to dispose fork session {}: {}",
-                                    sid, e
-                                )
-                            )
+                        aifo_coder::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: warning: failed to dispose fork session {}: {}",
+                                sid, e
+                            ),
                         );
                     }
                 }
@@ -112,13 +104,9 @@ pub fn apply_post_merge(
                 eprintln!("aifo-coder: merge strategy '{}' failed: {}", strat, e);
             } else {
                 let use_err = aifo_coder::color_enabled_stderr();
-                eprintln!(
-                    "{}",
-                    aifo_coder::paint(
-                        use_err,
-                        "\x1b[31;1m",
-                        &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e)
-                    )
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!("aifo-coder: merge strategy '{}' failed: {}", strat, e),
                 );
             }
             Err(e.to_string())

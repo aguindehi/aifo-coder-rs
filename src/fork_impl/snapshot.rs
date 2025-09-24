@@ -1,4 +1,5 @@
 //! Snapshot helper: create a temporary commit including dirty index/working tree via a temporary index.
+use crate::ForkError;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -47,14 +48,18 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     let add_out = with_tmp_index(&["add", "-A"])?;
     if !add_out.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other("git add -A failed for snapshot"));
+        return Err(std::io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("git add -A failed for snapshot".to_string()),
+        )));
     }
 
     // 2) write-tree
     let wt = with_tmp_index(&["write-tree"])?;
     if !wt.status.success() {
         let _ = fs::remove_file(&tmp_idx);
-        return Err(std::io::Error::other("git write-tree failed for snapshot"));
+        return Err(std::io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("git write-tree failed for snapshot".to_string()),
+        )));
     }
     let tree = String::from_utf8_lossy(&wt.stdout).trim().to_string();
 
@@ -84,14 +89,18 @@ pub(crate) fn fork_create_snapshot_impl(repo_root: &Path, sid: &str) -> std::io:
     // Clean up temporary index (best-effort)
     let _ = fs::remove_file(&tmp_idx);
     if !ct_out.status.success() {
-        return Err(std::io::Error::other(format!(
-            "git commit-tree failed for snapshot: {}",
-            String::from_utf8_lossy(&ct_out.stderr)
+        return Err(std::io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message(format!(
+                "git commit-tree failed for snapshot: {}",
+                String::from_utf8_lossy(&ct_out.stderr)
+            )),
         )));
     }
     let sha = String::from_utf8_lossy(&ct_out.stdout).trim().to_string();
     if sha.is_empty() {
-        return Err(std::io::Error::other("empty snapshot SHA from commit-tree"));
+        return Err(std::io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("empty snapshot SHA from commit-tree".to_string()),
+        )));
     }
     Ok(sha)
 }

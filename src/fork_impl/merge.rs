@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
+use crate::ForkError;
 use crate::{json_escape, shell_join};
 
 pub(crate) fn collect_pane_branches_impl(
@@ -41,9 +42,11 @@ pub(crate) fn collect_pane_branches_impl(
         pane_branches.push((pdir.clone(), actual_branch));
     }
     if pane_branches.is_empty() {
-        return Err(io::Error::other(
-            "no pane branches to process (empty pane set or detached HEAD)",
-        ));
+        return Err(io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message(
+                "no pane branches to process (empty pane set or detached HEAD)".to_string(),
+            ),
+        )));
     }
     Ok(pane_branches)
 }
@@ -72,9 +75,12 @@ pub(crate) fn preflight_clean_working_tree_impl(repo_root: &Path) -> io::Result<
         Err(_) => true,
     };
     if dirty {
-        return Err(io::Error::other(
-            "octopus merge requires a clean working tree in the original repository",
-        ));
+        return Err(io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message(
+                "octopus merge requires a clean working tree in the original repository"
+                    .to_string(),
+            ),
+        )));
     }
     Ok(())
 }
@@ -234,10 +240,12 @@ pub(crate) fn fork_merge_branches_impl(
             }
             let st = cmd.status()?;
             if !st.success() {
-                return Err(io::Error::other(format!(
-                    "git fetch failed for pane {} (branch {})",
-                    pdir.display(),
-                    br
+                return Err(io::Error::other(crate::display_for_fork_error(
+                    &ForkError::Message(format!(
+                        "git fetch failed for pane {} (branch {})",
+                        pdir.display(),
+                        br
+                    )),
                 )));
             }
         }
@@ -288,7 +296,9 @@ pub(crate) fn fork_merge_branches_impl(
             cmd.status()?
         };
         if !st.success() {
-            return Err(io::Error::other("failed to checkout merge target branch"));
+            return Err(io::Error::other(crate::display_for_fork_error(
+                &ForkError::Message("failed to checkout merge target branch".to_string()),
+            )));
         }
     }
 
@@ -366,9 +376,12 @@ pub(crate) fn fork_merge_branches_impl(
                         .join(", ")
                 ),
             );
-            return Err(io::Error::other(
-                "octopus merge failed (conflicts likely). Resolve manually and retry.",
-            ));
+            return Err(io::Error::other(crate::display_for_fork_error(
+                &ForkError::Message(
+                    "octopus merge failed (conflicts likely). Resolve manually and retry."
+                        .to_string(),
+                ),
+            )));
         }
     }
 

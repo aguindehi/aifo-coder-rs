@@ -1,3 +1,11 @@
+
+//! Toolchain session RAII: start sidecars, start proxy, export env, stop on drop.
+//!
+//! Behavior
+//! - Honors CLI flags (unix socket on Linux, no-cache, bootstrap) without changing user strings.
+//! - Exports AIFO_TOOLEEXEC_URL/TOKEN for agent and shims; sets AIFO_SESSION_NETWORK.
+//! - Cleans up proxy, sidecars and unix socket dir in Drop unless running inside a fork pane.
+
 use std::io;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -109,7 +117,11 @@ impl ToolchainSession {
         ) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("aifo-coder: failed to start toolchain sidecars: {}", e);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!("aifo-coder: failed to start toolchain sidecars: {}", e),
+                );
                 return Err(e);
             }
         };
@@ -142,7 +154,11 @@ impl ToolchainSession {
         let (url, token, flag, handle) = match aifo_coder::toolexec_start_proxy(&sid, cli.verbose) {
             Ok(t) => t,
             Err(e) => {
-                eprintln!("aifo-coder: failed to start toolexec proxy: {}", e);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!("aifo-coder: failed to start toolexec proxy: {}", e),
+                );
                 aifo_coder::toolchain_cleanup_session(&sid, cli.verbose);
                 return Err(e);
             }

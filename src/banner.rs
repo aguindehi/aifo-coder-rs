@@ -54,49 +54,11 @@ pub(crate) fn print_startup_banner() {
             .args(["info", "--format", "{{json .SecurityOptions}}"])
             .output()
         {
-            let raw = String::from_utf8_lossy(&out.stdout);
-            // Extract quoted items from JSON array of strings
-            let mut items: Vec<String> = Vec::new();
-            let mut in_str = false;
-            let mut esc = false;
-            let mut buf = String::new();
-            for ch in raw.chars() {
-                if in_str {
-                    if esc {
-                        buf.push(ch);
-                        esc = false;
-                    } else if ch == '\\' {
-                        esc = true;
-                    } else if ch == '"' {
-                        items.push(buf.clone());
-                        buf.clear();
-                        in_str = false;
-                    } else {
-                        buf.push(ch);
-                    }
-                } else if ch == '"' {
-                    in_str = true;
-                }
-            }
-            for s in &items {
-                if s.contains("name=seccomp") {
-                    for part in s.split(',') {
-                        if let Some(v) = part.strip_prefix("profile=") {
-                            seccomp = v.to_string();
-                            break;
-                        }
-                    }
-                } else if s.contains("name=cgroupns") {
-                    for part in s.split(',') {
-                        if let Some(v) = part.strip_prefix("mode=") {
-                            cgroupns = v.to_string();
-                            break;
-                        }
-                    }
-                } else if s.contains("rootless") {
-                    rootless = true;
-                }
-            }
+            let raw = String::from_utf8_lossy(&out.stdout).to_string();
+            let parsed = aifo_coder::docker_security_options_parse(&raw);
+            seccomp = parsed.seccomp_profile;
+            cgroupns = parsed.cgroupns_mode;
+            rootless = parsed.rootless;
         }
     }
 

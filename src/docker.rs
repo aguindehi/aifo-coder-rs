@@ -1,6 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
 //! Docker command construction and runtime detection.
 
+use crate::ensure_file_exists;
+use crate::path_pair;
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 use once_cell::sync::Lazy;
@@ -504,20 +506,4 @@ pub fn build_docker_cmd(
     };
 
     Ok((cmd, preview))
-}
-
-// Local helper: Render a docker -v host:container pair.
-fn path_pair(host: &Path, container: &str) -> OsString {
-    OsString::from(format!("{}:{container}", host.display()))
-}
-
-// Local helper: Ensure a file exists by creating parent directories as needed.
-fn ensure_file_exists(p: &Path) -> io::Result<()> {
-    if !p.exists() {
-        if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::File::create(p)?;
-    }
-    Ok(())
 }

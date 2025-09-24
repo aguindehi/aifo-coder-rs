@@ -5,33 +5,76 @@ use std::process::Command;
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 
-/// Windows Terminal orchestrator (non-waitable). This struct provides a minimal
-/// implementation so the module is usable during refactoring. It intentionally
-/// does not alter user-visible behavior yet; main.rs continues to drive WT flows.
-///
-/// Notes per spec:
-/// - Previews should use wt_* helpers with argv[0] ("wt") included.
-/// - When executing via Command::new(wt_path), drop argv[0] from helper vectors.
-/// - Post-merge is not supported directly (non-waitable); callers must handle guidance.
+/// Windows Terminal orchestrator (non-waitable).
 pub struct WindowsTerminal;
 
 impl Orchestrator for WindowsTerminal {
-    fn launch(&self, _session: &ForkSession, _panes: &[Pane], _child_args: &[String]) -> Result<(), String> {
-        // Defer to existing main.rs logic for now.
+    fn launch(
+        &self,
+        session: &ForkSession,
+        panes: &[Pane],
+        child_args: &[String],
+    ) -> Result<(), String> {
+        let wt_path = which::which("wt")
+            .or_else(|_| which::which("wt.exe"))
+            .map_err(|_| "Windows Terminal (wt.exe) not found in PATH".to_string())?;
+
+        // PowerShell to run in each pane
+        let psbin = which::which("pwsh")
+            .or_else(|_| which::which("powershell"))
+            .or_else(|_| which::which("powershell.exe"))
+            .unwrap_or_else(|_| std::path::PathBuf::from("powershell"));
+
+        // Pane 1: new-tab
+        if let Some(first) = panes.first() {
+            let inner = aifo_coder::fork_ps_inner_string(
+                &session.agent,
+                &session.sid,
+                first.index,
+                &first.dir,
+                &first.state_dir,
+                child_args,
+            );
+            let args = aifo_coder::wt_build_new_tab_args(&psbin, &first.dir, &inner);
+            let mut cmd = Command::new(&wt_path);
+            for a in args.iter().skip(1) {
+                cmd.arg(a);
+            }
+            let st = cmd.status().map_err(|e| e.to_string())?;
+            if !st.success() {
+                return Err("Windows Terminal failed to start first pane".to_string());
+            }
+        } else {
+            return Err("no panes to create".to_string());
+        }
+
+        // Remaining panes: split-pane with orientation based on layout
+        for p in panes.iter().skip(1) {
+            let inner = aifo_coder::fork_ps_inner_string(
+                &session.agent,
+                &session.sid,
+                p.index,
+                &p.dir,
+                &p.state_dir,
+                child_args,
+            );
+            let orient = aifo_coder::wt_orient_for_layout(&session.layout, p.index);
+            let args = aifo_coder::wt_build_split_args(orient, &psbin, &p.dir, &inner);
+            let mut cmd = Command::new(&wt_path);
+            for a in args.iter().skip(1) {
+                cmd.arg(a);
+            }
+            let st = cmd.status().map_err(|e| e.to_string())?;
+            if !st.success() {
+                return Err("Windows Terminal split-pane failed".to_string());
+            }
+        }
+
         Ok(())
     }
 
     fn supports_post_merge(&self) -> bool {
+        // Detached, non-waitable
         false
     }
-}
-
-// Helper: execute a wt command built by wt_* helpers, dropping argv[0] ("wt") when running.
-#[allow(dead_code)]
-fn exec_wt_dropping_argv0(wt_path: &std::path::Path, args_with_argv0: &[String]) -> std::io::Result<std::process::ExitStatus> {
-    let mut cmd = Command::new(wt_path);
-    for a in args_with_argv0.iter().skip(1) {
-        cmd.arg(a);
-    }
-    cmd.status()
 }

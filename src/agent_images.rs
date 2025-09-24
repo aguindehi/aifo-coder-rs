@@ -1,3 +1,13 @@
+
+//! Agent image selection helpers.
+//!
+//! Rules
+//! - Environment overrides take precedence: AIFO_CODER_IMAGE, AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR.
+//! - Flavor slim/full is expressed via "-slim" suffix and affects defaults only.
+//! - Registry prefix comes from preferred_registry_prefix[_quiet] and is normalized to "<host>/".
+//!
+//! These functions do not pull images or perform network I/O; they only compose strings.
+
 use std::env;
 
 pub(crate) fn default_image_for(agent: &str) -> String {

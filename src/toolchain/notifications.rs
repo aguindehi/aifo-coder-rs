@@ -93,6 +93,25 @@ fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
     })
 }
 
+/// Public helper to obtain the configured notifications executable basename after policy validation.
+pub(crate) fn notifications_exec_basename() -> Result<String, String> {
+    match parse_notif_cfg() {
+        Ok(cfg) => {
+            let bn = cfg
+                .exec_abs
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            Ok(bn)
+        }
+        Err(e) => match e {
+            NotifyError::Policy(msg) => Err(msg),
+            NotifyError::ExecSpawn(msg) => Err(msg),
+            NotifyError::Timeout => Err("timeout".to_string()),
+        },
+    }
+}
+
 fn compute_allowlist_basenames() -> Vec<String> {
     // Default allowlist
     let mut out: Vec<String> = vec!["say".to_string()];
@@ -325,30 +344,8 @@ pub(crate) fn parse_notifications_command_config() -> Result<Vec<String>, String
         _ => return Err("notifications-command must be a string or sequence".to_string()),
     };
 
-    // Early validations per spec (Phase 1)
     if tokens.is_empty() {
         return Err("notifications-command is empty".to_string());
-    }
-    // Enforce absolute executable path
-    if !tokens[0].starts_with('/') {
-        return Err("notifications-command executable must be an absolute path".to_string());
-    }
-
-    // Validate single strictly-trailing "{args}" placeholder (if present)
-    if let Some(last) = tokens.last() {
-        if last == "{args}" {
-            // ensure no other occurrences earlier
-            if tokens[..tokens.len() - 1].iter().any(|t| t == "{args}") {
-                return Err(
-                    "invalid notifications-command: '{args}' placeholder must be trailing"
-                        .to_string(),
-                );
-            }
-        } else if tokens.iter().any(|t| t == "{args}") {
-            return Err(
-                "invalid notifications-command: '{args}' placeholder must be trailing".to_string(),
-            );
-        }
     }
 
     Ok(tokens)

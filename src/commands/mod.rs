@@ -1,5 +1,3 @@
-use std::io;
-
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Cli, ToolchainKind};
@@ -90,8 +88,12 @@ pub fn run_toolchain_cache_clear(cli: &Cli) -> std::process::ExitCode {
             std::process::ExitCode::from(0)
         }
         Err(e) => {
-            eprintln!("aifo-coder: failed to purge toolchain caches: {}", e);
-            std::process::ExitCode::from(1)
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_error_stderr(
+                use_err,
+                &format!("aifo-coder: failed to purge toolchain caches: {}", e),
+            );
+            std::process::ExitCode::from(aifo_coder::exit_code_for_io_error(&e))
         }
     }
 }
@@ -132,12 +134,9 @@ pub fn run_toolchain(
     ) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{e}");
-            if e.kind() == io::ErrorKind::NotFound {
-                127
-            } else {
-                1
-            }
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_error_stderr(use_err, &e.to_string());
+            aifo_coder::exit_code_for_io_error(&e) as i32
         }
     };
     std::process::ExitCode::from((code & 0xff) as u8)

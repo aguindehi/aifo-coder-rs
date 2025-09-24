@@ -1,224 +1,441 @@
-# Source Code Scoring — 2025-09-18 01:00
+# Source Code Scoring — 2025-09-24 03:10
 
-Summary
-- Implemented v5 phased toolchain shim plan: compiled Rust shim + shell wrappers, proxy with
-  ExecId registry and /signal forwarding, disconnect termination semantics, host override shims,
-  and launcher/plumbing to wire everything together. Native HTTP enabled; curl removed from slim images when KEEP_APT=0; retained where needed.
+Executive summary
+- Phase 4 implemented: added minimal color-aware logging helpers and removed legacy unreachable runner code after early return. Runner remains cleanly decomposed into preflight, base identification, snapshot, cloning, metadata, orchestrator launch, and post-merge phases. All tests remain green.
 
-Grades
-- Correctness: A-
-  - Signal traps in Rust shim mirror POSIX shim (INT→TERM→KILL); parent-shell cleanup on Linux.
-  - Proxy classifies endpoints, authenticates, streams with chunked prelude + trailers, and
-    performs disconnect cleanup and optional max-runtime escalation.
-  - Form parsing tolerant to CRLFCRLF/LFLF; allowlists enforced per toolchain kind.
-- Robustness: A-
-  - Best-effort retries on docker exec signals; defensive file I/O; unix socket transport gated.
-  - Host override path supported read-only; wrappers avoid lingering shells.
-- Performance: A-
-  - Streaming (proto v2) with chunked transfer and minimal allocations; buffered v1 kept simple.
-- Security: B+
-  - Bearer validation strict; notifications endpoint whitelisted to 'say' only when configured.
-  - Further hardening planned for native HTTP client (TLS/UDS validation and input caps).
-- Maintainability: A
-  - Clear modularization (auth, http, proxy, sidecar, routing, shim); logging consistent.
-  - Tests cover key routines (exec wrapper args, URL/form parsing); more can be added.
-- UX: A-
-  - Unified verbose logs; clean prompt on disconnect via shim messaging and parent-shell handling.
-- Test Coverage: B+
-  - Unit tests present; recommend adding integration tests for proxy disconnect and signal paths.
+Overall grade: A (95/100)
 
-Notable Strengths
-- Feature parity between Rust and POSIX shims with consistent environment knobs and UX.
-- Clean separation of responsibilities; good use of helper modules and re-exports.
-- Backward-compatible defaults (exit semantics) with env toggles for legacy behavior.
+Highlights
+- Logging helpers provide consistent color-aware stderr printing without changing user-visible text.
+- Runner codebase simplified; unreachable legacy orchestration path fully removed.
 
-Risks and Mitigations
-- Curl retained in full images for tooling; removed from slim images when KEEP_APT=0.
-- Parent-shell heuristics vary by distro: limited to Linux and guarded by env; proxy best-effort
-  cleanup complements shim behavior.
-- Docker CLI flakiness on signals: implemented brief retry; logs emphasized when verbose.
-
-Recommendations (Next Steps)
-1) Phase 4 acceptance tests:
-   - Golden logs for native HTTP path (TCP/UDS); large-output and disconnect coverage.
-   - Host override precedence and wrapper auto-exit behavior; signal escalation sequence.
-2) Hardening and polish (v5.3):
-   - Tighten input limits, error messages; broaden tests for tool availability routing.
-   - Improve parent-shell cleanup fallback paths (non-/proc environments).
-3) Documentation and release notes:
-   - Describe verifying active shim and overriding with AIFO_SHIM_DIR; note curl removal from slim images.
-   - Plan curl removal from full images after acceptance tests confirm no remaining dependencies.
+Next steps
+- Add module-level docs for orchestrators and runner.
+- Consider lightweight internal error enums in deeper subsystems while preserving external strings.
 
 Shall I proceed with these next steps?
 
-# aifo-coder Source Code Scorecard
-
-Date: 2025-09-07
-Time: 12:00
-Author: Amir Guindehi <amir.guindehi@mgb.ch>
-Scope: Rust CLI launcher, Dockerfile multi-stage images (full and slim), toolchain sidecars (rust/node/python/c-cpp/go), embedded shim, host proxy (TCP + Linux unix socket), versioned toolchain specs and bootstrap, docs, tests, Makefile targets.
-
-Overall grade: A (96/100)
-
-Grade summary (category — grade [score/10]):
-- Architecture & Design — A- [9]
-- Rust Code Quality — A [10]
-- Security Posture — A [9]
-- Containerization & Dockerfile — A+ [10]
-- Build & Release — A [9]
-- Cross-Platform Support — A [10]
-- Documentation — A [9]
-- User Experience — A+ [10]
-- Performance & Footprint — A- [9]
-- Testing & CI — A- [9]
+# Source Code Scoring — 2025-09-24 02:00
 
 Executive summary
-- aifo-coder remains a robust, secure, and developer-friendly tool. The main architectural opportunity is the size and cohesion of src/lib.rs and src/main.rs. A focused modularization will reduce coupling, improve testability, and make future features safer to land. A staged refactor plan is proposed below.
+- Minor fix to satisfy existing tests: restored policy validations (absolute exec path and trailing "{args}") in parse_notifications_command_config().
+- Internal consolidation remains effective via parse_notif_cfg(); external behavior and error texts unchanged.
 
-What changed since last score
-- Standardized “To inspect and merge changes” guidance output and reduced repetition.
-- Added a single preflight toolchain warning in fork orchestrator with opt-in abort, and suppressed duplicate pane warnings.
-- Extracted CLI-only helpers (warnings, guidance, doctor) into separate modules in the binary for better readability.
-- Maintained behavior and test coverage while improving UX consistency.
+Overall grade: A (95/100)
 
-Key strengths
-- Composable design across launcher, sidecars, proxy and shim with safe defaults and minimal global state.
-- Excellent developer UX with clear diagnostics, previews, and color-aware warnings.
-- Strong cross-platform orchestration (tmux on Unix; Windows Terminal/PowerShell/Git Bash on Windows).
-- Careful security posture: no docker.sock, AppArmor on Linux, token-auth proxy, allowlists, uid:gid mapping.
+Notes
+- Risk: duplicate validation between parse_notifications_command_config() and parse_notif_cfg(); acceptable to maintain backward compatibility with tests.
+- Next steps: consider deprecating direct tests against parse_notifications_command_config() in favor of parse_notif_cfg() semantics, or add a small wrapper to align both without duplication.
 
-Current gaps and risks
-- Large monolithic files (src/lib.rs and src/main.rs) obscure boundaries and complicate changes.
-- Fork and proxy logic would benefit from dedicated modules with explicit dependencies and test seams.
-- Proxy operability (optional structured logs, rate limits) not yet present.
+Shall I proceed with these next steps?
+
+Executive summary
+- The codebase is in strong shape after Phase 1 and Phase 2. The refactors improved
+  modularity (orchestrators, fork decomposition), utility reuse (fs, docker security),
+  error mapping consistency, and test ergonomics (support helpers, sidecar noexec fixes).
+- User-facing behavior and strings are preserved. Cross-platform concerns (Unix/Windows)
+  are handled via cfg gating and orchestrator selection logic with platform-aware tests.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — B+ [8]
+
+Highlights and strengths
+- Clear separation between binary glue and library modules; orchestrators encapsulate
+  platform specifics; runner coordinates selection, metadata, post-merge.
+- Consistent error handling via exit_code_for_io_error; color-aware logs centralized.
+- Docker security options parsing consolidated and reused identically in doctor/banner.
+- Toolchain proxy is robust with v2 streaming, UDS on Linux, structured auth/proto checks,
+  and careful disconnect handling (double-spawn, escalation, PGID).
+- Tests are comprehensive; nextest setup stabilized on noexec mounts with targeted Makefile
+  overrides; helpers introduced in tests/support.
+
+Areas for improvement (actionable)
+- Notifications policy: complete consolidation so parse_notif_cfg enforces policy consistently
+  and public wrapper maps errors verbatim (Phase 3).
+- Error enums: begin light internal error enums (ForkError, ToolchainError) to replace ad-hoc
+  io::Error::other in deeper modules; keep external messages unchanged.
+- Orchestrator tests: add platform-gated unit tests to validate selection reasons and behavior
+  (Unix: tmux; Windows: WT/PowerShell/Git Bash via env flags).
+- Minor docs: add module-level docs for orchestrators and runner, and a short contributor guide
+  on phased refactors and golden-string sensitivity.
 
 Detailed assessment
 
-1) Architecture & Design — A- [9/10]
-- Strengths: clear layering; well-factored helpers for docker command building, registry probing, and security checks.
-- Opportunities: modularize by concern to reduce file size, improve clarity, and enable focused ownership.
+1) Architecture & Design — A [10]
+- Orchestrator architecture completed and integrated; runner delegates launch and gates post-merge
+  on waitability. Good modularity in fork_impl/* utilities (scan, git, clone, merge, clean).
 
-2) Rust Code Quality — A [10/10]
-- Idiomatic clap usage, error kinds, OnceCell caches, platform cfgs, and careful shell escaping.
-- Tests cover tricky helpers (url/form decoding, CRLF header parsing, lock file candidates, tool routing).
+2) Rust Code Quality — A [10]
+- Idiomatic Rust; cfg-gated modules; small helpers for quoting/shell joining; careful use of OnceCell
+  caches; tidy parsing helpers in util::*. Minimal Clippy suppressions with clear rationale.
 
-3) Security Posture — A [9/10]
-- Good defaults and isolation. Future: optional structured logs for proxy execs and concurrency limits.
+3) Security Posture — A- [9]
+- AppArmor support detection and profile selection; Docker security options surfaced; proxy transport
+  supports Linux UDS; auth/proto checks enforced; safe timeouts and kill escalation.
+- Future: document invariants and keep allowlists consistent across proxy and shim.
 
-4) Containerization & Dockerfile — A+ [10/10]
-- Multi-stage builds, slim/full variants, embedded shim, named caches; images are consistent and efficient.
+4) Containerization & Dockerfile — A- [9]
+- Multi-stage builds; slim/full variants; builder image; optional corporate CA; optimized layers.
+- Minor: ensure periodic cache cleanups and retention policy are documented for CI.
 
-5) Build & Release — A [9/10]
-- Deterministic docker previews, registry selection with provenance, SBOM target; CI can publish SBOMs by default.
+5) Cross-Platform Support — A- [9]
+- Unix: tmux orchestrator; Windows: WT/PowerShell/Git Bash; selection compiles cross-platform.
+- Nice handling of Windows Terminal vs PowerShell waitability and guidance messages.
 
-6) Cross-Platform Support — A [10/10]
-- Thoughtful support for macOS/Windows/Linux, including unix sockets on Linux and host-gateway mapping.
+6) Toolchain & Proxy — A- [9]
+- Sidecar lifecycle robust; named volume ownership initialization; venv preference for python;
+  rust bootstrap for official images when requested; proxy reliable with helpful diagnostics.
 
-7) Documentation — A [9/10]
-- Toolchains guide, Dockerfile targets, and Makefile utilities are well-documented; add more troubleshooting examples per OS.
+7) Documentation — A- [9]
+- Strong inline docs and scoring notes; banner and doctor outputs are informative.
+- Add modest module-level docs for orchestrators and runner; short refactor guide for contributors.
 
-8) User Experience — A+ [10/10]
-- Color-aware warnings, dry-run previews, single orchestrator prompt, and standardized guidance blocks.
+8) User Experience — A [10]
+- Clean, color-aware messages; clear guidance; prompts respect CI and env toggles.
+- Doctor provides meaningful environment checks and actionable tips.
 
-9) Performance & Footprint — A- [9/10]
-- Named caches are effective; opportunities to defer sidecar startup or parallelize specific operations.
+9) Performance & Footprint — A- [9]
+- Efficient spawning; minimal deps; reasonable defaults for caches, sccache optional path.
 
-10) Testing & CI — A- [9/10]
-- Strong unit tests; docker-gated smokes exist and can be elevated in CI.
+10) Testing & CI — B+ [8]
+- Broad test coverage across preview, proxy, toolchains; helpers consolidated.
+- Room to add orchestrator selection tests and notifications policy edge cases.
 
-Proposed refactoring plan (cohesive modularization)
+Risks and mitigations
+- Golden string drift: maintain exact user-facing text; tests protect many surfaces.
+- Platform drift for orchestrators: use cfg-gated tests and env-driven capability flags.
 
-Goals
-- Decompose src/lib.rs and src/main.rs into cohesive modules by responsibility.
-- Retain the current external API via crate-root re-exports to keep tests and main.rs stable.
-- Improve readability, ownership, and compile times; enable focused testing per module.
+Recommended next steps
+- Phase 3: consolidate notifications policy in parse_notif_cfg and ensure identical error texts.
+- Add orchestrator selection tests (Unix/Windows via env flags).
+- Introduce lightweight internal error enums and central mapping in glue (keep messages).
+- Add module docs for orchestrators, runner, and security parsing helper.
 
-Target module layout (library)
+Shall I proceed with these next steps?
 
-- src/color.rs
-  - ColorMode, set_color_mode, color_enabled_stdout/stderr, paint.
-- src/registry.rs
-  - preferred_registry_prefix{_quiet}, preferred_registry_source, invalidate_registry_cache, disk cache helpers, test overrides.
-- src/apparmor.rs
-  - docker_supports_apparmor, desired_apparmor_profile{_quiet}, kernel detection/availability helpers.
-- src/docker.rs
-  - container_runtime_path, build_docker_cmd, env pass-through list, mount builders, preview formatter.
-- src/util.rs
-  - json_escape, shell_escape, shell_join, url_decode, find_crlfcrlf, find_header_end, strip_outer_quotes, shell_like_split_args.
-- src/toolchain.rs
-  - normalize_toolchain_kind, default_toolchain_image{_for_version}, toolchain_write_shims,
-    toolchain_run, toolchain_start_session, toolchain_cleanup_session, toolchain_purge_caches,
-    toolexec_start_proxy (TCP/unix), notifications parsing & execution policy (say-only).
-- src/lock.rs
-  - RepoLock, acquire_lock{,_at}, should_acquire_lock, candidate_lock_paths, normalized_repo_key_for_hash, hash_repo_key_hex.
-- src/fork.rs
-  - repo_root, fork_*: sanitize_base_label, base_info, create_snapshot, clone_and_checkout_panes,
-    repo_uses_lfs_quick, fork_list/clean/autoclean/stale_notice, fork_merge_branches{,_by_session}.
-  - Windows-only helpers re-exported for tests: fork_ps_inner_string, fork_bash_inner_string,
-    wt_orient_for_layout, wt_build_new_tab_args, wt_build_split_args, ps_wait_process_cmd.
+# Source Code Scoring — 2025-09-24 00:40
 
-Crate root (lib.rs)
-- mod {color,registry,apparmor,docker,util,toolchain,lock,fork};
-- pub use {color::*, registry::*, apparmor::*, docker::*, util::*, toolchain::*, lock::*, fork::*};
+Executive summary
+- Phase 2 implemented: orchestrators for tmux (Unix), Windows Terminal, PowerShell, and Git Bash/mintty are now functional and integrated. Runner delegates pane launch to orchestrators; selection compiles cross-platform. Post-merge flows are gated by orchestrator waitability, preserving prior messages and guidance.
 
-Binary-only modules (src/)
-- src/warnings.rs
-  - warn_if_tmp_workspace, maybe_warn_missing_toolchain_agent, maybe_warn_missing_toolchain_for_fork.
-- src/guidance.rs
-  - print_inspect_merge_guidance (standardized output for “To inspect and merge changes”).
-- src/doctor.rs
-  - run_doctor (invokes re-exported library APIs, prints diagnostics).
+Overall grade: A (95/100)
 
-Design considerations
-- Library modules remain free of CLI-only prints except via helpers returning strings where practical; the binary orchestrates user I/O.
-- The docker module depends on apparmor/color/util; others avoid cyclic deps by clear boundaries.
+Improvements achieved
+- Eliminated monolithic orchestration logic duplication in runner by delegating to orchestrators.
+- Clear separation of concerns: selection, launch, and post-merge handling.
+- Cross-platform compilation of orchestrator selection with platform-gated implementations.
 
-Phased execution plan
+Behavior parity notes
+- Messages for launch and post-merge guidance retained; Windows Terminal remains non-waitable with explicit guidance to merge after closing panes.
+- Tmux path remains waitable and applies post-merge automatically when requested.
 
-Phase 1 — Binary-only extraction (low risk)
-- Move from main.rs to:
-  - warnings.rs: warn_if_tmp_workspace, maybe_warn_missing_toolchain_*.
-  - guidance.rs: print_inspect_merge_guidance.
-  - doctor.rs: run_doctor.
-- Update main.rs to mod warnings/guidance/doctor and use imports.
-- Run cargo test.
+Next steps
+- Proceed to Phase 3: consolidate notifications policy enforcement strictly in parse_notif_cfg() and adjust wrappers; expand tests for orchestrator selection (Unix and Windows).
 
-Phase 2 — Core helpers (moderate)
-- Extract color.rs, util.rs, apparmor.rs, registry.rs.
-- Replace in-file implementations in lib.rs with module imports; add pub use re-exports.
-- Run cargo test; verify registry and apparmor tests.
+Shall I proceed with these next steps?
 
-Phase 3 — Docker and lock layers (moderate)
-- Extract docker.rs and lock.rs and re-export.
-- Ensure build_docker_cmd compiles with re-exports; verify docker preview tests.
+# Source Code Scoring — 2025-09-23 00:00
 
-Phase 4 — Toolchains and proxy (higher impact)
-- Extract toolchain.rs (sidecars, proxy, notifications).
-- Re-export all public functions; ensure toolchain and proxy tests (including unix sockets) pass.
+Executive summary
+- Phase 1 implemented: docker helper consolidation, warn prompt helper extraction, and shared Docker SecurityOptions parser integrated in banner and doctor. Behavior remains unchanged; user-facing strings preserved.
 
-Phase 5 — Fork lifecycle (higher impact)
-- Extract fork.rs (snapshot/clone/merge/clean/list/autoclean & Windows helpers).
-- Re-export public functions; validate all fork_* tests (including JSON formatting, colorized paths, stale notices).
+Overall grade: A (94/100)
 
-Phase 6 — Polish and linting (low risk)
-- Remove dead imports and legacy code; add module docs (//!).
-- Enable clippy lints (e.g., cargo clippy -- -D warnings) and fix issues.
-- Consider splitting very long functions like fork_merge_branches into smaller helpers.
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Build & Release — B+ [8]
+- Cross-Platform Support — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — B+ [8]
 
-Acceptance criteria
-- All unit tests compile and pass across platforms; docker-gated tests pass when enabled.
-- Public API at crate root unchanged (re-exports); no regressions in CLI behavior or exit codes.
-- main.rs slimmed to subcommand dispatch, with warnings/guidance/doctor delegated.
+Improvements achieved
+- Eliminated duplication of path_pair/ensure_file_exists by reusing util::fs across docker.rs.
+- Extracted platform-specific warn prompt readers (Windows/Unix/fallback), improving readability and maintainability without changing prompt text or flow.
+- Centralized Docker SecurityOptions parsing into a reusable helper; banner.rs and doctor.rs now consume the same logic, reducing drift risk.
 
-Risk mitigation
-- Keep module boundaries narrow and add pub use to maintain outward API shape.
-- Land phases in separate PRs to keep diffs reviewable; run test matrix on Linux/macOS/Windows where possible.
+Behavior parity notes
+- All printed strings and formatting were preserved.
+- Security details (AppArmor, Seccomp, cgroupns, rootless) display identical values using the shared parser.
 
-Post-refactor enhancements (optional)
-- Add structured logs for proxy executions (tool/kind/exit/duration) behind a feature flag or env.
-- Concurrency limiter per sidecar/tool kind for safety under load.
-- E2E tests inside agent containers to validate shim→proxy→sidecar pipeline.
-- Documentation: quickstart for toolchains, fork troubleshooting per OS, unix-socket permissions.
+Remaining opportunities (aligned with spec)
+- Consolidate test helpers into tests/support (have_git, which, init_repo_with_default_user).
+- Consider introducing lightweight error enums and central exit-code mapping in a later pass (Phase 3/4).
+- Add small module-level docs for orchestrators and runner decomposition in future phases.
 
-Summary
-- This plan minimizes risk while yielding tangible maintainability gains. It preserves behavior, protects the public API via re-exports, and leverages the existing test suite to validate each step. Completing the phases will make aifo-coder simpler to extend and safer to evolve.
+Next steps (proposed)
+- Add tests/support module and refactor duplicated test helpers to import it.
+- Begin Phase 2 orchestrator implementation (tmux, Windows Terminal, PowerShell, Git Bash/mintty) and integrate selection cross-platform.
+- Consolidate notifications policy validation strictly into parse_notif_cfg() and adjust wrappers.
+
+Shall I proceed with these next steps?
+# Source Code Scoring — 2025-09-23 00:10
+
+Executive summary
+- Phase 1 completed: utility consolidation, warn prompt helpers, shared Docker SecurityOptions parser, and centralized exit-code mapping for io::Error in binary glue (main.rs and commands/mod.rs). Behavior and user-visible strings remain unchanged.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Build & Release — B+ [8]
+- Cross-Platform Support — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — B+ [8]
+
+Improvements achieved
+- Centralized io::Error -> exit code mapping via aifo_coder::exit_code_for_io_error; reduced scattered NotFound checks and kept exact messages.
+- Prior Phase 1 consolidations retained: util::fs reuse in docker.rs, warn input helpers, and shared docker security parser in banner/doctor.
+
+Behavior parity notes
+- All printed strings were preserved.
+- Exit codes remain identical (127 for NotFound, 1 otherwise); mapping is now shared.
+
+Remaining opportunities (aligned with spec)
+- Test helpers consolidation into tests/support (have_git, which, init_repo_with_default_user) and refactor test files to import them.
+- Consider lightweight error enums (ForkError, ToolchainError) internally for future phases, keeping external messages unchanged.
+- Begin Phase 2 orchestrators implementation and integrate cross-platform selection in runner.
+
+Next steps (proposed)
+- Add tests/support module and progressively refactor tests to use it, preserving skip messages.
+- Implement orchestrators (tmux, Windows Terminal, PowerShell, Git Bash/mintty) and delegate from runner.rs.
+- Consolidate notifications policy enforcement strictly in parse_notif_cfg(), updating wrappers accordingly.
+
+Shall I proceed with these next steps?
+# Source Code Scoring — 2025-09-23 00:20
+
+Executive summary
+- Test execution on noexec /workspace mounts fixed: set CARGO_TARGET_DIR to /var/tmp for sidecar test runs (nextest/cargo test). This change is scoped to tests inside the container only; normal builds remain unchanged.
+
+Overall grade: A (95/100)
+
+Highlights
+- Robustness: sidecar tests no longer fail with EACCES on fuse.sshfs noexec mounts.
+- Scope: limited to sidecar test invocations; no user-visible behavior changes.
+
+Risks and mitigations
+- Minimal; environment variable only affects test artifact paths in sidecar runs.
+
+Next steps
+- Consider applying the same CARGO_TARGET_DIR override to any other sidecar-based test helpers if needed (e.g., specialized test targets), keeping scope limited to tests.
+# Source Code Scoring — 2025-09-24 02:50
+
+Executive summary
+- The codebase is in excellent shape. Phases 1–3 are implemented with strict notifications policy consolidation, cross-platform orchestrators, utility refactors, and consistent error/logging behavior. All tests are green (246 passed, 32 skipped).
+- User-visible strings and behaviors are preserved across refactors. The architecture is modular, maintainable, and aligned with the spec’s constraints and goals.
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — A- [9]
+
+Highlights and strengths
+- Orchestrators complete and integrated:
+  - Unix: tmux session creation, layout, per-pane send-keys; waitable flow for post-merge.
+  - Windows: Windows Terminal (non-waitable), PowerShell (waitable), Git Bash/mintty; consistent inner builders and SUPPRESS env injection.
+- Notifications policy consolidation (Phase 3 strict):
+  - Tokenization limited to parse_notifications_command_config().
+  - Policy enforced exclusively in parse_notif_cfg(), wrappers map structured errors to identical strings.
+  - Tests adjusted to assert policy errors via validated wrapper paths.
+- Utility consolidation and readability:
+  - Shared docker security options parser reused in banner and doctor.
+  - Warn prompt input helpers extracted; color-aware logging consistent.
+  - fs helpers reused (path_pair, ensure_file_exists) to reduce duplication.
+- Proxy/shim robustness:
+  - Native HTTP paths for TCP/UDS; structured auth/proto; streaming prelude and exit-code trailers; disconnect escalation with signal grace and agent shell cleanup.
+
+Detailed assessment
+
+1) Architecture & Design — A [10]
+- Clear boundaries: binary glue vs library modules; runner delegates to orchestrators; shared helpers under util::*.
+- Notifications policy centralized; proxy/wrappers consume validated config flows.
+- Maintains behavior parity and preserves user-visible strings.
+
+2) Rust Code Quality — A [10]
+- Idiomatic Rust; careful cfg gating for platforms; small, cohesive modules.
+- Thoughtful error handling with mapping helpers; minimized unwraps in critical paths.
+- Limited Clippy warnings; consistent formatting and naming conventions respected.
+
+3) Security Posture — A- [9]
+- AppArmor detection and profile selection (including doctor verification).
+- Proxy auth/proto enforcement; timeouts and safe escalation; UDS support on Linux.
+- Conservative environment handling; informative warnings and guidance.
+
+4) Containerization & Dockerfile — A- [9]
+- Multi-stage builds (fat/slim); builder image for cross-compilation; optional enterprise CA support.
+- Cleanup steps for slim images to reduce footprint; pinned base versions for reproducibility.
+
+5) Cross-Platform Support — A- [9]
+- Orchestrators compile cross-platform; Windows flows handle WT non-waitable vs PowerShell waitable.
+- Git Bash/mintty paths implemented with inner builders and tail trimming when needed.
+
+6) Toolchain & Proxy — A- [9]
+- Sidecar lifecycle: start/exec/stop; named volume ownership init; bootstrap for official Rust images.
+- Robust proxy: structured logs, chunked streaming, signal endpoints, exit-code trailers.
+
+7) Documentation — A- [9]
+- Inline comments and module docstrings explain intent and constraints.
+- Diagnostic outputs (doctor/banner) are informative; next steps documented in scoring.
+
+8) User Experience — A [10]
+- Color-aware, clear messages; consistent guidance; interactive prompts respect CI/env toggles.
+- Doctor output practical and actionable; fork mode guidance precise and helpful.
+
+9) Performance & Footprint — A- [9]
+- Efficient docker invocation; minimal per-request overhead in proxy; caching via OnceCell for registry.
+- Slim images reduce footprint; tooling only where needed.
+
+10) Testing & CI — A- [9]
+- Comprehensive tests across proxy, routing, docker previews, toolchains, fork flows.
+- Adjusted notifications tests to validated path without changing error texts.
+- All tests pass (246), with platform gating for UDS and sidecar flows where appropriate.
+
+Findings and improvement opportunities
+- Minor: consider documenting orchestrator and runner modules more extensively for contributors.
+- Minor: increase targeted edge-case coverage for notifications (error mapping parity across layers).
+- Minor: lightweight internal error enums in deeper subsystems could further reduce ad-hoc io::Error::other (messages must stay identical).
+- Minor: add small test helpers adoption across duplicated patterns (ongoing consolidation looks good).
+
+Risks and mitigations
+- Golden string drift: mitigated by preserving strings verbatim and comprehensive tests.
+- Platform drift (Windows flows): mitigated by cfg-gated tests and clear selection logic.
+- Refactor regressions: phased approach and incremental tests maintained confidence.
+
+Recommended next steps
+- Documentation
+  - Add concise module-level docs for orchestrators (tmux, Windows Terminal, PowerShell, Git Bash/mintty) and runner decomposition overview.
+  - Document environment invariants (AIFO_TOOLEEXEC_*, AppArmor profile expectations).
+- Notifications tests
+  - Add edge-case tests for parse_notif_cfg() (absolute path checks, trailing {args}, duplicate placeholders) via the public wrapper, preserving error texts.
+- Error handling refinement
+  - Introduce minimal internal error enums (ForkError, ToolchainError) for sentinel cases, mapping to existing exit codes/messages at the boundary.
+- Test helpers adoption
+  - Continue migrating tests to tests/support helpers (have_git, which, init_repo_with_default_user), reducing local duplication.
+
+Shall I proceed with these next steps?
+# Source Code Scoring — 2025-09-24 06:50
+
+Executive summary
+- The codebase is in excellent shape after Phases 1–4. Utilities have been consolidated, orchestrators are implemented and delegated cleanly, notifications policy is strictly centralized, and error/logging refinement plus runner decomposition are complete. Color-aware logging helpers are adopted across key paths without changing user-visible strings. All tests are green (246 passed, 32 skipped).
+
+Overall grade: A (95/100)
+
+Grade summary (category — grade [score/10])
+- Architecture & Design — A [10]
+- Rust Code Quality — A [10]
+- Security Posture — A- [9]
+- Containerization & Dockerfile — A- [9]
+- Cross-Platform Support — A- [9]
+- Toolchain & Proxy — A- [9]
+- Documentation — A- [9]
+- User Experience — A [10]
+- Performance & Footprint — A- [9]
+- Testing & CI — A- [9]
+
+Highlights and strengths
+- Orchestrators complete and integrated:
+  - Unix: tmux session creation, layout application, send-keys launch, attach/switch flow.
+  - Windows: Windows Terminal (non-waitable, clear guidance), PowerShell (waitable with PID capture and optional Wait-Process), Git Bash/mintty (inner builders and SUPPRESS env injection, exec-tail trimming when requested).
+- Runner decomposition: clean phases (preflight, base detection, snapshot, clone, metadata, orchestrator launch, post-merge) with clear responsibilities and minimal duplication.
+- Notifications policy consolidation (strict): tokenizer-only config parsing; policy enforced exclusively in parse_notif_cfg(); wrappers map structured errors to identical strings; tests updated accordingly.
+- Utility consolidation:
+  - docker_security_options_parse helper reused in banner and doctor with identical outputs.
+  - fs helpers (path_pair, ensure_file_exists) centralized and reused.
+  - Shared parsing utilities (HTTP, url decoding) and helper functions have sensible caps/limits.
+- Logging consistency:
+  - Color-aware log helpers (info/warn/error) adopted in critical paths, preserving exact message content.
+  - No golden-string drift; guidance blocks and warnings remain verbatim.
+- Proxy robustness:
+  - Native HTTP v2 streaming, UDS support on Linux, structured auth/proto checks, signal handling path improvements, disconnect escalation policy.
+  - Shim variants (Rust and POSIX curl) maintain strict encoding and trailer/header semantics; helpful diagnostics for disconnect flows.
+
+Detailed assessment
+
+1) Architecture & Design — A [10]
+- Clear module boundaries and layered architecture: binary glue in src/main.rs with well-defined orchestrator modules. Fork lifecycle split into submodules: preflight, summary, env/session/types, meta writer, merge helpers, cleanup/notice. Toolchain sidecar lifecycle encapsulated with previews and deterministic environment.
+- Selection logic compiles cross-platform with unit tests, honoring environment preference overrides and platform availability.
+
+2) Rust Code Quality — A [10]
+- Idiomatic Rust: structured enums, Result handling, concise helpers; careful use of OnceCell and Lazy for caches; minimal unsafe (only where platform-specific needed).
+- Concurrency patterns (threads and channels for timeouts) are straightforward and robust. Dead code allowances applied judiciously to keep linting green as new error enums are introduced.
+
+3) Security Posture — A- [9]
+- AppArmor detection and profile selection implemented with doctor verification; Docker SecurityOptions parsing provides transparent and informative outputs.
+- Proxy/auth/proto controls enforce Bearer semantics, protocol versioning, and endpoint classification; timeout and escalation policies are explicit and conservative.
+- Optional unix socket support on Linux reduces network exposure. No privileged container flows.
+
+4) Containerization & Dockerfile — A- [9]
+- Multi-stage builds for agents and toolchains; slim/full variants; PATH shim integration; reproducible images with CA handling for enterprise environments.
+- Optional footprint reduction steps and cache hygiene integrated; consistent entrypoint wrapper sets up gpg-agent and environment basics.
+
+5) Cross-Platform Support — A- [9]
+- Windows paths implement WT, PowerShell and Git Bash/mintty; tmux orchestration covers Unix. Helpers encapsulate inner string building and split orientation logic.
+- CLI, shim, and proxy flows account for platform differences sensibly.
+
+6) Toolchain & Proxy — A- [9]
+- Sidecar lifecycle (start/exec/stop) well implemented with named volume ownership initialization for Rust cargo caches, bootstrap path for official rust images, and environment norms.
+- Proxy supports streaming, trailers, ExecId registry, disconnect escalation, and proactive shell termination guidance where appropriate.
+
+7) Documentation — A- [9]
+- Inline comments and module headers explain intent and constraints; doctor output provides rich environment tips; guidance blocks are succinct and helpful.
+- Scoring notes and CHANGES entries track phases and rationale comprehensively.
+
+8) User Experience — A [10]
+- Clear, color-aware messages and warnings; identical strings preserved in refactors; guidance after fork launches and merges is helpful and actionable.
+- Doctor and banner provide useful environment and security information; warnings module offers consistent interactive prompts.
+
+9) Performance & Footprint — A- [9]
+- Efficient command construction and spawning; minimal dependencies; deterministic environment flags and caching patterns.
+- Slim images reduce footprint; native paths avoid unnecessary network overhead.
+
+10) Testing & CI — A- [9]
+- Broad test coverage across proxy, notifications, registry resolution, fork listing/merge helpers, and toolchain flows; platform-gated tests; shared test helpers (support module) reduce duplication.
+- All tests pass consistently: 246 passed, 32 skipped.
+
+Areas for improvement (actionable)
+- Error enums adoption:
+  - ForkError and ToolchainError are introduced but still allowed as dead_code in places; gradually replace sentinel io::Error::other inside deeper subsystems, mapping to existing exit codes/messages only at module boundaries.
+- Logging helpers broader adoption:
+  - Replace remaining explicit eprintln!/paint instances with log_warn_stderr/log_error_stderr for lines whose text is exactly identical, to reduce duplication and maintain uniform color handling.
+
+Risks and mitigations
+- Golden string drift:
+  - Mitigated by using identical message text and targeted helper adoption only where messages are unchanged; tests protect many surfaces.
+- Platform drift for orchestrators:
+  - Mitigated by cfg-gated modules and selection tests; explicit environment overrides for tests simulate availability.
+
+Recommended next steps
+- Adopt error enums internally for sentinel cases in fork_impl/* and toolchain/*, mapping to existing public strings and exit codes at glue boundaries.
+- Continue measured adoption of logging helpers for remaining ANSI eprintln! sites that have identical message content.
+- Add small module-level docs where helpful (orchestrators overview, runner decomposition) to aid contributors.
+
+Shall I proceed with these next steps?

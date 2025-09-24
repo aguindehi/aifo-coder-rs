@@ -1,4 +1,5 @@
 //! Clone and checkout helpers for creating fork panes with LFS/submodules best-effort support.
+use crate::ForkError;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -73,9 +74,8 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
             }
         }
         if !cloned_ok {
-            return Err(std::io::Error::other(format!(
-                "git clone failed for pane {}",
-                i
+            return Err(std::io::Error::other(crate::display_for_fork_error(
+                &ForkError::Message(format!("git clone failed for pane {}", i)),
             )));
         }
 
@@ -104,9 +104,11 @@ pub(crate) fn fork_clone_and_checkout_panes_impl(
             .status()?;
         if !st.success() {
             let _ = fs::remove_dir_all(&pane_dir);
-            return Err(std::io::Error::other(format!(
-                "git checkout failed for pane {} (branch {})",
-                i, branch
+            return Err(std::io::Error::other(crate::display_for_fork_error(
+                &ForkError::Message(format!(
+                    "git checkout failed for pane {} (branch {})",
+                    i, branch
+                )),
             )));
         }
 
