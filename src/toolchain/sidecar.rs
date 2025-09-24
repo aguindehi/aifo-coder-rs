@@ -589,18 +589,14 @@ pub fn toolchain_run(
             if !verbose {
                 run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
             }
-            let status = run_cmd
-                .status()
-                .map_err(|e| {
-                    io::Error::new(
-                        e.kind(),
-                        aifo_coder::display_for_toolchain_error(
-                            &aifo_coder::ToolchainError::Message(format!(
-                                "failed to start sidecar: {e}"
-                            )),
-                        ),
-                    )
-                })?;
+            let status = run_cmd.status().map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    aifo_coder::display_for_toolchain_error(&aifo_coder::ToolchainError::Message(
+                        format!("failed to start sidecar: {e}"),
+                    )),
+                )
+            })?;
             if !status.success() {
                 // Race-safe fallback: consider success if the container exists now (started by a peer)
                 let mut exists_after = false;
@@ -652,11 +648,9 @@ pub fn toolchain_run(
         let status = exec_cmd.status().map_err(|e| {
             io::Error::new(
                 e.kind(),
-                aifo_coder::display_for_toolchain_error(
-                    &aifo_coder::ToolchainError::Message(format!(
-                        "failed to exec in sidecar: {e}"
-                    )),
-                ),
+                aifo_coder::display_for_toolchain_error(&aifo_coder::ToolchainError::Message(
+                    format!("failed to exec in sidecar: {e}"),
+                )),
             )
         })?;
         exit_code = status.code().unwrap_or(1);
@@ -771,13 +765,11 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
-                    return Err(io::Error::other(
-                        aifo_coder::display_for_toolchain_error(
-                            &aifo_coder::ToolchainError::Message(
-                                "failed to start one or more sidecars".to_string(),
-                            ),
+                    return Err(io::Error::other(aifo_coder::display_for_toolchain_error(
+                        &aifo_coder::ToolchainError::Message(
+                            "failed to start one or more sidecars".to_string(),
                         ),
-                    ));
+                    )));
                 }
             }
         }
