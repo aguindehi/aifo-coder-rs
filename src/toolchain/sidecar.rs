@@ -16,8 +16,8 @@ use std::time::Duration;
 use nix::unistd::{getgid, getuid};
 
 use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
-use crate::{container_runtime_path, shell_join};
 use crate::ToolchainError;
+use crate::{container_runtime_path, shell_join};
 
 use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
@@ -593,9 +593,9 @@ pub fn toolchain_run(
             let status = run_cmd.status().map_err(|e| {
                 io::Error::new(
                     e.kind(),
-                    crate::display_for_toolchain_error(&ToolchainError::Message(
-                        format!("failed to start sidecar: {e}"),
-                    )),
+                    crate::display_for_toolchain_error(&ToolchainError::Message(format!(
+                        "failed to start sidecar: {e}"
+                    ))),
                 )
             })?;
             if !status.success() {
@@ -649,9 +649,9 @@ pub fn toolchain_run(
         let status = exec_cmd.status().map_err(|e| {
             io::Error::new(
                 e.kind(),
-                crate::display_for_toolchain_error(&ToolchainError::Message(
-                    format!("failed to exec in sidecar: {e}"),
-                )),
+                crate::display_for_toolchain_error(&ToolchainError::Message(format!(
+                    "failed to exec in sidecar: {e}"
+                ))),
             )
         })?;
         exit_code = status.code().unwrap_or(1);

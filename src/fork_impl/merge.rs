@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
-use crate::{json_escape, shell_join};
 use crate::ForkError;
+use crate::{json_escape, shell_join};
 
 pub(crate) fn collect_pane_branches_impl(
     panes: &[(PathBuf, String)],
@@ -295,9 +295,7 @@ pub(crate) fn fork_merge_branches_impl(
         };
         if !st.success() {
             return Err(io::Error::other(crate::display_for_fork_error(
-                &ForkError::Message(
-                    "failed to checkout merge target branch".to_string(),
-                ),
+                &ForkError::Message("failed to checkout merge target branch".to_string()),
             )));
         }
     }
