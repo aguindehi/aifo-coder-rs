@@ -85,8 +85,8 @@ pub fn init_repo_with_default_user(dir: &Path) -> io::Result<()> {
 /// Capture stdout to a temporary file while running `f`, returning the captured text.
 /// Intended for integration tests; mirrors repeated inline helpers.
 pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use std::os::fd::{FromRawFd, RawFd};
     use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
+    use std::os::fd::{FromRawFd, RawFd};
     unsafe {
         // Open a temporary file
         let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout.tmp").unwrap();
