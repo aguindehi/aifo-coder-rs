@@ -1,14 +1,7 @@
 use std::process::Command;
+mod support;
+use support::have_git;
 
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
 
 #[test]
 fn test_fork_merge_octopus_conflict_sets_meta_and_leaves_branches() {

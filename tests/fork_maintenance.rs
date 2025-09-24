@@ -1,48 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
-
-fn have_git() -> bool {
-    std::process::Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
+mod support;
+use support::{have_git, init_repo_with_default_user};
 
 // Helper: initialize a minimal git repo with one commit
 fn init_repo(dir: &PathBuf) {
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    // Disable GPG signing to avoid interactive pinentry during test commits
-    let _ = std::process::Command::new("git")
-        .args(["config", "commit.gpgsign", "false"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "tag.gpgSign", "false"])
-        .current_dir(dir)
-        .status();
-    fs::write(dir.join("init.txt"), "x\n").unwrap();
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
+    let _ = init_repo_with_default_user(dir.as_path());
 }
 
 #[test]
