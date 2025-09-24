@@ -92,6 +92,7 @@ pub fn urlencode(s: &str) -> String {
 #[cfg(unix)]
 /// Capture stdout to a temporary file while running `f`, returning the captured text.
 /// Intended for integration tests; mirrors repeated inline helpers.
+#[allow(dead_code)]
 pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
     use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
     use std::os::fd::{FromRawFd, RawFd};
