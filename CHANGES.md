@@ -1,3 +1,13 @@
+2025-09-24 08:20 user@example.com
+
+Phase 5 follow-up: error-surface consistency and proxy helpers
+
+Short summary: Wrap remaining io::Error::other strings, add proxy log helper.
+
+- Wrapped remaining io::Error::other strings with display_for_* in lock.rs, merge.rs, and toolchain sidecar start paths.
+- Added proxy helper log_disconnect() and constant to reduce repeated disconnect strings; reused in two places.
+- No user-visible strings changed; behavior unchanged. Suggested running rustfmt.
+
 2025-09-24 08:00 user@example.com
 
 Scoring: comprehensive source code assessment and next steps

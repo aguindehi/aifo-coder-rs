@@ -747,9 +747,14 @@ pub fn toolchain_start_session(
             if !verbose {
                 run_cmd.stdout(Stdio::null()).stderr(Stdio::null());
             }
-            let st = run_cmd
-                .status()
-                .map_err(|e| io::Error::new(e.kind(), format!("failed to start sidecar: {e}")))?;
+            let st = run_cmd.status().map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    crate::display_for_toolchain_error(&ToolchainError::Message(
+                        format!("failed to start sidecar: {e}"),
+                    )),
+                )
+            })?;
             if !st.success() {
                 // Race-safe fallback: if the container exists now, proceed; otherwise fail
                 let mut exists_after = false;

@@ -510,7 +510,9 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     }
 
     if panes.is_empty() {
-        return Err(io::Error::other("no pane branches found (detached HEAD?)"));
+        return Err(io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("no pane branches found (detached HEAD?)".to_string()),
+        )));
     }
 
     super::fork_merge_branches(

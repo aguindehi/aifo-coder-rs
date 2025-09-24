@@ -153,6 +153,13 @@ fn log_stderr_and_file(s: &str) {
     let _ = io::stderr().flush();
 }
 
+// Small helpers/constants to reduce duplication in proxy logs
+const DISCONNECT_MSG: &str = "\raifo-coder: disconnect";
+
+fn log_disconnect() {
+    log_stderr_and_file(DISCONNECT_MSG);
+}
+
 /// Best-effort: send a signal to the process group inside container for given exec id.
 fn kill_in_container(
     runtime: &PathBuf,
@@ -271,7 +278,7 @@ fn disconnect_terminate_exec_in_container(
     agent_container: Option<&str>,
 ) {
     // Always print a single disconnect line so the user sees it before returning to the agent
-    log_stderr_and_file("\raifo-coder: disconnect");
+    log_disconnect();
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(50));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
@@ -1098,7 +1105,7 @@ fn handle_connection<S: Read + Write>(
                 }
             };
             if suppress {
-                log_stderr_and_file("\raifo-coder: disconnect");
+                log_disconnect();
                 if let Some(ac) = ctx.agent_container.as_deref() {
                     kill_agent_shell_in_agent_container(&ctx.runtime, ac, &exec_id, verbose);
                 }
