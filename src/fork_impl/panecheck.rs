@@ -61,22 +61,27 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         if !(base_ok && head_sha_opt.is_some()) {
             (false, true)
         } else {
-            // Use merge-base --is-ancestor to decide ancestry robustly
-            let is_ancestor = {
-                let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                cmd.arg("merge-base")
-                    .arg("--is-ancestor")
-                    .arg(base_sha)
-                    .arg("HEAD");
-                cmd.stderr(std::process::Stdio::null());
-                cmd.status().ok().map(|st| st.success()).unwrap_or(false)
-            };
-            if let Some(head_sha) = head_sha_opt {
-                if is_ancestor {
-                    (head_sha != base_sha, false)
+            // Fast path: exact equality means not-ahead and base is known
+            if let Some(ref head_sha_eq) = head_sha_opt {
+                if head_sha_eq == base_sha {
+                    (false, false)
                 } else {
-                    // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
-                    (false, true)
+                    // Use merge-base --is-ancestor to decide ancestry robustly
+                    let is_ancestor = {
+                        let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                        cmd.arg("merge-base")
+                            .arg("--is-ancestor")
+                            .arg(base_sha)
+                            .arg("HEAD");
+                        cmd.stderr(std::process::Stdio::null());
+                        cmd.status().ok().map(|st| st.success()).unwrap_or(false)
+                    };
+                    if is_ancestor {
+                        (true, false)
+                    } else {
+                        // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
+                        (false, true)
+                    }
                 }
             } else {
                 // HEAD not resolvable -> treat as base-unknown
