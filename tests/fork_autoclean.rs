@@ -10,14 +10,14 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo_with_default_user(&root);
+    let _ = init_repo_with_default_user(&root);
 
     // Old clean session
     let sid_clean = "sid-clean-old";
     let base_clean = root.join(".aifo-coder").join("forks").join(sid_clean);
     let pane_clean = base_clean.join("pane-1");
     std::fs::create_dir_all(&pane_clean).unwrap();
-    init_repo_with_default_user(&pane_clean);
+    let _ = init_repo_with_default_user(&pane_clean);
     let head_clean = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])
@@ -45,7 +45,7 @@ fn test_fork_autoclean_removes_only_clean_sessions() {
     let base_prot = root.join(".aifo-coder").join("forks").join(sid_prot);
     let pane_prot = base_prot.join("pane-1");
     std::fs::create_dir_all(&pane_prot).unwrap();
-    init_repo_with_default_user(&pane_prot);
+    let _ = init_repo_with_default_user(&pane_prot);
     let head_prot = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

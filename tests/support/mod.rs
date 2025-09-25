@@ -97,8 +97,16 @@ pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
     use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
     use std::os::fd::{FromRawFd, RawFd};
     unsafe {
-        // Open a temporary file
-        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout.tmp").unwrap();
+        // Open a temporary file (unique per call to avoid cross-test interleaving)
+        let unique = format!(
+            "/tmp/aifo-coder-test-stdout-{}-{}.tmp",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                .as_nanos()
+        );
+        let path = std::ffi::CString::new(unique).unwrap();
         let mode = std::ffi::CString::new("w+").unwrap();
         let file = fopen(path.as_ptr(), mode.as_ptr());
         assert!(!file.is_null(), "failed to open temp file for capture");
