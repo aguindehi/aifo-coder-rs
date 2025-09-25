@@ -2,10 +2,6 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 fn write_fake_session(repo_root: &std::path::Path, sid: &str, age_days: u64) {
     let forks = repo_root.join(".aifo-coder").join("forks");
     let sd = forks.join(sid);
@@ -42,13 +38,13 @@ fn test_fork_list_all_repos_json_includes_both() {
     // repo1
     let repo1 = wsdir.join("repo1");
     std::fs::create_dir_all(&repo1).unwrap();
-    init_repo(&repo1);
+    let _ = support::init_repo_with_default_user(&repo1);
     write_fake_session(&repo1, "sid-r1", 20);
 
     // repo2
     let repo2 = wsdir.join("repo2");
     std::fs::create_dir_all(&repo2).unwrap();
-    init_repo(&repo2);
+    let _ = support::init_repo_with_default_user(&repo2);
     write_fake_session(&repo2, "sid-r2", 1);
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");

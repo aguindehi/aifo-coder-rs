@@ -5,10 +5,6 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 mod support;
 
-fn urlencode_component(s: &str) -> String {
-    support::urlencode(s)
-}
-
 #[test]
 #[ignore]
 fn accept_phase4_native_http_uds_exec_rust_version() {
@@ -46,9 +42,9 @@ fn accept_phase4_native_http_uds_exec_rust_version() {
         if !body.is_empty() {
             body.push('&');
         }
-        body.push_str(&urlencode_component(k));
+        body.push_str(&support::urlencode(k));
         body.push('=');
-        body.push_str(&urlencode_component(v));
+        body.push_str(&support::urlencode(v));
     }
 
     let req_line = "POST /exec HTTP/1.1\r\n";

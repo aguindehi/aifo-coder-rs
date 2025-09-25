@@ -4,10 +4,6 @@ use std::process::Command;
 mod support;
 use support::{have_git, init_repo_with_default_user};
 
-fn init_repo(dir: &PathBuf) {
-    let _ = init_repo_with_default_user(dir.as_path());
-}
-
 #[test]
 fn test_fork_list_json_includes_repo_root_and_default_stale_false() {
     if !have_git() {
@@ -16,14 +12,14 @@ fn test_fork_list_json_includes_repo_root_and_default_stale_false() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = init_repo_with_default_user(&root);
 
     // Create a fresh (non-stale) session with created_at ~ now
     let sid = "sid-now";
     let base = root.join(".aifo-coder").join("forks").join(sid);
     let pane = base.join("pane-1");
     fs::create_dir_all(&pane).unwrap();
-    init_repo(&pane);
+    let _ = init_repo_with_default_user(&pane);
     let head = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

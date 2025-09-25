@@ -4,16 +4,6 @@ use std::process::Command;
 mod support;
 
 #[cfg(windows)]
-fn which(bin: &str) -> bool {
-    support::which(bin).is_some()
-}
-
-#[cfg(windows)]
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
-#[cfg(windows)]
 #[test]
 fn test_e2e_fork_windows_terminal_smoke_opt_in() {
     // Only run when explicitly requested and prerequisites are present
@@ -21,7 +11,7 @@ fn test_e2e_fork_windows_terminal_smoke_opt_in() {
         eprintln!("skipping: AIFO_CODER_E2E!=1");
         return;
     }
-    if !which("wt.exe") && !which("wt") {
+    if support::which("wt.exe").is_none() && support::which("wt").is_none() {
         eprintln!("skipping: wt.exe not found");
         return;
     }
@@ -40,7 +30,7 @@ fn test_e2e_fork_windows_terminal_smoke_opt_in() {
 
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)

@@ -5,10 +5,6 @@ use std::net::TcpStream;
 use std::time::Duration;
 mod support;
 
-fn urlencode_component(s: &str) -> String {
-    support::urlencode(s)
-}
-
 #[test]
 #[ignore]
 fn accept_phase4_native_http_tcp_exec_rust_version() {
@@ -56,9 +52,9 @@ fn accept_phase4_native_http_tcp_exec_rust_version() {
         if i > 0 {
             body.push('&');
         }
-        body.push_str(&urlencode_component(k));
+        body.push_str(&support::urlencode(k));
         body.push('=');
-        body.push_str(&urlencode_component(v));
+        body.push_str(&support::urlencode(v));
     }
 
     let req_line = format!("POST {} HTTP/1.1\r\n", req_path);

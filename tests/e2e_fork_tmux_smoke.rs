@@ -1,14 +1,6 @@
 use std::process::Command;
 mod support;
 
-fn which(bin: &str) -> bool {
-    support::which(bin).is_some()
-}
-
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[cfg(unix)]
 #[test]
 fn test_e2e_fork_tmux_smoke_opt_in() {
@@ -17,7 +9,7 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
         eprintln!("skipping: AIFO_CODER_E2E!=1");
         return;
     }
-    if !which("tmux") {
+    if support::which("tmux").is_none() {
         eprintln!("skipping: tmux not found");
         return;
     }
@@ -35,7 +27,7 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
 
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     // Run fork with 2 panes; set TMUX to force switch-client (non-attaching)
     let bin = env!("CARGO_BIN_EXE_aifo-coder");

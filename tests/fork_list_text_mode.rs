@@ -2,15 +2,11 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_list_text_mode_header_and_stale_mark() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     // Old session for stale marking
     let forks = root.join(".aifo-coder").join("forks");
@@ -19,7 +15,7 @@ fn test_fork_list_text_mode_header_and_stale_mark() {
     let sd = forks.join(sid);
     let pane = sd.join("pane-1");
     std::fs::create_dir_all(&pane).unwrap();
-    init_repo(&pane);
+    let _ = support::init_repo_with_default_user(&pane);
     let head = String::from_utf8_lossy(
         &std::process::Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

@@ -2,16 +2,12 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_list_cli_json_stale_highlight() {
     // Prepare temp repo
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let forks = root.join(".aifo-coder").join("forks");
     std::fs::create_dir_all(&forks).unwrap();

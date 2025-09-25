@@ -1,15 +1,11 @@
 use std::process::Command;
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_list_json_empty_returns_empty_array() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)
@@ -35,7 +31,7 @@ fn test_fork_list_json_empty_returns_empty_array() {
 fn test_fork_list_text_empty_reports_none() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
     let out = Command::new(bin)

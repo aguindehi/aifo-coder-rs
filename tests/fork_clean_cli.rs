@@ -1,23 +1,19 @@
 use std::process::Command;
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_clean_cli_safety_and_flags() {
     // Prepare temp repo and a protected session (ahead)
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let sid = "sid-cli-prot";
     let forks = root.join(".aifo-coder").join("forks");
     let sd = forks.join(sid);
     let pane = sd.join("pane-1");
     std::fs::create_dir_all(&pane).unwrap();
-    init_repo(&pane);
+    let _ = support::init_repo_with_default_user(&pane);
     // Record base_commit_sha as current HEAD
     let head = String::from_utf8_lossy(
         &std::process::Command::new("git")
