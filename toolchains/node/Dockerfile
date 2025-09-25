@@ -53,7 +53,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Install Deno system-wide to /usr/local/bin/deno (with optional enterprise CA injection)
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -euo pipefail; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
       install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -61,7 +61,36 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
       export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
       export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
-    curl -fsSL https://deno.land/install.sh | sh -s -- -d /usr/local; \
+    tmp=/tmp/deno_install.sh; \
+    if ! curl -fsSL https://deno.land/install.sh -o "$tmp"; then \
+      echo "warning: https://deno.land/install.sh failed; trying x/install ..." >&2; \
+      if ! curl -fsSL https://deno.land/x/install/install.sh -o "$tmp"; then \
+        echo "warning: install.sh fallback failed; trying direct binary from dl.deno.land" >&2; \
+        ver="$(curl -fsSL https://dl.deno.land/release-latest.txt || true)"; \
+        if [ -n "$ver" ]; then \
+          arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; \
+          case "$arch" in aarch64|arm64) triple="aarch64-unknown-linux-gnu" ;; x86_64|amd64) triple="x86_64-unknown-linux-gnu" ;; *) triple="";; esac; \
+          if [ -n "$triple" ]; then \
+            url="https://dl.deno.land/release/${ver}/deno-${triple}.zip"; \
+            echo "Attempting direct download: $url" >&2; \
+            mkdir -p /tmp/deno && cd /tmp/deno; \
+            if curl -fsSL "$url" -o deno.zip; then \
+              unzip -q deno.zip; \
+              install -m 0755 deno /usr/local/bin/deno; \
+              cd /; rm -rf /tmp/deno; \
+              if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+                rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+              fi; \
+              exit 0; \
+            fi; \
+          fi; \
+        fi; \
+        echo "error: failed to obtain deno installer or binary" >&2; \
+        exit 1; \
+      fi; \
+    fi; \
+    sh "$tmp" -d /usr/local; \
+    rm -f "$tmp"; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
       rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
       command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
