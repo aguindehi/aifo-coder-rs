@@ -23,7 +23,7 @@ use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
     PROXY_ENV_NAMES,
 };
-use super::mounts::{init_rust_named_volumes_if_needed, push_mount};
+use super::mounts::{init_rust_named_volumes_if_needed, init_node_cache_volume_if_needed, push_mount};
 use super::{default_toolchain_image, is_official_rust_image, normalize_toolchain_kind};
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
@@ -594,6 +594,16 @@ pub fn toolchain_run(
                 verbose,
             );
         }
+        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        if sidecar_kind == "node" && !no_cache {
+            init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &run_preview_args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
         // If a sidecar with this name already exists, reuse it (another pane may have started it)
         let exists = Command::new(&runtime)
             .arg("inspect")
@@ -750,6 +760,16 @@ pub fn toolchain_start_session(
         );
         if verbose {
             eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        }
+        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        if kind == "node" && !no_cache {
+            init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
         }
         // If a sidecar with this name already exists, reuse it (another pane may have started it)
         let exists = Command::new(&runtime)
