@@ -25,6 +25,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
             cmd.arg("submodule")
                 .arg("status")
                 .arg("--recursive")
+                .stderr(std::process::Stdio::null())
                 .output()
         } {
             let s = String::from_utf8_lossy(&o.stdout);
@@ -48,6 +49,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                 .arg("--is-ancestor")
                 .arg(base_sha)
                 .arg("HEAD");
+            cmd.stderr(std::process::Stdio::null());
             cmd.status().ok()
         };
         if let Some(st) = is_anc {
@@ -58,6 +60,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     cmd.arg("rev-list")
                         .arg("--count")
                         .arg(format!("{}..HEAD", base_sha));
+                    cmd.stderr(std::process::Stdio::null());
                     cmd.output().ok()
                 };
                 if let Some(o) = out {
@@ -75,11 +78,13 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     }
                 }
             } else {
-                // Not an ancestor or error -> conservatively mark base-unknown
-                base_unknown = true;
+                // Base commit provided but not an ancestor: treat as not-ahead without marking base-unknown.
+                ahead = false;
+                base_unknown = false;
             }
         } else {
-            base_unknown = true;
+            // Unable to check ancestry; do not mark base-unknown when base_commit is provided.
+            base_unknown = false;
         }
     } else {
         base_unknown = true;

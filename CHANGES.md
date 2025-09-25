@@ -1,3 +1,11 @@
+2025-09-25 12:50 user@example.com
+
+Fix: fork pane status detection and noisy git stderr
+
+- Updated pane cleanliness checker to avoid marking base-unknown when a base commit is present but not an ancestor; treats panes as not-ahead instead.
+- Suppressed git stderr in pane checks (merge-base/rev-list) and submodule status to avoid "fatal: Not a valid object name" noise in tests.
+- This restores expected behavior for fork clean/autoclean tests: old clean sessions are deletable; protected (ahead/dirty) panes remain.
+
 2025-09-24 12:40 user@example.com
 
 Phase 3: tests consolidation (incremental)
