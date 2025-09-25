@@ -99,7 +99,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         // fall through to default constant
     }
     default_image_for_kind_const(&k)
-        .unwrap_or("node:22-bookworm-slim")
+        .unwrap_or("node:20-bookworm-slim")
         .to_string()
 }
 
