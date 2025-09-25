@@ -1,4 +1,5 @@
 mod support;
+#[cfg(target_os = "linux")]
 use support::urlencode;
 #[cfg(target_os = "linux")]
 #[ignore]
