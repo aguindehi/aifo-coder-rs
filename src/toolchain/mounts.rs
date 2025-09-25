@@ -149,9 +149,7 @@ pub(crate) fn init_node_cache_volume_if_needed(
     while i + 1 < run_args.len() {
         if run_args[i] == "-v" {
             let mnt = &run_args[i + 1];
-            if mnt.starts_with("aifo-node-cache:")
-                && mnt.ends_with("/home/coder/.cache")
-            {
+            if mnt.starts_with("aifo-node-cache:") && mnt.ends_with("/home/coder/.cache") {
                 need_node_cache = true;
             }
             i += 2;
