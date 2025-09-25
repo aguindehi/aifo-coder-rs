@@ -42,7 +42,9 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         // Verify base and HEAD exist in this pane repo
         let base_known = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-            cmd.arg("cat-file").arg("-t").arg(base_sha);
+            cmd.arg("rev-parse")
+                .arg("--verify")
+                .arg(format!("{base_sha}^{{commit}}"));
             cmd.stdout(std::process::Stdio::null());
             cmd.stderr(std::process::Stdio::null());
             cmd.status().ok().map(|st| st.success()).unwrap_or(false)
