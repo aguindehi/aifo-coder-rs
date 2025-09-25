@@ -1,35 +1,12 @@
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-fn init_repo(dir: &std::path::Path) {
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
-}
+mod support;
 
 #[test]
 fn test_doctor_prints_stale_notice_and_status() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     // Create an old session beyond threshold 1d
     let forks = root.join(".aifo-coder").join("forks");
@@ -38,7 +15,7 @@ fn test_doctor_prints_stale_notice_and_status() {
     let sd = forks.join(sid);
     let pane = sd.join("pane-1");
     std::fs::create_dir_all(&pane).unwrap();
-    init_repo(&pane);
+    let _ = support::init_repo_with_default_user(&pane);
     let head = String::from_utf8_lossy(
         &std::process::Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

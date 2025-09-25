@@ -1,4 +1,3 @@
-
 //! Agent image selection helpers.
 //!
 //! Rules

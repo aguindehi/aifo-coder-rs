@@ -2,6 +2,17 @@
 # Tiny wrapper to execute the Rust-based launcher.
 # It prefers an existing compiled binary (release or debug),
 # otherwise attempts to build with cargo and run it.
+# 
+# Environment overrides:
+# - AIFO_CODER_PROJECT_ROOT: override project root detection
+# - AIFO_CODER_BIN: direct path to a compiled aifo-coder binary
+# - RUST_BUILDER_IMAGE: Docker image tag used for container builds (fallback)
+# 
+# Behavior overview:
+# - Prefers an installed and runnable aifo-coder on PATH (not this script)
+# - Rebuilds with cargo when sources are newer than the current binary
+# - Falls back to Docker build if cargo is unavailable
+# - Supports cross-compile on Windows/MSYS by setting target and release folder
 set -e
 
 # Determine executable suffix on Windows environments (Git Bash/MSYS/Cygwin)

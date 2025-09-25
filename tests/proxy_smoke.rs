@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[ignore]
 #[test]
 fn test_proxy_shim_route_rust_and_node() {
@@ -33,14 +35,10 @@ fn test_proxy_shim_route_rust_and_node() {
 
         let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
 
-        let mut body = format!(
-            "tool={}&cwd={}",
-            urlencoding::Encoded::new(tool),
-            urlencoding::Encoded::new(".")
-        );
+        let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
         for a in args {
             body.push('&');
-            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+            body.push_str(&format!("arg={}", urlencode(a)));
         }
 
         let req = format!(

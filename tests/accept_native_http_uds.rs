@@ -3,22 +3,7 @@
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
-
-fn urlencode_component(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b' ' => out.push('+'),
-            b'-' | b'_' | b'.' | b'~' => out.push(b as char),
-            b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => out.push(b as char),
-            _ => {
-                out.push('%');
-                out.push_str(&format!("{:02X}", b));
-            }
-        }
-    }
-    out
-}
+mod support;
 
 #[test]
 #[ignore]
@@ -57,9 +42,9 @@ fn accept_phase4_native_http_uds_exec_rust_version() {
         if !body.is_empty() {
             body.push('&');
         }
-        body.push_str(&urlencode_component(k));
+        body.push_str(&support::urlencode(k));
         body.push('=');
-        body.push_str(&urlencode_component(v));
+        body.push_str(&support::urlencode(v));
     }
 
     let req_line = "POST /exec HTTP/1.1\r\n";

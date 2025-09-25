@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -49,14 +51,10 @@ fn test_dev_tool_routing_make_rust_only_tcp_v2() {
         let mut stream =
             TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-        let mut body = format!(
-            "tool={}&cwd={}",
-            urlencoding::Encoded::new(tool),
-            urlencoding::Encoded::new(".")
-        );
+        let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
         for a in args {
             body.push('&');
-            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+            body.push_str(&format!("arg={}", urlencode(a)));
         }
 
         let req = format!(
@@ -203,14 +201,10 @@ fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
         let mut stream =
             TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-        let mut body = format!(
-            "tool={}&cwd={}",
-            urlencoding::Encoded::new(tool),
-            urlencoding::Encoded::new(".")
-        );
+        let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
         for a in args {
             body.push('&');
-            body.push_str(&format!("arg={}", urlencoding::Encoded::new(a)));
+            body.push_str(&format!("arg={}", urlencode(a)));
         }
         let req = format!(
             "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nTE: trailers\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",

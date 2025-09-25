@@ -467,17 +467,19 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     if !session_dir.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!(
+            crate::display_for_fork_error(&ForkError::Message(format!(
                 "fork session directory not found: {}",
                 session_dir.display()
-            ),
+            ))),
         ));
     }
 
     // Gather pane dirs
     let panes_dirs = super::fork_impl_scan::pane_dirs_for_session(&session_dir);
     if panes_dirs.is_empty() {
-        return Err(io::Error::other("no pane directories found under session"));
+        return Err(io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("no pane directories found under session".to_string()),
+        )));
     }
 
     // Determine base_ref_or_sha from .meta.json if present; otherwise fallback to HEAD
@@ -510,7 +512,9 @@ pub(crate) fn fork_merge_branches_by_session_impl(
     }
 
     if panes.is_empty() {
-        return Err(io::Error::other("no pane branches found (detached HEAD?)"));
+        return Err(io::Error::other(crate::display_for_fork_error(
+            &ForkError::Message("no pane branches found (detached HEAD?)".to_string()),
+        )));
     }
 
     super::fork_merge_branches(

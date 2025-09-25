@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -61,11 +63,7 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
     let mut stream =
         TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-    let mut body = format!(
-        "tool={}&cwd={}",
-        urlencoding::Encoded::new("python"),
-        urlencoding::Encoded::new(".")
-    );
+    let mut body = format!("tool={}&cwd={}", urlencode("python"), urlencode("."));
     body.push_str("&arg=--version");
 
     let req = format!(

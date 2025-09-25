@@ -1,5 +1,7 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
+mod support;
+use support::urlencode;
 
 fn connect(url: &str) -> (TcpStream, String, u16, String) {
     let u = url.strip_prefix("http://").expect("only http supported");
@@ -32,15 +34,12 @@ fn test_proxy_handles_large_payload_notifications_cmd() {
     // Build large body using notifications-cmd (no sidecars needed); config likely missing -> 403
     let mut body = format!(
         "tool={}&cwd={}",
-        urlencoding::Encoded::new("notifications-cmd"),
-        urlencoding::Encoded::new(".")
+        urlencode("notifications-cmd"),
+        urlencode(".")
     );
     for i in 0..5000 {
         body.push('&');
-        body.push_str(&format!(
-            "arg={}",
-            urlencoding::Encoded::new(&format!("x{i:04}"))
-        ));
+        body.push_str(&format!("arg={}", urlencode(&format!("x{i:04}"))));
     }
 
     let req = format!(

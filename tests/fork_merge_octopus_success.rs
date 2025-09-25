@@ -1,14 +1,6 @@
 use std::process::Command;
-
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
+mod support;
+use support::have_git;
 
 #[test]
 fn test_fork_merge_octopus_success_creates_merge_branch_and_deletes_pane_branches() {

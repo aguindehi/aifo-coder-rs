@@ -1,36 +1,6 @@
 use std::process::Command;
-
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-// Minimal helper to initialize a git repository with one commit
-fn init_repo(dir: &std::path::Path) {
-    let _ = Command::new("git").arg("init").current_dir(dir).status();
-    let _ = Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
-}
+mod support;
+use support::{have_git, init_repo_with_default_user};
 
 #[test]
 fn test_fork_clean_older_than_deletes_only_old_sessions() {
@@ -40,14 +10,14 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = init_repo_with_default_user(&root);
 
     // Old clean session
     let sid_old = "sid-old2";
     let base_old = root.join(".aifo-coder").join("forks").join(sid_old);
     let pane_old = base_old.join("pane-1");
     std::fs::create_dir_all(&pane_old).unwrap();
-    init_repo(&pane_old);
+    let _ = init_repo_with_default_user(&pane_old);
     let head_old = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])
@@ -75,7 +45,7 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     let base_new = root.join(".aifo-coder").join("forks").join(sid_new);
     let pane_new = base_new.join("pane-1");
     std::fs::create_dir_all(&pane_new).unwrap();
-    init_repo(&pane_new);
+    let _ = init_repo_with_default_user(&pane_new);
     let head_new = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

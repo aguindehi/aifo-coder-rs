@@ -1,38 +1,5 @@
 use std::process::Command;
-
-fn which(bin: &str) -> bool {
-    Command::new("which")
-        .arg(bin)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-fn init_repo(dir: &std::path::Path) {
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
-}
+mod support;
 
 #[cfg(unix)]
 #[test]
@@ -42,7 +9,7 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
         eprintln!("skipping: AIFO_CODER_E2E!=1");
         return;
     }
-    if !which("tmux") {
+    if support::which("tmux").is_none() {
         eprintln!("skipping: tmux not found");
         return;
     }
@@ -60,7 +27,7 @@ fn test_e2e_fork_tmux_smoke_opt_in() {
 
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     // Run fork with 2 panes; set TMUX to force switch-client (non-attaching)
     let bin = env!("CARGO_BIN_EXE_aifo-coder");

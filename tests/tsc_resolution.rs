@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -72,11 +74,7 @@ fn test_tsc_local_resolution_tcp_v2() {
     let mut stream =
         TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
 
-    let body = format!(
-        "tool={}&cwd={}",
-        urlencoding::Encoded::new("tsc"),
-        urlencoding::Encoded::new(".")
-    );
+    let body = format!("tool={}&cwd={}", urlencode("tsc"), urlencode("."));
 
     let req = format!(
         "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nTE: trailers\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",

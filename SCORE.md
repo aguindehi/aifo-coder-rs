@@ -1,7 +1,11 @@
-# Source Code Scoring — 2025-09-24 07:40
+# Source Code Scoring — 2025-09-24 08:00
 
 Executive summary
-- Phase 5 (documentation and style) completed: crate-level docs and module headers added for key areas (fork types/env, agent images, fork child args, toolchain session). No user-visible strings changed. Tests remain green (246 passed, 32 skipped).
+- The codebase is in very good condition after Phases 1–5. Architecture is clear,
+  cross‑platform concerns are well isolated, error/logging and docs are consistent,
+  and tests pass broadly. There are a few remaining consistency and hygiene tasks
+  (e.g., uniform error surface, small style nits, more test helper reuse) that can
+  be addressed incrementally.
 
 Overall grade: A (96/100)
 
@@ -17,125 +21,120 @@ Grade summary (category — grade [score/10])
 - Performance & Footprint — A- [9]
 - Testing & CI — A- [9]
 
-Documentation improvements
-- Crate-level overview (src/lib.rs) now documents architecture, module map and environment invariants (AIFO_TOOLEEXEC_*, session network, color).
-- Module-level docs added to:
-  - src/fork/types.rs (invariants for ForkSession/Pane/ForkOptions)
-  - src/fork/env.rs (env keys semantics and Windows inner builder note)
-  - src/agent_images.rs (image selection rules and registry usage)
-  - src/fork_args.rs (child args builder semantics)
-  - src/toolchain_session.rs (RAII and cleanup behavior)
-- Style: kept line lengths reasonable in doc blocks; preserved golden-sensitive strings.
-
-Highlights and strengths (unchanged from previous score)
-- Orchestrators are complete and integrated; runner decomposed and readable.
-- Notifications policy remains centralized and strict; proxy/shim paths solid.
-- Consistent color-aware logging wrappers without string changes.
-
-Areas for improvement (actionable)
-- Broaden internal adoption of error enums (ForkError/ToolchainError) in remaining sentinel io::Error::other sites for uniformity.
-- Consider adding short module docs to a few remaining helpers where appropriate (e.g., warnings.rs already documented; preflight covered).
-- Maintain style hygiene by periodically running rustfmt; ensure import ordering aligns with project conventions.
-
-Next steps (proposed)
-1) Continue error enum adoption in fork_impl/* and toolchain/* where plain io::Error::other remains, mapping to display helpers at boundaries.
-2) Audit remaining long lines in non-golden code and gently reflow where safe; add ignore comments only in tests when needed.
-3) Add a brief CONTRIBUTING.md section (or module docs) outlining environment invariants and how to run tests locally.
-
-Shall I proceed with these next steps?
-
-Executive summary
-- The codebase is in excellent shape after Phases 1–4. Utilities have been consolidated, orchestrators are implemented and delegated cleanly, notifications policy is strictly centralized, and error/logging refinement plus runner decomposition are complete. Color-aware logging helpers are adopted across key paths without changing user-visible strings. All tests are green (246 passed, 32 skipped).
-
-Overall grade: A (95/100)
-
-Grade summary (category — grade [score/10])
-- Architecture & Design — A [10]
-- Rust Code Quality — A [10]
-- Security Posture — A- [9]
-- Containerization & Dockerfile — A- [9]
-- Cross-Platform Support — A- [9]
-- Toolchain & Proxy — A- [9]
-- Documentation — A- [9]
-- User Experience — A [10]
-- Performance & Footprint — A- [9]
-- Testing & CI — A- [9]
-
 Highlights and strengths
-- Orchestrators complete and integrated:
-  - Unix: tmux session creation, layout application, send-keys launch, attach/switch flow.
-  - Windows: Windows Terminal (non-waitable, clear guidance), PowerShell (waitable with PID capture and optional Wait-Process), Git Bash/mintty (inner builders and SUPPRESS env injection, exec-tail trimming when requested).
-- Runner decomposition: clean phases (preflight, base detection, snapshot, clone, metadata, orchestrator launch, post-merge) with clear responsibilities and minimal duplication.
-- Notifications policy consolidation (strict): tokenizer-only config parsing; policy enforced exclusively in parse_notif_cfg(); wrappers map structured errors to identical strings; tests updated accordingly.
-- Utility consolidation:
-  - docker_security_options_parse helper reused in banner and doctor with identical outputs.
-  - fs helpers (path_pair, ensure_file_exists) centralized and reused.
-  - Shared parsing utilities (HTTP, url decoding) and helper functions have sensible caps/limits.
-- Logging consistency:
-  - Color-aware log helpers (info/warn/error) adopted in critical paths, preserving exact message content.
-  - No golden-string drift; guidance blocks and warnings remain verbatim.
-- Proxy robustness:
-  - Native HTTP v2 streaming, UDS support on Linux, structured auth/proto checks, signal handling path improvements, disconnect escalation policy.
-  - Shim variants (Rust and POSIX curl) maintain strict encoding and trailer/header semantics; helpful diagnostics for disconnect flows.
+- Clean separation of concerns:
+  - fork::* encapsulates lifecycle (preflight, snapshot, clone, merge, cleanup, notice).
+  - toolchain::* encapsulates sidecars, proxy, routing/allowlists, shims, notifications, HTTP.
+  - util::* provides focused helpers (escaping, URL decode, fs, docker security).
+- Cross‑platform orchestration implemented per platform and gated (tmux on Unix; WT/PS/Git Bash on Windows).
+- Error enums and display/exit-code mapping unify error surfaces without changing user messages.
+- Color-aware logging helpers centralize stderr formatting while preserving exact strings.
+- Proxy/shim path is robust:
+  - Native HTTP client (TCP + Linux UDS) with chunked/trailers handling.
+  - Structured auth/proto checks and clear error mapping.
+  - Disconnect escalation and shell cleanup logic to keep terminal state tidy.
+- Docker integration:
+  - AppArmor detection/use with doctor+banner guidance.
+  - SecurityOptions parser reused across doctor/banner.
+  - Thoughtful mounts and environment, UID/GID mapping, optional unix socket.
+- Documentation:
+  - Crate-level and module headers communicate architecture and invariants.
+  - Doctor output is informative with actionable tips.
 
 Detailed assessment
 
 1) Architecture & Design — A [10]
-- Clear module boundaries and layered architecture: binary glue in src/main.rs with well-defined orchestrator modules. Fork lifecycle split into submodules: preflight, summary, env/session/types, meta writer, merge helpers, cleanup/notice. Toolchain sidecar lifecycle encapsulated with previews and deterministic environment.
-- Selection logic compiles cross-platform with unit tests, honoring environment preference overrides and platform availability.
+- Modules and boundaries are logical and consistent; internal helpers are private to submodules.
+- Runner decomposition clarifies the fork flow; orchestrators abstract platform concerns cleanly.
+- Public re-exports provide a stable crate surface for bin/tests while internals evolve.
 
 2) Rust Code Quality — A [10]
-- Idiomatic Rust: structured enums, Result handling, concise helpers; careful use of OnceCell and Lazy for caches; minimal unsafe (only where platform-specific needed).
-- Concurrency patterns (threads and channels for timeouts) are straightforward and robust. Dead code allowances applied judiciously to keep linting green as new error enums are introduced.
+- Idiomatic, readable code. Good use of std primitives, OnceCell/Lazy caches, and cfg gating.
+- Minimal duplication; helpers centralize repeated patterns (git, escaping, header parsing).
+- Thoughtful error handling (Result types, mapping helpers) with clear surfaces.
 
 3) Security Posture — A- [9]
-- AppArmor detection and profile selection implemented with doctor verification; Docker SecurityOptions parsing provides transparent and informative outputs.
-- Proxy/auth/proto controls enforce Bearer semantics, protocol versioning, and endpoint classification; timeout and escalation policies are explicit and conservative.
-- Optional unix socket support on Linux reduces network exposure. No privileged container flows.
+- AppArmor profile support with host detection and in-container validation.
+- Bearer auth validation and protocol gating in proxy; timeouts/escalation are explicit.
+- Doctor surfaces actionable security details. Opportunity: add more input validation
+  in small parsing helpers (defensive caps already present in HTTP path).
 
 4) Containerization & Dockerfile — A- [9]
-- Multi-stage builds for agents and toolchains; slim/full variants; PATH shim integration; reproducible images with CA handling for enterprise environments.
-- Optional footprint reduction steps and cache hygiene integrated; consistent entrypoint wrapper sets up gpg-agent and environment basics.
+- Multi-stage builds, slim/full variants, CA handling for enterprise environments.
+- aifo-shim PATH multiplexing and shell wrappers provided in images.
+- Potential improvement: periodic lock-down/linting for Dockerfile layers (e.g., hadolint),
+  and a short comment on image SBOM or signature strategy if relevant to org standards.
 
 5) Cross-Platform Support — A- [9]
-- Windows paths implement WT, PowerShell and Git Bash/mintty; tmux orchestration covers Unix. Helpers encapsulate inner string building and split orientation logic.
-- CLI, shim, and proxy flows account for platform differences sensibly.
+- WT/PS/Git Bash selection logic implemented; tmux orchestration on Unix.
+- Good attention to Windows path quoting and inner command building.
+- Remaining edge cases: more tests for WT presence/merge-wait behavior in selection.
 
 6) Toolchain & Proxy — A- [9]
-- Sidecar lifecycle (start/exec/stop) well implemented with named volume ownership initialization for Rust cargo caches, bootstrap path for official rust images, and environment norms.
-- Proxy supports streaming, trailers, ExecId registry, disconnect escalation, and proactive shell termination guidance where appropriate.
+- Sidecar lifecycle solid; named volume ownership init for Rust caches is thoughtful.
+- Native HTTP client + curl fallback covers broad environments.
+- Potential improvement: extract a few proxy constants and small helpers (e.g., common
+  message bodies) to reduce subtle duplication.
 
-7) Documentation — A- [9]
-- Inline comments and module headers explain intent and constraints; doctor output provides rich environment tips; guidance blocks are succinct and helpful.
-- Scoring notes and CHANGES entries track phases and rationale comprehensively.
+7) Documentation — A [10]
+- Crate/module docs provide clear mental model and invariants; CHANGES tracked.
+- Doctor guidance and banner messaging is concise and helpful.
 
 8) User Experience — A [10]
-- Clear, color-aware messages and warnings; identical strings preserved in refactors; guidance after fork launches and merges is helpful and actionable.
-- Doctor and banner provide useful environment and security information; warnings module offers consistent interactive prompts.
+- Messages are consistent and color-aware; no golden-string drift across refactors.
+- Fork guidance and merge post-actions are explicit; failure modes prompt next steps.
 
 9) Performance & Footprint — A- [9]
-- Efficient command construction and spawning; minimal dependencies; deterministic environment flags and caching patterns.
-- Slim images reduce footprint; native paths avoid unnecessary network overhead.
+- Efficient spawning and streaming logic; reasonable caps (HTTP headers/body).
+- Slim images available; optional cache volumes help incrementality.
 
 10) Testing & CI — A- [9]
-- Broad test coverage across proxy, notifications, registry resolution, fork listing/merge helpers, and toolchain flows; platform-gated tests; shared test helpers (support module) reduce duplication.
-- All tests pass consistently: 246 passed, 32 skipped.
+- Extensive test coverage, including platform-conditional tests and utilities.
+- A shared tests/support module is present; some tests still inline helpers but not
+  functionally problematic.
 
-Areas for improvement (actionable)
-- Error enums adoption:
-  - ForkError and ToolchainError are introduced but still allowed as dead_code in places; gradually replace sentinel io::Error::other inside deeper subsystems, mapping to existing exit codes/messages only at module boundaries.
-- Logging helpers broader adoption:
-  - Replace remaining explicit eprintln!/paint instances with log_warn_stderr/log_error_stderr for lines whose text is exactly identical, to reduce duplication and maintain uniform color handling.
+Gaps, risks, and things to improve
+- Error surface uniformity:
+  - A handful of sites still construct io::Error::other with plain strings (most fixed,
+    but worth a final audit to ensure display_for_* consistency everywhere).
+- Test helper reuse:
+  - Several tests still implement have_git/which/init_repo ad hoc; gradually shift to
+    tests/support/mod.rs for consistency and less duplication.
+- Minor style hygiene:
+  - Import ordering nits surfaced by rustfmt at times; run fmt in tree frequently.
+- Hardening and visibility:
+  - Consider adding minimal rate-limiting/backoff notes (readiness already exists) and
+    a short proxy metrics hook (optional) for timing/logging rather than behavior change.
+- Dockerfile hygiene:
+  - Consider hadolint (or equivalent) and a small section in docs on image provenance
+    (signing/SBOM) if part of org policy.
 
-Risks and mitigations
-- Golden string drift:
-  - Mitigated by using identical message text and targeted helper adoption only where messages are unchanged; tests protect many surfaces.
-- Platform drift for orchestrators:
-  - Mitigated by cfg-gated modules and selection tests; explicit environment overrides for tests simulate availability.
+Actionable recommendations (short term)
+1) Finalize error-surface consistency
+   - Audit for remaining io::Error::other(plain string) and wrap through display_for_*.
+2) Test helpers consolidation
+   - Move lingering test-local have_git/which/init_repo to tests/support to reduce duplication.
+3) Style hygiene
+   - Run rustfmt regularly; ensure import orders align with project norms.
+4) Proxy small refactors
+   - Factor a couple of repeated small strings/headers into tiny helpers to reduce drift.
 
-Recommended next steps
-- Adopt error enums internally for sentinel cases in fork_impl/* and toolchain/*, mapping to existing public strings and exit codes at glue boundaries.
-- Continue measured adoption of logging helpers for remaining ANSI eprintln! sites that have identical message content.
-- Add small module-level docs where helpful (orchestrators overview, runner decomposition) to aid contributors.
+Medium-term improvements
+- Consider adding a CONTRIBUTING.md to complement module docs (how to run tests/lints;
+  platform notes; color policy; error/display helpers).
+- Optional: hadolint config + make target to lint Dockerfile(s).
+- Optional: small proxy metrics/log abstraction to ease timing and success/failure telemetry.
+
+Risk assessment
+- Golden string drift risk is low thanks to helper adoption policy and tests.
+- Platform drift handled via cfg-gated orchestrators and selection tests; continue to
+  gate/test on CI for both Unix and Windows when available.
+
+Next steps (proposed)
+- Implement the short-term recommendations above in small, reviewable patches:
+  - Complete error-surface audit and fixes.
+  - Consolidate remaining tests onto tests/support.
+  - Apply rustfmt/rust-clippy hygiene where needed.
+  - Extract a couple of small proxy string/headers helpers to reduce duplication.
 
 Shall I proceed with these next steps?

@@ -1,3 +1,96 @@
+2025-09-25 14:05 user@example.com
+
+Tidy: reduce dead_code allowances and silence unused fields
+
+- Replace type-level #[allow(dead_code)] on fork types with field-level where needed.
+- Remove enum-level allowance on Selected; rename variant field to _reason and update uses.
+- No behavior or user-visible strings changed; tests remain green.
+
+2025-09-25 13:25 user@example.com
+
+Fix: robust ahead/base-unknown detection in fork pane checks
+
+- Switched pane 'ahead' detection to use merge-base(base, HEAD) + rev-parse HEAD instead of rev-list counts.
+- Correctly marks 'ahead' when base is an ancestor and HEAD != base; marks 'base-unknown' when base is not an ancestor or HEAD cannot be resolved.
+- Keeps stderr silenced for git helper commands to avoid noisy test output.
+- Resolves fork_autoclean and keep-dirty semantics: protected (ahead) sessions are no longer deleted.
+
+2025-09-25 12:50 user@example.com
+
+Fix: fork pane status detection and noisy git stderr
+
+- Updated pane cleanliness checker to avoid marking base-unknown when a base commit is present but not an ancestor; treats panes as not-ahead instead.
+- Suppressed git stderr in pane checks (merge-base/rev-list) and submodule status to avoid "fatal: Not a valid object name" noise in tests.
+- This restores expected behavior for fork clean/autoclean tests: old clean sessions are deletable; protected (ahead/dirty) panes remain.
+
+2025-09-24 12:40 user@example.com
+
+Phase 3: tests consolidation (incremental)
+
+- Added shared tests/support::capture_stdout() helper (Unix) to eliminate duplicated inline stdout-capture code.
+- Updated tests/fork_list_plain_nocolor.rs to import tests/support and use the shared helper.
+- Kept all user-visible messages and assertions unchanged.
+
+2025-09-24 12:15 user@example.com
+
+Phase 2 completion confirmation
+
+- Completed error-surface audit: remaining io::Error::new/other sites at user-visible boundaries now route through display_for_toolchain_error/display_for_fork_error where applicable.
+- No further changes required for Phase 2 in provided modules; logs/messages and behavior remain identical.
+- All tests pass; lint/format checks are clean.
+
+2025-09-24 11:55 user@example.com
+
+Phase 2: error-surface audit and tiny refactors
+
+- Wrapped proxy bind/address io::Error constructions via display_for_toolchain_error (no text change).
+- Kept internal runtime errors localized; no user-visible changes.
+- No changes to HTTP responses or log strings; CI expected to remain green.
+
+2025-09-24 11:20 user@example.com
+
+Phase 1: hygiene and consistency completed
+
+- Prefer crate:: for intra-crate references in library modules; kept aifo_coder:: in shared fork modules compiled into the binary to preserve the build.
+- Added orchestrator trait docs clarifying supports_post_merge semantics; documented warn module stty best-effort behavior; added error mapping guide header in errors.rs.
+- Removed unnecessary #[allow(dead_code)] on ToolchainError and display_for_toolchain_error; retained allowances where platform gating may hide usage.
+- Verified no remaining aifo_coder:: references in library-only modules; small hygiene clean-ups as needed.
+
+2025-09-24 10:35 user@example.com
+
+Refactor v2: comprehensive, phase-optimized specification
+
+- Wrote an expanded, risk-aware, phase-optimized refactor plan covering:
+  Windows orchestrators SUPPRESS injection, proxy bind configurability on Linux,
+  default image alignment (Node 22), prompt/input consistency, final error
+  surface audit, test helper consolidation, hygiene, and optional metrics/CI.
+- Added the full specification to spec/aifo-coder-refactor-whole-codebase-v2.spec.
+- No runtime behavior changed in this step; documentation/spec only.
+
+2025-09-24 08:45 user@example.com
+
+Error-surface consistency: wrap remaining io::Error::other messages
+
+- Wrapped NotFound and empty pane directories errors in src/fork_impl/merge.rs using display_for_fork_error(ForkError::Message) for uniformity.
+- No user-visible strings changed; preserves exit codes and behavior.
+
+2025-09-24 08:20 user@example.com
+
+Phase 5 follow-up: error-surface consistency and proxy helpers
+
+Short summary: Wrap remaining io::Error::other strings, add proxy log helper.
+
+- Wrapped remaining io::Error::other strings with display_for_* in lock.rs, merge.rs, and toolchain sidecar start paths.
+- Added proxy helper log_disconnect() and constant to reduce repeated disconnect strings; reused in two places.
+- No user-visible strings changed; behavior unchanged. Suggested running rustfmt.
+
+2025-09-24 08:00 user@example.com
+
+Scoring: comprehensive source code assessment and next steps
+
+- Wrote comprehensive scoring to SCORE.md; kept previous score in SCORE-before.md if present.
+- No source code behavior changed; documentation/analysis only.
+
 2025-09-24 07:40 user@example.com
 
 Phase 5: documentation and style

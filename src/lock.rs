@@ -55,9 +55,11 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                     });
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    return Err(io::Error::other(
-                        "Another coding agent is already running (lock held). Please try again later.",
-                    ));
+                    return Err(io::Error::other(crate::display_for_fork_error(
+                        &crate::ForkError::Message(
+                            "Another coding agent is already running (lock held). Please try again later.".to_string(),
+                        ),
+                    )));
                 }
                 Err(e) => {
                     last_err = Some(e);
@@ -82,7 +84,9 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
     if let Some(e) = last_err {
         msg.push_str(&format!(" (last error: {e})"));
     }
-    Err(io::Error::other(msg))
+    Err(io::Error::other(crate::display_for_fork_error(
+        &crate::ForkError::Message(msg),
+    )))
 }
 
 /// Acquire a lock at a specific path (helper for tests).
@@ -103,7 +107,10 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                 path: p.to_path_buf(),
             }),
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::other(
-                "Another coding agent is already running (lock held). Please try again later.",
+                crate::display_for_fork_error(&crate::ForkError::Message(
+                    "Another coding agent is already running (lock held). Please try again later."
+                        .to_string(),
+                )),
             )),
             Err(e) => Err(e),
         },

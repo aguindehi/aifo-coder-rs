@@ -1,3 +1,7 @@
+#![doc = "Error mapping guide:\n\
+- Map io::ErrorKind::NotFound to exit code 127; all others to 1.\n\
+- Prefer ForkError/ToolchainError for internal clarity while preserving user-visible strings via display_* helpers.\n\
+- Keep mapping/styling consistent with v1; no behavior changes."]
 use std::io;
 
 /// Map an io::Error to a process exit code, preserving current behavior:
@@ -20,7 +24,6 @@ pub enum ForkError {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ToolchainError {
     Io(std::io::Error),
     Message(String),
@@ -48,7 +51,6 @@ pub fn exit_code_for_fork_error(e: &ForkError) -> u8 {
 }
 
 /// Convert ToolchainError to exit code (parity with io::Error mapping).
-#[allow(dead_code)]
 pub fn exit_code_for_toolchain_error(e: &ToolchainError) -> u8 {
     match e {
         ToolchainError::Io(ioe) => exit_code_for_io_error(ioe),
@@ -66,7 +68,6 @@ pub fn display_for_fork_error(e: &ForkError) -> String {
 }
 
 /// Render a user-facing string for ToolchainError without changing existing texts.
-#[allow(dead_code)]
 pub fn display_for_toolchain_error(e: &ToolchainError) -> String {
     match e {
         ToolchainError::Io(ioe) => ioe.to_string(),

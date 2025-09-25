@@ -1,18 +1,9 @@
 use std::process::Command;
-
-fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
+mod support;
 
 #[test]
 fn test_fork_clone_and_checkout_panes_lfs_marker_does_not_fail_without_lfs() {
-    if !have_git() {
+    if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
     }

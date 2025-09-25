@@ -1,4 +1,3 @@
-
 //! Toolchain session RAII: start sidecars, start proxy, export env, stop on drop.
 //!
 //! Behavior

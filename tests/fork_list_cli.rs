@@ -1,36 +1,13 @@
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-fn init_repo(dir: &std::path::Path) {
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
-}
+mod support;
 
 #[test]
 fn test_fork_list_cli_json_stale_highlight() {
     // Prepare temp repo
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let forks = root.join(".aifo-coder").join("forks");
     std::fs::create_dir_all(&forks).unwrap();
@@ -40,7 +17,7 @@ fn test_fork_list_cli_json_stale_highlight() {
     let sd_old = forks.join(sid_old);
     let pane_old = sd_old.join("pane-1");
     std::fs::create_dir_all(&pane_old).unwrap();
-    init_repo(&pane_old);
+    let _ = support::init_repo_with_default_user(&pane_old);
     let head_old = String::from_utf8_lossy(
         &std::process::Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])
@@ -67,7 +44,7 @@ fn test_fork_list_cli_json_stale_highlight() {
     let sd_new = forks.join(sid_new);
     let pane_new = sd_new.join("pane-1");
     std::fs::create_dir_all(&pane_new).unwrap();
-    init_repo(&pane_new);
+    let _ = support::init_repo_with_default_user(&pane_new);
     let head_new = String::from_utf8_lossy(
         &std::process::Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

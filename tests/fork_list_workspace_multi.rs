@@ -1,36 +1,10 @@
 use serde_json::Value;
 use std::fs;
-use std::io::{Read, Seek};
-use std::os::fd::FromRawFd;
+mod support;
 use std::time::{SystemTime, UNIX_EPOCH};
+use support::capture_stdout;
 
-// Capture stdout to a temporary file (Unix-only; sufficient for CI matrix).
-fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
-    unsafe {
-        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout-ws-multi.tmp").unwrap();
-        let mode = std::ffi::CString::new("w+").unwrap();
-        let file = fopen(path.as_ptr(), mode.as_ptr());
-        assert!(!file.is_null(), "failed to open temp file for capture");
-        let fd: i32 = fileno(file);
-
-        let stdout_fd = STDOUT_FILENO;
-        let saved = dup(stdout_fd);
-        assert!(saved >= 0, "dup(stdout) failed");
-        assert!(dup2(fd, stdout_fd) >= 0, "dup2 failed");
-
-        f();
-
-        fflush(std::ptr::null_mut());
-        assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
-
-        let mut f = std::fs::File::from_raw_fd(fd);
-        let mut s = String::new();
-        f.rewind().ok();
-        f.read_to_string(&mut s).expect("read captured");
-        s
-    }
-}
+// using tests/support::capture_stdout
 
 #[test]
 fn test_workspace_fork_list_json_multiple_repos_order_insensitive() {

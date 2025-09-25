@@ -1,3 +1,5 @@
+mod support;
+use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -39,11 +41,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
             if i > 0 {
                 body.push('&');
             }
-            body.push_str(&format!(
-                "{}={}",
-                urlencoding::Encoded::new(k),
-                urlencoding::Encoded::new(v)
-            ));
+            body.push_str(&format!("{}={}", urlencode(k), urlencode(v)));
         }
 
         // Build headers

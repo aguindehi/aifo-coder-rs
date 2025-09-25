@@ -1,44 +1,9 @@
 use std::fs;
-use std::io::{Read, Seek};
-use std::os::fd::{FromRawFd, RawFd};
+mod support;
 use std::time::{SystemTime, UNIX_EPOCH};
+use support::capture_stdout;
 
-// Capture stdout for the duration of f, returning the captured UTF-8 string.
-// Unix-only; safe for our CI matrix (macOS/Linux).
-fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
-    unsafe {
-        // Open a temporary file
-        let path = std::ffi::CString::new("/tmp/aifo-coder-test-stdout.tmp").unwrap();
-        let mode = std::ffi::CString::new("w+").unwrap();
-        let file = fopen(path.as_ptr(), mode.as_ptr());
-        assert!(!file.is_null(), "failed to open temp file for capture");
-        let fd: RawFd = fileno(file);
-
-        // Duplicate current stdout
-        let stdout_fd = STDOUT_FILENO;
-        let saved = dup(stdout_fd);
-        assert!(saved >= 0, "dup(stdout) failed");
-
-        // Redirect stdout to file
-        assert!(dup2(fd, stdout_fd) >= 0, "dup2 failed");
-
-        // Run the function
-        f();
-
-        // Flush and restore stdout
-        fflush(std::ptr::null_mut());
-        assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
-
-        // Read back the file
-        let mut f = std::fs::File::from_raw_fd(fd);
-        let mut s = String::new();
-        f.rewind().ok();
-        f.read_to_string(&mut s).expect("read captured");
-        // Prevent closing freed file twice
-        s
-    }
-}
+// using tests/support::capture_stdout
 
 #[test]
 fn test_public_fork_list_json_golden() {
