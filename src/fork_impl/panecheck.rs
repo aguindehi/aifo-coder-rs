@@ -37,7 +37,8 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         }
     }
 
-    // Normalize empty base_commit to None (treat as "no recorded base" — not protective)
+    // Track presence to distinguish missing vs present-empty, then normalize empty to None.
+    let base_present = base_commit.is_some();
     let base_commit = match base_commit {
         Some(s) if s.trim().is_empty() => None,
         other => other,
@@ -63,21 +64,63 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
             if head_sha == base_sha {
                 (false, false)
             } else {
-                // Use merge-base --is-ancestor and classify by exit code:
-                // 0 => ancestor; 1 => not ancestor; 128/other => invalid base -> base-unknown
-                let exit_code_opt = {
+                // Verify base exists, then detect ahead robustly.
+                // If base does not resolve to a commit: base-unknown.
+                let base_exists = {
                     let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                    cmd.arg("merge-base")
-                        .arg("--is-ancestor")
-                        .arg(base_sha)
-                        .arg("HEAD");
+                    cmd.arg("cat-file")
+                        .arg("-e")
+                        .arg(format!("{}^{{commit}}", base_sha));
+                    cmd.stdout(std::process::Stdio::null());
                     cmd.stderr(std::process::Stdio::null());
-                    cmd.status().ok().and_then(|st| st.code())
+                    cmd.status().ok().map(|st| st.success()).unwrap_or(false)
                 };
-                match exit_code_opt {
-                    Some(0) => (true, false),  // ancestor -> ahead
-                    Some(1) => (false, false), // not ancestor -> not ahead
-                    _ => (false, true),        // error/spawn -> base-unknown
+                if !base_exists {
+                    (false, true)
+                } else {
+                    // Try merge-base base HEAD and compare output to base commit.
+                    let mb_sha_opt = {
+                        let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                        cmd.arg("merge-base").arg(base_sha).arg("HEAD");
+                        cmd.stdout(std::process::Stdio::piped());
+                        cmd.stderr(std::process::Stdio::null());
+                        cmd.output().ok().and_then(|o| {
+                            if o.status.success() {
+                                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                    };
+                    if let Some(mb) = mb_sha_opt {
+                        if mb == base_sha {
+                            (true, false)
+                        } else {
+                            // Not ancestor -> not ahead
+                            (false, false)
+                        }
+                    } else {
+                        // Fallback: count commits in base..HEAD; >0 => ahead
+                        let cnt_opt = {
+                            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                            cmd.arg("rev-list").arg("--count").arg(format!("{}..HEAD", base_sha));
+                            cmd.stdout(std::process::Stdio::piped());
+                            cmd.stderr(std::process::Stdio::null());
+                            cmd.output().ok().and_then(|o| {
+                                if o.status.success() {
+                                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                                } else {
+                                    None
+                                }
+                            })
+                        };
+                        if let Some(cnt) = cnt_opt {
+                            let n = cnt.parse::<u64>().unwrap_or(0);
+                            if n > 0 { (true, false) } else { (false, false) }
+                        } else {
+                            (false, true)
+                        }
+                    }
                 }
             }
         } else {
@@ -85,8 +128,17 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
             (false, true)
         }
     } else {
-        // No recorded base (missing/empty) -> do not mark base-unknown; consider clean if not dirty
-        (false, false)
+        // Missing vs empty handling:
+        // - Missing key (base_present=false): base-unknown=true (always).
+        // - Empty string (base_present=true): base-unknown=true only if HEAD exists (repo has commits).
+        let has_head = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+            cmd.arg("rev-parse").arg("--verify").arg("HEAD");
+            cmd.stdout(std::process::Stdio::null());
+            cmd.stderr(std::process::Stdio::null());
+            cmd.status().ok().map(|st| st.success()).unwrap_or(false)
+        };
+        (false, (!base_present) || has_head)
     };
     if ahead {
         reasons.push("ahead".to_string());
