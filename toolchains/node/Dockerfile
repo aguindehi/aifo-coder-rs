@@ -33,15 +33,39 @@ RUN set -eux; \
     mkdir -p /home/coder/.cache /home/coder/.local/share/pnpm /home/coder/.npm; \
     chmod -R 0777 /home/coder || true
 
-# Enable corepack and activate yarn/pnpm channels
-RUN set -eux; \
+# Enable corepack and activate yarn/pnpm channels (with optional enterprise CA injection)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+      install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      export NODE_EXTRA_CA_CERTS="$CAF"; \
+      export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
     corepack enable; \
     corepack prepare yarn@stable --activate; \
-    corepack prepare pnpm@latest --activate
+    corepack prepare pnpm@latest --activate; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+      rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 
-# Install Deno system-wide to /usr/local/bin/deno
-RUN set -eux; \
-    curl -fsSL https://deno.land/install.sh | sh -s -- -d /usr/local
+# Install Deno system-wide to /usr/local/bin/deno (with optional enterprise CA injection)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+      install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    curl -fsSL https://deno.land/install.sh | sh -s -- -d /usr/local; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+      rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
