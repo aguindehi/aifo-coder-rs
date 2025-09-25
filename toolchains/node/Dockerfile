@@ -66,7 +66,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
       echo "warning: https://deno.land/install.sh failed; trying x/install ..." >&2; \
       if ! curl -fsSL https://deno.land/x/install/install.sh -o "$tmp"; then \
         echo "warning: install.sh fallback failed; trying direct binary from dl.deno.land" >&2; \
-        ver="$(curl -fsSL https://dl.deno.land/release-latest.txt || true)"; \
+        ver="$(curl -fsSL https://dl.deno.land/release-latest.txt | tr -d '\r\n' || true)"; \
         if [ -n "$ver" ]; then \
           arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; \
           case "$arch" in aarch64|arm64) triple="aarch64-unknown-linux-gnu" ;; x86_64|amd64) triple="x86_64-unknown-linux-gnu" ;; *) triple="";; esac; \
