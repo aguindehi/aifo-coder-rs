@@ -98,6 +98,21 @@ pub fn default_toolchain_image(kind: &str) -> String {
         }
         // fall through to default constant
     }
+    if k == "node" {
+        // Symmetric overrides for Node toolchain image and version
+        if let Ok(img) = env::var("AIFO_NODE_TOOLCHAIN_IMAGE") {
+            let img = img.trim();
+            if !img.is_empty() {
+                return img.to_string();
+            }
+        }
+        if let Ok(ver) = env::var("AIFO_NODE_TOOLCHAIN_VERSION") {
+            let v = ver.trim();
+            if !v.is_empty() {
+                return format!("aifo-node-toolchain:{v}");
+            }
+        }
+    }
     default_image_for_kind_const(&k)
         .unwrap_or("node:20-bookworm-slim")
         .to_string()
