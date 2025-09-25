@@ -25,11 +25,11 @@ fn test_default_toolchain_image_for_version_mapping() {
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("node", "20"),
-        "node:20-bookworm-slim"
+        "aifo-node-toolchain:20"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("typescript", "20"),
-        "node:20-bookworm-slim"
+        "aifo-node-toolchain:20"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("python", "3.12"),
