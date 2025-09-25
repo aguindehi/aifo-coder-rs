@@ -274,8 +274,22 @@ pub fn build_sidecar_run_preview(
         }
         "node" => {
             if !no_cache {
-                push_mount(&mut args, "aifo-npm-cache:/home/coder/.npm");
+                // Consolidated Node caches under XDG_CACHE_HOME
+                push_mount(&mut args, "aifo-node-cache:/home/coder/.cache");
             }
+            // Cache envs for Node ecosystem tools
+            push_env(&mut args, "XDG_CACHE_HOME", "/home/coder/.cache");
+            push_env(&mut args, "NPM_CONFIG_CACHE", "/home/coder/.cache/npm");
+            push_env(&mut args, "YARN_CACHE_FOLDER", "/home/coder/.cache/yarn");
+            push_env(&mut args, "PNPM_STORE_PATH", "/home/coder/.cache/pnpm-store");
+            push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
+            push_env(&mut args, "DENO_DIR", "/home/coder/.cache/deno");
+            // Ensure pnpm-managed binaries are on PATH
+            push_env(
+                &mut args,
+                "PATH",
+                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            );
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
@@ -404,6 +418,13 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "node" => {
+            // Ensure pnpm binaries resolve in exec even for pre-existing containers
+            push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
+            push_env(
+                &mut args,
+                "PATH",
+                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            );
             // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
@@ -836,6 +857,7 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let volumes = [
         "aifo-cargo-registry",
         "aifo-cargo-git",
+        "aifo-node-cache",
         "aifo-npm-cache",
         "aifo-pip-cache",
         "aifo-ccache",
