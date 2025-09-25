@@ -51,7 +51,6 @@ pub fn exit_code_for_fork_error(e: &ForkError) -> u8 {
 }
 
 /// Convert ToolchainError to exit code (parity with io::Error mapping).
-#[allow(dead_code)]
 pub fn exit_code_for_toolchain_error(e: &ToolchainError) -> u8 {
     match e {
         ToolchainError::Io(ioe) => exit_code_for_io_error(ioe),
