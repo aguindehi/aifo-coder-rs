@@ -2,10 +2,6 @@ use std::process::Command;
 mod support;
 use support::{have_git, init_repo_with_default_user};
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_clean_older_than_deletes_only_old_sessions() {
     if !have_git() {
@@ -14,14 +10,14 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    init_repo_with_default_user(&root);
 
     // Old clean session
     let sid_old = "sid-old2";
     let base_old = root.join(".aifo-coder").join("forks").join(sid_old);
     let pane_old = base_old.join("pane-1");
     std::fs::create_dir_all(&pane_old).unwrap();
-    init_repo(&pane_old);
+    init_repo_with_default_user(&pane_old);
     let head_old = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])
@@ -49,7 +45,7 @@ fn test_fork_clean_older_than_deletes_only_old_sessions() {
     let base_new = root.join(".aifo-coder").join("forks").join(sid_new);
     let pane_new = base_new.join("pane-1");
     std::fs::create_dir_all(&pane_new).unwrap();
-    init_repo(&pane_new);
+    init_repo_with_default_user(&pane_new);
     let head_new = String::from_utf8_lossy(
         &Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

@@ -7,7 +7,7 @@ fn write_fake_session(repo_root: &std::path::Path, sid: &str, age_days: u64) {
     let sd = forks.join(sid);
     let pane = sd.join("pane-1");
     std::fs::create_dir_all(&pane).unwrap();
-    init_repo(&pane);
+    let _ = support::init_repo_with_default_user(&pane);
     let head = String::from_utf8_lossy(
         &std::process::Command::new("git")
             .args(["rev-parse", "--verify", "HEAD"])

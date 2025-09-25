@@ -1,16 +1,12 @@
 use std::process::Command;
 mod support;
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_fork_clean_planning_json_and_execution_summary() {
     // Prepare temp repo with one session having two panes: one clean and one protected (ahead)
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path().to_path_buf();
-    init_repo(&root);
+    let _ = support::init_repo_with_default_user(&root);
 
     let sid = "sid-plan";
     let forks = root.join(".aifo-coder").join("forks");
@@ -19,8 +15,8 @@ fn test_fork_clean_planning_json_and_execution_summary() {
     let pane2 = sd.join("pane-2"); // ahead
     std::fs::create_dir_all(&pane1).unwrap();
     std::fs::create_dir_all(&pane2).unwrap();
-    init_repo(&pane1);
-    init_repo(&pane2);
+    let _ = support::init_repo_with_default_user(&pane1);
+    let _ = support::init_repo_with_default_user(&pane2);
 
     // base_commit_sha as current HEAD for both
     let head1 = String::from_utf8_lossy(

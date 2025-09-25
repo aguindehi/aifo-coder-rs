@@ -2,10 +2,6 @@ use std::process::Command;
 mod support;
 use support::{have_git, init_repo_with_default_user};
 
-fn init_repo(dir: &std::path::Path) {
-    let _ = init_repo_with_default_user(dir);
-}
-
 #[test]
 fn test_cli_fork_list_color_always_has_ansi() {
     if !have_git() {
@@ -14,7 +10,7 @@ fn test_cli_fork_list_color_always_has_ansi() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = init_repo_with_default_user(repo);
 
     // Create a minimal fork session with one pane
     let sid = "sid-color";
@@ -57,7 +53,7 @@ fn test_cli_fork_list_color_never_no_ansi() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = init_repo_with_default_user(repo);
 
     // Create session
     let sid = "sid-color-never";
@@ -91,7 +87,7 @@ fn test_cli_fork_list_json_never_colorizes() {
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = init_repo_with_default_user(repo);
 
     // Create session
     let sid = "sid-color-json";
