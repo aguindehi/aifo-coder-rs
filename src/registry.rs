@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 //! Registry prefix resolution with optional disk cache and test overrides.
+//! Complies with v2: library module uses intra-crate references (crate::) only.
 
 use once_cell::sync::{Lazy, OnceCell};
 use std::env;
