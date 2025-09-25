@@ -878,20 +878,25 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     }
 }
 
+pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
+    &[
+        "aifo-cargo-registry",
+        "aifo-cargo-git",
+        "aifo-node-cache",
+        // Back-compat: legacy npm-only cache remains in purge list
+        "aifo-npm-cache",
+        "aifo-pip-cache",
+        "aifo-ccache",
+        "aifo-go",
+    ]
+}
+
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
     // Phase 7: Purge caches
     // Include consolidated Node cache volume; retain legacy npm cache for back-compat cleanup.
-    let volumes = [
-        "aifo-cargo-registry",
-        "aifo-cargo-git",
-        "aifo-node-cache",
-        "aifo-npm-cache",
-        "aifo-pip-cache",
-        "aifo-ccache",
-        "aifo-go",
-    ];
+    let volumes = toolchain_purge_volume_names();
     for v in volumes {
         if verbose {
             eprintln!("aifo-coder: docker: docker volume rm -f {}", v);
