@@ -32,7 +32,11 @@ fn test_proxy_handles_large_payload_notifications_cmd() {
     let (mut stream, host, _port, path) = connect(&url);
 
     // Build large body using notifications-cmd (no sidecars needed); config likely missing -> 403
-    let mut body = format!("tool={}&cwd={}", urlencode("notifications-cmd"), urlencode("."));
+    let mut body = format!(
+        "tool={}&cwd={}",
+        urlencode("notifications-cmd"),
+        urlencode(".")
+    );
     for i in 0..5000 {
         body.push('&');
         body.push_str(&format!("arg={}", urlencode(&format!("x{i:04}"))));

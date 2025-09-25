@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::{have_git, init_repo_with_default_user};
 
-
 fn init_repo(dir: &std::path::Path) {
     let _ = init_repo_with_default_user(dir);
 }

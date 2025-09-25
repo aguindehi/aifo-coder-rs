@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_fork_clone_and_checkout_panes_creates_branches() {
     if !have_git() {

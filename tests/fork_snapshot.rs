@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_fork_create_snapshot_commit_exists() {
     if !have_git() {

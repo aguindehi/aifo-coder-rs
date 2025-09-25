@@ -1,9 +1,9 @@
 use std::fs;
 mod support;
-use support::capture_stdout;
 use std::time::{SystemTime, UNIX_EPOCH};
+use support::capture_stdout;
 
- // using tests/support::capture_stdout
+// using tests/support::capture_stdout
 
 #[test]
 fn test_workspace_fork_list_plain_output_color_forced() {

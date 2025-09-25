@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_cli_fork_clean_refusal_colorized() {
     if !have_git() {

@@ -1,8 +1,8 @@
 mod support;
-use support::urlencode;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use support::urlencode;
 
 fn write_file(p: &PathBuf, s: &str) {
     if let Some(parent) = p.parent() {

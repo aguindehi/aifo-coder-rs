@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_cli_fork_merge_octopus_autoclean_color_success() {
     if !have_git() {

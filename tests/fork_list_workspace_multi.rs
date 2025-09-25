@@ -1,10 +1,10 @@
 use serde_json::Value;
 use std::fs;
 mod support;
-use support::capture_stdout;
 use std::time::{SystemTime, UNIX_EPOCH};
+use support::capture_stdout;
 
- // using tests/support::capture_stdout
+// using tests/support::capture_stdout
 
 #[test]
 fn test_workspace_fork_list_json_multiple_repos_order_insensitive() {

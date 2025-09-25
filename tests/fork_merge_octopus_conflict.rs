@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_fork_merge_octopus_conflict_sets_meta_and_leaves_branches() {
     if !have_git() {

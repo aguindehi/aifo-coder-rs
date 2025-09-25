@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_git_stdout_str_invalid_subcommand_returns_none() {
     // This should fail with a non-zero exit, yielding None

@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_fork_clean_protects_submodule_dirty() {
     if !have_git() {

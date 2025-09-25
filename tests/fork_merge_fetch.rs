@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_fork_merge_fetch_creates_branches_and_meta() {
     if !have_git() {

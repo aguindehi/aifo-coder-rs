@@ -372,15 +372,14 @@ pub fn toolexec_start_proxy(
             }
             let sock_path = format!("{}/toolexec.sock", host_dir);
             let _ = fs::remove_file(&sock_path);
-            let listener = UnixListener::bind(&sock_path)
-                .map_err(|e| {
-                    io::Error::new(
-                        e.kind(),
-                        crate::display_for_toolchain_error(&crate::ToolchainError::Message(
-                            format!("proxy unix bind failed: {e}"),
-                        )),
-                    )
-                })?;
+            let listener = UnixListener::bind(&sock_path).map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    crate::display_for_toolchain_error(&crate::ToolchainError::Message(format!(
+                        "proxy unix bind failed: {e}"
+                    ))),
+                )
+            })?;
             let _ = listener.set_nonblocking(true);
             std_env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
             let running_cl2 = running.clone();

@@ -103,7 +103,9 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                         // Fallback: count commits in base..HEAD; >0 => ahead
                         let cnt_opt = {
                             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                            cmd.arg("rev-list").arg("--count").arg(format!("{}..HEAD", base_sha));
+                            cmd.arg("rev-list")
+                                .arg("--count")
+                                .arg(format!("{}..HEAD", base_sha));
                             cmd.stdout(std::process::Stdio::piped());
                             cmd.stderr(std::process::Stdio::null());
                             cmd.output().ok().and_then(|o| {
@@ -116,7 +118,11 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                         };
                         if let Some(cnt) = cnt_opt {
                             let n = cnt.parse::<u64>().unwrap_or(0);
-                            if n > 0 { (true, false) } else { (false, false) }
+                            if n > 0 {
+                                (true, false)
+                            } else {
+                                (false, false)
+                            }
                         } else {
                             (false, true)
                         }

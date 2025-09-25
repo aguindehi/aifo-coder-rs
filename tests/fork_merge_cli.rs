@@ -2,7 +2,6 @@ use std::process::Command;
 mod support;
 use support::have_git;
 
-
 #[test]
 fn test_cli_fork_merge_fetch_e2e() {
     if !have_git() {
