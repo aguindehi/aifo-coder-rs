@@ -426,10 +426,11 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
         "node" => {
             // Ensure pnpm binaries resolve in exec even for pre-existing containers
             push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
+            // Include $PNPM_HOME/bin explicitly in PATH to align with prebuilt toolchain image spec
             push_env(
                 &mut args,
                 "PATH",
-                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             );
             // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
