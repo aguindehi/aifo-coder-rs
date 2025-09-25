@@ -83,6 +83,7 @@ help:
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-toolchain ............. Build all toolchain sidecar images (rust/node/cpp)"
 	@echo "  build-toolchain-rust ........ Build the Rust toolchain sidecar image (aifo-rust-toolchain:latest)"
 	@echo "  build-toolchain-node ........ Build the Node toolchain sidecar image (aifo-node-toolchain:latest)"
 	@echo "  build-toolchain-cpp ......... Build the C-CPP toolchain sidecar image (aifo-cpp-toolchain:latest)"
@@ -103,6 +104,7 @@ help:
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
+	@echo "  rebuild-toolchain ........... Rebuild all toolchain sidecar images without cache"
 	@echo "  rebuild-toolchain-rust ...... Rebuild only the Rust toolchain image without cache"
 	@echo "  rebuild-toolchain-node ...... Rebuild only the Node toolchain image without cache"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the C-CPP toolchain image without cache"
@@ -493,6 +495,12 @@ rebuild-toolchain-node:
 	else \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
 	fi
+
+.PHONY: build-toolchain
+build-toolchain: build-toolchain-rust build-toolchain-node build-toolchain-cpp
+
+.PHONY: rebuild-toolchain
+rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolchain-cpp
 
 .PHONY: publish-toolchain-rust
 publish-toolchain-rust:
