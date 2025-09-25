@@ -1,6 +1,5 @@
 use std::process::Command;
 mod support;
-
 fn ensure_minimal_session(repo: &std::path::Path, sid: &str) {
     let session = repo.join(".aifo-coder").join("forks").join(sid);
     std::fs::create_dir_all(session.join("pane-1")).unwrap();

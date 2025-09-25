@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 mod support;
 use support::{have_git, init_repo_with_default_user};
