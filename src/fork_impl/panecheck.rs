@@ -39,7 +39,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
 
     // ahead/base-unknown detection
     let (ahead, base_unknown) = if let Some(base_sha) = base_commit {
-        // Ensure both base and HEAD resolve
+        // Verify base and HEAD exist in this pane repo
         let base_ok = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
             cmd.arg("rev-parse").arg("--verify").arg(base_sha);
@@ -58,40 +58,25 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                 }
             })
         };
-        if !base_ok {
-            // Missing base object -> treat as base-unknown
+        if !(base_ok && head_sha_opt.is_some()) {
             (false, true)
         } else {
-            match head_sha_opt {
-                Some(head_sha) => {
-                    // Determine common ancestor; only consider 'ahead' when base is an ancestor
-                    let mb = {
-                        let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                        cmd.arg("merge-base").arg(base_sha).arg("HEAD");
-                        cmd.stderr(std::process::Stdio::null());
-                        cmd.output().ok().and_then(|o| {
-                            if o.status.success() {
-                                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                            } else {
-                                None
-                            }
-                        })
-                    };
-                    match mb {
-                        Some(common) if !common.is_empty() && common == base_sha => {
-                            // Base is an ancestor of HEAD; ahead iff HEAD != base
-                            (head_sha != base_sha, false)
-                        }
-                        _ => {
-                            // Base is not an ancestor or cannot be determined
-                            (false, true)
-                        }
-                    }
-                }
-                None => {
-                    // HEAD not resolvable -> treat as base-unknown
-                    (false, true)
-                }
+            // Use merge-base --is-ancestor to decide ancestry robustly
+            let is_ancestor = {
+                let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                cmd.arg("merge-base")
+                    .arg("--is-ancestor")
+                    .arg(base_sha)
+                    .arg("HEAD");
+                cmd.stderr(std::process::Stdio::null());
+                cmd.status().ok().map(|st| st.success()).unwrap_or(false)
+            };
+            if is_ancestor {
+                let head_sha = head_sha_opt.unwrap();
+                (head_sha != base_sha, false)
+            } else {
+                // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
+                (false, true)
             }
         }
     } else {
