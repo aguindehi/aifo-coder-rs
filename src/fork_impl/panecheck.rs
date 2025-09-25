@@ -53,10 +53,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
             })
         };
         // If HEAD not resolvable, base-unknown
-        if head_sha_opt.is_none() {
-            (false, true)
-        } else {
-            let head_sha = head_sha_opt.as_ref().unwrap();
+        if let Some(head_sha) = head_sha_opt.as_ref() {
             // Fast path: exact equality means not-ahead and base is known
             if head_sha == base_sha {
                 (false, false)
@@ -78,6 +75,9 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     _ => (false, true),        // error/spawn -> base-unknown
                 }
             }
+        } else {
+            // HEAD not resolvable -> treat as base-unknown
+            (false, true)
         }
     } else {
         // No recorded base -> unknown
