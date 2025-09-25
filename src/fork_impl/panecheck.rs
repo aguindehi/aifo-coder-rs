@@ -71,11 +71,15 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                 cmd.stderr(std::process::Stdio::null());
                 cmd.status().ok().map(|st| st.success()).unwrap_or(false)
             };
-            if is_ancestor {
-                let head_sha = head_sha_opt.unwrap();
-                (head_sha != base_sha, false)
+            if let Some(head_sha) = head_sha_opt {
+                if is_ancestor {
+                    (head_sha != base_sha, false)
+                } else {
+                    // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
+                    (false, true)
+                }
             } else {
-                // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
+                // HEAD not resolvable -> treat as base-unknown
                 (false, true)
             }
         }
