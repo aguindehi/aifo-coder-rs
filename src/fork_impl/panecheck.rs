@@ -38,9 +38,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
     }
 
     // ahead/base-unknown detection
-    let mut ahead = false;
-    let mut base_unknown;
-    if let Some(base_sha) = base_commit {
+    let (ahead, base_unknown) = if let Some(base_sha) = base_commit {
         // Resolve HEAD and merge-base(base, HEAD); robustly detect ancestry and ahead
         let head_sha_opt = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
@@ -69,19 +67,18 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         if let (Some(head_sha), Some(mb)) = (head_sha_opt, merge_base_opt) {
             if !mb.is_empty() && mb == base_sha {
                 // Base is an ancestor of HEAD; mark ahead when HEAD != base
-                ahead = head_sha != base_sha;
-                base_unknown = false;
+                (head_sha != base_sha, false)
             } else {
                 // Base not an ancestor
-                base_unknown = true;
+                (false, true)
             }
         } else {
             // Unable to resolve HEAD or merge-base; conservatively mark base-unknown
-            base_unknown = true;
+            (false, true)
         }
     } else {
-        base_unknown = true;
-    }
+        (false, true)
+    };
     if ahead {
         reasons.push("ahead".to_string());
     }
