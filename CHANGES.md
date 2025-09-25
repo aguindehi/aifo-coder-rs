@@ -1,3 +1,12 @@
+2025-09-25 13:25 user@example.com
+
+Fix: robust ahead/base-unknown detection in fork pane checks
+
+- Switched pane 'ahead' detection to use merge-base(base, HEAD) + rev-parse HEAD instead of rev-list counts.
+- Correctly marks 'ahead' when base is an ancestor and HEAD != base; marks 'base-unknown' when base is not an ancestor or HEAD cannot be resolved.
+- Keeps stderr silenced for git helper commands to avoid noisy test output.
+- Resolves fork_autoclean and keep-dirty semantics: protected (ahead) sessions are no longer deleted.
+
 2025-09-25 12:50 user@example.com
 
 Fix: fork pane status detection and noisy git stderr
