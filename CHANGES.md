@@ -1,3 +1,11 @@
+2025-09-25 14:05 user@example.com
+
+Tidy: reduce dead_code allowances and silence unused fields
+
+- Replace type-level #[allow(dead_code)] on fork types with field-level where needed.
+- Remove enum-level allowance on Selected; rename variant field to _reason and update uses.
+- No behavior or user-visible strings changed; tests remain green.
+
 2025-09-25 13:25 user@example.com
 
 Fix: robust ahead/base-unknown detection in fork pane checks

@@ -11,26 +11,30 @@ use aifo_coder::MergingStrategy;
 use std::path::PathBuf;
 
 /// High-level fork session information captured at creation time.
-#[allow(dead_code)]
 pub struct ForkSession {
     pub sid: String,
     pub session_name: String,
+    #[allow(dead_code)]
     pub base_label: String,
+    #[allow(dead_code)]
     pub base_ref_or_sha: String,
+    #[allow(dead_code)]
     pub base_commit_sha: String,
+    #[allow(dead_code)]
     pub created_at: u64,
     pub layout: String,
     pub agent: String,
+    #[allow(dead_code)]
     pub session_dir: PathBuf,
 }
 
 /// A single pane description.
-#[allow(dead_code)]
 pub struct Pane {
     pub index: usize,
     pub dir: PathBuf,
     pub branch: String,
     pub state_dir: PathBuf,
+    #[allow(dead_code)]
     pub container_name: String,
 }
 
