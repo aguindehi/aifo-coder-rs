@@ -1,28 +1,9 @@
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+mod support;
 
 fn init_repo(dir: &std::path::Path) {
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.name", "UT"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["config", "user.email", "ut@example.com"])
-        .current_dir(dir)
-        .status();
-    let _ = std::fs::write(dir.join("init.txt"), "x\n");
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(dir)
-        .status();
-    let _ = std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(dir)
-        .status();
+    let _ = support::init_repo_with_default_user(dir);
 }
 
 fn write_fake_session(repo_root: &std::path::Path, sid: &str, age_days: u64) {
