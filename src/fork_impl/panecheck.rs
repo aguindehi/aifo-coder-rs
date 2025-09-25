@@ -39,21 +39,34 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
 
     // ahead/base-unknown detection
     let (ahead, base_unknown) = if let Some(base_sha) = base_commit {
-        // Verify base commit exists
+        // Ensure both base and HEAD resolve
         let base_ok = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
             cmd.arg("rev-parse").arg("--verify").arg(base_sha);
             cmd.stderr(std::process::Stdio::null());
             cmd.status().ok().map(|st| st.success()).unwrap_or(false)
         };
-        if !base_ok {
-            // Recorded base commit does not resolve in this pane
+        let head_sha_opt = {
+            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+            cmd.arg("rev-parse").arg("--verify").arg("HEAD");
+            cmd.stderr(std::process::Stdio::null());
+            cmd.output().ok().and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+        };
+        if !base_ok || head_sha_opt.is_none() {
+            // Missing objects -> treat as base-unknown
             (false, true)
         } else {
-            // Resolve HEAD commit
-            let head_sha_opt = {
+            let head_sha = head_sha_opt.unwrap();
+            // Determine common ancestor; only consider 'ahead' when base is an ancestor
+            let mb = {
                 let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                cmd.arg("rev-parse").arg("--verify").arg("HEAD");
+                cmd.arg("merge-base").arg(base_sha).arg("HEAD");
                 cmd.stderr(std::process::Stdio::null());
                 cmd.output().ok().and_then(|o| {
                     if o.status.success() {
@@ -63,63 +76,15 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     }
                 })
             };
-            if let Some(head_sha) = head_sha_opt {
-                if head_sha == base_sha {
-                    // Exactly at base: not ahead, base is known
-                    (false, false)
-                } else {
-                    // Prefer simple rev-list count; fall back to merge-base if needed
-                    let ahead_count_opt = {
-                        let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                        cmd.arg("rev-list")
-                            .arg("--count")
-                            .arg(format!("{}..HEAD", base_sha));
-                        cmd.stderr(std::process::Stdio::null());
-                        cmd.output().ok().and_then(|o| {
-                            if o.status.success() {
-                                let c = String::from_utf8_lossy(&o.stdout)
-                                    .trim()
-                                    .parse::<u64>()
-                                    .unwrap_or(0);
-                                Some(c)
-                            } else {
-                                None
-                            }
-                        })
-                    };
-                    if let Some(c) = ahead_count_opt {
-                        (c > 0, false)
-                    } else {
-                        // Try merge-base to decide if base is an ancestor; if not, mark base-unknown
-                        let mb_opt = {
-                            let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                            cmd.arg("merge-base").arg(base_sha).arg("HEAD");
-                            cmd.stderr(std::process::Stdio::null());
-                            cmd.output().ok().and_then(|o| {
-                                if o.status.success() {
-                                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                                } else {
-                                    None
-                                }
-                            })
-                        };
-                        if let Some(mb) = mb_opt {
-                            if !mb.is_empty() {
-                                // Base is known; consider ahead if HEAD != base (already true here)
-                                (true, false)
-                            } else {
-                                // merge-base returned empty; treat as unknown base
-                                (false, true)
-                            }
-                        } else {
-                            // Unable to determine; conservatively treat base as unknown
-                            (false, true)
-                        }
-                    }
+            match mb {
+                Some(common) if !common.is_empty() && common == base_sha => {
+                    // Base is an ancestor of HEAD; ahead iff HEAD != base
+                    (head_sha != base_sha, false)
                 }
-            } else {
-                // HEAD not resolvable; treat base as unknown
-                (false, true)
+                _ => {
+                    // Base is not an ancestor or cannot be determined
+                    (false, true)
+                }
             }
         }
     } else {
