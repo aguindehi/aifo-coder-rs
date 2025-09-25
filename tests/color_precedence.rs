@@ -1,13 +1,6 @@
 use std::process::Command;
 mod support;
 
-fn have_git() -> bool {
-    support::have_git()
-}
-
-fn init_repo(dir: &std::path::Path) {
-    let _ = support::init_repo_with_default_user(dir);
-}
 
 fn ensure_minimal_session(repo: &std::path::Path, sid: &str) {
     let session = repo.join(".aifo-coder").join("forks").join(sid);
@@ -24,13 +17,13 @@ fn ensure_minimal_session(repo: &std::path::Path, sid: &str) {
 
 #[test]
 fn test_color_env_always_applies_when_no_cli_flag() {
-    if !have_git() {
+    if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = support::init_repo_with_default_user(repo);
     ensure_minimal_session(repo, "sid-color-env");
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
@@ -55,13 +48,13 @@ fn test_color_env_always_applies_when_no_cli_flag() {
 
 #[test]
 fn test_no_color_env_disables_even_with_cli_always() {
-    if !have_git() {
+    if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = support::init_repo_with_default_user(repo);
     ensure_minimal_session(repo, "sid-no-color");
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
@@ -86,13 +79,13 @@ fn test_no_color_env_disables_even_with_cli_always() {
 
 #[test]
 fn test_cli_overrides_env_when_no_no_color() {
-    if !have_git() {
+    if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
     }
     let td = tempfile::tempdir().expect("tmpdir");
     let repo = td.path();
-    init_repo(repo);
+    let _ = support::init_repo_with_default_user(repo);
     ensure_minimal_session(repo, "sid-cli-over-env");
 
     let bin = env!("CARGO_BIN_EXE_aifo-coder");

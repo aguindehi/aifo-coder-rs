@@ -1,13 +1,8 @@
 use std::process::Command;
+mod support;
 
 fn have_git() -> bool {
-    Command::new("git")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    support::have_git()
 }
 
 #[test]
