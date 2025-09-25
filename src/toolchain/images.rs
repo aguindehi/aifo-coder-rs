@@ -29,7 +29,7 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 /// Default images by normalized kind
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-rust-toolchain:latest"),
-    ("node", "node:22-bookworm-slim"),
+    ("node", "aifo-node-toolchain:latest"),
     ("python", "python:3.12-slim"),
     ("c-cpp", "aifo-cpp-toolchain:latest"),
     ("go", "golang:1.22-bookworm"),
@@ -38,7 +38,7 @@ const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
 /// Default image templates for kind@version (use {version} placeholder)
 const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-rust-toolchain:{version}"),
-    ("node", "node:{version}-bookworm-slim"),
+    ("node", "aifo-node-toolchain:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
     // c-cpp has no versioned mapping; falls back to non-versioned default
