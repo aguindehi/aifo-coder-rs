@@ -40,9 +40,10 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
     // ahead/base-unknown detection
     let (ahead, base_unknown) = if let Some(base_sha) = base_commit {
         // Verify base and HEAD exist in this pane repo
-        let base_ok = {
+        let base_known = {
             let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-            cmd.arg("rev-parse").arg("--verify").arg(base_sha);
+            cmd.arg("cat-file").arg("-t").arg(base_sha);
+            cmd.stdout(std::process::Stdio::null());
             cmd.stderr(std::process::Stdio::null());
             cmd.status().ok().map(|st| st.success()).unwrap_or(false)
         };
@@ -58,7 +59,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                 }
             })
         };
-        if !(base_ok && head_sha_opt.is_some()) {
+        if !(base_known && head_sha_opt.is_some()) {
             (false, true)
         } else {
             // Fast path: exact equality means not-ahead and base is known
@@ -79,8 +80,8 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     if is_ancestor {
                         (true, false)
                     } else {
-                        // Base commit recorded but not an ancestor of HEAD -> treat as unknown/protected
-                        (false, true)
+                        // Base commit recorded but not an ancestor of HEAD -> treat as not-ahead with base known
+                        (false, false)
                     }
                 }
             } else {
