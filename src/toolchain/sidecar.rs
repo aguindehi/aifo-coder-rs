@@ -881,6 +881,8 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
+    // Phase 7: Purge caches
+    // Include consolidated Node cache volume; retain legacy npm cache for back-compat cleanup.
     let volumes = [
         "aifo-cargo-registry",
         "aifo-cargo-git",
