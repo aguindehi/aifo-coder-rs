@@ -39,7 +39,7 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
 
     // ahead/base-unknown detection
     let mut ahead = false;
-    let mut base_unknown = false;
+    let mut base_unknown;
     if let Some(base_sha) = base_commit {
         // Resolve HEAD and merge-base(base, HEAD); robustly detect ancestry and ahead
         let head_sha_opt = {
