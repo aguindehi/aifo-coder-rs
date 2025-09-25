@@ -29,7 +29,7 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 /// Default images by normalized kind
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-rust-toolchain:latest"),
-    ("node", "node:20-bookworm-slim"),
+    ("node", "node:22-bookworm-slim"),
     ("python", "python:3.12-slim"),
     ("c-cpp", "aifo-cpp-toolchain:latest"),
     ("go", "golang:1.22-bookworm"),
@@ -99,7 +99,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         // fall through to default constant
     }
     default_image_for_kind_const(&k)
-        .unwrap_or("node:20-bookworm-slim")
+        .unwrap_or("node:22-bookworm-slim")
         .to_string()
 }
 
