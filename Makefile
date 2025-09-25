@@ -218,6 +218,8 @@ ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-q
 
 # Detect docker buildx availability
 BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || echo 0)
+# Detect buildx driver (e.g., docker, docker-container, containerd)
+BUILDX_DRIVER := $(shell docker buildx inspect 2>/dev/null | awk '/^Driver:/{print $$2}')
 
 # Select build command (buildx with cache/load/push or classic docker build)
 ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
@@ -230,7 +232,11 @@ ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
     DOCKER_BUILDX_FLAGS := --load
   endif
   ifneq ($(strip $(CACHE_DIR)),)
-    DOCKER_BUILDX_FLAGS += --cache-from type=local,src=$(CACHE_DIR) --cache-to type=local,dest=$(CACHE_DIR),mode=max
+    ifneq ($(BUILDX_DRIVER),docker)
+      DOCKER_BUILDX_FLAGS += --cache-from type=local,src=$(CACHE_DIR) --cache-to type=local,dest=$(CACHE_DIR),mode=max
+    else
+      $(info buildx driver 'docker' detected; skipping cache export flags)
+    endif
   endif
   DOCKER_BUILD = docker buildx build $(DOCKER_BUILDX_FLAGS)
 else
