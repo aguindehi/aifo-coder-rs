@@ -73,9 +73,9 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                     cmd.status().ok().and_then(|st| st.code())
                 };
                 match exit_code_opt {
-                    Some(0) => (true, false),   // ancestor -> ahead
-                    Some(1) => (false, false),  // not ancestor -> not ahead
-                    _ => (false, true),         // error/spawn -> base-unknown
+                    Some(0) => (true, false),  // ancestor -> ahead
+                    Some(1) => (false, false), // not ancestor -> not ahead
+                    _ => (false, true),        // error/spawn -> base-unknown
                 }
             }
         }
