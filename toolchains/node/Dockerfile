@@ -53,7 +53,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Install Deno system-wide to /usr/local/bin/deno (with optional enterprise CA injection)
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -euo pipefail; \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -eu; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
       install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
