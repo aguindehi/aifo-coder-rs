@@ -23,7 +23,9 @@ use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
     PROXY_ENV_NAMES,
 };
-use super::mounts::{init_rust_named_volumes_if_needed, init_node_cache_volume_if_needed, push_mount};
+use super::mounts::{
+    init_node_cache_volume_if_needed, init_rust_named_volumes_if_needed, push_mount,
+};
 use super::{default_toolchain_image, is_official_rust_image, normalize_toolchain_kind};
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
@@ -281,7 +283,11 @@ pub fn build_sidecar_run_preview(
             push_env(&mut args, "XDG_CACHE_HOME", "/home/coder/.cache");
             push_env(&mut args, "NPM_CONFIG_CACHE", "/home/coder/.cache/npm");
             push_env(&mut args, "YARN_CACHE_FOLDER", "/home/coder/.cache/yarn");
-            push_env(&mut args, "PNPM_STORE_PATH", "/home/coder/.cache/pnpm-store");
+            push_env(
+                &mut args,
+                "PNPM_STORE_PATH",
+                "/home/coder/.cache/pnpm-store",
+            );
             push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
             push_env(&mut args, "DENO_DIR", "/home/coder/.cache/deno");
             // Ensure pnpm-managed binaries are on PATH
