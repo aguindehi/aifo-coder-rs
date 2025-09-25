@@ -58,31 +58,38 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
                 }
             })
         };
-        if !base_ok || head_sha_opt.is_none() {
-            // Missing objects -> treat as base-unknown
+        if !base_ok {
+            // Missing base object -> treat as base-unknown
             (false, true)
         } else {
-            let head_sha = head_sha_opt.unwrap();
-            // Determine common ancestor; only consider 'ahead' when base is an ancestor
-            let mb = {
-                let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
-                cmd.arg("merge-base").arg(base_sha).arg("HEAD");
-                cmd.stderr(std::process::Stdio::null());
-                cmd.output().ok().and_then(|o| {
-                    if o.status.success() {
-                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                    } else {
-                        None
+            match head_sha_opt {
+                Some(head_sha) => {
+                    // Determine common ancestor; only consider 'ahead' when base is an ancestor
+                    let mb = {
+                        let mut cmd = super::fork_impl_git::git_cmd(Some(pane_dir));
+                        cmd.arg("merge-base").arg(base_sha).arg("HEAD");
+                        cmd.stderr(std::process::Stdio::null());
+                        cmd.output().ok().and_then(|o| {
+                            if o.status.success() {
+                                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                    };
+                    match mb {
+                        Some(common) if !common.is_empty() && common == base_sha => {
+                            // Base is an ancestor of HEAD; ahead iff HEAD != base
+                            (head_sha != base_sha, false)
+                        }
+                        _ => {
+                            // Base is not an ancestor or cannot be determined
+                            (false, true)
+                        }
                     }
-                })
-            };
-            match mb {
-                Some(common) if !common.is_empty() && common == base_sha => {
-                    // Base is an ancestor of HEAD; ahead iff HEAD != base
-                    (head_sha != base_sha, false)
                 }
-                _ => {
-                    // Base is not an ancestor or cannot be determined
+                None => {
+                    // HEAD not resolvable -> treat as base-unknown
                     (false, true)
                 }
             }
