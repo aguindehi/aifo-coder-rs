@@ -37,6 +37,11 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
         }
     }
 
+    // Normalize empty base_commit to None (treat as "no recorded base" — not protective)
+    let base_commit = match base_commit {
+        Some(s) if s.trim().is_empty() => None,
+        other => other,
+    };
     // ahead/base-unknown detection
     let (ahead, base_unknown) = if let Some(base_sha) = base_commit {
         // Resolve HEAD sha
@@ -80,8 +85,8 @@ pub fn pane_check(pane_dir: &Path, base_commit: Option<&str>) -> PaneCheck {
             (false, true)
         }
     } else {
-        // No recorded base -> unknown
-        (false, true)
+        // No recorded base (missing/empty) -> do not mark base-unknown; consider clean if not dirty
+        (false, false)
     };
     if ahead {
         reasons.push("ahead".to_string());
