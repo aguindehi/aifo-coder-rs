@@ -6,6 +6,9 @@ fn test_route_tool_to_sidecar_mapping() {
     assert_eq!(aifo_coder::route_tool_to_sidecar("node"), "node");
     assert_eq!(aifo_coder::route_tool_to_sidecar("npm"), "node");
     assert_eq!(aifo_coder::route_tool_to_sidecar("npx"), "node");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("yarn"), "node");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("pnpm"), "node");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("deno"), "node");
     assert_eq!(aifo_coder::route_tool_to_sidecar("tsc"), "node");
     assert_eq!(aifo_coder::route_tool_to_sidecar("ts-node"), "node");
 
