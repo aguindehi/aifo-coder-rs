@@ -1,3 +1,19 @@
+2025-09-26 15:30 user@example.com
+
+feat: add Node toolchain image/version env overrides
+
+- Implemented AIFO_NODE_TOOLCHAIN_IMAGE and AIFO_NODE_TOOLCHAIN_VERSION in image selection.
+- Keeps rust overrides intact; preserves unknown-kind fallback to node:20-bookworm-slim.
+- No user-visible string changes; tests remain green.
+
+2025-09-26 15:10 user@example.com
+
+tests: add optional node preview run/exec checks
+
+- Added tests/preview_node_run_mount.rs to assert aifo-node-cache mount and key envs.
+- Added tests/preview_node_exec_env.rs to assert PNPM_HOME and PATH include $PNPM_HOME/bin.
+- Updated scoring per AGENT.md and proposed next steps.
+
 2025-09-25 14:45 user@example.com
 
 SCORE: comprehensive scoring and next steps (v2 refactor complete)

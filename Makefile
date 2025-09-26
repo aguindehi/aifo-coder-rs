@@ -61,10 +61,6 @@ help:
 	@echo ""
 	@echo "  install ..................... Install binary, man page, LICENSE/README and examples, then build Docker images locally"
 	@echo ""
-	@echo "Build launcher:"
-	@echo ""
-	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
-	@echo ""
 	@echo "Build shim:"
 	@echo ""
 	@echo "  build-shim .................. Build the aifo-shim binary with host toolchain"
@@ -72,7 +68,11 @@ help:
 	@echo ""
 	@echo "Build images:"
 	@echo ""
-	@echo "  build ....................... Build both slim and fat images (all agents)"
+	@echo "  build ....................... Build all images"
+	@echo ""
+	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
+	@echo ""
+	@echo "  build-coder ................. Build both slim and fat images (all agents)"
 	@echo "  build-fat ................... Build all fat images (codex, crush, aider)"
 	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim)"
 	@echo ""
@@ -82,16 +82,22 @@ help:
 	@echo "  build-codex-slim ............ Build only the Codex slim image ($${IMAGE_PREFIX}-codex-slim:$${TAG})"
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
+	@echo ""
+	@echo "  build-toolchain ............. Build all toolchain sidecar images (rust/node/cpp)"
+	@echo "  build-toolchain-rust ........ Build the Rust toolchain sidecar image (aifo-rust-toolchain:latest)"
+	@echo "  build-toolchain-node ........ Build the Node toolchain sidecar image (aifo-node-toolchain:latest)"
+	@echo "  build-toolchain-cpp ......... Build the C-CPP toolchain sidecar image (aifo-cpp-toolchain:latest)"
+	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
-	@echo "  build-toolchain-rust ........ Build the rust toolchain sidecar image (aifo-rust-toolchain:latest)"
-	@echo "  build-toolchain-cpp ......... Build the c-cpp toolchain sidecar image (aifo-cpp-toolchain:latest)"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
 	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
-	@echo "  rebuild ..................... Rebuild both slim and fat images without cache"
+	@echo "  rebuild ..................... Rebuild all images without cache"
+	@echo ""
+	@echo "  rebuild-coder ............... Rebuild both slim, fat and builder images without cache (all agents)"
 	@echo "  rebuild-fat ................. Rebuild all fat images without cache"
 	@echo "  rebuild-slim ................ Rebuild all slim images without cache"
 	@echo ""
@@ -101,9 +107,13 @@ help:
 	@echo "  rebuild-codex-slim .......... Rebuild only the Codex slim image without cache"
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
+	@echo ""
+	@echo "  rebuild-toolchain ........... Rebuild all toolchain sidecar images without cache"
+	@echo "  rebuild-toolchain-rust ...... Rebuild only the Rust toolchain image without cache"
+	@echo "  rebuild-toolchain-node ...... Rebuild only the Node toolchain image without cache"
+	@echo "  rebuild-toolchain-cpp ....... Rebuild only the C-CPP toolchain image without cache"
+	@echo ""
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
-	@echo "  rebuild-toolchain-rust ...... Rebuild only the rust toolchain image without cache"
-	@echo "  rebuild-toolchain-cpp ....... Rebuild only the c-cpp toolchain image without cache"
 	@echo ""
 	@echo "Rebuild existing images by prefix:"
 	@echo ""
@@ -112,13 +122,14 @@ help:
 	@echo ""
 	@echo "Publish images:"
 	@echo ""
-	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push c-cpp toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push C-CPP toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "Utilities:"
 	@echo ""
 	@echo "  clean ....................... Remove built images (ignores errors if not present)"
-	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/npm/pip/ccache/go)"
+	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -251,6 +262,7 @@ CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 RUST_TOOLCHAIN_TAG ?= latest
+NODE_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-bookworm
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
@@ -258,10 +270,12 @@ COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
-.PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
+.PHONY: build build-coder build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
 
-build: build-slim build-fat build-rust-builder
+build: build-slim build-fat build-rust-builder build-toolchain build-launcher
+
+build-coder: build-slim build-fat build-rust-builder
 
 build-codex:
 	@RP=""; \
@@ -445,6 +459,57 @@ rebuild-toolchain-rust:
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
 	fi
 
+.PHONY: build-toolchain-node rebuild-toolchain-node
+build-toolchain-node:
+	@set -e; \
+	echo "Building aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build node toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	else \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
+	fi
+
+rebuild-toolchain-node:
+	@set -e; \
+	echo "Rebuilding aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) (no cache) ..."; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
+	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+	  else \
+	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild node toolchain image."; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$RP" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	else \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
+	fi
+
+.PHONY: build-toolchain
+build-toolchain: build-toolchain-rust build-toolchain-node build-toolchain-cpp
+
+.PHONY: rebuild-toolchain
+rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolchain-cpp
+
 .PHONY: publish-toolchain-rust
 publish-toolchain-rust:
 	@set -e; \
@@ -547,6 +612,38 @@ publish-toolchain-cpp:
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
 	  $(DOCKER_BUILD) -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	fi
+
+.PHONY: publish-toolchain-node
+publish-toolchain-node:
+	@set -e; \
+	echo "Publishing aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in \
+	  */) ;; \
+	  "") ;; \
+	  *) REG="$$REG/";; \
+	esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..." ; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
+	else \
+	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
+	fi; \
+	if [ "$(PUSH)" = "1" ]; then \
+	  if [ -n "$$REG" ]; then \
+	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	  else \
+	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
+	    mkdir -p dist; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile --output type=oci,dest=dist/aifo-node-toolchain-$(NODE_TOOLCHAIN_TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/aifo-node-toolchain-$(NODE_TOOLCHAIN_TAG).oci.tar"; \
+	  fi; \
+	else \
+	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
@@ -1059,14 +1156,16 @@ test-toolchain-rust-e2e:
 
 .PHONY: toolchain-cache-clear
 toolchain-cache-clear:
-	@echo "Purging toolchain cache volumes (cargo registry/git, npm, pip, ccache, go) ..."
-	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
+	@echo "Purging toolchain cache volumes (cargo registry/git, node/npm, pip, ccache, go) ..."
+	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-node-cache aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
 	@echo "Done."
 
-.PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
-rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
+.PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
+rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
 
-rebuild: rebuild-slim rebuild-fat rebuild-rust-builder
+rebuild-coder: rebuild-slim rebuild-fat rebuild-rust-builder
+
+rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
 
 rebuild-codex:
 	@RP=""; \

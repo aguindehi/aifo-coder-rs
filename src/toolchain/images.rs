@@ -29,7 +29,7 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 /// Default images by normalized kind
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-rust-toolchain:latest"),
-    ("node", "node:22-bookworm-slim"),
+    ("node", "aifo-node-toolchain:latest"),
     ("python", "python:3.12-slim"),
     ("c-cpp", "aifo-cpp-toolchain:latest"),
     ("go", "golang:1.22-bookworm"),
@@ -38,7 +38,7 @@ const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
 /// Default image templates for kind@version (use {version} placeholder)
 const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-rust-toolchain:{version}"),
-    ("node", "node:{version}-bookworm-slim"),
+    ("node", "aifo-node-toolchain:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
     // c-cpp has no versioned mapping; falls back to non-versioned default
@@ -97,6 +97,21 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
         // fall through to default constant
+    }
+    if k == "node" {
+        // Symmetric overrides for Node toolchain image and version
+        if let Ok(img) = env::var("AIFO_NODE_TOOLCHAIN_IMAGE") {
+            let img = img.trim();
+            if !img.is_empty() {
+                return img.to_string();
+            }
+        }
+        if let Ok(ver) = env::var("AIFO_NODE_TOOLCHAIN_VERSION") {
+            let v = ver.trim();
+            if !v.is_empty() {
+                return format!("aifo-node-toolchain:{v}");
+            }
+        }
     }
     default_image_for_kind_const(&k)
         .unwrap_or("node:20-bookworm-slim")

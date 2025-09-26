@@ -23,7 +23,9 @@ use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
     PROXY_ENV_NAMES,
 };
-use super::mounts::{init_rust_named_volumes_if_needed, push_mount};
+use super::mounts::{
+    init_node_cache_volume_if_needed, init_rust_named_volumes_if_needed, push_mount,
+};
 use super::{default_toolchain_image, is_official_rust_image, normalize_toolchain_kind};
 
 pub(crate) fn sidecar_container_name(kind: &str, id: &str) -> String {
@@ -274,8 +276,26 @@ pub fn build_sidecar_run_preview(
         }
         "node" => {
             if !no_cache {
-                push_mount(&mut args, "aifo-npm-cache:/home/coder/.npm");
+                // Consolidated Node caches under XDG_CACHE_HOME
+                push_mount(&mut args, "aifo-node-cache:/home/coder/.cache");
             }
+            // Cache envs for Node ecosystem tools
+            push_env(&mut args, "XDG_CACHE_HOME", "/home/coder/.cache");
+            push_env(&mut args, "NPM_CONFIG_CACHE", "/home/coder/.cache/npm");
+            push_env(&mut args, "YARN_CACHE_FOLDER", "/home/coder/.cache/yarn");
+            push_env(
+                &mut args,
+                "PNPM_STORE_PATH",
+                "/home/coder/.cache/pnpm-store",
+            );
+            push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
+            push_env(&mut args, "DENO_DIR", "/home/coder/.cache/deno");
+            // Ensure pnpm-managed binaries are on PATH
+            push_env(
+                &mut args,
+                "PATH",
+                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            );
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
@@ -404,6 +424,14 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
         "node" => {
+            // Ensure pnpm binaries resolve in exec even for pre-existing containers
+            push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
+            // Include $PNPM_HOME/bin explicitly in PATH to align with prebuilt toolchain image spec
+            push_env(
+                &mut args,
+                "PATH",
+                "/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            );
             // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
         }
@@ -573,6 +601,16 @@ pub fn toolchain_run(
                 verbose,
             );
         }
+        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        if sidecar_kind == "node" && !no_cache {
+            init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &run_preview_args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
         // If a sidecar with this name already exists, reuse it (another pane may have started it)
         let exists = Command::new(&runtime)
             .arg("inspect")
@@ -730,6 +768,16 @@ pub fn toolchain_start_session(
         if verbose {
             eprintln!("aifo-coder: docker: {}", shell_join(&args));
         }
+        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        if kind == "node" && !no_cache {
+            init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
         // If a sidecar with this name already exists, reuse it (another pane may have started it)
         let exists = Command::new(&runtime)
             .arg("inspect")
@@ -830,17 +878,25 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
     }
 }
 
-/// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
-pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
-    let runtime = container_runtime_path()?;
-    let volumes = [
+pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
+    &[
         "aifo-cargo-registry",
         "aifo-cargo-git",
+        "aifo-node-cache",
+        // Back-compat: legacy npm-only cache remains in purge list
         "aifo-npm-cache",
         "aifo-pip-cache",
         "aifo-ccache",
         "aifo-go",
-    ];
+    ]
+}
+
+/// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
+pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
+    let runtime = container_runtime_path()?;
+    // Phase 7: Purge caches
+    // Include consolidated Node cache volume; retain legacy npm cache for back-compat cleanup.
+    let volumes = toolchain_purge_volume_names();
     for v in volumes {
         if verbose {
             eprintln!("aifo-coder: docker: docker volume rm -f {}", v);
