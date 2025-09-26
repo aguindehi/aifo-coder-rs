@@ -1364,8 +1364,8 @@ rebuild-existing-nocache:
 .PHONY: clean
 clean:
 	@set -e; \
-	- docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
-	- docker rmi repository.migros.net/$(CODEX_IMAGE) repository.migros.net/$(CRUSH_IMAGE) repository.migros.net/$(AIDER_IMAGE) repository.migros.net/$(CODEX_IMAGE_SLIM) repository.migros.net/$(CRUSH_IMAGE_SLIM) repository.migros.net/$(AIDER_IMAGE_SLIM) repository.migros.net/$(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
+	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) || true; \
+	docker rmi repository.migros.net/$(CODEX_IMAGE) repository.migros.net/$(CRUSH_IMAGE) repository.migros.net/$(AIDER_IMAGE) repository.migros.net/$(CODEX_IMAGE_SLIM) repository.migros.net/$(CRUSH_IMAGE_SLIM) repository.migros.net/$(AIDER_IMAGE_SLIM) repository.migros.net/$(RUST_BUILDER_IMAGE) || true; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	DOCKER_PLATFORM_ARGS=""; \
