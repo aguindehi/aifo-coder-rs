@@ -1369,9 +1369,18 @@ clean:
 	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
 	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
+	  RP="repository.migros.net/"; \
+	fi; \
 	if [ -n "$$REG" ]; then \
 	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
 	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
+	fi; \
+	if [ -n "$$RP" ] && [ "$$RP" != "$$REG" ]; then \
+	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
+	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
