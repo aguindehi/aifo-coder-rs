@@ -275,7 +275,7 @@ CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src
 .PHONY: build build-coder build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
 
-build: build-slim build-fat build-rust-builder build-toolchain
+build: build-slim build-fat build-rust-builder build-toolchain build-launcher
 
 build-coder: build-slim build-fat build-rust-builder
 
