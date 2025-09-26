@@ -72,7 +72,9 @@ help:
 	@echo ""
 	@echo "Build images:"
 	@echo ""
-	@echo "  build ....................... Build both slim and fat images (all agents)"
+	@echo "  build ....................... Build all images"
+	@echo ""
+	@echo "  build-coder ................. Build both slim and fat images (all agents)"
 	@echo "  build-fat ................... Build all fat images (codex, crush, aider)"
 	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim)"
 	@echo ""
@@ -95,7 +97,9 @@ help:
 	@echo ""
 	@echo "Rebuild images:"
 	@echo ""
-	@echo "  rebuild ..................... Rebuild both slim and fat images without cache"
+	@echo "  rebuild ..................... Rebuild all images without cache"
+	@echo ""
+	@echo "  rebuild-coder ............... Rebuild both slim, fat and builder images without cache (all agents)"
 	@echo "  rebuild-fat ................. Rebuild all fat images without cache"
 	@echo "  rebuild-slim ................ Rebuild all slim images without cache"
 	@echo ""
@@ -268,10 +272,12 @@ COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
-.PHONY: build build-fat build-codex build-crush build-aider build-rust-builder build-launcher
+.PHONY: build build-coder build-fat build-codex build-crush build-aider build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider
 
-build: build-slim build-fat build-rust-builder
+build: build-slim build-fat build-rust-builder build-toolchain
+
+build-coder: build-slim build-fat build-rust-builder
 
 build-codex:
 	@RP=""; \
@@ -1156,10 +1162,12 @@ toolchain-cache-clear:
 	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-node-cache aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
 	@echo "Done."
 
-.PHONY: rebuild rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
-rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
+.PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
+rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
 
-rebuild: rebuild-slim rebuild-fat rebuild-rust-builder
+rebuild-coder: rebuild-slim rebuild-fat rebuild-rust-builder
+
+rebuild-fat: rebuild-codex rebuild-crush rebuild-aider
 
 rebuild-codex:
 	@RP=""; \
