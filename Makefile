@@ -128,7 +128,7 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo ""
-	@echo "  clean ....................... Remove built images (ignores errors if not present)"
+	@echo "  clean ....................... Remove built and base images (ignores errors if not present)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
@@ -264,6 +264,7 @@ RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-bookworm
+NODE_BASE_TAG ?= 22-bookworm-slim
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
@@ -1364,8 +1365,19 @@ rebuild-existing-nocache:
 .PHONY: clean
 clean:
 	@set -e; \
-	- docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
-	- docker rmi repository.migros.net/$(CODEX_IMAGE) repository.migros.net/$(CRUSH_IMAGE) repository.migros.net/$(AIDER_IMAGE) repository.migros.net/$(CODEX_IMAGE_SLIM) repository.migros.net/$(CRUSH_IMAGE_SLIM) repository.migros.net/$(AIDER_IMAGE_SLIM) repository.migros.net/$(RUST_BUILDER_IMAGE) 2>/dev/null || true; \
+	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) aifo-cpp-toolchain:latest 2>/dev/null || true; \
+	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
+	RP="repository.migros.net/"; \
+	if [ -n "$$REG" ]; then \
+	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
+	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
+	fi; \
+	if [ "$$RP" != "$$REG" ]; then \
+	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
+	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
+	fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	DOCKER_PLATFORM_ARGS=""; \
