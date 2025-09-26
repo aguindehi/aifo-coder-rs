@@ -1366,13 +1366,11 @@ rebuild-existing-nocache:
 clean:
 	@set -e; \
 	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) aifo-cpp-toolchain:latest 2>/dev/null || true; \
-	# Also remove base images (Docker Hub)
 	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
 	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
 	if [ -n "$$REG" ]; then \
 	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
-	  # Also remove prefixed base images (enterprise registry)
 	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
