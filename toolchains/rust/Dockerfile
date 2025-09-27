@@ -79,5 +79,13 @@ RUN set -eux; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
     cargo install cargo-nextest --locked
 
+# Optionally drop procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
+
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
