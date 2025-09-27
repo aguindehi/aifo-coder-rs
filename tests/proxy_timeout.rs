@@ -1,4 +1,4 @@
-mod port;
+mod support;
 
 #[test]
 fn test_proxy_timeout_python_sleep() {
@@ -43,7 +43,7 @@ fn test_proxy_timeout_python_sleep() {
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
-        port::port_from_http_url(u)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 

@@ -1,4 +1,4 @@
-mod port;
+mod support;
 
 #[test]
 fn test_notifications_policy_error_403() {
@@ -23,7 +23,7 @@ fn test_notifications_policy_error_403() {
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
     // Connect and send a /notify request with an absolute non-existent 'say' path
-    let port = port::port_from_http_url(&url);
+    let port = support::port_from_http_url(&url);
 
     use std::io::{Read, Write};
     use std::net::TcpStream;

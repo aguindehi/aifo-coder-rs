@@ -1,4 +1,3 @@
-mod port;
 mod support;
 use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
@@ -13,7 +12,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
 
     // Helper: parse port from http://host.docker.internal:<port>/exec
     fn port_from_url(url: &str) -> u16 {
-        port::port_from_http_url(url)
+        support::port_from_http_url(url)
     }
 
     // Helper: open TCP connection to localhost:<port> and send a request, return (status, headers, body)

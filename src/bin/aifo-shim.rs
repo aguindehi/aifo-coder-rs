@@ -1541,3 +1541,214 @@ fn main() {
     eprint!("\n\r");
     process::exit(exit_code);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    fn find_header_end(buf: &[u8]) -> Option<usize> {
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            Some(i + 4)
+        } else {
+            buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
+        }
+    }
+
+    fn read_all(stream: &mut TcpStream) -> Vec<u8> {
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 2048];
+        loop {
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                Err(_) => break,
+            }
+        }
+        buf
+    }
+
+    fn decode_chunked_body(mut body: Vec<u8>) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut cursor = 0usize;
+        // Simple decoder tolerant to LF or CRLF
+        loop {
+            // read size line
+            let mut line = Vec::new();
+            while cursor < body.len() {
+                let b = body[cursor];
+                cursor += 1;
+                if b == b'\r' {
+                    if cursor < body.len() && body[cursor] == b'\n' {
+                        cursor += 1;
+                    }
+                    break;
+                } else if b == b'\n' {
+                    break;
+                } else {
+                    line.push(b);
+                }
+            }
+            if line.is_empty() {
+                // tolerate empty lines
+                continue;
+            }
+            let size_str = String::from_utf8_lossy(&line);
+            let size_hex = size_str.split(';').next().unwrap_or(&size_str);
+            let size = usize::from_str_radix(size_hex.trim(), 16).unwrap_or(0);
+            if size == 0 {
+                // drain any trailers until blank
+                loop {
+                    let mut tr = Vec::new();
+                    while cursor < body.len() {
+                        let b = body[cursor];
+                        cursor += 1;
+                        if b == b'\r' {
+                            if cursor < body.len() && body[cursor] == b'\n' {
+                                cursor += 1;
+                            }
+                            break;
+                        } else if b == b'\n' {
+                            break;
+                        } else {
+                            tr.push(b);
+                        }
+                    }
+                    if tr.is_empty() {
+                        break;
+                    }
+                }
+                break;
+            }
+            // copy payload
+            let end = cursor.saturating_add(size).min(body.len());
+            out.extend_from_slice(&body[cursor..end]);
+            cursor = end;
+            // consume trailing CRLF/LF
+            if cursor < body.len() && body[cursor] == b'\r' {
+                cursor += 1;
+                if cursor < body.len() && body[cursor] == b'\n' {
+                    cursor += 1;
+                }
+            } else if cursor < body.len() && body[cursor] == b'\n' {
+                cursor += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_notify_urlencode_component_covers_star_and_space() {
+        // Spin up local server to capture request body
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                let buf = read_all(&mut s);
+                let idx = find_header_end(&buf).unwrap_or(buf.len());
+                let body = String::from_utf8_lossy(&buf[idx..]).to_string();
+                // Respond OK
+                let resp = "HTTP/1.1 200 OK\r\nX-Exit-Code: 0\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                let _ = s.write_all(resp.as_bytes());
+                assert!(
+                    body.contains("cmd=say%2A") || body.contains("cmd=say%2a"),
+                    "expected '*' encoded, got: {}",
+                    body
+                );
+                assert!(
+                    body.contains("arg=a+b") || body.contains("arg=a%20b"),
+                    "expected space encoded (+ or %20), got: {}",
+                    body
+                );
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/notify", port);
+        let token = "t";
+        let cmd = "say*";
+        let args = vec!["a b".to_string()];
+        let code = try_notify_native(&url, token, cmd, &args, false).expect("native");
+        assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn test_exec_chunked_trailer_exit_code_124() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                let buf = read_all(&mut s);
+                let idx = find_header_end(&buf).unwrap_or(buf.len());
+                let body = decode_chunked_body(buf[idx..].to_vec());
+                let body_s = String::from_utf8_lossy(&body);
+                assert!(
+                    body_s.contains("tool=") && body_s.contains("cwd="),
+                    "expected form parts, got: {}",
+                    body_s
+                );
+                // Chunked response with trailer
+                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\nok\r\n0\r\nX-Exit-Code: 124\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/exec", port);
+        let token = "t";
+        let exec_id = "e1";
+        let parts = vec![
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+            ("arg".to_string(), "--help".to_string()),
+        ];
+        let code = try_run_native(&url, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code, 124);
+    }
+
+    #[test]
+    fn test_header_end_lf_only_parsing_on_notify() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                // LF-only header terminator
+                let resp = "HTTP/1.1 200 OK\nX-Exit-Code: 86\nContent-Length: 0\nConnection: close\n\n";
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/notify", port);
+        let token = "t";
+        let cmd = "say";
+        let args = vec!["hi".to_string()];
+        let code = try_notify_native(&url, token, cmd, &args, false).expect("native");
+        assert_eq!(code, 86);
+    }
+
+    #[test]
+    fn test_disconnect_exit_code_default_and_override() {
+        // Server: send headers only, then close (no body/trailer)
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                let _ = read_all(&mut s);
+                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+                // Immediately close without trailers
+            }
+        });
+        std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
+        let url = format!("http://127.0.0.1:{}/exec", port);
+        let token = "t";
+        let exec_id = "e2";
+        let parts = vec![("tool".to_string(), "node".to_string()), ("cwd".to_string(), ".".to_string())];
+        // Default: exit zero on disconnect
+        std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
+        let code = try_run_native(&url, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code, 0, "default should be zero on disconnect");
+        // Override: force non-zero on disconnect
+        std::env::set_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT", "0");
+        let code2 = try_run_native(&url, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code2, 1, "override should yield non-zero on disconnect");
+        std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
+        std::env::remove_var("AIFO_SHIM_DISCONNECT_WAIT_SECS");
+    }
+}

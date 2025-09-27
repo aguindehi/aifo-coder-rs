@@ -54,6 +54,18 @@ pub fn which(bin: &str) -> Option<PathBuf> {
         })
 }
 
+#[allow(dead_code)]
+pub fn port_from_http_url(url: &str) -> u16 {
+    let after = url.split("://").nth(1).unwrap_or(url);
+    let host_port = after.split('/').next().unwrap_or(after);
+    host_port
+        .rsplit(':')
+        .next()
+        .unwrap_or("0")
+        .parse()
+        .unwrap_or(0)
+}
+
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
 #[allow(dead_code)]

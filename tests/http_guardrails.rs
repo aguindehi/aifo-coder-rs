@@ -1,7 +1,5 @@
 mod support;
 
-mod port;
-
 #[test]
 fn test_http_excessive_headers_yields_431() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
@@ -16,7 +14,7 @@ fn test_http_excessive_headers_yields_431() {
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
     // Extract port from http URL
-    let port = port::port_from_http_url(&url);
+    let port = support::port_from_http_url(&url);
 
     // Build an HTTP request with excessive number of headers (>1024)
     use std::io::{Read, Write};
@@ -65,7 +63,7 @@ fn test_http_content_length_mismatch_yields_400() {
     let (url, _token, flag, handle) =
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
-    let port = port::port_from_http_url(&url);
+    let port = support::port_from_http_url(&url);
 
     // Declare small Content-Length but send a larger body to trigger mismatch
     use std::io::{Read, Write};
