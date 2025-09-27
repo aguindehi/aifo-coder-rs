@@ -1040,8 +1040,13 @@ coverage-html:
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	      exit 1; \
+	    fi; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-html (cargo)"; \
@@ -1050,14 +1055,23 @@ coverage-html:
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	      exit 1; \
+	    fi; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "coverage-html (docker $(RUST_BUILDER_IMAGE))"; \
+	  if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	    echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	    exit 1; \
+	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
 	echo "Wrote build/coverage/html (if grcov ran)."
 
@@ -1088,8 +1102,12 @@ coverage-lcov:
 	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	      exit 1; \
+	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-lcov (cargo)"; \
@@ -1098,14 +1116,22 @@ coverage-lcov:
 	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	      exit 1; \
+	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "coverage-lcov (docker $(RUST_BUILDER_IMAGE))"; \
+	  if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
+	    echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
+	    exit 1; \
+	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
 	echo "Wrote build/coverage/lcov.info (if grcov ran)."
 
