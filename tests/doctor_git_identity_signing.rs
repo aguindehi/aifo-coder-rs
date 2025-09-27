@@ -72,8 +72,9 @@ fn test_doctor_identity_precedence_and_signing_repo_over_global() {
     let home = td.path().to_path_buf();
     env::set_var("HOME", &home);
 
-    let global_cfg = home.join(".gitconfig-global");
+    let global_cfg = home.join(".gitconfig");
     env::set_var("GIT_CONFIG_GLOBAL", &global_cfg);
+    env::set_var("GIT_CONFIG_NOSYSTEM", "1");
 
     write_global_gitconfig(
         &global_cfg,
@@ -146,6 +147,10 @@ fn test_doctor_identity_precedence_and_signing_repo_over_global() {
         "effective commit.gpgsign should be false due to repo precedence; output:\n{}",
         output
     );
+
+    // Cleanup env overrides
+    env::remove_var("GIT_CONFIG_GLOBAL");
+    env::remove_var("GIT_CONFIG_NOSYSTEM");
 }
 
 #[test]
@@ -160,8 +165,9 @@ fn test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
     let home = td.path().to_path_buf();
     env::set_var("HOME", &home);
 
-    let global_cfg = home.join(".gitconfig-global");
+    let global_cfg = home.join(".gitconfig");
     env::set_var("GIT_CONFIG_GLOBAL", &global_cfg);
+    env::set_var("GIT_CONFIG_NOSYSTEM", "1");
 
     write_global_gitconfig(&global_cfg, "[commit]\n\tgpgsign = false\n");
 
@@ -192,4 +198,8 @@ fn test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
         "doctor verbose tips should suggest disabling signing; output:\n{}",
         output
     );
+
+    // Cleanup env overrides
+    env::remove_var("GIT_CONFIG_GLOBAL");
+    env::remove_var("GIT_CONFIG_NOSYSTEM");
 }
