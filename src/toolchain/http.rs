@@ -381,3 +381,45 @@ mod tests {
         assert_eq!(classify_endpoint("/notify"), Some(Endpoint::Notifications));
     }
 }
+
+#[cfg(test)]
+mod http_hardening_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_te_chunked_preferred_over_conflicting_content_length() {
+        // Request with both Transfer-Encoding: chunked and Content-Length present.
+        let req_text = "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Content-Length: 5\r\n\
+Transfer-Encoding: chunked\r\n\
+Connection: close\r\n\
+\r\n\
+A;ext=foo=bar\r\n\
+0123456789\r\n\
+0\r\n\
+\r\n";
+        let mut cur = Cursor::new(req_text.as_bytes().to_vec());
+        let parsed = read_http_request(&mut cur).expect("parsed");
+        // Body should reflect de-chunked payload, ignoring extensions and CL
+        assert_eq!(parsed.body, b"0123456789");
+    }
+
+    #[test]
+    fn test_invalid_hex_chunk_size_is_tolerated_without_panic() {
+        // Invalid chunk size 'G' (not hex) should not panic during decode
+        let req_text = "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Transfer-Encoding: chunked\r\n\
+\r\n\
+G\r\n\
+payload\r\n\
+0\r\n\r\n";
+        let mut cur = Cursor::new(req_text.as_bytes().to_vec());
+        let _ = read_http_request(&mut cur).expect("parsed without panic");
+    }
+}
