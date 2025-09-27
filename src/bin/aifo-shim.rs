@@ -1796,7 +1796,8 @@ mod tests {
         std::thread::spawn(move || {
             if let Ok((mut s, _a)) = listener.accept() {
                 // LF-only header terminator
-                let resp = "HTTP/1.1 200 OK\nX-Exit-Code: 86\nContent-Length: 0\nConnection: close\n\n";
+                let resp =
+                    "HTTP/1.1 200 OK\nX-Exit-Code: 86\nContent-Length: 0\nConnection: close\n\n";
                 let _ = s.write_all(resp.as_bytes());
             }
         });
@@ -1823,7 +1824,8 @@ mod tests {
                 // Read a bit of the request to allow client to finish writes before we reply.
                 let _ = read_until_header_end(&mut s, 200);
                 let _ = read_some_with_timeout(&mut s, 4096, 200);
-                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let resp =
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
                 let _ = s.write_all(resp.as_bytes());
                 // Keep socket alive briefly to avoid immediate RST and let client parse headers.
                 std::thread::sleep(std::time::Duration::from_millis(75));
@@ -1850,7 +1852,8 @@ mod tests {
             if let Ok((mut s, _a)) = listener2.accept() {
                 let _ = read_until_header_end(&mut s, 200);
                 let _ = read_some_with_timeout(&mut s, 4096, 200);
-                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let resp =
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
                 let _ = s.write_all(resp.as_bytes());
                 std::thread::sleep(std::time::Duration::from_millis(75));
             }
