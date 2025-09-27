@@ -26,15 +26,14 @@ fn test_notifications_exec_spawn_error_500() {
     // Enable noauth notifications mode
     std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
 
-    // Write a config with an allowlist and a mapping intended to force spawn failure.
-    // Note: Adjust to your actual notifications config schema if different.
+    // Write a config that sets an absolute non-existent executable to force spawn failure.
+    // Keep 'say' on the allowlist (default allowlist also includes 'say').
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let cfg_path = std::path::Path::new(&home).join(".aider.conf.yml");
-    let cfg = r#"notifications:
+    let cfg = r#"notifications-command: "/no/such/say"
+notifications:
   allowlist:
     - say
-  mappings:
-    say: /no/such/say
 "#;
     let _ = std::fs::write(&cfg_path, cfg);
 
