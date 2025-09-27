@@ -1,5 +1,5 @@
 #[test]
-fn test_notifications_exec_spawn_error_500() {
+fn test_notifications_policy_error_403() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
