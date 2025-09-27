@@ -84,11 +84,20 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
     }
 
     let header_str = String::from_utf8_lossy(header_bytes);
-    let mut lines = header_str.lines();
-    let request_line = lines.next().unwrap_or_default().trim().to_string();
+    let all_lines: Vec<&str> = header_str.lines().collect();
+    let request_line = all_lines.first().copied().unwrap_or("").trim().to_string();
+
+    // Enforce a header line count cap (excluding request line)
+    let hdr_count = all_lines.len().saturating_sub(1);
+    if hdr_count > 1024 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "too many headers",
+        ));
+    }
 
     let (method, path_lc, query_pairs) = parse_request_line_and_query(&request_line);
-    let headers = parse_headers(lines);
+    let headers = parse_headers(all_lines.iter().copied().skip(1));
 
     // Support Transfer-Encoding: chunked by de-chunking into body; otherwise honor Content-Length.
     let te = headers
@@ -244,6 +253,13 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
         }
         if content_len > BODY_CAP {
             content_len = BODY_CAP;
+        }
+        // Fail if we already have more bytes than declared Content-Length
+        if content_len > 0 && body.len() > content_len {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "content-length mismatch: too many bytes present",
+            ));
         }
         let mut remaining = content_len.saturating_sub(body.len());
         while remaining > 0 {

@@ -573,8 +573,25 @@ fn handle_connection<S: Read + Write>(
     // Parse request
     let req = match http::read_http_request(stream) {
         Ok(r) => r,
-        Err(_e) => {
-            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+        Err(e) => {
+            match e.kind() {
+                io::ErrorKind::InvalidInput => {
+                    // e.g., too many headers
+                    respond_plain(
+                        stream,
+                        "431 Request Header Fields Too Large",
+                        86,
+                        b"request headers too large\n",
+                    );
+                }
+                io::ErrorKind::InvalidData => {
+                    // e.g., Content-Length mismatch or malformed body
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                }
+                _ => {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                }
+            }
             let _ = stream.flush();
             return;
         }
@@ -1193,8 +1210,10 @@ fn handle_connection<S: Read + Write>(
 
     // Optional max-runtime escalation watcher
     let done = Arc::new(AtomicBool::new(false));
+    let timed_out = Arc::new(AtomicBool::new(false));
     if timeout_secs > 0 {
         let done_cl = done.clone();
+        let timed_out_cl = timed_out.clone();
         let runtime_cl = ctx.runtime.clone();
         let container_cl = name.clone();
         let exec_id_cl = exec_id.clone();
@@ -1220,6 +1239,9 @@ fn handle_connection<S: Read + Write>(
                         "\raifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                         sig, exec_id_cl, accum
                     );
+                }
+                if sig == "INT" {
+                    timed_out_cl.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
                 kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
             }
@@ -1300,6 +1322,12 @@ fn handle_connection<S: Read + Write>(
     }
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
+    // If watcher timed out (on initial INT), map to 504 with exit code 124
+    if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+        respond_plain(stream, "504 Gateway Timeout", 124, b"timeout\n");
+        let _ = stream.flush();
+        return;
+    }
     let header = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         code,
