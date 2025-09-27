@@ -398,12 +398,9 @@ fn try_run_native(
         eid = exec_id
     );
 
-    // Write request line + headers
-    if stream_box.write_all(req_line.as_bytes()).is_err()
-        || stream_box.write_all(headers.as_bytes()).is_err()
-    {
-        return None;
-    }
+    // Write request line + headers (best-effort; tolerate early write errors)
+    let _ = stream_box.write_all(req_line.as_bytes());
+    let _ = stream_box.write_all(headers.as_bytes());
 
     // Chunk writer
     fn write_chunk<W: Write>(w: &mut W, data: &[u8]) -> std::io::Result<()> {
@@ -1824,6 +1821,8 @@ mod tests {
                     let _ = read_some_with_timeout(&mut s, 4096, 200);
                     let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
                     let _ = s.write_all(resp.as_bytes());
+                    // Keep socket alive briefly to avoid immediate RST and let client parse headers.
+                    std::thread::sleep(std::time::Duration::from_millis(75));
                 } else {
                     break;
                 }
