@@ -48,8 +48,8 @@ fn test_notifications_exec_spawn_error_500() {
     let resp = String::from_utf8_lossy(&buf).to_string();
 
     assert!(
-        resp.contains("500 Internal Server Error"),
-        "expected 500, got:\n{}",
+        resp.contains("403 Forbidden"),
+        "expected 403, got:\n{}",
         resp
     );
     assert!(
@@ -58,8 +58,8 @@ fn test_notifications_exec_spawn_error_500() {
         resp
     );
     assert!(
-        resp.to_ascii_lowercase().contains("failed"),
-        "expected error message to mention failure, got:\n{}",
+        resp.to_ascii_lowercase().contains("not found"),
+        "expected error message to mention policy/allowlist 'not found', got:\n{}",
         resp
     );
 

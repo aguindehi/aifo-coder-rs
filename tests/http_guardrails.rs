@@ -40,10 +40,9 @@ fn test_http_excessive_headers_yields_431() {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     stream.write_all(req.as_bytes()).expect("write");
 
-    let mut resp = String::new();
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).ok();
-    resp = String::from_utf8_lossy(&buf).to_string();
+    let resp = String::from_utf8_lossy(&buf).to_string();
 
     assert!(
         resp.contains("431 Request Header Fields Too Large"),
