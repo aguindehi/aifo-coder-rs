@@ -77,7 +77,8 @@ RUN set -eux; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
-    cargo install cargo-nextest --locked
+    cargo install cargo-nextest --locked; \
+    cargo install grcov --locked
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
