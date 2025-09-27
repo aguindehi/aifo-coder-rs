@@ -128,7 +128,7 @@ pub fn http_post_tcp(
     let mut body_out: Vec<u8> = Vec::new();
 
     if let Some(pos) =
-        crate::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
+        aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
     {
         let h = &buf[..pos];
         headers_s = String::from_utf8_lossy(h).to_string();
