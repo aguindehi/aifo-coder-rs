@@ -157,7 +157,7 @@ help:
 	@echo ""
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
-	@echo "  coverage .................... Run coverage-html and coverage-lcov (composite target)"
+	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
 	@echo "  coverage-html ............... Generate HTML coverage via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo "  coverage-lcov ............... Generate lcov.info via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
@@ -1008,8 +1008,8 @@ test-cargo:
 
 test-legacy: test-cargo
 
-.PHONY: coverage coverage-html coverage-lcov
-coverage: coverage-html coverage-lcov
+.PHONY: cov coverage-html coverage-lcov
+cov: coverage-html coverage-lcov
 
 coverage-html:
 	@set -e; \
