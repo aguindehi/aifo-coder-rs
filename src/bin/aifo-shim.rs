@@ -647,7 +647,13 @@ fn try_run_native(
                     Ok(n) => buf.extend_from_slice(&tmp2[..n]),
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut => {}
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        if buf.is_empty() {
+                            return None;
+                        }
+                        // otherwise, keep looping to see if more bytes arrive
+                    }
                     Err(_) => return None,
                 }
                 // Signal checks during blocking reads
@@ -1016,6 +1022,12 @@ fn try_notify_native(
         match reader.read(&mut tmp) {
             Ok(0) => break,
             Ok(n) => buf.extend_from_slice(&tmp[..n]),
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue;
+            }
             Err(_) => break,
         }
     }
@@ -1048,6 +1060,12 @@ fn try_notify_native(
             Ok(0) => break,
             Ok(n) => {
                 let _ = stdout.write_all(&tmp[..n]);
+            }
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue;
             }
             Err(_) => break,
         }
@@ -1569,7 +1587,7 @@ mod tests {
         buf
     }
 
-    fn decode_chunked_body(mut body: Vec<u8>) -> Vec<u8> {
+    fn decode_chunked_body(body: Vec<u8>) -> Vec<u8> {
         let mut out = Vec::new();
         let mut cursor = 0usize;
         // Simple decoder tolerant to LF or CRLF
