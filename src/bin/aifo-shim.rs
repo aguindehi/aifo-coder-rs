@@ -1574,6 +1574,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn read_all(stream: &mut TcpStream) -> Vec<u8> {
         let mut buf = Vec::new();
         let mut tmp = [0u8; 2048];
@@ -1808,7 +1809,9 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
             if let Ok((mut s, _a)) = listener.accept() {
-                // Send prelude immediately; do not wait for EOF to avoid deadlock.
+                // Read a bit of the request to allow client to finish writes before we reply.
+                let _ = read_until_header_end(&mut s, 200);
+                let _ = read_some_with_timeout(&mut s, 4096, 200);
                 let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
                 let _ = s.write_all(resp.as_bytes());
             }
