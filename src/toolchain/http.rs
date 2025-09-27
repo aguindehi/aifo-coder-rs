@@ -422,4 +422,35 @@ payload\r\n\
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
         let _ = read_http_request(&mut cur).expect("parsed without panic");
     }
+
+    #[test]
+    fn test_body_cap_enforced_chunked_large_stream() {
+        // Build a chunked body exceeding 1 MiB to assert cap enforcement (1_048_576 bytes)
+        let header = "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Transfer-Encoding: chunked\r\n\
+Connection: close\r\n\
+\r\n";
+        // Create many 4096-byte chunks (size hex '1000')
+        let chunk_payload = "x".repeat(4096);
+        let mut body = String::new();
+        let mut total: usize = 0;
+        while total < 1_200_000 {
+            body.push_str("1000\r\n");
+            body.push_str(&chunk_payload);
+            body.push_str("\r\n");
+            total += 4096;
+        }
+        body.push_str("0\r\n\r\n");
+
+        let req_text = format!("{}{}", header, body);
+        let mut cur = Cursor::new(req_text.into_bytes());
+        let parsed = read_http_request(&mut cur).expect("parsed");
+        assert_eq!(
+            parsed.body.len(),
+            1_048_576,
+            "expected BODY_CAP=1MiB enforcement"
+        );
+    }
 }
