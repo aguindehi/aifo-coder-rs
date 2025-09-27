@@ -49,8 +49,7 @@ fn test_rust_env_normative_replacements_present_in_preview() {
         preview
     );
     assert!(
-        pl.contains("cargo_home=/usr/local/cargo")
-            || pl.contains("cargo_home=/home/coder/.cargo"),
+        pl.contains("cargo_home=/usr/local/cargo") || pl.contains("cargo_home=/home/coder/.cargo"),
         "expected normative CARGO_HOME path in preview:\n{}",
         preview
     );
