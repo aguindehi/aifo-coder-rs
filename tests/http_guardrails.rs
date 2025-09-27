@@ -17,7 +17,12 @@ fn test_http_excessive_headers_yields_431() {
     fn port_from_url(url: &str) -> u16 {
         let after = url.split("://").nth(1).unwrap_or(url);
         let host_port = after.split('/').next().unwrap_or(after);
-        host_port.rsplit(':').next().unwrap_or("0").parse().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0)
     }
     let port = port_from_url(&url);
 
@@ -72,7 +77,12 @@ fn test_http_content_length_mismatch_yields_400() {
     fn port_from_url(url: &str) -> u16 {
         let after = url.split("://").nth(1).unwrap_or(url);
         let host_port = after.split('/').next().unwrap_or(after);
-        host_port.rsplit(':').next().unwrap_or("0").parse().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0)
     }
     let port = port_from_url(&url);
 

@@ -16,7 +16,12 @@ fn test_notifications_exec_spawn_error_500() {
     fn port_from_url(url: &str) -> u16 {
         let after = url.split("://").nth(1).unwrap_or(url);
         let host_port = after.split('/').next().unwrap_or(after);
-        host_port.rsplit(':').next().unwrap_or("0").parse().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0)
     }
     let port = port_from_url(&url);
 
