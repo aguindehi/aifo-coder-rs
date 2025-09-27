@@ -1810,38 +1810,61 @@ mod tests {
 
     #[test]
     fn test_disconnect_exit_code_default_and_override() {
-        // Server: send headers only, then close (no body/trailer)
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
-        let port = listener.local_addr().unwrap().port();
-        std::thread::spawn(move || {
-            for _ in 0..2 {
-                if let Ok((mut s, _a)) = listener.accept() {
-                    // Read a bit of the request to allow client to finish writes before we reply.
-                    let _ = read_until_header_end(&mut s, 200);
-                    let _ = read_some_with_timeout(&mut s, 4096, 200);
-                    let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
-                    let _ = s.write_all(resp.as_bytes());
-                    // Keep socket alive briefly to avoid immediate RST and let client parse headers.
-                    std::thread::sleep(std::time::Duration::from_millis(75));
-                } else {
-                    break;
-                }
+        // Use two independent listeners to avoid race between sequential runs.
+        std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
+
+        // First run: default zero-on-disconnect
+        let listener1 = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port1 = listener1.local_addr().unwrap().port();
+        let (tx1, rx1) = std::sync::mpsc::channel::<()>();
+        let handle1 = std::thread::spawn(move || {
+            let _ = tx1.send(());
+            if let Ok((mut s, _a)) = listener1.accept() {
+                // Read a bit of the request to allow client to finish writes before we reply.
+                let _ = read_until_header_end(&mut s, 200);
+                let _ = read_some_with_timeout(&mut s, 4096, 200);
+                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+                // Keep socket alive briefly to avoid immediate RST and let client parse headers.
+                std::thread::sleep(std::time::Duration::from_millis(75));
             }
         });
-        std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
-        let url = format!("http://127.0.0.1:{}/exec", port);
+        let _ = rx1.recv_timeout(std::time::Duration::from_millis(200));
+        let url1 = format!("http://127.0.0.1:{}/exec", port1);
         let token = "t";
         let exec_id = "e2";
-        let parts = vec![("tool".to_string(), "node".to_string()), ("cwd".to_string(), ".".to_string())];
-        // Default: exit zero on disconnect
+        let parts = vec![
+            ("tool".to_string(), "node".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
         std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
-        let code = try_run_native(&url, token, exec_id, &parts, false).expect("native");
-        assert_eq!(code, 0, "default should be zero on disconnect");
-        // Override: force non-zero on disconnect
+        let code1 = try_run_native(&url1, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code1, 0, "default should be zero on disconnect");
+
+        // Second run: force non-zero on disconnect
+        let listener2 = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port2 = listener2.local_addr().unwrap().port();
+        let (tx2, rx2) = std::sync::mpsc::channel::<()>();
+        let handle2 = std::thread::spawn(move || {
+            let _ = tx2.send(());
+            if let Ok((mut s, _a)) = listener2.accept() {
+                let _ = read_until_header_end(&mut s, 200);
+                let _ = read_some_with_timeout(&mut s, 4096, 200);
+                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+                std::thread::sleep(std::time::Duration::from_millis(75));
+            }
+        });
+        let _ = rx2.recv_timeout(std::time::Duration::from_millis(200));
+        let url2 = format!("http://127.0.0.1:{}/exec", port2);
         std::env::set_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT", "0");
-        let code2 = try_run_native(&url, token, exec_id, &parts, false).expect("native");
+        let code2 = try_run_native(&url2, token, exec_id, &parts, false).expect("native");
         assert_eq!(code2, 1, "override should yield non-zero on disconnect");
+
+        // Cleanup
         std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
         std::env::remove_var("AIFO_SHIM_DISCONNECT_WAIT_SECS");
+        let _ = handle1.join();
+        let _ = handle2.join();
     }
 }
