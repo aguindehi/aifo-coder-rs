@@ -416,17 +416,32 @@ fn try_run_native(
     // Send body as chunks (8 KiB pieces)
     let bytes = body.as_bytes();
     let mut ofs = 0usize;
+    let mut request_write_err = false;
     while ofs < bytes.len() {
         let end = (ofs + 8192).min(bytes.len());
         if write_chunk(&mut stream_box, &bytes[ofs..end]).is_err() {
-            return None;
+            request_write_err = true;
+            break;
         }
         ofs = end;
     }
-    if stream_box.write_all(b"0\r\n\r\n").is_err() {
-        return None;
+    if !request_write_err {
+        if stream_box.write_all(b"0\r\n\r\n").is_err() {
+            request_write_err = true;
+        }
     }
     let _ = stream_box.flush();
+    // Best-effort: half-close the write side to signal end-of-request regardless of earlier errors.
+    drop(stream_box);
+    match &mut conn {
+        Conn::Tcp(s, _, _) => {
+            let _ = s.shutdown(std::net::Shutdown::Write);
+        }
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s, _) => {
+            let _ = s.shutdown(std::net::Shutdown::Write);
+        }
+    }
 
     // Now read response and stream stdout
     // Helper to read until headers end
