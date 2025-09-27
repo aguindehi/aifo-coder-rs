@@ -1,5 +1,4 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-#[ignore]
 #[test]
 fn test_notifications_exec_spawn_error_500() {
     // This test is ignored by default because it requires a config that maps 'say'
@@ -9,6 +8,16 @@ fn test_notifications_exec_spawn_error_500() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+
+    // Gate: only run when explicitly enabled
+    if std::env::var("AIFO_CODER_TEST_ENABLE_NOTIFY_SPAWN_500")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        eprintln!("skipping: AIFO_CODER_TEST_ENABLE_NOTIFY_SPAWN_500 not set to 1");
         return;
     }
 
