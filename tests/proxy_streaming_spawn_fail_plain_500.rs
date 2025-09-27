@@ -3,6 +3,8 @@
 use std::fs;
 use std::io::{Read, Write};
 
+mod support;
+
 /// This test verifies that the streaming path (proto v2) returns a plain 500 (no chunked prelude)
 /// when the spawn of the docker runtime fails, and that X-Exit-Code is 86 as per spec.
 ///
@@ -59,14 +61,7 @@ fn test_streaming_spawn_fail_plain_500() {
     }
 
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 

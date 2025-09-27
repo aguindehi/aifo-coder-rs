@@ -1,3 +1,4 @@
+mod support;
 use std::io::{Read, Write};
 
 #[test]
@@ -8,14 +9,7 @@ fn test_http_endpoint_routing() {
         aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 
@@ -25,13 +19,7 @@ fn test_http_endpoint_routing() {
 
     // /exec is recognized: GET should yield 405 (not 404)
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect exec");
-        let req = "GET /exec HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, "GET /exec HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assert!(
             txt.contains("405 Method Not Allowed"),
             "expected 405 for GET /exec: {}",
@@ -41,17 +29,12 @@ fn test_http_endpoint_routing() {
 
     // /notify is recognized: POST should not be 404 (auth/proto/policy may still apply)
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect notify");
         let body = "arg=--x";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(
             !txt.contains("404 Not Found"),
             "did not expect 404 for /notify: {}",

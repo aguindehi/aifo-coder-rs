@@ -151,7 +151,19 @@ pub fn http_post_tcp(
     }
     (status, headers_s, body_out)
 }
-
+ 
+/// Minimal raw HTTP sender over TCP returning the full response as a String.
+#[allow(dead_code)]
+pub fn http_send_raw(port: u16, request: &str) -> String {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
+    stream.write_all(request.as_bytes()).expect("write failed");
+    let mut buf = Vec::new();
+    let _ = stream.read_to_end(&mut buf);
+    String::from_utf8_lossy(&buf).to_string()
+}
+ 
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
 #[allow(dead_code)]

@@ -1,3 +1,4 @@
+mod support;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
@@ -57,26 +58,16 @@ fn test_notify_verbose_logs_include_parsed_and_result() {
 
     // Extract port from URL and send a raw notify request with cmd + args
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
-    let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     let body = "cmd=say&arg=--title&arg=AIFO";
     let req = format!(
         "POST /notify HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Aifo-Proto: 2\r\nContent-Length: {}\r\n\r\n{}",
         body.len(),
         body
     );
-    s.write_all(req.as_bytes()).expect("write notify");
-    let mut resp = Vec::new();
-    let _ = s.read_to_end(&mut resp);
+    let _ = support::http_send_raw(port, &req);
 
     // Read log file and assert lines present
     let log = fs::read_to_string(&logf).expect("read log");

@@ -17,50 +17,32 @@ fn test_proxy_unauthorized_and_unknown_tool() {
 
     // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        let port_str = host_port.rsplit(':').next().unwrap_or("0");
-        port_str.parse::<u16>().unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 
     // No Authorization header -> expect 401
-    use std::io::{Read, Write};
-    use std::net::TcpStream;
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-    let body = "tool=cargo&cwd=.";
-    let req = format!(
-        "POST /exec HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-        body.len(),
-        body
+    let (status, _headers, _body) = support::http_post_tcp(
+        port,
+        &[],
+        &[("tool", "cargo"), ("cwd", ".")],
     );
-    stream.write_all(req.as_bytes()).expect("write failed");
-    let mut resp = Vec::new();
-    stream.read_to_end(&mut resp).ok();
-    let text = String::from_utf8_lossy(&resp).to_string();
-    assert!(
-        text.contains("401 Unauthorized"),
-        "expected 401, got:\n{}",
-        text
+    assert_eq!(
+        status, 401,
+        "expected 401, got status={}",
+        status
     );
 
     // Unknown tool name with valid token -> expect 403
-    let mut stream2 = TcpStream::connect(("127.0.0.1", port)).expect("connect2 failed");
-    let body2 = "tool=h4x0r&cwd=.";
-    let req2 = format!(
-        "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-        token,
-        body2.len(),
-        body2
+    let (status2, _headers2, _body2) = support::http_post_tcp(
+        port,
+        &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+        &[("tool", "h4x0r"), ("cwd", ".")],
     );
-    stream2.write_all(req2.as_bytes()).expect("write2 failed");
-    let mut resp2 = Vec::new();
-    stream2.read_to_end(&mut resp2).ok();
-    let text2 = String::from_utf8_lossy(&resp2).to_string();
-    assert!(
-        text2.contains("403 Forbidden"),
-        "expected 403, got:\n{}",
-        text2
+    assert_eq!(
+        status2, 403,
+        "expected 403, got status={}",
+        status2
     );
 
     // Cleanup

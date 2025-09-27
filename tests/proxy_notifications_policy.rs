@@ -1,3 +1,4 @@
+mod support;
 use std::fs;
 use std::io::{Read, Write};
 
@@ -44,30 +45,18 @@ fn test_proxy_notifications_policy_auth_vs_noauth() {
         aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 
     // Default: missing auth -> 401 on /notify
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect unauth");
         let body = "arg=--title&arg=AIFO";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(
             txt.contains("401 Unauthorized"),
             "expected 401 when missing auth: {}",
@@ -77,17 +66,12 @@ fn test_proxy_notifications_policy_auth_vs_noauth() {
 
     // Auth present but missing proto -> 426
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect bad proto");
         let body = "arg=--title&arg=AIFO";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(
             txt.contains("426 Upgrade Required"),
             "expected 426 when auth ok but missing proto: {}",
@@ -98,17 +82,12 @@ fn test_proxy_notifications_policy_auth_vs_noauth() {
     // NOAUTH=1 allows unauthenticated /notify; with arg mismatch expect 403 + reason
     std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect noauth");
         let body = "cmd=say&arg=--oops";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        let _ = s.read_to_end(&mut resp);
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(
             txt.contains("403 Forbidden"),
             "expected 403 policy rejection under NOAUTH: {}",
