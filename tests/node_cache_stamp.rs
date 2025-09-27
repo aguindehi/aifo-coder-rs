@@ -12,8 +12,8 @@ fn node_named_cache_ownership_stamp_files() {
     };
 
     // Start node sidecar and run a harmless command to init cache
-    let image =
-        std::env::var("AIFO_CODER_TEST_NODE_IMAGE").unwrap_or_else(|_| "node:20-bookworm-slim".into());
+    let image = std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
+        .unwrap_or_else(|_| "node:20-bookworm-slim".into());
     let img_ok = std::process::Command::new(&rt)
         .args(["image", "inspect", &image])
         .stdout(std::process::Stdio::null())
@@ -50,7 +50,10 @@ fn node_named_cache_ownership_stamp_files() {
         ])
         .status()
         .expect("inspect volume");
-    assert!(status.success(), "expected stamp file in aifo-node-cache volume");
+    assert!(
+        status.success(),
+        "expected stamp file in aifo-node-cache volume"
+    );
 
     // Cleanup session
     aifo_coder::toolchain_cleanup_session(&sid, true);

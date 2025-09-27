@@ -10,8 +10,8 @@ fn proxy_streaming_slow_consumer_disconnect() {
 
     // Use node sidecar (skip if image not present locally to avoid pulling)
     let rt = aifo_coder::container_runtime_path().expect("runtime");
-    let node_image =
-        std::env::var("AIFO_CODER_TEST_NODE_IMAGE").unwrap_or_else(|_| "node:20-bookworm-slim".into());
+    let node_image = std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
+        .unwrap_or_else(|_| "node:20-bookworm-slim".into());
     let img_ok = std::process::Command::new(&rt)
         .args(["image", "inspect", &node_image])
         .stdout(std::process::Stdio::null())
@@ -31,8 +31,8 @@ fn proxy_streaming_slow_consumer_disconnect() {
 
     let kinds = vec!["node".to_string()];
     let overrides = vec![("node".to_string(), node_image.clone())];
-    let sid =
-        aifo_coder::toolchain_start_session(&kinds, &overrides, false, true).expect("start sidecar");
+    let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
+        .expect("start sidecar");
 
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
@@ -41,7 +41,12 @@ fn proxy_streaming_slow_consumer_disconnect() {
     fn port_from_url(url: &str) -> u16 {
         let after = url.split("://").nth(1).unwrap_or(url);
         let host_port = after.split('/').next().unwrap_or(after);
-        host_port.rsplit(':').next().unwrap_or("0").parse().unwrap_or(0)
+        host_port
+            .rsplit(':')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0)
     }
     let port = port_from_url(&url);
 
