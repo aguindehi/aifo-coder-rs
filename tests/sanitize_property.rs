@@ -31,8 +31,16 @@ fn fork_sanitize_base_label_property_like() {
         );
         // No leading/trailing '-'
         if !out.is_empty() {
-            assert!(out.as_bytes().first() != Some(&b'-'), "leading '-': {}", out);
-            assert!(out.as_bytes().last() != Some(&b'-'), "trailing '-': {}", out);
+            assert!(
+                out.as_bytes().first() != Some(&b'-'),
+                "leading '-': {}",
+                out
+            );
+            assert!(
+                out.as_bytes().last() != Some(&b'-'),
+                "trailing '-': {}",
+                out
+            );
         }
     }
 }
