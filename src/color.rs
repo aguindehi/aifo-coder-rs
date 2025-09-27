@@ -39,16 +39,7 @@ fn no_color_env() -> bool {
 }
 
 fn color_enabled_for(is_tty: bool) -> bool {
-    if no_color_env() {
-        return false;
-    }
-    if let Some(mode) = COLOR_MODE.get().copied() {
-        return match mode {
-            ColorMode::Always => true,
-            ColorMode::Never => false,
-            ColorMode::Auto => is_tty,
-        };
-    }
+    // 1) Environment override wins over NO_COLOR and TTY checks
     if let Some(env_mode) = env_color_mode_pref() {
         return match env_mode {
             ColorMode::Always => true,
@@ -56,6 +47,19 @@ fn color_enabled_for(is_tty: bool) -> bool {
             ColorMode::Auto => is_tty,
         };
     }
+    // 2) Programmatic override via set_color_mode
+    if let Some(mode) = COLOR_MODE.get().copied() {
+        return match mode {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => is_tty,
+        };
+    }
+    // 3) Respect NO_COLOR only when no overrides are present
+    if no_color_env() {
+        return false;
+    }
+    // 4) Default: auto (TTY)
     is_tty
 }
 

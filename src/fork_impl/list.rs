@@ -149,12 +149,7 @@ pub(crate) fn fork_list_to_string_impl(
                         continue;
                     }
                     any = true;
-                    let env_mode_always = std::env::var("AIFO_CODER_COLOR")
-                        .ok()
-                        .map(|v| v.trim().to_ascii_lowercase())
-                        .map(|v| matches!(v.as_str(), "always" | "on" | "true" | "yes"))
-                        .unwrap_or(false);
-                    let use_color = crate::color_enabled_stdout() || env_mode_always;
+                    let use_color = crate::color_enabled_stdout();
                     let header_path = format!("{}/.aifo-coder/forks", repo.display());
                     let mut lines: Vec<String> = Vec::new();
                     lines.push(format!(
@@ -227,12 +222,7 @@ pub(crate) fn fork_list_to_string_impl(
         }
         Ok(format!("[{}]", items.join(",")))
     } else {
-        let env_mode_always = std::env::var("AIFO_CODER_COLOR")
-            .ok()
-            .map(|v| v.trim().to_ascii_lowercase())
-            .map(|v| matches!(v.as_str(), "always" | "on" | "true" | "yes"))
-            .unwrap_or(false);
-        let use_color = crate::color_enabled_stdout() || env_mode_always;
+        let use_color = crate::color_enabled_stdout();
         let header_path = format!("{}/.aifo-coder/forks", repo_root.display());
         let mut lines: Vec<String> = Vec::new();
         lines.push(format!(
