@@ -1009,6 +1009,11 @@ coverage: coverage-html coverage-lcov
 
 coverage-html:
 	@set -e; \
+	if ! command -v grcov >/dev/null 2>&1; then \
+		echo "grcov not found; skipping coverage html. Rebuild images or install grcov."; \
+		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
+		exit 0; \
+	fi; \
 	mkdir -p build/coverage; \
 	rm -f build/coverage/*.profraw || true; \
 	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests; \
@@ -1016,6 +1021,11 @@ coverage-html:
 
 coverage-lcov:
 	@set -e; \
+	if ! command -v grcov >/dev/null 2>&1; then \
+		echo "grcov not found; skipping coverage lcov. Rebuild images or install grcov."; \
+		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
+		exit 0; \
+	fi; \
 	mkdir -p build/coverage; \
 	grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o build/coverage/lcov.info
 
