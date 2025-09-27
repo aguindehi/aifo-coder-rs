@@ -1014,9 +1014,9 @@ coverage-html:
 		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
 		exit 0; \
 	fi; \
-	echo "Running cargo nextest (sidecar, instrument-coverage) ..."; \
 	mkdir -p build/coverage; \
 	rm -f build/coverage/*.profraw || true; \
+	echo "Running cargo nextest (sidecar, instrument-coverage) ..."; \
 	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); \
 	echo "Running grcov (sidecar, html) ..."; \
 	grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*"  $(ARGS_GRCOV) $(ARGS) -o build/coverage/html

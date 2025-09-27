@@ -1,5 +1,5 @@
-mod support;
 mod port;
+mod support;
 use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
