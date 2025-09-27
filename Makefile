@@ -153,9 +153,10 @@ help:
 	@echo ""
 	@echo "Test targets:"
 	@echo ""
+	@echo "  check ....................... Run 'lint' then 'test' (composite validation target)"
+	@echo ""
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
-	@echo "  check ....................... Run 'lint' then 'test' (composite validation target)"
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
 	@echo "  test-legacy ................. Alias for test-cargo"
@@ -903,7 +904,7 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint test coverage
+check: lint test
 
 test:
 	@set -e; \
