@@ -35,7 +35,7 @@ fn test_notifications_exec_spawn_error_500() {
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
-    let body = "cmd=/no/such/say&arg=hello";
+    let body = "cmd=say&arg=hello";
     let req = format!(
         "POST /notify HTTP/1.1\r\n\
          Host: localhost\r\n\
