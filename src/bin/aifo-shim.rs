@@ -416,23 +416,17 @@ fn try_run_native(
     // Send body as chunks (8 KiB pieces)
     let bytes = body.as_bytes();
     let mut ofs = 0usize;
-    let mut request_write_err = false;
     while ofs < bytes.len() {
         let end = (ofs + 8192).min(bytes.len());
         if write_chunk(&mut stream_box, &bytes[ofs..end]).is_err() {
-            request_write_err = true;
             break;
         }
         ofs = end;
     }
-    if !request_write_err {
-        if stream_box.write_all(b"0\r\n\r\n").is_err() {
-            request_write_err = true;
-        }
-    }
+    let _ = stream_box.write_all(b"0\r\n\r\n");
     let _ = stream_box.flush();
     // Best-effort: half-close the write side to signal end-of-request regardless of earlier errors.
-    drop(stream_box);
+    let _ = stream_box;
     match &mut conn {
         Conn::Tcp(s, _, _) => {
             let _ = s.shutdown(std::net::Shutdown::Write);
@@ -1823,12 +1817,16 @@ mod tests {
         let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
-            if let Ok((mut s, _a)) = listener.accept() {
-                // Read a bit of the request to allow client to finish writes before we reply.
-                let _ = read_until_header_end(&mut s, 200);
-                let _ = read_some_with_timeout(&mut s, 4096, 200);
-                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
-                let _ = s.write_all(resp.as_bytes());
+            for _ in 0..2 {
+                if let Ok((mut s, _a)) = listener.accept() {
+                    // Read a bit of the request to allow client to finish writes before we reply.
+                    let _ = read_until_header_end(&mut s, 200);
+                    let _ = read_some_with_timeout(&mut s, 4096, 200);
+                    let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                    let _ = s.write_all(resp.as_bytes());
+                } else {
+                    break;
+                }
             }
         });
         std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
