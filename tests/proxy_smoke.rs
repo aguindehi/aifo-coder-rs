@@ -23,10 +23,7 @@ fn test_proxy_shim_route_rust_and_node() {
 
     // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        let port_str = host_port.rsplit(':').next().unwrap_or("0");
-        port_str.parse::<u16>().unwrap_or(0)
+        support::port_from_http_url(u)
     }
 
     fn post_exec(port: u16, token: &str, tool: &str, args: &[&str]) -> (i32, String) {
