@@ -8,6 +8,13 @@ fn test_notifications_exec_spawn_error_500() {
 
     // Enable noauth notifications mode
     std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
+
+    // Write a minimal allowlist config so policy passes (and spawn can fail with 500)
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let cfg_path = std::path::Path::new(&home).join(".aider.conf.yml");
+    let cfg = "notifications:\n  allowlist:\n    - say\n";
+    let _ = std::fs::write(&cfg_path, cfg);
+
     let sid = "ut-notify-spawnerr";
     let (url, _token, flag, handle) =
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
