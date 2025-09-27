@@ -1014,10 +1014,12 @@ coverage-html:
 		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
 		exit 0; \
 	fi; \
+	echo "Running cargo nextest (sidecar, instrument-coverage) ..."; \
 	mkdir -p build/coverage; \
 	rm -f build/coverage/*.profraw || true; \
-	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests; \
-	grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" -o build/coverage/html
+	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); \
+	echo "Running grcov (sidecar, html) ..."; \
+	grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*"  $(ARGS_GRCOV) $(ARGS) -o build/coverage/html
 
 coverage-lcov:
 	@set -e; \
@@ -1027,6 +1029,7 @@ coverage-lcov:
 		exit 0; \
 	fi; \
 	mkdir -p build/coverage; \
+	echo "Running grcov (sidecar, lcov) ..."; \
 	grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o build/coverage/lcov.info
 
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
