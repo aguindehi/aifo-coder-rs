@@ -1,3 +1,5 @@
+mod port;
+
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[test]
 fn test_notifications_exec_spawn_error_500() {
@@ -41,17 +43,7 @@ fn test_notifications_exec_spawn_error_500() {
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
     // Extract port from http URL
-    fn port_from_url(url: &str) -> u16 {
-        let after = url.split("://").nth(1).unwrap_or(url);
-        let host_port = after.split('/').next().unwrap_or(after);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse()
-            .unwrap_or(0)
-    }
-    let port = port_from_url(&url);
+    let port = port::port_from_http_url(&url);
 
     use std::io::{Read, Write};
     use std::net::TcpStream;

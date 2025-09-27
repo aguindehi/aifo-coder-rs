@@ -1,3 +1,5 @@
+mod port;
+
 #[test]
 fn test_notifications_policy_error_403() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
@@ -21,17 +23,7 @@ fn test_notifications_policy_error_403() {
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
 
     // Connect and send a /notify request with an absolute non-existent 'say' path
-    fn port_from_url(url: &str) -> u16 {
-        let after = url.split("://").nth(1).unwrap_or(url);
-        let host_port = after.split('/').next().unwrap_or(after);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse()
-            .unwrap_or(0)
-    }
-    let port = port_from_url(&url);
+    let port = port::port_from_http_url(&url);
 
     use std::io::{Read, Write};
     use std::net::TcpStream;
