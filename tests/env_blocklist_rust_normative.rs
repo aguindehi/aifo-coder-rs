@@ -42,7 +42,6 @@ fn test_rust_env_normative_replacements_present_in_preview() {
     );
 
     // Normative replacements are implementation-dependent; skip asserting them here.
-    // Normative replacements are implementation-dependent; skip asserting them here.
 
     // Cleanup env
     std::env::remove_var("RUSTUP_TOOLCHAIN");

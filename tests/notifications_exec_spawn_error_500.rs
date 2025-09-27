@@ -1,9 +1,9 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[test]
 fn test_notifications_exec_spawn_error_500() {
-    // This test is ignored by default because it requires a config that maps 'say'
-    // to an absolute non-existent or non-executable path to trigger ExecSpawn=500.
-    // Once notifications config supports such mappings in your environment, unignore it.
+    // This test is gated by AIFO_CODER_TEST_ENABLE_NOTIFY_SPAWN_500=1 because it requires
+    // a notifications config that maps 'say' to a non-existent or non-executable absolute path
+    // to trigger ExecSpawn=500. Set AIFO_CODER_TEST_ENABLE_NOTIFY_SPAWN_500=1 to run it.
 
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {

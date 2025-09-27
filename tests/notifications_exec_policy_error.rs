@@ -9,7 +9,8 @@ fn test_notifications_policy_error_403() {
     // Enable noauth notifications mode
     std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
 
-    // Write a minimal allowlist config so policy passes (and spawn can fail with 500)
+    // Write a minimal allowlist config; current policy path returns 403 "not found"
+    // when notifications-command is not present/allowed by the configured allowlist.
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let cfg_path = std::path::Path::new(&home).join(".aider.conf.yml");
     let cfg = "notifications:\n  allowlist:\n    - say\n";
