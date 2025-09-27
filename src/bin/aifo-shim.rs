@@ -1587,6 +1587,60 @@ mod tests {
         buf
     }
 
+    // Tiny helper: read only until end-of-headers (CRLFCRLF or LFLF) with a small timeout.
+    fn read_until_header_end(stream: &mut TcpStream, max_ms: u64) -> Vec<u8> {
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(max_ms)));
+        let mut buf = Vec::<u8>::new();
+        let mut tmp = [0u8; 1024];
+        loop {
+            if find_header_end(&buf).is_some() {
+                break;
+            }
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        buf
+    }
+
+    // Tiny helper: read up to cap_bytes more, bounded by max_ms timeout.
+    fn read_some_with_timeout(stream: &mut TcpStream, cap_bytes: usize, max_ms: u64) -> Vec<u8> {
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(max_ms)));
+        let mut out = Vec::<u8>::new();
+        let mut tmp = [0u8; 1024];
+        loop {
+            if out.len() >= cap_bytes {
+                break;
+            }
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let take = n.min(cap_bytes.saturating_sub(out.len()));
+                    out.extend_from_slice(&tmp[..take]);
+                    if take < n {
+                        break;
+                    }
+                }
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        out
+    }
+
     fn decode_chunked_body(body: Vec<u8>) -> Vec<u8> {
         let mut out = Vec::new();
         let mut cursor = 0usize;
@@ -1663,10 +1717,14 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
             if let Ok((mut s, _a)) = listener.accept() {
-                let buf = read_all(&mut s);
+                // Read only until header end, then a small slice of body to avoid deadlock.
+                let mut buf = read_until_header_end(&mut s, 200);
+                // Try to capture a bit more body if already available.
+                let more = read_some_with_timeout(&mut s, 4096, 200);
+                buf.extend_from_slice(&more);
                 let idx = find_header_end(&buf).unwrap_or(buf.len());
                 let body = String::from_utf8_lossy(&buf[idx..]).to_string();
-                // Respond OK
+                // Respond OK immediately
                 let resp = "HTTP/1.1 200 OK\r\nX-Exit-Code: 0\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
                 let _ = s.write_all(resp.as_bytes());
                 assert!(
@@ -1695,7 +1753,10 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
             if let Ok((mut s, _a)) = listener.accept() {
-                let buf = read_all(&mut s);
+                // Read headers quickly, then a bounded slice of the body.
+                let mut buf = read_until_header_end(&mut s, 200);
+                let more = read_some_with_timeout(&mut s, 8192, 200);
+                buf.extend_from_slice(&more);
                 let idx = find_header_end(&buf).unwrap_or(buf.len());
                 let body = decode_chunked_body(buf[idx..].to_vec());
                 let body_s = String::from_utf8_lossy(&body);
@@ -1747,10 +1808,9 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
             if let Ok((mut s, _a)) = listener.accept() {
-                let _ = read_all(&mut s);
+                // Send prelude immediately; do not wait for EOF to avoid deadlock.
                 let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
                 let _ = s.write_all(resp.as_bytes());
-                // Immediately close without trailers
             }
         });
         std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
