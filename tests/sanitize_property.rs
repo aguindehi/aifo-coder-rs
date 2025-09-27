@@ -1,11 +1,12 @@
 #[test]
 fn fork_sanitize_base_label_property_like() {
     // Deterministic set of mixed strings
-    let cases = vec![
+    let long = "a".repeat(200);
+    let cases: Vec<&str> = vec![
         "Hello, World!",
         "UPPER_lower-123.__/\\__   mixed---",
         "***invalid***chars###",
-        "a".repeat(200).as_str(),
+        long.as_str(),
         "-leading-and-trailing-",
         " spaced  words ",
         "symbols_./-group",
