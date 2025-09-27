@@ -8,6 +8,8 @@ ARG RUST_TAG=1-bookworm
 ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
+ARG KEEP_APT
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Base system dependencies (Debian/Bookworm)
@@ -30,6 +32,7 @@ RUN set -eux; \
       docker.io \
       ca-certificates \
       curl \
+      procps \
       tzdata \
       locales; \
     rm -rf /var/lib/apt/lists/*
