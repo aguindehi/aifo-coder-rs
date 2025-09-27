@@ -72,6 +72,7 @@ fn test_notifications_policy_error_403() {
     );
 
     // Cleanup
+    let _ = std::fs::remove_file(&cfg_path);
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
     std::env::remove_var("AIFO_NOTIFICATIONS_NOAUTH");
