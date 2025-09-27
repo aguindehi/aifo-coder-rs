@@ -6,6 +6,8 @@
 ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim
 
+ARG KEEP_APT
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Minimal system deps for modern Node workflows (deno installer requires unzip)
@@ -15,6 +17,7 @@ RUN set -eux; \
       ca-certificates \
       curl \
       git \
+      procps \
       unzip; \
     rm -rf /var/lib/apt/lists/*
 
@@ -98,6 +101,14 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
+
+# Optionally drop procps from final image to reduce footprint
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # Sleep by default; proxy will docker exec into this container
 CMD ["sleep", "infinity"]
