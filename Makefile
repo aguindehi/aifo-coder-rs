@@ -1013,28 +1013,101 @@ coverage: coverage-html coverage-lcov
 
 coverage-html:
 	@set -e; \
-	if ! command -v grcov >/dev/null 2>&1; then \
-		echo "grcov not found; skipping coverage html. Rebuild images or install grcov."; \
-		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
-		exit 0; \
-	fi; \
-	mkdir -p build/coverage; \
-	rm -f build/coverage/*.profraw || true; \
-	echo "Running cargo nextest (sidecar, instrument-coverage) ..."; \
-	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); \
-	echo "Running grcov (sidecar, html) ..."; \
-	grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*"  $(ARGS_GRCOV) $(ARGS) -o build/coverage/html
+	mkdir -p build/coverage; rm -f build/coverage/*.profraw || true; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	COV_ENV='CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0'; \
+	if [ -n "$$AIFO_EXEC_ID" ]; then \
+	  echo "coverage-html (sidecar)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
+	  else \
+	    echo "warning: grcov not found in sidecar; skipping html"; \
+	  fi; \
+	elif command -v rustup >/dev/null 2>&1; then \
+	  echo "coverage-html (rustup)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "coverage-html (cargo)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "coverage-html (docker $(RUST_BUILDER_IMAGE))"; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
+	echo "Wrote build/coverage/html (if grcov ran)."
 
 coverage-lcov:
 	@set -e; \
-	if ! command -v grcov >/dev/null 2>&1; then \
-		echo "grcov not found; skipping coverage lcov. Rebuild images or install grcov."; \
-		echo "Hint: make rebuild-toolchain-rust; make rebuild-rust-builder"; \
-		exit 0; \
-	fi; \
-	mkdir -p build/coverage; \
-	echo "Running grcov (sidecar, lcov) ..."; \
-	grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o build/coverage/lcov.info
+	mkdir -p build/coverage; rm -f build/coverage/*.profraw || true; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	COV_ENV='CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0'; \
+	if [ -n "$$AIFO_EXEC_ID" ]; then \
+	  echo "coverage-lcov (sidecar)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
+	  else echo "warning: grcov not found in sidecar; skipping lcov"; fi; \
+	elif command -v rustup >/dev/null 2>&1; then \
+	  echo "coverage-lcov (rustup)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
+	elif command -v cargo >/dev/null 2>&1; then \
+	  echo "coverage-lcov (cargo)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  if command -v grcov >/dev/null 2>&1; then \
+	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
+	  elif command -v docker >/dev/null 2>&1; then \
+	    echo "grcov missing; running grcov in $(RUST_BUILDER_IMAGE)"; \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
+	elif command -v docker >/dev/null 2>&1; then \
+	  echo "coverage-lcov (docker $(RUST_BUILDER_IMAGE))"; \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
+	echo "Wrote build/coverage/lcov.info (if grcov ran)."
 
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
