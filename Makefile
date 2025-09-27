@@ -799,7 +799,7 @@ build-shim-with-builder:
 	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
-.PHONY: lint check test test-cargo test-legacy
+.PHONY: lint check test test-cargo test-legacy coverage coverage-html coverage-lcov
 
 lint:
 	@set -e; \
@@ -903,7 +903,7 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint test
+check: lint test coverage
 
 test:
 	@set -e; \
@@ -1003,6 +1003,21 @@ test-cargo:
 	fi
 
 test-legacy: test-cargo
+
+.PHONY: coverage coverage-html coverage-lcov
+coverage: coverage-html coverage-lcov
+
+coverage-html:
+	@set -e; \
+	mkdir -p build/coverage; \
+	rm -f build/coverage/*.profraw || true; \
+	CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$(PWD)/build/coverage/aifo-%p-%m.profraw" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -j 1 --tests; \
+	grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" -o build/coverage/html
+
+coverage-lcov:
+	@set -e; \
+	mkdir -p build/coverage; \
+	grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o build/coverage/lcov.info
 
 .PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:

@@ -281,14 +281,26 @@ fn disconnect_terminate_exec_in_container(
     log_disconnect();
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(50));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending INT to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
     // In parallel, try to close the transient /run shell in the agent container, if known.
     if let Some(ac) = agent_container {
         kill_agent_shell_in_agent_container(runtime, ac, exec_id, verbose);
     }
     std::thread::sleep(Duration::from_millis(250));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending TERM to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
     std::thread::sleep(Duration::from_millis(750));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending KILL to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 

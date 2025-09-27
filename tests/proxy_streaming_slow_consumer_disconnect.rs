@@ -67,14 +67,29 @@ fn proxy_streaming_slow_consumer_disconnect() {
     // Drop the connection without reading much
     drop(stream);
 
-    // Wait briefly for proxy to record disconnect
-    std::thread::sleep(std::time::Duration::from_millis(600));
+    // Wait for proxy to record disconnect and escalation sequence
+    std::thread::sleep(std::time::Duration::from_millis(1600));
 
-    // Check logs for disconnect message
+    // Check logs for disconnect and escalation messages
     let log_content = std::fs::read_to_string(&log_path).unwrap_or_default();
     assert!(
         log_content.contains("aifo-coder: disconnect"),
         "expected disconnect log; got:\n{}",
+        log_content
+    );
+    assert!(
+        log_content.contains("disconnect escalate: sending INT"),
+        "expected INT escalation log; got:\n{}",
+        log_content
+    );
+    assert!(
+        log_content.contains("disconnect escalate: sending TERM"),
+        "expected TERM escalation log; got:\n{}",
+        log_content
+    );
+    assert!(
+        log_content.contains("disconnect escalate: sending KILL"),
+        "expected KILL escalation log; got:\n{}",
         log_content
     );
 
