@@ -1870,4 +1870,101 @@ mod tests {
         let _ = handle1.join();
         let _ = handle2.join();
     }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_send_signal_native_uds_basic() {
+        use std::os::unix::net::UnixListener;
+        use std::time::Duration;
+
+        // Prepare a temporary unix socket
+        let td = tempfile::tempdir().expect("tmpdir");
+        let sock_path = td.path().join("shim-signal.sock");
+        let listener = UnixListener::bind(&sock_path).expect("bind uds");
+
+        // Spawn server to capture request and assert headers/body
+        let handle = std::thread::spawn(move || {
+            let (mut s, _addr) = listener.accept().expect("accept");
+            let _ = s.set_read_timeout(Some(Duration::from_millis(300)));
+            let _ = s.set_write_timeout(Some(Duration::from_millis(300)));
+
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 1024];
+
+            // Read until end of headers
+            loop {
+                match s.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if let Some(_idx) = find_header_end(&buf) {
+                            break;
+                        }
+                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut => { break; }
+                    Err(_) => break,
+                }
+            }
+            // Attempt to read a bit more (body) with a tiny timeout window
+            let start = std::time::Instant::now();
+            loop {
+                match s.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if buf.len() > 4096 {
+                            break;
+                        }
+                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut => { break; }
+                    Err(_) => break,
+                }
+                if start.elapsed() > Duration::from_millis(250) {
+                    break;
+                }
+            }
+
+            let req = String::from_utf8_lossy(&buf).to_string();
+            let req_lc = req.to_ascii_lowercase();
+
+            assert!(
+                req.contains("POST /signal"),
+                "expected POST /signal line, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("Authorization: Bearer t"),
+                "expected Authorization header, got:\n{}",
+                req
+            );
+            assert!(
+                req_lc.contains("x-aifo-proto: 2"),
+                "expected X-Aifo-Proto: 2 header, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("exec_id=e1"),
+                "expected exec_id in body, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("signal=INT"),
+                "expected signal=INT in body, got:\n{}",
+                req
+            );
+
+            // Minimal 204 response
+            let resp = b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = s.write_all(resp);
+        });
+
+        // Call native signal sender against unix:// socket
+        let url = format!("unix://{}", sock_path.display());
+        send_signal_native(&url, "t", "e1", "INT");
+        let _ = handle.join();
+    }
 }

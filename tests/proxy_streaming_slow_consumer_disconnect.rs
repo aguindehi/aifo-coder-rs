@@ -12,13 +12,7 @@ fn proxy_streaming_slow_consumer_disconnect() {
     // Use node sidecar (skip if image not present locally to avoid pulling)
     let rt = aifo_coder::container_runtime_path().expect("runtime");
     let node_image = support::default_node_test_image();
-    let img_ok = std::process::Command::new(&rt)
-        .args(["image", "inspect", &node_image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let img_ok = support::docker_image_present(&rt.as_path(), &node_image);
     if !img_ok {
         eprintln!("skipping: node image '{}' not present locally", node_image);
         return;

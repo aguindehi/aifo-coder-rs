@@ -14,13 +14,7 @@ fn node_named_cache_ownership_stamp_files() {
 
     // Start node sidecar and run a harmless command to init cache
     let image = support::default_node_test_image();
-    let img_ok = std::process::Command::new(&rt)
-        .args(["image", "inspect", &image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let img_ok = support::docker_image_present(&rt.as_path(), &image);
     if !img_ok {
         eprintln!("skipping: node image '{}' not present locally", image);
         return;
