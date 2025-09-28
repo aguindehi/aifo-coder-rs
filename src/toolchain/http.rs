@@ -453,4 +453,28 @@ Connection: close\r\n\
             "expected BODY_CAP=1MiB enforcement"
         );
     }
+
+    #[test]
+    fn test_body_cap_enforced_non_chunked_large_stream() {
+        // Non-chunked request with a Content-Length larger than BODY_CAP should be capped.
+        let payload = "x".repeat(2_000_000);
+        let header = format!(
+            "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Content-Length: {}\r\n\
+Connection: close\r\n\
+\r\n",
+            payload.len()
+        );
+        let req_text = format!("{}{}", header, payload);
+        let mut cur = Cursor::new(req_text.into_bytes());
+        let parsed = read_http_request(&mut cur).expect("parsed");
+        assert_eq!(
+            parsed.body.len(),
+            1_048_576,
+            "expected BODY_CAP=1MiB enforcement for non-chunked"
+        );
+    }
 }
