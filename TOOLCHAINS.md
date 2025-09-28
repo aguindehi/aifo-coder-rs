@@ -1,6 +1,53 @@
+# AIFO Toolchains & Sidecars (v7)
+
+This document summarizes the current sidecar model for all toolchains and then provides
+detailed notes for Rust. It reflects the consolidated caches, image overrides, session
+network, and unix-socket transport introduced in v7.
+
+Common model (all toolchains)
+- Sidecars and kinds: rust, node (incl. TypeScript), python, c-cpp, go.
+- Session network: per-session Docker network aifo-net-<sid> (created on demand and removed
+  on cleanup).
+- Image overrides (highest precedence first):
+  - AIFO_<KIND>_TOOLCHAIN_IMAGE → full image reference
+  - AIFO_<KIND>_TOOLCHAIN_VERSION → aifo-<kind>-toolchain:{version}
+  - Defaults per kind (see src/toolchain/images.rs):
+    - rust: aifo-rust-toolchain:latest (or official rust:<tag>-bookworm when requested)
+    - node: aifo-node-toolchain:latest (base images use node:22-bookworm-slim)
+    - python: python:3.12-slim
+    - c-cpp: aifo-cpp-toolchain:latest
+    - go: golang:1.22-bookworm
+- Caches and volumes (created/used on demand; purged via toolchain_purge_caches):
+  - Rust cargo caches: aifo-cargo-registry, aifo-cargo-git (mounted under /home/coder/.cargo/*;
+    legacy mounts also supported at /usr/local/cargo/*).
+  - Node consolidated caches: aifo-node-cache mounted at /home/coder/.cache (npm/yarn/pnpm/deno).
+  - Python: aifo-pip-cache at /home/coder/.cache/pip.
+  - C/C++: aifo-ccache at /home/coder/.cache/ccache when enabled.
+  - Go: aifo-go mounted at /go (GOPATH).
+- Ownership initialization (best-effort):
+  - Rust: named cargo volumes chowned once per volume with a stamp file (.aifo-init-done).
+  - Node: consolidated cache volume chowned once with a stamp file.
+- Connectivity:
+  - Linux optional host-gateway mapping when AIFO_TOOLEEXEC_ADD_HOST=1.
+  - Linux optional unix:// transport (AIFO_TOOLEEXEC_USE_UNIX=1) with proxy socket under
+    /run/aifo/aifo-<sid>/toolexec.sock.
+- Proxies and env passthrough: HTTP(S)_PROXY and NO_PROXY (and lowercase variants) are
+  forwarded to sidecars. Additional toolchain-specific env is documented below.
+
+References
+- Images and normalization: src/toolchain/images.rs
+- Mounts and ownership init: src/toolchain/mounts.rs
+- Sidecar lifecycle and previews: src/toolchain/sidecar.rs
+- Routing and allowlists: src/toolchain/routing.rs
+- Testing lanes and toggles: docs/TESTING.md
+- Toolchain overrides and caches: CONTRIBUTING.md
+
 # AIFO Rust Toolchain (v7)
 
-This document explains how to use the Rust toolchain sidecar in AIFO Coder. It covers image selection, cache strategy and mounts, required environment defaults, optional integrations (SSH, sccache, proxies, fast linkers), Windows-specific behavior, and ownership initialization of named volumes. Migration notes and troubleshooting tips are provided at the end.
+This document explains how to use the Rust toolchain sidecar in AIFO Coder. It covers image
+selection, cache strategy and mounts, required environment defaults, optional integrations
+(SSH, sccache, proxies, fast linkers), Windows-specific behavior, and ownership initialization
+of named volumes. Migration notes and troubleshooting tips are provided at the end.
 
 Quick start
 - Default behavior “just works” on Linux/macOS when launching an agent with the rust toolchain:
