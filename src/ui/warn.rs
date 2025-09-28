@@ -8,10 +8,7 @@ use std::io::Write;
 /// Print a standardized warning line to stderr (color-aware).
 pub fn warn_print(msg: &str) {
     let use_err = crate::color_enabled_stderr();
-    eprintln!(
-        "{}",
-        crate::paint(use_err, "\x1b[33;1m", &format!("warning: {}", msg))
-    );
+    crate::log_warn_stderr(use_err, &format!("warning: {}", msg));
 }
 
 fn finish_prompt_line() {
@@ -96,10 +93,7 @@ fn warn_input_fallback() -> bool {
 pub fn warn_prompt_continue_or_quit(lines: &[&str]) -> bool {
     let use_err = crate::color_enabled_stderr();
     for l in lines {
-        eprintln!(
-            "{}",
-            crate::paint(use_err, "\x1b[33;1m", &format!("warning: {}", l))
-        );
+        crate::log_warn_stderr(use_err, &format!("warning: {}", l));
     }
 
     // Only prompt when interactive and not disabled by env/CI
