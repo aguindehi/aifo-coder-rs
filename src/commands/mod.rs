@@ -9,6 +9,7 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     print_startup_banner();
     let _ = warn_if_tmp_workspace(false);
     
+    let use_err = aifo_coder::color_enabled_stderr();
     aifo_coder::log_info_stderr(use_err, "aifo-coder images");
     eprintln!();
 

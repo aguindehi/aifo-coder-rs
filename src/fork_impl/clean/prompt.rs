@@ -96,7 +96,7 @@ pub fn check_and_prompt(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) -> Re
             let _ = std::io::stdin().read_line(&mut line);
             let ans = line.trim().to_ascii_lowercase();
             if ans != "y" && ans != "yes" {
-                eprintln!("aborted.");
+                crate::log_error_stderr(use_err, "aborted.");
                 return Err(1);
             }
         }
