@@ -70,13 +70,13 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let port = port_str.parse::<u16>().expect("port parse");
 
     // Build a request body that streams a lot of output quickly
-    // Script: generate many lines rapidly to fill the bounded channel
-    let script = "i=0; while [ $i -lt 8000 ]; do echo x; i=$((i+1)); done";
+    // Use node to generate many lines rapidly without invoking a shell
+    let script = "for (let i=0; i<8000; i++) console.log('x')";
     let body = format!(
         "tool={}&cwd={}&arg={}&arg={}",
-        urlencode_component("sh"),
+        urlencode_component("node"),
         urlencode_component("/workspace"),
-        urlencode_component("-lc"),
+        urlencode_component("-e"),
         urlencode_component(script)
     );
 
