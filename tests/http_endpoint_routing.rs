@@ -1,5 +1,4 @@
 mod support;
-use std::io::{Read, Write};
 
 #[test]
 fn test_http_endpoint_routing() {
