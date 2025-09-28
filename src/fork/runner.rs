@@ -35,7 +35,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     let repo_root = match aifo_coder::repo_root() {
         Some(p) => p,
         None => {
-            eprintln!("aifo-coder: error: fork mode must be run inside a Git repository.");
+            aifo_coder::log_error_stderr(
+                use_err_color,
+                "aifo-coder: error: fork mode must be run inside a Git repository.",
+            );
             return ExitCode::from(1);
         }
     };
@@ -48,7 +51,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         match aifo_coder::fork_base_info(&repo_root) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("aifo-coder: error determining base: {}", e);
+                aifo_coder::log_error_stderr(
+                    use_err_color,
+                    &format!("aifo-coder: error determining base: {}", e),
+                );
                 return ExitCode::from(1);
             }
         };
@@ -147,7 +153,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     ) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("aifo-coder: error during cloning: {}", e);
+            aifo_coder::log_error_stderr(
+                use_err_color,
+                &format!("aifo-coder: error during cloning: {}", e),
+            );
             return ExitCode::from(1);
         }
     };
@@ -289,7 +298,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             crate::fork::orchestrators::Selected::Tmux { .. } => {
                 let orch = crate::fork::orchestrators::tmux::Tmux;
                 if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    eprintln!("aifo-coder: {}", e);
+                    aifo_coder::log_error_stderr(
+                        use_err_color,
+                        &format!("aifo-coder: {}", e),
+                    );
                     crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
@@ -314,7 +326,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             crate::fork::orchestrators::Selected::WindowsTerminal { .. } => {
                 let orch = crate::fork::orchestrators::windows_terminal::WindowsTerminal;
                 if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    eprintln!("aifo-coder: {}", e);
+                    aifo_coder::log_error_stderr(
+                        use_err_color,
+                        &format!("aifo-coder: {}", e),
+                    );
                     crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
@@ -335,7 +350,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     wait: merge_requested,
                 };
                 if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    eprintln!("aifo-coder: {}", e);
+                    aifo_coder::log_error_stderr(
+                        use_err_color,
+                        &format!("aifo-coder: {}", e),
+                    );
                     crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
@@ -356,7 +374,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     exec_shell_tail: !merge_requested,
                 };
                 if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    eprintln!("aifo-coder: {}", e);
+                    aifo_coder::log_error_stderr(
+                        use_err_color,
+                        &format!("aifo-coder: {}", e),
+                    );
                     crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
