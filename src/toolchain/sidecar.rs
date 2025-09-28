@@ -529,13 +529,13 @@ pub(crate) fn mark_official_rust_bootstrap(kind: &str, image: &str) {
     }
 }
 
-/// RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP: set on create, clear on Drop.
-struct BootstrapGuard {
+//// RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP: set on create, clear on Drop.
+pub struct BootstrapGuard {
     _was_set: bool,
 }
 
 impl BootstrapGuard {
-    fn new(kind: &str, image: &str) -> Self {
+    pub fn new(kind: &str, image: &str) -> Self {
         // Set marker according to rules and record whether it is set
         mark_official_rust_bootstrap(kind, image);
         let _was_set = std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
@@ -796,7 +796,7 @@ pub fn toolchain_start_session(
                 image = vv.clone();
             }
         }
-        let _bootstrap_guard = BootstrapGuard::new(kind.as_str(), &image);
+// Bootstrap marker held at session level via ToolchainSession guard
 
         let name = sidecar_container_name(kind.as_str(), &session_id);
         let args = build_sidecar_run_preview(

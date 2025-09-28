@@ -81,6 +81,7 @@ pub struct ToolchainSession {
     proxy_handle: Option<std::thread::JoinHandle<()>>,
     verbose: bool,
     in_fork_pane: bool,
+    bootstrap_guard: Option<aifo_coder::BootstrapGuard>,
 }
 
 impl ToolchainSession {
@@ -106,6 +107,22 @@ impl ToolchainSession {
         if cli.toolchain_unix_socket {
             std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
         }
+
+        // Prepare session-scoped RAII guard for official Rust bootstrap (lives until session drop)
+        let session_bootstrap_guard: Option<aifo_coder::BootstrapGuard> = if kinds
+            .iter()
+            .any(|k| k == "rust")
+        {
+            // Determine rust image (override or default) and create guard
+            let rust_image = overrides
+                .iter()
+                .find(|(k, _)| aifo_coder::normalize_toolchain_kind(k) == "rust")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| aifo_coder::default_toolchain_image("rust"));
+            Some(aifo_coder::BootstrapGuard::new("rust", &rust_image))
+        } else {
+            None
+        };
 
         // Start sidecars
         let sid = match aifo_coder::toolchain_start_session(
@@ -184,6 +201,7 @@ impl ToolchainSession {
             proxy_handle: Some(handle),
             verbose: cli.verbose,
             in_fork_pane,
+            bootstrap_guard: session_bootstrap_guard,
         }))
     }
 
