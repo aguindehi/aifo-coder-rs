@@ -28,7 +28,10 @@ fn test_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
     {
         let (status, _headers, _body) = support::http_post_tcp(
             port,
-            &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+            &[
+                ("Authorization", &format!("Bearer {}", token)),
+                ("X-Aifo-Proto", "1"),
+            ],
             &[("cwd", ".")],
         );
         assert_eq!(status, 400, "expected 400, got status={}", status);
