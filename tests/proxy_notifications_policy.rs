@@ -1,6 +1,5 @@
 mod support;
 use std::fs;
-use std::io::{Read, Write};
 
 #[test]
 fn test_proxy_notifications_policy_auth_vs_noauth() {

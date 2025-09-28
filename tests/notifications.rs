@@ -1,6 +1,5 @@
 mod support;
 use std::fs;
-use std::io::{Read, Write};
 
 #[test]
 fn test_notifications_cmd_e2e_ok_and_mismatch() {

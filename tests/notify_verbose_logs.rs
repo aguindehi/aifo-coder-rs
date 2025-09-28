@@ -1,8 +1,5 @@
 mod support;
 use std::fs;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpStream;
 
 #[test]
 fn test_notify_verbose_logs_include_parsed_and_result() {

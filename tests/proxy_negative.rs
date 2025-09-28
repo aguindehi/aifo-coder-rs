@@ -1,3 +1,4 @@
+mod support;
 #[ignore]
 #[test]
 fn test_proxy_unauthorized_and_unknown_tool() {
@@ -27,12 +28,10 @@ fn test_proxy_unauthorized_and_unknown_tool() {
     assert_eq!(status, 401, "expected 401, got status={}", status);
 
     // Unknown tool name with valid token -> expect 403
+    let auth = format!("Bearer {}", token);
     let (status2, _headers2, _body2) = support::http_post_tcp(
         port,
-        &[
-            ("Authorization", &format!("Bearer {}", token)),
-            ("X-Aifo-Proto", "1"),
-        ],
+        &[("Authorization", auth.as_str()), ("X-Aifo-Proto", "1")],
         &[("tool", "h4x0r"), ("cwd", ".")],
     );
     assert_eq!(status2, 403, "expected 403, got status={}", status2);
