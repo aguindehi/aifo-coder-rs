@@ -62,12 +62,18 @@ fn test_proxy_tsc_prefers_local_compiler() {
     // POST tool=tsc
     let (status, _headers, body) = support::http_post_tcp(
         port,
-        &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
         &[("tool", "tsc"), ("cwd", ".")],
     );
     assert_eq!(status, 200, "expected 200, got status={}", status);
     let text = String::from_utf8_lossy(&body).to_string();
-    assert!(text.contains("local-tsc"), "tsc did not come from local node_modules");
+    assert!(
+        text.contains("local-tsc"),
+        "tsc did not come from local node_modules"
+    );
 
     // Cleanup session first
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

@@ -62,7 +62,10 @@ fn test_proxy_python_venv_precedence() {
     // POST tool=python
     let (status, _headers, body) = support::http_post_tcp(
         port,
-        &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
         &[("tool", "python"), ("cwd", ".")],
     );
     assert_eq!(status, 200, "expected 200, got status={}", status);
