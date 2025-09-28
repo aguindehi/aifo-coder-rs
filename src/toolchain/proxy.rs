@@ -85,11 +85,11 @@ fn respond_chunked_write_chunk<W: Write>(w: &mut W, chunk: &[u8]) -> io::Result<
     Ok(())
 }
 
-fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) {
-    let _ = w.write_all(b"0\r\n");
+fn respond_chunked_trailer<W: Write>(w: &mut W, code: i32) -> io::Result<()> {
+    w.write_all(b"0\r\n")?;
     let trailer = format!("X-Exit-Code: {code}\r\n\r\n");
-    let _ = w.write_all(trailer.as_bytes());
-    let _ = w.flush();
+    w.write_all(trailer.as_bytes())?;
+    w.flush()
 }
 
 /// Best-effort detection of an unreadable/untraversable /workspace inside the container
@@ -1294,7 +1294,21 @@ fn handle_connection<S: Read + Write>(
             let _ = rs.remove(&exec_id);
         }
         log_request_result(verbose, &tool, kind, code, &started);
-        respond_chunked_trailer(stream, code);
+        if let Err(_e) = respond_chunked_trailer(stream, code) {
+            if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                log_stderr_and_file(
+                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                );
+            }
+            let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if verbose {
+                let line = format!(
+                    "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                    dropped_count.load(std::sync::atomic::Ordering::SeqCst)
+                );
+                log_stderr_and_file(&line);
+            }
+        }
         return;
     }
 
