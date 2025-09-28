@@ -70,7 +70,7 @@ pub fn run_doctor(verbose: bool) {
             .output()
         {
             let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            let parsed = aifo_coder::docker_security_options_parse(&raw);
+            let parsed = aifo_coder::docker_security_options_parse(raw.as_str());
             let items = parsed.items.clone();
             let pretty: Vec<String> = items
                 .iter()
