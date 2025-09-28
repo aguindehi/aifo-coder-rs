@@ -76,7 +76,8 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
 
 pub fn run_cache_clear(_cli: &Cli) -> std::process::ExitCode {
     aifo_coder::invalidate_registry_cache();
-    eprintln!("aifo-coder: cleared on-disk registry cache.");
+    let use_err = aifo_coder::color_enabled_stderr();
+    aifo_coder::log_info_stderr(use_err, "aifo-coder: cleared on-disk registry cache.");
     std::process::ExitCode::from(0)
 }
 

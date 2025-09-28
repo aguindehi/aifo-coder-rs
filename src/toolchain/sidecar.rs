@@ -781,6 +781,7 @@ pub fn toolchain_start_session(
     verbose: bool,
 ) -> io::Result<String> {
     let runtime = container_runtime_path()?;
+    let use_err = aifo_coder::color_enabled_stderr();
     let pwd = {
         let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         fs::canonicalize(&p).unwrap_or(p)
@@ -823,7 +824,10 @@ pub fn toolchain_start_session(
             apparmor_profile.as_deref(),
         );
         if verbose {
-            eprintln!("aifo-coder: docker: {}", shell_join(&args));
+            aifo_coder::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: docker: {}", shell_join(&args)),
+            );
         }
         // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
         if kind == "node" && !no_cache {
@@ -896,6 +900,7 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
         Ok(p) => p,
         Err(_) => return,
     };
+    let use_err = aifo_coder::color_enabled_stderr();
     let kinds = ["rust", "node", "python", "c-cpp", "go"];
     for k in kinds {
         let name = sidecar_container_name(k, session_id);
@@ -910,7 +915,10 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
             .unwrap_or(false);
         if exists {
             if verbose {
-                eprintln!("aifo-coder: docker: docker stop {}", name);
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: docker: docker stop {}", name),
+                );
             }
             let _ = Command::new(&runtime)
                 .arg("stop")
@@ -951,12 +959,16 @@ pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
+    let use_err = aifo_coder::color_enabled_stderr();
     // Phase 7: Purge caches
     // Include consolidated Node cache volume; retain legacy npm cache for back-compat cleanup.
     let volumes = toolchain_purge_volume_names();
     for v in volumes {
         if verbose {
-            eprintln!("aifo-coder: docker: docker volume rm -f {}", v);
+            aifo_coder::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: docker: docker volume rm -f {}", v),
+            );
         }
         let _ = Command::new(&runtime)
             .arg("volume")
@@ -973,6 +985,7 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
 /// Bootstrap: install a global typescript in the node sidecar (best-effort).
 pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
+    let use_err = aifo_coder::color_enabled_stderr();
     let name = sidecar_container_name("node", session_id);
 
     #[cfg(unix)]
@@ -996,7 +1009,10 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     args.push("typescript".to_string());
 
     if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: {}", shell_join(&args)),
+        );
     }
 
     let mut cmd = Command::new(&runtime);
