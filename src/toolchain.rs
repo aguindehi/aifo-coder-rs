@@ -115,8 +115,8 @@ fn random_token() -> String {
         Err(e) => {
             // Very rare fallback: deterministic-ish token with warning
             {
-                let use_err = aifo_coder::color_enabled_stderr();
-                aifo_coder::log_warn_stderr(
+                let use_err = crate::color_enabled_stderr();
+                crate::log_warn_stderr(
                     use_err,
                     &format!(
                         "aifo-coder: warning: secure RNG failed ({}); falling back to time^pid",

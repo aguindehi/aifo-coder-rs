@@ -268,8 +268,8 @@ pub(crate) fn fork_list_impl(
             Ok(0)
         }
         Err(_) => {
-            let use_err = aifo_coder::color_enabled_stderr();
-            aifo_coder::log_error_stderr(
+            let use_err = crate::color_enabled_stderr();
+            crate::log_error_stderr(
                 use_err,
                 "aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.",
             );

@@ -77,12 +77,12 @@ pub fn invalidate_registry_cache() {
 /// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
 /// 3) Fallback: empty string (Docker Hub)
 pub fn preferred_registry_prefix() -> String {
-    let use_err = aifo_coder::color_enabled_stderr();
+    let use_err = crate::color_enabled_stderr();
     // Env override always takes precedence within the current process
     if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
         let trimmed = pref.trim();
         if trimmed.is_empty() {
-            aifo_coder::log_info_stderr(use_err, "aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
+            crate::log_info_stderr(use_err, "aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
             let v = String::new();
             let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
             let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
@@ -91,7 +91,7 @@ pub fn preferred_registry_prefix() -> String {
         }
         let mut s = trimmed.trim_end_matches('/').to_string();
         s.push('/');
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!(
                 "aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'",
@@ -128,7 +128,7 @@ pub fn preferred_registry_prefix() -> String {
     }
 
     if which("curl").is_ok() {
-        aifo_coder::log_info_stderr(use_err, "aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
+        crate::log_info_stderr(use_err, "aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
         let status = Command::new("curl")
             .args([
                 "--connect-timeout",
@@ -143,14 +143,14 @@ pub fn preferred_registry_prefix() -> String {
             .status();
         if let Ok(st) = status {
             if st.success() {
-                aifo_coder::log_info_stderr(use_err, "aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
+                crate::log_info_stderr(use_err, "aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
                 let v = "repository.migros.net/".to_string();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
                 let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
                 write_registry_cache_disk(&v);
                 return v;
             } else {
-                aifo_coder::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
+                crate::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
                 let v = String::new();
                 let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
                 let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
@@ -158,23 +158,23 @@ pub fn preferred_registry_prefix() -> String {
                 return v;
             }
         } else {
-            aifo_coder::log_warn_stderr(
+            crate::log_warn_stderr(
                 use_err,
                 "aifo-coder: curl invocation failed; falling back to TCP reachability check.",
             );
         }
     } else {
-        aifo_coder::log_warn_stderr(
+        crate::log_warn_stderr(
             use_err,
             "aifo-coder: curl not found; falling back to TCP reachability check.",
         );
     }
 
     let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
-        aifo_coder::log_info_stderr(use_err, "aifo-coder: repository.migros.net appears reachable via TCP; using registry prefix 'repository.migros.net/'.");
+        crate::log_info_stderr(use_err, "aifo-coder: repository.migros.net appears reachable via TCP; using registry prefix 'repository.migros.net/'.");
         "repository.migros.net/".to_string()
     } else {
-        aifo_coder::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable via TCP; using Docker Hub (no prefix).");
+        crate::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable via TCP; using Docker Hub (no prefix).");
         String::new()
     };
     let _ = REGISTRY_PREFIX_CACHE.set(v.clone());

@@ -54,8 +54,8 @@ pub fn fork_print_stale_notice_impl() {
         }
     }
     if count > 0 {
-        let use_err = aifo_coder::color_enabled_stderr();
-        aifo_coder::log_info_stderr(
+        let use_err = crate::color_enabled_stderr();
+        crate::log_info_stderr(
             use_err,
             &format!(
                 "Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}",
@@ -153,8 +153,8 @@ pub fn fork_autoclean_if_enabled_impl() {
     }
 
     if deleted > 0 {
-        let use_err = aifo_coder::color_enabled_stderr();
-        aifo_coder::log_info_stderr(
+        let use_err = crate::color_enabled_stderr();
+        crate::log_info_stderr(
             use_err,
             &format!(
                 "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
@@ -163,13 +163,13 @@ pub fn fork_autoclean_if_enabled_impl() {
         );
         if autoclean_verbose {
             if !deleted_sids.is_empty() {
-                aifo_coder::log_info_stderr(
+                crate::log_info_stderr(
                     use_err,
                     &format!("  deleted sessions: {}", deleted_sids.join(" ")),
                 );
             }
             if !kept_sids.is_empty() {
-                aifo_coder::log_info_stderr(
+                crate::log_info_stderr(
                     use_err,
                     &format!("  protected sessions kept: {}", kept_sids.join(" ")),
                 );

@@ -204,7 +204,7 @@ pub(crate) fn fork_merge_branches_impl(
     verbose: bool,
     dry_run: bool,
 ) -> io::Result<()> {
-    let use_err = aifo_coder::color_enabled_stderr();
+    let use_err = crate::color_enabled_stderr();
     if matches!(strategy, crate::MergingStrategy::None) {
         return Ok(());
     }
@@ -226,7 +226,7 @@ pub(crate) fn fork_merge_branches_impl(
         args.push(pdir_str.clone());
         args.push(refspec.clone());
         if verbose || dry_run {
-            aifo_coder::log_info_stderr(
+            crate::log_info_stderr(
                 use_err,
                 &format!("aifo-coder: git: {}", shell_join(&args)),
             );
@@ -288,7 +288,7 @@ pub(crate) fn fork_merge_branches_impl(
         base_ref_or_sha.to_string(),
     ];
     if verbose || dry_run {
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!("aifo-coder: git: {}", shell_join(&checkout_args)),
         );
@@ -316,7 +316,7 @@ pub(crate) fn fork_merge_branches_impl(
     let msg_path =
         std::env::temp_dir().join(format!("aifo-merge-{}-{}.txt", sid, std::process::id()));
     if verbose {
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!(
                 "aifo-coder: preparing octopus merge message at {}",
@@ -328,7 +328,7 @@ pub(crate) fn fork_merge_branches_impl(
         if fs::write(&msg_path, &merge_message).is_ok() {
             merge_msg_path = Some(msg_path.clone());
         } else if verbose {
-            aifo_coder::log_warn_stderr(
+            crate::log_warn_stderr(
                 use_err,
                 "aifo-coder: warning: failed to write merge message file; falling back to default message",
             );
@@ -352,7 +352,7 @@ pub(crate) fn fork_merge_branches_impl(
         merge_args.push(br.clone());
     }
     if verbose || dry_run {
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!("aifo-coder: git: {}", shell_join(&merge_args)),
         );
@@ -463,7 +463,7 @@ pub(crate) fn fork_merge_branches_impl(
         for (_p, br) in &pane_branches {
             preview.push(br.clone());
         }
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!("aifo-coder: git: {}", shell_join(&preview)),
         );

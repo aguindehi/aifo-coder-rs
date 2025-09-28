@@ -281,9 +281,9 @@ pub fn fork_list(repo_root: &Path, json: bool, all_repos: bool) -> std::io::Resu
 /// Returns exit code (0 on success; 1 on refusal or error).
 pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32> {
     let base = repo_root.join(".aifo-coder").join("forks");
-    let use_err = aifo_coder::color_enabled_stderr();
+    let use_err = crate::color_enabled_stderr();
     if !base.exists() {
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             &format!(
                 "aifo-coder: no fork sessions directory at {}",
@@ -325,7 +325,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
     } else if opts.all {
         fork_impl_scan::session_dirs(&base)
     } else {
-        aifo_coder::log_info_stderr(
+        crate::log_info_stderr(
             use_err,
             "aifo-coder: please specify one of --session <sid>, --older-than <days>, or --all.",
         );
@@ -333,7 +333,7 @@ pub fn fork_clean(repo_root: &Path, opts: &ForkCleanOpts) -> std::io::Result<i32
     };
 
     if targets.is_empty() {
-        aifo_coder::log_info_stderr(use_err, "aifo-coder: no matching fork sessions to clean.");
+        crate::log_info_stderr(use_err, "aifo-coder: no matching fork sessions to clean.");
         return Ok(0);
     }
 
