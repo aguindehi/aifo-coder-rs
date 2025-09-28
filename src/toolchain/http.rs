@@ -477,4 +477,61 @@ Connection: close\r\n\
             "expected BODY_CAP=1MiB enforcement for non-chunked"
         );
     }
+
+    #[test]
+    fn test_multiple_transfer_encoding_headers_last_chunked_preferred() {
+        // Two TE headers: first identity, second chunked; CL present but chunked must win.
+        let req_text = "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Content-Length: 4\r\n\
+Transfer-Encoding: identity\r\n\
+Transfer-Encoding: chunked\r\n\
+Connection: close\r\n\
+\r\n\
+4\r\n\
+okay\r\n\
+0\r\n\
+\r\n";
+        let mut cur = Cursor::new(req_text.as_bytes().to_vec());
+        let parsed = read_http_request(&mut cur).expect("parsed");
+        assert_eq!(parsed.body, b"okay");
+    }
+
+    #[test]
+    fn test_multiple_transfer_encoding_headers_last_identity_no_chunked() {
+        // Two TE headers: first chunked, second identity; no chunked -> fall back to CL.
+        let req_text = "\
+POST /exec HTTP/1.1\r\n\
+Host: localhost\r\n\
+Content-Type: application/x-www-form-urlencoded\r\n\
+Content-Length: 4\r\n\
+Transfer-Encoding: chunked\r\n\
+Transfer-Encoding: identity\r\n\
+Connection: close\r\n\
+\r\n\
+abcd";
+        let mut cur = Cursor::new(req_text.as_bytes().to_vec());
+        let parsed = read_http_request(&mut cur).expect("parsed");
+        assert_eq!(parsed.body, b"abcd");
+    }
+
+    #[test]
+    fn test_too_many_headers_rejected() {
+        // Build a header block exceeding the cap (1024 headers) and expect InvalidInput.
+        let mut header = String::new();
+        header.push_str("POST /exec HTTP/1.1\r\n");
+        for i in 0..1025 {
+            header.push_str(&format!("X-Extra-Header-{}: v\r\n", i));
+        }
+        header.push_str("\r\n");
+        let mut cur = Cursor::new(header.into_bytes());
+        let err = read_http_request(&mut cur).unwrap_err();
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::InvalidInput,
+            "expected too many headers error"
+        );
+    }
 }

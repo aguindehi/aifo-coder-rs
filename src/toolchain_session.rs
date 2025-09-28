@@ -81,6 +81,7 @@ pub struct ToolchainSession {
     proxy_handle: Option<std::thread::JoinHandle<()>>,
     verbose: bool,
     in_fork_pane: bool,
+    bootstrap_guard: Option<aifo_coder::BootstrapGuard>,
 }
 
 impl ToolchainSession {
@@ -106,6 +107,20 @@ impl ToolchainSession {
         if cli.toolchain_unix_socket {
             std::env::set_var("AIFO_TOOLEEXEC_USE_UNIX", "1");
         }
+
+        // Prepare session-scoped RAII guard for official Rust bootstrap (lives until session drop)
+        let session_bootstrap_guard: Option<aifo_coder::BootstrapGuard> =
+            if kinds.iter().any(|k| k == "rust") {
+                // Determine rust image (override or default) and create guard
+                let rust_image = overrides
+                    .iter()
+                    .find(|(k, _)| aifo_coder::normalize_toolchain_kind(k) == "rust")
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_else(|| aifo_coder::default_toolchain_image("rust"));
+                Some(aifo_coder::BootstrapGuard::new("rust", &rust_image))
+            } else {
+                None
+            };
 
         // Start sidecars
         let sid = match aifo_coder::toolchain_start_session(
@@ -184,6 +199,7 @@ impl ToolchainSession {
             proxy_handle: Some(handle),
             verbose: cli.verbose,
             in_fork_pane,
+            bootstrap_guard: session_bootstrap_guard,
         }))
     }
 
@@ -205,6 +221,40 @@ impl Drop for ToolchainSession {
     fn drop(&mut self) {
         let verbose = self.verbose;
         let in_fork_pane = self.in_fork_pane;
+        // Touch guard for clippy; RAII cleans on Drop.
+        let _ = self.bootstrap_guard.as_ref();
         self.cleanup_inner(verbose, in_fork_pane);
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_session_tests {
+    #[test]
+    fn test_bootstrap_marker_cleared_on_early_error_session_scope() {
+        // Force official mode so guard sets the marker even with non-official images
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+        // Ensure unset before
+        std::env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+
+        // Simulate an early error path: guard is created and then scope exits before session completes
+        {
+            let _g = aifo_coder::BootstrapGuard::new("rust", "rust:1.80-bookworm");
+            let v = std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
+            assert_eq!(
+                v.as_deref(),
+                Some("1"),
+                "bootstrap marker should be set while guard is alive"
+            );
+            // early return simulated by scope end (Drop runs)
+        }
+
+        // After scope exit, marker must be cleared by Drop
+        assert!(
+            std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").is_err(),
+            "bootstrap marker should be cleared after early error scope ends"
+        );
+
+        // Cleanup env
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
     }
 }

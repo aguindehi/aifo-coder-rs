@@ -24,7 +24,7 @@ use std::net::TcpListener;
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -1095,24 +1095,88 @@ fn handle_connection<S: Read + Write>(
             });
         }
 
-        // Stream stdout
-        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        // Stream stdout (bounded channel to limit memory under client stalls)
+        let use_unbounded = std_env::var("AIFO_PROXY_UNBOUNDED").ok().as_deref() == Some("1");
+        // Bounded channel capacity
+        let cap: usize = 64;
+        let dropped_count = Arc::new(AtomicUsize::new(0));
+        let drop_warned = Arc::new(AtomicBool::new(false));
+
+        // Create channel (bounded by default; unbounded when AIFO_PROXY_UNBOUNDED=1)
+        #[derive(Clone)]
+        enum TxKind {
+            Unbounded(std::sync::mpsc::Sender<Vec<u8>>),
+            Bounded(std::sync::mpsc::SyncSender<Vec<u8>>),
+        }
+        let (tx_kind, rx) = if use_unbounded {
+            let (t, r) = std::sync::mpsc::channel::<Vec<u8>>();
+            (TxKind::Unbounded(t), r)
+        } else {
+            let (t, r) = std::sync::mpsc::sync_channel::<Vec<u8>>(cap);
+            (TxKind::Bounded(t), r)
+        };
+
         if let Some(mut so) = child.stdout.take() {
-            let txo = tx.clone();
+            let txo = match &tx_kind {
+                TxKind::Unbounded(s) => TxKind::Unbounded(s.clone()),
+                TxKind::Bounded(s) => TxKind::Bounded(s.clone()),
+            };
+            let drop_warned_cl = drop_warned.clone();
+            let dropped_count_cl = dropped_count.clone();
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 loop {
                     match so.read(&mut buf) {
                         Ok(0) => break,
                         Ok(n) => {
-                            let _ = txo.send(buf[..n].to_vec());
+                            let chunk = buf[..n].to_vec();
+                            match txo {
+                                TxKind::Unbounded(ref s) => {
+                                    let _ = s.send(chunk);
+                                }
+                                TxKind::Bounded(ref s) => {
+                                    // Best-effort small backoff attempts before dropping under backpressure
+                                    let mut msg = chunk;
+                                    let mut attempts = 0usize;
+                                    loop {
+                                        match s.try_send(msg) {
+                                            Ok(()) => break,
+                                            Err(std::sync::mpsc::TrySendError::Full(c)) => {
+                                                attempts += 1;
+                                                if attempts <= 2 {
+                                                    std::thread::sleep(
+                                                        std::time::Duration::from_millis(5),
+                                                    );
+                                                    msg = c;
+                                                    continue;
+                                                }
+                                                if !drop_warned_cl
+                                                    .swap(true, std::sync::atomic::Ordering::SeqCst)
+                                                {
+                                                    log_stderr_and_file(
+                                                        "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                                                    );
+                                                }
+                                                let _ = dropped_count_cl.fetch_add(
+                                                    1,
+                                                    std::sync::atomic::Ordering::SeqCst,
+                                                );
+                                                break;
+                                            }
+                                            Err(std::sync::mpsc::TrySendError::Disconnected(
+                                                _c,
+                                            )) => break,
+                                        }
+                                    }
+                                }
+                            }
                         }
                         Err(_) => break,
                     }
                 }
             });
         }
-        drop(tx);
+        drop(tx_kind);
 
         // Stream until EOF or write error
         let mut write_failed = false;
@@ -1127,6 +1191,15 @@ fn handle_connection<S: Read + Write>(
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
+        }
+
+        // Verbose metric: how many chunks dropped under backpressure
+        if verbose && dropped_count.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            let line = format!(
+                "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                dropped_count.load(std::sync::atomic::Ordering::SeqCst)
+            );
+            log_stderr_and_file(&line);
         }
 
         if write_failed {
