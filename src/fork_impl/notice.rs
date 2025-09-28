@@ -54,9 +54,13 @@ pub fn fork_print_stale_notice_impl() {
         }
     }
     if count > 0 {
-        eprintln!(
-            "Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}",
-            count, oldest, threshold_days
+        let use_err = aifo_coder::color_enabled_stderr();
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "Found {} old fork sessions (oldest {}d). Consider: aifo-coder fork clean --older-than {}",
+                count, oldest, threshold_days
+            ),
         );
     }
 }
@@ -149,16 +153,26 @@ pub fn fork_autoclean_if_enabled_impl() {
     }
 
     if deleted > 0 {
-        eprintln!(
-            "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
-            deleted, threshold_days, kept
+        let use_err = aifo_coder::color_enabled_stderr();
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "Auto-clean: removed {} clean fork session(s) older than {}d; kept {} protected session(s).",
+                deleted, threshold_days, kept
+            ),
         );
         if autoclean_verbose {
             if !deleted_sids.is_empty() {
-                eprintln!("  deleted sessions: {}", deleted_sids.join(" "));
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("  deleted sessions: {}", deleted_sids.join(" ")),
+                );
             }
             if !kept_sids.is_empty() {
-                eprintln!("  protected sessions kept: {}", kept_sids.join(" "));
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("  protected sessions kept: {}", kept_sids.join(" ")),
+                );
             }
         }
     }
