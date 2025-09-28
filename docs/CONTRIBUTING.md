@@ -1,0 +1,127 @@
+# Contributing notes: Toolchain overrides and caches
+
+This document summarizes how to override toolchain images, how caches are laid out and
+mounted, and a few execution environment details for each supported toolchain.
+
+Conventions and registry prefix
+- Images can be overridden via environment variables, following the pattern:
+  - AIFO_<KIND>_TOOLCHAIN_IMAGE: full image reference (highest precedence)
+  - AIFO_<KIND>_TOOLCHAIN_VERSION: version tag (maps to aifo-<kind>-toolchain:{version})
+- A registry prefix can be provided at runtime via AIFO_CODER_REGISTRY_PREFIX and at build
+  time via Docker ARG REGISTRY_PREFIX. The implementation normalizes a single trailing slash.
+
+Toolchain image overrides
+
+Rust
+- Environment:
+  - AIFO_RUST_TOOLCHAIN_IMAGE
+  - AIFO_RUST_TOOLCHAIN_VERSION
+  - AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 forces official rust:<ver> images where supported.
+- Notes:
+  - Official images are used when requested or when policy dictates.
+  - Defaults prefer our sidecar unless overridden.
+
+Node (includes TypeScript)
+- Environment:
+  - AIFO_NODE_TOOLCHAIN_IMAGE
+  - AIFO_NODE_TOOLCHAIN_VERSION
+- Examples:
+  - AIFO_NODE_TOOLCHAIN_IMAGE=aifo-node-toolchain:latest
+  - AIFO_NODE_TOOLCHAIN_VERSION=22
+
+Python
+- Environment:
+  - AIFO_PYTHON_TOOLCHAIN_IMAGE
+  - AIFO_PYTHON_TOOLCHAIN_VERSION
+
+Go
+- Environment:
+  - AIFO_GO_TOOLCHAIN_IMAGE
+  - AIFO_GO_TOOLCHAIN_VERSION
+
+C/C++ (CCpp)
+- Environment:
+  - AIFO_CCPP_TOOLCHAIN_IMAGE
+  - AIFO_CCPP_TOOLCHAIN_VERSION
+
+Cache layout and mounts (common scheme)
+- Unless noted, caches are consolidated under XDG_CACHE_HOME=/home/coder/.cache and a single
+  named volume per toolchain is mounted at /home/coder/.cache.
+- Purge behavior:
+  - toolchain_purge_caches() removes per-toolchain cache volumes (and some legacy names) for a
+    clean slate. Known volumes include aifo-node-cache and aifo-npm-cache; others follow the
+    aifo-<kind>-cache naming scheme.
+
+Per-toolchain cache details
+
+Node
+- XDG_CACHE_HOME=/home/coder/.cache
+- NPM_CONFIG_CACHE=/home/coder/.cache/npm
+- YARN_CACHE_FOLDER=/home/coder/.cache/yarn
+- PNPM_STORE_PATH=/home/coder/.cache/pnpm-store
+- DENO_DIR=/home/coder/.cache/deno
+- PNPM_HOME=/home/coder/.local/share/pnpm
+- Volume: aifo-node-cache:/home/coder/.cache
+- Legacy volume (purged for back-compat): aifo-npm-cache
+
+Rust
+- CARGO_HOME=/home/coder/.cargo
+- RUSTUP_HOME=/home/coder/.rustup
+- SCCACHE_DIR=/home/coder/.cache/sccache (if sccache is enabled)
+- XDG_CACHE_HOME=/home/coder/.cache
+- Typical volume: aifo-rust-cache:/home/coder/.cache
+- Named volumes under ~/.cargo:
+  - aifo-cargo-registry:/home/coder/.cargo/registry
+  - aifo-cargo-git:/home/coder/.cargo/git
+- Ownership init:
+  - When these mounts are selected, a short helper container chowns them to uid:gid and stamps
+    .aifo-init-done to avoid repeated work (see init_rust_named_volumes_if_needed).
+
+Python
+- PIP_CACHE_DIR=/home/coder/.cache/pip
+- XDG_CACHE_HOME=/home/coder/.cache
+- Typical volume: aifo-python-cache:/home/coder/.cache
+
+Go
+- GOCACHE=/home/coder/.cache/go-build
+- GOMODCACHE defaults under GOPATH; if normalized, it may be placed under XDG cache as well
+- XDG_CACHE_HOME=/home/coder/.cache
+- Typical volume: aifo-go-cache:/home/coder/.cache
+
+C/C++
+- If compiler cache is enabled:
+  - ccache: /home/coder/.cache/ccache
+  - sccache: /home/coder/.cache/sccache
+- XDG_CACHE_HOME=/home/coder/.cache
+- Typical volume: aifo-ccpp-cache:/home/coder/.cache
+
+Exec environment notes
+
+Node
+- PNPM_HOME is ensured and PATH includes $PNPM_HOME/bin so pnpm-managed binaries resolve,
+  even in pre-existing containers.
+
+Rust
+- PATH includes $CARGO_HOME/bin so cargo-installed tools are available.
+- sccache policy is validated and warnings are surfaced in preview where applicable.
+
+Python
+- When a virtualenv is active in the workspace, PATH is adjusted so venv/bin takes precedence.
+
+Go
+- GOPATH and GOBIN are configured so go-installed tools are resolvable on PATH.
+
+C/C++
+- If compiler cache is used, environment is set for ccache/sccache to be effective.
+
+Image build notes
+- Each toolchain’s Dockerfile accepts ARG REGISTRY_PREFIX for base image selection.
+- Build Node (with/without registry prefix) for validation:
+  - docker build -f toolchains/node/Dockerfile -t aifo-node-toolchain:22 .
+  - docker build -f toolchains/node/Dockerfile -t aifo-node-toolchain:22 \
+    --build-arg REGISTRY_PREFIX=repository.migros.net/
+- Similar patterns apply for other toolchains under toolchains/<kind>/Dockerfile.
+
+References
+- Exact environment variable names, precedence, and defaults are defined in src/toolchain/images.rs.
+- Mounts and cache volume names are defined under src/toolchain/mounts.rs and related modules.

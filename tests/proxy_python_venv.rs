@@ -1,3 +1,4 @@
+mod support;
 use std::fs;
 use std::path::PathBuf;
 
@@ -34,15 +35,9 @@ fn test_proxy_python_venv_precedence() {
 
     // Start python sidecar and proxy (skip if image not present locally to avoid pulling)
     let kinds = vec!["python".to_string()];
-    let image = std::env::var("AIFO_CODER_TEST_PY_IMAGE")
-        .unwrap_or_else(|_| "python:3.12-slim".to_string());
-    let present = std::process::Command::new("docker")
-        .args(["image", "inspect", &image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let image = support::default_python_test_image();
+    let rt = aifo_coder::container_runtime_path().expect("runtime");
+    let present = support::docker_image_present(&rt.as_path(), &image);
     if !present {
         eprintln!("skipping: test image not present locally: {}", image);
         return;
@@ -54,31 +49,21 @@ fn test_proxy_python_venv_precedence() {
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 
     // POST tool=python
-    use std::io::{Read, Write};
-    use std::net::TcpStream;
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-    let body = "tool=python&cwd=.";
-    let req = format!(
-        "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-        token, body.len(), body
+    let (status, _headers, body) = support::http_post_tcp(
+        port,
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
+        &[("tool", "python"), ("cwd", ".")],
     );
-    stream.write_all(req.as_bytes()).expect("write failed");
-    let mut resp = Vec::new();
-    stream.read_to_end(&mut resp).ok();
-    let text = String::from_utf8_lossy(&resp).to_string();
-    assert!(text.contains("200 OK"), "expected 200, got:\n{}", text);
+    assert_eq!(status, 200, "expected 200, got status={}", status);
+    let text = String::from_utf8_lossy(&body).to_string();
     assert!(text.contains("venv-python"), "venv PATH was not preferred");
 
     // Cleanup session

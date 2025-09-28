@@ -1,5 +1,4 @@
 mod support;
-use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -12,90 +11,10 @@ fn test_error_semantics_tcp_v1_and_v2() {
 
     // Helper: parse port from http://host.docker.internal:<port>/exec
     fn port_from_url(url: &str) -> u16 {
-        assert!(
-            url.starts_with("http://"),
-            "expected http:// URL, got: {url}"
-        );
-        let without_proto = url.trim_start_matches("http://");
-        let host_port = without_proto.split('/').next().unwrap_or(without_proto);
-        host_port
-            .rsplit(':')
-            .next()
-            .and_then(|s| s.parse::<u16>().ok())
-            .expect("failed to parse port from URL")
+        support::port_from_http_url(url)
     }
 
-    // Helper: open TCP connection to localhost:<port> and send a request, return (status, headers, body)
-    fn http_post_tcp(
-        port: u16,
-        headers: &[(&str, &str)],
-        body_kv: &[(&str, &str)],
-    ) -> (u16, String, Vec<u8>) {
-        use std::io::{Read, Write};
-        use std::net::TcpStream;
-
-        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-
-        let mut body = String::new();
-        for (i, (k, v)) in body_kv.iter().enumerate() {
-            if i > 0 {
-                body.push('&');
-            }
-            body.push_str(&format!("{}={}", urlencode(k), urlencode(v)));
-        }
-
-        // Build headers
-        let mut req = format!(
-            "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n",
-            body.len()
-        );
-        for (k, v) in headers {
-            req.push_str(&format!("{k}: {v}\r\n"));
-        }
-        req.push_str("\r\n");
-        req.push_str(&body);
-
-        stream.write_all(req.as_bytes()).expect("write failed");
-
-        let mut buf = Vec::new();
-        let mut tmp = [0u8; 1024];
-        loop {
-            match stream.read(&mut tmp) {
-                Ok(0) => break,
-                Ok(n) => buf.extend_from_slice(&tmp[..n]),
-                Err(_) => break,
-            }
-        }
-
-        // Split headers/body
-        let mut status: u16 = 0;
-        let headers_s;
-        let mut body_out: Vec<u8> = Vec::new();
-
-        if let Some(pos) =
-            aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
-        {
-            let h = &buf[..pos];
-            headers_s = String::from_utf8_lossy(h).to_string();
-            // Parse status
-            if let Some(line) = headers_s.lines().next() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    status = parts[1].parse::<u16>().unwrap_or(0);
-                }
-            }
-            // Body (best-effort; not handling chunked here)
-            let mut body_bytes = buf[pos..].to_vec();
-            // Drop leading CRLFCRLF or LF+LF
-            while body_bytes.first() == Some(&b'\r') || body_bytes.first() == Some(&b'\n') {
-                body_bytes.remove(0);
-            }
-            body_out = body_bytes;
-        } else {
-            headers_s = String::from_utf8_lossy(&buf).to_string();
-        }
-        (status, headers_s, body_out)
-    }
+    // Helper moved to tests/support::http_post_tcp
 
     // 1) 401 Unauthorized (no Authorization header)
     {
@@ -104,7 +23,8 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let (_url, _token, flag, handle) =
             aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&_url);
-        let (status, headers, body) = http_post_tcp(port, &[], &[("tool", "cargo"), ("cwd", ".")]);
+        let (status, headers, body) =
+            support::http_post_tcp(port, &[], &[("tool", "cargo"), ("cwd", ".")]);
         assert_eq!(
             status, 401,
             "expected 401, got {status}\nheaders:\n{headers}"
@@ -127,7 +47,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
             aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Send Authorization but no X-Aifo-Proto
-        let (status, headers, body) = http_post_tcp(
+        let (status, headers, body) = support::http_post_tcp(
             port,
             &[("Authorization", &format!("Bearer {}", token))],
             &[("tool", "cargo"), ("cwd", ".")],
@@ -159,7 +79,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
             aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Request "ls" which is not present in allowlists
-        let (status, headers, body) = http_post_tcp(
+        let (status, headers, body) = support::http_post_tcp(
             port,
             &[
                 ("Authorization", &format!("Bearer {}", token)),
@@ -189,7 +109,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
         let (url, token, flag, handle) =
             aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
         let port = port_from_url(&url);
-        let (status, _headers, body) = http_post_tcp(
+        let (status, _headers, body) = support::http_post_tcp(
             port,
             &[
                 ("Authorization", &format!("Bearer {}", token)),
@@ -223,7 +143,7 @@ fn test_error_semantics_tcp_v1_and_v2() {
             aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
         let port = port_from_url(&url);
         // Use protocol v1 (buffered) to trigger recv_timeout. Run node for ~2 seconds.
-        let (status, headers, _body) = http_post_tcp(
+        let (status, headers, _body) = support::http_post_tcp(
             port,
             &[
                 ("Authorization", &format!("Bearer {}", token)),

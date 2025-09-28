@@ -281,14 +281,26 @@ fn disconnect_terminate_exec_in_container(
     log_disconnect();
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(50));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending INT to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
     // In parallel, try to close the transient /run shell in the agent container, if known.
     if let Some(ac) = agent_container {
         kill_agent_shell_in_agent_container(runtime, ac, exec_id, verbose);
     }
     std::thread::sleep(Duration::from_millis(250));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending TERM to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
     std::thread::sleep(Duration::from_millis(750));
+    log_stderr_and_file(&format!(
+        "\raifo-coder: disconnect escalate: sending KILL to exec_id={}",
+        exec_id
+    ));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
@@ -573,8 +585,25 @@ fn handle_connection<S: Read + Write>(
     // Parse request
     let req = match http::read_http_request(stream) {
         Ok(r) => r,
-        Err(_e) => {
-            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+        Err(e) => {
+            match e.kind() {
+                io::ErrorKind::InvalidInput => {
+                    // e.g., too many headers
+                    respond_plain(
+                        stream,
+                        "431 Request Header Fields Too Large",
+                        86,
+                        b"request headers too large\n",
+                    );
+                }
+                io::ErrorKind::InvalidData => {
+                    // e.g., Content-Length mismatch or malformed body
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                }
+                _ => {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                }
+            }
             let _ = stream.flush();
             return;
         }
@@ -1193,8 +1222,10 @@ fn handle_connection<S: Read + Write>(
 
     // Optional max-runtime escalation watcher
     let done = Arc::new(AtomicBool::new(false));
+    let timed_out = Arc::new(AtomicBool::new(false));
     if timeout_secs > 0 {
         let done_cl = done.clone();
+        let timed_out_cl = timed_out.clone();
         let runtime_cl = ctx.runtime.clone();
         let container_cl = name.clone();
         let exec_id_cl = exec_id.clone();
@@ -1220,6 +1251,9 @@ fn handle_connection<S: Read + Write>(
                         "\raifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                         sig, exec_id_cl, accum
                     );
+                }
+                if sig == "INT" {
+                    timed_out_cl.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
                 kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
             }
@@ -1300,6 +1334,12 @@ fn handle_connection<S: Read + Write>(
     }
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
+    // If watcher timed out (on initial INT), map to 504 with exit code 124
+    if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+        respond_plain(stream, "504 Gateway Timeout", 124, b"timeout\n");
+        let _ = stream.flush();
+        return;
+    }
     let header = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nX-Exit-Code: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         code,

@@ -398,12 +398,9 @@ fn try_run_native(
         eid = exec_id
     );
 
-    // Write request line + headers
-    if stream_box.write_all(req_line.as_bytes()).is_err()
-        || stream_box.write_all(headers.as_bytes()).is_err()
-    {
-        return None;
-    }
+    // Write request line + headers (best-effort; tolerate early write errors)
+    let _ = stream_box.write_all(req_line.as_bytes());
+    let _ = stream_box.write_all(headers.as_bytes());
 
     // Chunk writer
     fn write_chunk<W: Write>(w: &mut W, data: &[u8]) -> std::io::Result<()> {
@@ -419,14 +416,23 @@ fn try_run_native(
     while ofs < bytes.len() {
         let end = (ofs + 8192).min(bytes.len());
         if write_chunk(&mut stream_box, &bytes[ofs..end]).is_err() {
-            return None;
+            break;
         }
         ofs = end;
     }
-    if stream_box.write_all(b"0\r\n\r\n").is_err() {
-        return None;
-    }
+    let _ = stream_box.write_all(b"0\r\n\r\n");
     let _ = stream_box.flush();
+    // Best-effort: half-close the write side to signal end-of-request regardless of earlier errors.
+    let _ = stream_box;
+    match &mut conn {
+        Conn::Tcp(s, _, _) => {
+            let _ = s.shutdown(std::net::Shutdown::Write);
+        }
+        #[cfg(target_os = "linux")]
+        Conn::Uds(s, _) => {
+            let _ = s.shutdown(std::net::Shutdown::Write);
+        }
+    }
 
     // Now read response and stream stdout
     // Helper to read until headers end
@@ -647,7 +653,13 @@ fn try_run_native(
                     Ok(n) => buf.extend_from_slice(&tmp2[..n]),
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut => {}
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        if buf.is_empty() {
+                            return None;
+                        }
+                        // otherwise, keep looping to see if more bytes arrive
+                    }
                     Err(_) => return None,
                 }
                 // Signal checks during blocking reads
@@ -1016,6 +1028,12 @@ fn try_notify_native(
         match reader.read(&mut tmp) {
             Ok(0) => break,
             Ok(n) => buf.extend_from_slice(&tmp[..n]),
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue;
+            }
             Err(_) => break,
         }
     }
@@ -1048,6 +1066,12 @@ fn try_notify_native(
             Ok(0) => break,
             Ok(n) => {
                 let _ = stdout.write_all(&tmp[..n]);
+            }
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue;
             }
             Err(_) => break,
         }
@@ -1540,4 +1564,413 @@ fn main() {
     }
     eprint!("\n\r");
     process::exit(exit_code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    fn find_header_end(buf: &[u8]) -> Option<usize> {
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            Some(i + 4)
+        } else {
+            buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
+        }
+    }
+
+    #[allow(dead_code)]
+    fn read_all(stream: &mut TcpStream) -> Vec<u8> {
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 2048];
+        loop {
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                Err(_) => break,
+            }
+        }
+        buf
+    }
+
+    // Tiny helper: read only until end-of-headers (CRLFCRLF or LFLF) with a small timeout.
+    fn read_until_header_end(stream: &mut TcpStream, max_ms: u64) -> Vec<u8> {
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(max_ms)));
+        let mut buf = Vec::<u8>::new();
+        let mut tmp = [0u8; 1024];
+        loop {
+            if find_header_end(&buf).is_some() {
+                break;
+            }
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        buf
+    }
+
+    // Tiny helper: read up to cap_bytes more, bounded by max_ms timeout.
+    fn read_some_with_timeout(stream: &mut TcpStream, cap_bytes: usize, max_ms: u64) -> Vec<u8> {
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(max_ms)));
+        let mut out = Vec::<u8>::new();
+        let mut tmp = [0u8; 1024];
+        loop {
+            if out.len() >= cap_bytes {
+                break;
+            }
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let take = n.min(cap_bytes.saturating_sub(out.len()));
+                    out.extend_from_slice(&tmp[..take]);
+                    if take < n {
+                        break;
+                    }
+                }
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        out
+    }
+
+    fn decode_chunked_body(body: Vec<u8>) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut cursor = 0usize;
+        // Simple decoder tolerant to LF or CRLF
+        loop {
+            // read size line
+            let mut line = Vec::new();
+            while cursor < body.len() {
+                let b = body[cursor];
+                cursor += 1;
+                if b == b'\r' {
+                    if cursor < body.len() && body[cursor] == b'\n' {
+                        cursor += 1;
+                    }
+                    break;
+                } else if b == b'\n' {
+                    break;
+                } else {
+                    line.push(b);
+                }
+            }
+            if line.is_empty() {
+                // tolerate empty lines
+                continue;
+            }
+            let size_str = String::from_utf8_lossy(&line);
+            let size_hex = size_str.split(';').next().unwrap_or(&size_str);
+            let size = usize::from_str_radix(size_hex.trim(), 16).unwrap_or(0);
+            if size == 0 {
+                // drain any trailers until blank
+                loop {
+                    let mut tr = Vec::new();
+                    while cursor < body.len() {
+                        let b = body[cursor];
+                        cursor += 1;
+                        if b == b'\r' {
+                            if cursor < body.len() && body[cursor] == b'\n' {
+                                cursor += 1;
+                            }
+                            break;
+                        } else if b == b'\n' {
+                            break;
+                        } else {
+                            tr.push(b);
+                        }
+                    }
+                    if tr.is_empty() {
+                        break;
+                    }
+                }
+                break;
+            }
+            // copy payload
+            let end = cursor.saturating_add(size).min(body.len());
+            out.extend_from_slice(&body[cursor..end]);
+            cursor = end;
+            // consume trailing CRLF/LF
+            if cursor < body.len() && body[cursor] == b'\r' {
+                cursor += 1;
+                if cursor < body.len() && body[cursor] == b'\n' {
+                    cursor += 1;
+                }
+            } else if cursor < body.len() && body[cursor] == b'\n' {
+                cursor += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_notify_urlencode_component_covers_star_and_space() {
+        // Spin up local server to capture request body
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                // Read only until header end, then a small slice of body to avoid deadlock.
+                let mut buf = read_until_header_end(&mut s, 200);
+                // Try to capture a bit more body if already available.
+                let more = read_some_with_timeout(&mut s, 4096, 200);
+                buf.extend_from_slice(&more);
+                let idx = find_header_end(&buf).unwrap_or(buf.len());
+                let body = String::from_utf8_lossy(&buf[idx..]).to_string();
+                // Respond OK immediately
+                let resp = "HTTP/1.1 200 OK\r\nX-Exit-Code: 0\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                let _ = s.write_all(resp.as_bytes());
+                assert!(
+                    body.contains("cmd=say%2A") || body.contains("cmd=say%2a"),
+                    "expected '*' encoded, got: {}",
+                    body
+                );
+                assert!(
+                    body.contains("arg=a+b") || body.contains("arg=a%20b"),
+                    "expected space encoded (+ or %20), got: {}",
+                    body
+                );
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/notify", port);
+        let token = "t";
+        let cmd = "say*";
+        let args = vec!["a b".to_string()];
+        let code = try_notify_native(&url, token, cmd, &args, false).expect("native");
+        assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn test_exec_chunked_trailer_exit_code_124() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                // Read headers quickly, then a bounded slice of the body.
+                let mut buf = read_until_header_end(&mut s, 200);
+                let more = read_some_with_timeout(&mut s, 8192, 200);
+                buf.extend_from_slice(&more);
+                let idx = find_header_end(&buf).unwrap_or(buf.len());
+                let body = decode_chunked_body(buf[idx..].to_vec());
+                let body_s = String::from_utf8_lossy(&body);
+                assert!(
+                    body_s.contains("tool=") && body_s.contains("cwd="),
+                    "expected form parts, got: {}",
+                    body_s
+                );
+                // Chunked response with trailer
+                let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\nok\r\n0\r\nX-Exit-Code: 124\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/exec", port);
+        let token = "t";
+        let exec_id = "e1";
+        let parts = vec![
+            ("tool".to_string(), "cargo".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+            ("arg".to_string(), "--help".to_string()),
+        ];
+        let code = try_run_native(&url, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code, 124);
+    }
+
+    #[test]
+    fn test_header_end_lf_only_parsing_on_notify() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _a)) = listener.accept() {
+                // LF-only header terminator
+                let resp =
+                    "HTTP/1.1 200 OK\nX-Exit-Code: 86\nContent-Length: 0\nConnection: close\n\n";
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        let url = format!("http://127.0.0.1:{}/notify", port);
+        let token = "t";
+        let cmd = "say";
+        let args = vec!["hi".to_string()];
+        let code = try_notify_native(&url, token, cmd, &args, false).expect("native");
+        assert_eq!(code, 86);
+    }
+
+    #[test]
+    fn test_disconnect_exit_code_default_and_override() {
+        // Use two independent listeners to avoid race between sequential runs.
+        std::env::set_var("AIFO_SHIM_DISCONNECT_WAIT_SECS", "0");
+
+        // First run: default zero-on-disconnect
+        let listener1 = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port1 = listener1.local_addr().unwrap().port();
+        let (tx1, rx1) = std::sync::mpsc::channel::<()>();
+        let handle1 = std::thread::spawn(move || {
+            let _ = tx1.send(());
+            if let Ok((mut s, _a)) = listener1.accept() {
+                // Read a bit of the request to allow client to finish writes before we reply.
+                let _ = read_until_header_end(&mut s, 200);
+                let _ = read_some_with_timeout(&mut s, 4096, 200);
+                let resp =
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+                // Keep socket alive briefly to avoid immediate RST and let client parse headers.
+                std::thread::sleep(std::time::Duration::from_millis(75));
+            }
+        });
+        let _ = rx1.recv_timeout(std::time::Duration::from_millis(200));
+        let url1 = format!("http://127.0.0.1:{}/exec", port1);
+        let token = "t";
+        let exec_id = "e2";
+        let parts = vec![
+            ("tool".to_string(), "node".to_string()),
+            ("cwd".to_string(), ".".to_string()),
+        ];
+        std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
+        let code1 = try_run_native(&url1, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code1, 0, "default should be zero on disconnect");
+
+        // Second run: force non-zero on disconnect
+        let listener2 = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        let port2 = listener2.local_addr().unwrap().port();
+        let (tx2, rx2) = std::sync::mpsc::channel::<()>();
+        let handle2 = std::thread::spawn(move || {
+            let _ = tx2.send(());
+            if let Ok((mut s, _a)) = listener2.accept() {
+                let _ = read_until_header_end(&mut s, 200);
+                let _ = read_some_with_timeout(&mut s, 4096, 200);
+                let resp =
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+                let _ = s.write_all(resp.as_bytes());
+                std::thread::sleep(std::time::Duration::from_millis(75));
+            }
+        });
+        let _ = rx2.recv_timeout(std::time::Duration::from_millis(200));
+        let url2 = format!("http://127.0.0.1:{}/exec", port2);
+        std::env::set_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT", "0");
+        let code2 = try_run_native(&url2, token, exec_id, &parts, false).expect("native");
+        assert_eq!(code2, 1, "override should yield non-zero on disconnect");
+
+        // Cleanup
+        std::env::remove_var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT");
+        std::env::remove_var("AIFO_SHIM_DISCONNECT_WAIT_SECS");
+        let _ = handle1.join();
+        let _ = handle2.join();
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_send_signal_native_uds_basic() {
+        use std::os::unix::net::UnixListener;
+        use std::time::Duration;
+
+        // Prepare a temporary unix socket
+        let td = tempfile::tempdir().expect("tmpdir");
+        let sock_path = td.path().join("shim-signal.sock");
+        let listener = UnixListener::bind(&sock_path).expect("bind uds");
+
+        // Spawn server to capture request and assert headers/body
+        let handle = std::thread::spawn(move || {
+            let (mut s, _addr) = listener.accept().expect("accept");
+            let _ = s.set_read_timeout(Some(Duration::from_millis(300)));
+            let _ = s.set_write_timeout(Some(Duration::from_millis(300)));
+
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 1024];
+
+            // Read until end of headers
+            loop {
+                match s.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if let Some(_idx) = find_header_end(&buf) {
+                            break;
+                        }
+                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        break;
+                    }
+                    Err(_) => break,
+                }
+            }
+            // Attempt to read a bit more (body) with a tiny timeout window
+            let start = std::time::Instant::now();
+            loop {
+                match s.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&tmp[..n]);
+                        if buf.len() > 4096 {
+                            break;
+                        }
+                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        break;
+                    }
+                    Err(_) => break,
+                }
+                if start.elapsed() > Duration::from_millis(250) {
+                    break;
+                }
+            }
+
+            let req = String::from_utf8_lossy(&buf).to_string();
+            let req_lc = req.to_ascii_lowercase();
+
+            assert!(
+                req.contains("POST /signal"),
+                "expected POST /signal line, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("Authorization: Bearer t"),
+                "expected Authorization header, got:\n{}",
+                req
+            );
+            assert!(
+                req_lc.contains("x-aifo-proto: 2"),
+                "expected X-Aifo-Proto: 2 header, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("exec_id=e1"),
+                "expected exec_id in body, got:\n{}",
+                req
+            );
+            assert!(
+                req.contains("signal=INT"),
+                "expected signal=INT in body, got:\n{}",
+                req
+            );
+
+            // Minimal 204 response
+            let resp = b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = s.write_all(resp);
+        });
+
+        // Call native signal sender against unix:// socket
+        let url = format!("unix://{}", sock_path.display());
+        send_signal_native(&url, "t", "e1", "INT");
+        let _ = handle.join();
+    }
 }

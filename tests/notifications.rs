@@ -1,5 +1,5 @@
+mod support;
 use std::fs;
-use std::io::{Read, Write};
 
 #[test]
 fn test_notifications_cmd_e2e_ok_and_mismatch() {
@@ -51,30 +51,18 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
         aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
     fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
+        support::port_from_http_url(u)
     }
     let port = extract_port(&url);
 
     // OK case: args match config
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
         let body = "cmd=say&arg=--title&arg=AIFO";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write");
-        let mut resp = Vec::new();
-        s.read_to_end(&mut resp).ok();
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(txt.contains("200 OK"), "expected 200: {}", txt);
         assert!(
             txt.contains("X-Exit-Code: 0"),
@@ -90,17 +78,12 @@ fn test_notifications_cmd_e2e_ok_and_mismatch() {
 
     // Mismatch case: wrong args → expect 403 and exit 86
     {
-        use std::net::TcpStream;
-        let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect2");
         let body = "cmd=say&arg=--oops";
         let req = format!(
             "POST /notify HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
             token, body.len(), body
         );
-        s.write_all(req.as_bytes()).expect("write2");
-        let mut resp = Vec::new();
-        s.read_to_end(&mut resp).ok();
-        let txt = String::from_utf8_lossy(&resp);
+        let txt = support::http_send_raw(port, &req);
         assert!(txt.contains("403 Forbidden"), "expected 403: {}", txt);
         assert!(txt.contains("X-Exit-Code: 86"), "expected exit 86: {}", txt);
         assert!(
