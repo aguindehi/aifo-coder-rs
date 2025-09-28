@@ -302,7 +302,7 @@ pub fn build_sidecar_run_preview(
             push_env(
                 &mut args,
                 "PATH",
-                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "/opt/aifo/bin:/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             );
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
@@ -438,7 +438,7 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             push_env(
                 &mut args,
                 "PATH",
-                "/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "/opt/aifo/bin:/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             );
             // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);

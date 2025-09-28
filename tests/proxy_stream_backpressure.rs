@@ -50,8 +50,10 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
         .expect("toolchain_start_session");
     // Force proxy to use the container's default user (avoid odd host UID/GID failures)
     std::env::set_var("AIFO_TOOLEEXEC_DISABLE_USER", "1");
-    // Shrink channel capacity to accentuate backpressure (optional)
-    std::env::set_var("AIFO_PROXY_CHANNEL_CAP", "8");
+    // Disable TTY to avoid PTY quirks and ensure pipe behavior
+    std::env::set_var("AIFO_TOOLEEXEC_TTY", "0");
+    // Shrink channel capacity to accentuate backpressure
+    std::env::set_var("AIFO_PROXY_CHANNEL_CAP", "1");
     // Start proxy in verbose mode
     let (url, token, running, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
@@ -74,8 +76,8 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let port = port_str.parse::<u16>().expect("port parse");
 
     // Build a request body that streams a lot of output quickly
-    // Use node to generate many lines rapidly without invoking a shell
-    let script = "for (let i=0; i<8000; i++) console.log('x')";
+    // Use node to generate a large stream with a single fast write (no shell)
+    let script = "process.stdout.write('x\\n'.repeat(100000))";
     let body = format!(
         "tool={}&cwd={}&arg={}&arg={}",
         urlencode_component("node"),
@@ -149,5 +151,6 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     std::env::remove_var("AIFO_TEST_LOG_PATH");
     std::env::remove_var("AIFO_PROXY_SIGNAL_GRACE_MS");
     std::env::remove_var("AIFO_TOOLEEXEC_DISABLE_USER");
+    std::env::remove_var("AIFO_TOOLEEXEC_TTY");
     std::env::remove_var("AIFO_PROXY_CHANNEL_CAP");
 }
