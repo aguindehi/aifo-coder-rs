@@ -1135,12 +1135,16 @@ fn handle_connection<S: Read + Write>(
                                             attempts += 1;
                                             if attempts <= 2 {
                                                 // brief backoff then retry
-                                                std::thread::sleep(std::time::Duration::from_millis(5));
+                                                std::thread::sleep(
+                                                    std::time::Duration::from_millis(5),
+                                                );
                                                 msg = c;
                                                 continue;
                                             }
                                             // drop chunk on persistent backpressure; warn once
-                                            if !drop_warned_cl.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                            if !drop_warned_cl
+                                                .swap(true, std::sync::atomic::Ordering::SeqCst)
+                                            {
                                                 log_stderr_and_file(
                                                     "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
                                                 );
@@ -1149,7 +1153,9 @@ fn handle_connection<S: Read + Write>(
                                                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                                             break;
                                         }
-                                        Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => break,
+                                        Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => {
+                                            break
+                                        }
                                     }
                                 }
                             }
