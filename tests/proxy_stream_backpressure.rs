@@ -121,9 +121,9 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
         }
     }
 
-    // Stall client briefly, then close to induce proxy-side write failure/backpressure
-    std::thread::sleep(Duration::from_millis(100));
-    // Close connection now (server will detect write failure and escalate)
+    // Close connection immediately to force proxy-side write failure/backpressure
+    use std::net::Shutdown;
+    let _ = stream.shutdown(Shutdown::Both);
     drop(stream);
 
     // Allow proxy threads to process cleanup and emit logs
