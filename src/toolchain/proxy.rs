@@ -1097,8 +1097,12 @@ fn handle_connection<S: Read + Write>(
 
         // Stream stdout (bounded channel to limit memory under client stalls)
         let use_unbounded = std_env::var("AIFO_PROXY_UNBOUNDED").ok().as_deref() == Some("1");
-        // Bounded channel capacity
-        let cap: usize = 64;
+        // Bounded channel capacity (configurable via AIFO_PROXY_CHANNEL_CAP; default 64)
+        let cap: usize = std_env::var("AIFO_PROXY_CHANNEL_CAP")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(64);
         let dropped_count = Arc::new(AtomicUsize::new(0));
         let drop_warned = Arc::new(AtomicBool::new(false));
 
@@ -1203,6 +1207,20 @@ fn handle_connection<S: Read + Write>(
         }
 
         if write_failed {
+            // Emit a single drop-warning and mark at least one dropped chunk for metrics.
+            if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                log_stderr_and_file(
+                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                );
+            }
+            let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if verbose {
+                let line = format!(
+                    "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                    dropped_count.load(std::sync::atomic::Ordering::SeqCst)
+                );
+                log_stderr_and_file(&line);
+            }
             // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
                 let grace_ms: u64 = std_env::var("AIFO_PROXY_SIGNAL_GRACE_MS")
