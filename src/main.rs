@@ -238,10 +238,14 @@ fn print_verbose_run_info(
     cli_verbose: bool,
     dry_run: bool,
 ) {
+    let use_err = aifo_coder::color_enabled_stderr();
     if cli_verbose {
-        eprintln!(
-            "aifo-coder: effective apparmor profile: {}",
-            apparmor_opt.unwrap_or("(disabled)")
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: effective apparmor profile: {}",
+                apparmor_opt.unwrap_or("(disabled)")
+            ),
         );
         // Show chosen registry and source for transparency
         let rp = aifo_coder::preferred_registry_prefix_quiet();
@@ -251,12 +255,15 @@ fn print_verbose_run_info(
             rp.trim_end_matches('/').to_string()
         };
         let reg_src = aifo_coder::preferred_registry_source();
-        eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
-        eprintln!("aifo-coder: image: {image}");
-        eprintln!("aifo-coder: agent: {agent}");
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: registry: {} (source: {})", reg_display, reg_src),
+        );
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image));
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
     }
     if cli_verbose || dry_run {
-        eprintln!("aifo-coder: docker: {preview}");
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
 }
 
@@ -383,7 +390,10 @@ fn main() -> ExitCode {
             );
             if cli.dry_run {
                 // Skip actual Docker execution in dry-run mode
-                eprintln!("aifo-coder: dry-run requested; not executing Docker.");
+                {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    aifo_coder::log_info_stderr(use_err, "aifo-coder: dry-run requested; not executing Docker.");
+                }
                 return ExitCode::from(0);
             }
             // Acquire lock only for real execution; honor AIFO_CODER_SKIP_LOCK=1 for child panes

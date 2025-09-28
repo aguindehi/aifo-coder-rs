@@ -8,7 +8,8 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let _ = cli; // silence unused for future extensions
     print_startup_banner();
     let _ = warn_if_tmp_workspace(false);
-    eprintln!("aifo-coder images");
+    let use_err = aifo_coder::color_enabled_stderr();
+    aifo_coder::log_info_stderr(use_err, "aifo-coder images");
     eprintln!();
 
     // Flavor and registry display
@@ -110,13 +111,23 @@ pub fn run_toolchain(
         eprintln!("aborted.");
         return std::process::ExitCode::from(1);
     }
+    let use_err = aifo_coder::color_enabled_stderr();
     if cli.verbose {
-        eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: toolchain kind: {}", kind.as_str()),
+        );
         if let Some(img) = image.as_deref() {
-            eprintln!("aifo-coder: toolchain image override: {}", img);
+            aifo_coder::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: toolchain image override: {}", img),
+            );
         }
         if no_cache {
-            eprintln!("aifo-coder: toolchain caches disabled for this run");
+            aifo_coder::log_info_stderr(
+                use_err,
+                "aifo-coder: toolchain caches disabled for this run",
+            );
         }
     }
     if cli.dry_run {
