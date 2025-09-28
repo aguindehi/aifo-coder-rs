@@ -49,8 +49,8 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, false)
         .expect("toolchain_start_session");
     // Start proxy in verbose mode
-    let (url, token, running, handle) = aifo_coder::toolexec_start_proxy(&sid, true)
-        .expect("start proxy");
+    let (url, token, running, handle) =
+        aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
     // Capture proxy logs to a temp file
     let td = tempfile::tempdir().expect("tmpdir");
@@ -99,9 +99,7 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
 
     // Connect and send request
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    stream
-        .write_all(req.as_bytes())
-        .expect("write request");
+    stream.write_all(req.as_bytes()).expect("write request");
 
     // Read only until header end to cause server write backpressure later
     let mut buf = Vec::<u8>::new();

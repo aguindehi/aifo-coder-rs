@@ -1144,19 +1144,28 @@ fn handle_connection<S: Read + Write>(
                                             Err(std::sync::mpsc::TrySendError::Full(c)) => {
                                                 attempts += 1;
                                                 if attempts <= 2 {
-                                                    std::thread::sleep(std::time::Duration::from_millis(5));
+                                                    std::thread::sleep(
+                                                        std::time::Duration::from_millis(5),
+                                                    );
                                                     msg = c;
                                                     continue;
                                                 }
-                                                if !drop_warned_cl.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                                if !drop_warned_cl
+                                                    .swap(true, std::sync::atomic::Ordering::SeqCst)
+                                                {
                                                     log_stderr_and_file(
                                                         "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
                                                     );
                                                 }
-                                                let _ = dropped_count_cl.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                                let _ = dropped_count_cl.fetch_add(
+                                                    1,
+                                                    std::sync::atomic::Ordering::SeqCst,
+                                                );
                                                 break;
                                             }
-                                            Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => break,
+                                            Err(std::sync::mpsc::TrySendError::Disconnected(
+                                                _c,
+                                            )) => break,
                                         }
                                     }
                                 }

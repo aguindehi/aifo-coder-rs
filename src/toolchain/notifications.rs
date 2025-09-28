@@ -161,11 +161,7 @@ fn run_with_timeout(
     let mut cmd = Command::new(exec_abs);
     cmd.args(args);
     // Optional: trim child environment for notifications (opt-in via AIFO_NOTIFICATIONS_TRIM_ENV=1)
-    if std::env::var("AIFO_NOTIFICATIONS_TRIM_ENV")
-        .ok()
-        .as_deref()
-        == Some("1")
-    {
+    if std::env::var("AIFO_NOTIFICATIONS_TRIM_ENV").ok().as_deref() == Some("1") {
         cmd.env_clear();
         // Preserve minimal environment: PATH, HOME, LANG (or defaults), and any LC_* variables.
         if let Ok(v) = std::env::var("PATH") {
