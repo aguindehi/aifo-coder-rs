@@ -221,6 +221,8 @@ impl Drop for ToolchainSession {
     fn drop(&mut self) {
         let verbose = self.verbose;
         let in_fork_pane = self.in_fork_pane;
+        // Touch guard for clippy; RAII cleans on Drop.
+        let _ = self.bootstrap_guard.as_ref();
         self.cleanup_inner(verbose, in_fork_pane);
     }
 }
