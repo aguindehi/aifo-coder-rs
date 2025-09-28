@@ -35,8 +35,7 @@ fn test_proxy_python_venv_precedence() {
 
     // Start python sidecar and proxy (skip if image not present locally to avoid pulling)
     let kinds = vec!["python".to_string()];
-    let image = std::env::var("AIFO_CODER_TEST_PY_IMAGE")
-        .unwrap_or_else(|_| "python:3.12-slim".to_string());
+    let image = support::default_python_test_image();
     let rt = aifo_coder::container_runtime_path().expect("runtime");
     let present = support::docker_image_present(&rt.as_path(), &image);
     if !present {

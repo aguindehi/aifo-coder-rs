@@ -19,15 +19,8 @@ fn test_proxy_timeout_python_sleep() {
             return;
         }
     };
-    let python_image = std::env::var("AIFO_CODER_TEST_PYTHON_IMAGE")
-        .unwrap_or_else(|_| "python:3.12-slim".to_string());
-    let img_ok = std::process::Command::new(&rt)
-        .args(["image", "inspect", &python_image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let python_image = support::default_python_test_image();
+    let img_ok = support::docker_image_present(&rt.as_path(), &python_image);
     if !img_ok {
         eprintln!(
             "skipping: python image '{}' not present locally",

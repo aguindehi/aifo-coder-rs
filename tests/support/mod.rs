@@ -171,6 +171,14 @@ pub fn default_node_test_image() -> String {
         .unwrap_or_else(|_| "node:22-bookworm-slim".to_string())
 }
 
+/// Return default Python image for tests, from env or fallback to python:3.12-slim
+#[allow(dead_code)]
+pub fn default_python_test_image() -> String {
+    std::env::var("AIFO_CODER_TEST_PY_IMAGE")
+        .or_else(|_| std::env::var("AIFO_CODER_TEST_PYTHON_IMAGE"))
+        .unwrap_or_else(|_| "python:3.12-slim".to_string())
+}
+
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
 #[allow(dead_code)]
