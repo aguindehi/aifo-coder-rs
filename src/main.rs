@@ -259,7 +259,10 @@ fn print_verbose_run_info(
         let reg_src = aifo_coder::preferred_registry_source();
         aifo_coder::log_info_stderr(
             use_err,
-            &format!("aifo-coder: registry: {} (source: {})", reg_display, reg_src),
+            &format!(
+                "aifo-coder: registry: {} (source: {})",
+                reg_display, reg_src
+            ),
         );
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image));
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
@@ -414,7 +417,10 @@ fn main() -> ExitCode {
                 // Skip actual Docker execution in dry-run mode
                 {
                     let use_err = aifo_coder::color_enabled_stderr();
-                    aifo_coder::log_info_stderr(use_err, "aifo-coder: dry-run requested; not executing Docker.");
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: dry-run requested; not executing Docker.",
+                    );
                 }
                 return ExitCode::from(0);
             }
