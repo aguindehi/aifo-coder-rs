@@ -757,7 +757,10 @@ pub fn toolchain_run(
     Ok(exit_code)
 }
 
-/// Start sidecar session for requested kinds; returns the session id.
+//// Start sidecar session for requested kinds; returns the session id.
+//// Note: When invoked stand-alone (without ToolchainSession), callers that rely on the
+//// AIFO_RUST_OFFICIAL_BOOTSTRAP marker during exec should create a BootstrapGuard
+//// themselves around the session lifecycle to keep the marker set across preview+exec.
 pub fn toolchain_start_session(
     kinds: &[String],
     overrides: &[(String, String)],
