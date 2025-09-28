@@ -446,6 +446,8 @@ pub fn toolexec_start_proxy(
                     let token_cl = token_for_thread2.clone();
                     let session_cl = session.clone();
                     std::thread::spawn(move || {
+                        let disable_user =
+                            std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref() == Some("1");
                         let ctx2 = ProxyCtx {
                             runtime: runtime_cl,
                             token: token_cl,
@@ -453,7 +455,11 @@ pub fn toolexec_start_proxy(
                             timeout_secs,
                             verbose,
                             agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
-                            uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+                            uidgid: if cfg!(unix) && !disable_user {
+                                Some((uid, gid))
+                            } else {
+                                None
+                            },
                         };
                         let mut s = stream;
                         handle_connection(&ctx2, &mut s, &tc, &er, &rs);
@@ -547,6 +553,8 @@ pub fn toolexec_start_proxy(
             let token_cl = token_for_thread.clone();
             let session_cl = session.clone();
             std::thread::spawn(move || {
+                let disable_user =
+                    std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref() == Some("1");
                 let ctx2 = ProxyCtx {
                     runtime: runtime_cl,
                     token: token_cl,
@@ -554,7 +562,11 @@ pub fn toolexec_start_proxy(
                     timeout_secs,
                     verbose,
                     agent_container: std_env::var("AIFO_CODER_CONTAINER_NAME").ok(),
-                    uidgid: if cfg!(unix) { Some((uid, gid)) } else { None },
+                    uidgid: if cfg!(unix) && !disable_user {
+                        Some((uid, gid))
+                    } else {
+                        None
+                    },
                 };
                 let mut s = stream;
                 handle_connection(&ctx2, &mut s, &tc, &er, &rs);

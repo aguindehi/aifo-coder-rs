@@ -48,6 +48,10 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let overrides: Vec<(String, String)> = Vec::new();
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, false)
         .expect("toolchain_start_session");
+    // Force proxy to use the container's default user (avoid odd host UID/GID failures)
+    std::env::set_var("AIFO_TOOLEEXEC_DISABLE_USER", "1");
+    // Shrink channel capacity to accentuate backpressure (optional)
+    std::env::set_var("AIFO_PROXY_CHANNEL_CAP", "8");
     // Start proxy in verbose mode
     let (url, token, running, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
@@ -144,4 +148,6 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     // Cleanup env
     std::env::remove_var("AIFO_TEST_LOG_PATH");
     std::env::remove_var("AIFO_PROXY_SIGNAL_GRACE_MS");
+    std::env::remove_var("AIFO_TOOLEEXEC_DISABLE_USER");
+    std::env::remove_var("AIFO_PROXY_CHANNEL_CAP");
 }
