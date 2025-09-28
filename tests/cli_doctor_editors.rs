@@ -1,3 +1,4 @@
+mod support;
 use std::process::Command;
 
 fn docker_present() -> bool {
@@ -6,13 +7,7 @@ fn docker_present() -> bool {
 
 fn image_present(img: &str) -> bool {
     if let Ok(rt) = aifo_coder::container_runtime_path() {
-        return Command::new(rt)
-            .args(["image", "inspect", img])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        return support::docker_image_present(&rt.as_path(), img);
     }
     false
 }
