@@ -1,6 +1,6 @@
 # Defaults
 
-profile = "gpt-5"
+profile = "gpt-5-codex"
 approval_policy = "on-request"
 
 # Azure Provider
@@ -8,12 +8,12 @@ approval_policy = "on-request"
 [model_providers.azure]
 name = "Azure"
 
-# AIFO Sandbox 
-base_url = "https://mgb-aifo-sandbox-oai-swe.openai.azure.com/openai"
+# AIFO Sandbox Settings
 
+base_url = "https://mgb-aifo-sandbox-oai-swe.openai.azure.com/openai"
 env_key = "AZURE_API_KEY"  # Name of the environment variable
-wire_api = "responses"     # API type
 query_params = { api-version = "2025-04-01-preview" }
+wire_api = "responses"
 
 # Profiles
 
@@ -27,4 +27,41 @@ model = "mgb-aifo-model-gpt-o3"
 
 [profiles.gpt-5]
 model_provider = "azure"
+model = "gpt-5"
+model_reasoning_effort = "medium"
+
+[profiles.gpt-5-codex]
+model_provider = "azure"
+model = "gpt-5-codex"
+model_reasoning_effort = "medium"
+
+[profiles.gpt-5-low]
+model_provider = "azure"
 model = "mgb-aifo-model-gpt-5"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "low"
+
+[profiles.gpt-5-codex-low]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "low"
+
+[profiles.gpt-5-medium]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "medium"
+
+[profiles.gpt-5-codex-medium]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "medium"
+
+[profiles.gpt-5-high]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "high"
+
+[profiles.gpt-5-codex-high]
+model_provider = "azure"
+model = "mgb-aifo-model-gpt-5-codex"
+model_reasoning_effort = "high"
