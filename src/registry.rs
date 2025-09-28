@@ -164,7 +164,10 @@ pub fn preferred_registry_prefix() -> String {
             );
         }
     } else {
-        aifo_coder::log_warn_stderr(use_err, "aifo-coder: curl not found; falling back to TCP reachability check.");
+        aifo_coder::log_warn_stderr(
+            use_err,
+            "aifo-coder: curl not found; falling back to TCP reachability check.",
+        );
     }
 
     let v = if is_host_port_reachable("repository.migros.net", 443, 300) {

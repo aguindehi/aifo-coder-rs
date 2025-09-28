@@ -226,7 +226,10 @@ pub(crate) fn fork_merge_branches_impl(
         args.push(pdir_str.clone());
         args.push(refspec.clone());
         if verbose || dry_run {
-            aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: git: {}", shell_join(&args)));
+            aifo_coder::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: git: {}", shell_join(&args)),
+            );
         }
         if !dry_run {
             let mut cmd = Command::new("git");
@@ -460,7 +463,10 @@ pub(crate) fn fork_merge_branches_impl(
         for (_p, br) in &pane_branches {
             preview.push(br.clone());
         }
-        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: git: {}", shell_join(&preview)));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: git: {}", shell_join(&preview)),
+        );
     }
 
     Ok(())
