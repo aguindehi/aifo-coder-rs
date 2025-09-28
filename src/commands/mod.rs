@@ -8,7 +8,7 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let _ = cli; // silence unused for future extensions
     print_startup_banner();
     let _ = warn_if_tmp_workspace(false);
-    let use_err = aifo_coder::color_enabled_stderr();
+    
     aifo_coder::log_info_stderr(use_err, "aifo-coder images");
     eprintln!();
 
@@ -109,8 +109,9 @@ pub fn run_toolchain(
     args: Vec<String>,
 ) -> std::process::ExitCode {
     print_startup_banner();
+    let use_err = aifo_coder::color_enabled_stderr();
     if !warn_if_tmp_workspace(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return std::process::ExitCode::from(1);
     }
     let use_err = aifo_coder::color_enabled_stderr();

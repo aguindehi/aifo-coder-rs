@@ -281,6 +281,7 @@ fn main() -> ExitCode {
         std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");
     }
     apply_cli_globals(&cli);
+    let use_err = aifo_coder::color_enabled_stderr();
 
     // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
@@ -318,12 +319,12 @@ fn main() -> ExitCode {
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines
     if !warn_if_tmp_workspace(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return ExitCode::from(1);
     }
     // Warn and optionally block if LLM credentials are missing
     if !crate::warnings::warn_if_missing_llm_credentials(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return ExitCode::from(1);
     }
 
