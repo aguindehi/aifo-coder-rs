@@ -378,7 +378,7 @@ pub fn build_docker_cmd(
     let sh_cmd = format!(
         "set -e; umask 077; \
          if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
-         export PATH=\"{path_value}\"; sed_port(){ if [ \"${{AIFO_SED_PORTABLE:-1}}\" = \"1\" ]; then sed -i'' \"$@\"; else sed -i \"$@\"; fi; }; \
+         export PATH=\"{path_value}\"; sed_port(){{ if [ \"${{AIFO_SED_PORTABLE:-1}}\" = \"1\" ]; then sed -i'' \"$@\"; else sed -i \"$@\"; fi; }}; \
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
          if (command -v getent >/dev/null 2>&1 && ! getent passwd \"$uid\" >/dev/null 2>&1) || (! command -v getent >/dev/null 2>&1 && ! grep -q \"^[^:]*:[^:]*:$uid:\" /etc/passwd); then \

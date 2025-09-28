@@ -1103,18 +1103,26 @@ fn handle_connection<S: Read + Write>(
         let drop_warned = Arc::new(AtomicBool::new(false));
 
         // Create channel (bounded by default; unbounded when AIFO_PROXY_UNBOUNDED=1)
-        let (tx, rx) = if use_unbounded {
-            std::sync::mpsc::channel::<Vec<u8>>()
+        #[derive(Clone)]
+        enum TxKind {
+            Unbounded(std::sync::mpsc::Sender<Vec<u8>>),
+            Bounded(std::sync::mpsc::SyncSender<Vec<u8>>),
+        }
+        let (tx_kind, rx) = if use_unbounded {
+            let (t, r) = std::sync::mpsc::channel::<Vec<u8>>();
+            (TxKind::Unbounded(t), r)
         } else {
-            std::sync::mpsc::sync_channel::<Vec<u8>>(cap)
+            let (t, r) = std::sync::mpsc::sync_channel::<Vec<u8>>(cap);
+            (TxKind::Bounded(t), r)
         };
 
         if let Some(mut so) = child.stdout.take() {
-            let txo = tx.clone();
+            let txo = match &tx_kind {
+                TxKind::Unbounded(s) => TxKind::Unbounded(s.clone()),
+                TxKind::Bounded(s) => TxKind::Bounded(s.clone()),
+            };
             let drop_warned_cl = drop_warned.clone();
             let dropped_count_cl = dropped_count.clone();
-            let verbose_cl = verbose;
-            let use_unbounded_cl = use_unbounded;
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 loop {
@@ -1122,39 +1130,33 @@ fn handle_connection<S: Read + Write>(
                         Ok(0) => break,
                         Ok(n) => {
                             let chunk = buf[..n].to_vec();
-                            if use_unbounded_cl {
-                                let _ = txo.send(chunk);
-                            } else {
-                                // Best-effort small backoff attempts before dropping under backpressure
-                                let mut msg = chunk;
-                                let mut attempts = 0usize;
-                                loop {
-                                    match txo.try_send(msg) {
-                                        Ok(()) => break,
-                                        Err(std::sync::mpsc::TrySendError::Full(c)) => {
-                                            attempts += 1;
-                                            if attempts <= 2 {
-                                                // brief backoff then retry
-                                                std::thread::sleep(
-                                                    std::time::Duration::from_millis(5),
-                                                );
-                                                msg = c;
-                                                continue;
+                            match txo {
+                                TxKind::Unbounded(ref s) => {
+                                    let _ = s.send(chunk);
+                                }
+                                TxKind::Bounded(ref s) => {
+                                    // Best-effort small backoff attempts before dropping under backpressure
+                                    let mut msg = chunk;
+                                    let mut attempts = 0usize;
+                                    loop {
+                                        match s.try_send(msg) {
+                                            Ok(()) => break,
+                                            Err(std::sync::mpsc::TrySendError::Full(c)) => {
+                                                attempts += 1;
+                                                if attempts <= 2 {
+                                                    std::thread::sleep(std::time::Duration::from_millis(5));
+                                                    msg = c;
+                                                    continue;
+                                                }
+                                                if !drop_warned_cl.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                                    log_stderr_and_file(
+                                                        "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                                                    );
+                                                }
+                                                let _ = dropped_count_cl.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                                break;
                                             }
-                                            // drop chunk on persistent backpressure; warn once
-                                            if !drop_warned_cl
-                                                .swap(true, std::sync::atomic::Ordering::SeqCst)
-                                            {
-                                                log_stderr_and_file(
-                                                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
-                                                );
-                                            }
-                                            let _ = dropped_count_cl
-                                                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                            break;
-                                        }
-                                        Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => {
-                                            break
+                                            Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => break,
                                         }
                                     }
                                 }
@@ -1165,7 +1167,7 @@ fn handle_connection<S: Read + Write>(
                 }
             });
         }
-        drop(tx);
+        drop(tx_kind);
 
         // Stream until EOF or write error
         let mut write_failed = false;
