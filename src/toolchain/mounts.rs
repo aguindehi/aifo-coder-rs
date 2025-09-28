@@ -26,6 +26,7 @@ fn init_rust_named_volume(
     gid: u32,
     verbose: bool,
 ) {
+    let use_err = aifo_coder::color_enabled_stderr();
     let mount = format!("aifo-cargo-{subdir}:/home/coder/.cargo/{subdir}");
     let script = format!(
         "set -e; d=\"/home/coder/.cargo/{sd}\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
