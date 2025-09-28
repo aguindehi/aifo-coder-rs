@@ -86,8 +86,13 @@ fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
         Vec::new()
     };
 
+    let mut exec_abs_pb = PathBuf::from(exec);
+    // Best-effort canonicalization to avoid symlink surprises; fall back to original on error.
+    if let Ok(canon) = fs::canonicalize(&exec_abs_pb) {
+        exec_abs_pb = canon;
+    }
     Ok(NotifCfg {
-        exec_abs: PathBuf::from(exec),
+        exec_abs: exec_abs_pb,
         fixed_args,
         has_trailing_args_placeholder: has_placeholder,
     })
@@ -155,6 +160,54 @@ fn run_with_timeout(
 ) -> Result<(i32, Vec<u8>), NotifyError> {
     let mut cmd = Command::new(exec_abs);
     cmd.args(args);
+    // Optional: trim child environment for notifications (opt-in via AIFO_NOTIFICATIONS_TRIM_ENV=1)
+    if std::env::var("AIFO_NOTIFICATIONS_TRIM_ENV")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        cmd.env_clear();
+        // Preserve minimal environment: PATH, HOME, LANG (or defaults), and any LC_* variables.
+        if let Ok(v) = std::env::var("PATH") {
+            if !v.is_empty() {
+                cmd.env("PATH", v);
+            }
+        } else {
+            cmd.env(
+                "PATH",
+                "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            );
+        }
+        if let Ok(v) = std::env::var("HOME") {
+            if !v.is_empty() {
+                cmd.env("HOME", v);
+            }
+        }
+        if let Ok(v) = std::env::var("LANG") {
+            if !v.is_empty() {
+                cmd.env("LANG", v);
+            }
+        } else {
+            cmd.env("LANG", "C.UTF-8");
+        }
+        for (k, v) in std::env::vars() {
+            if k.starts_with("LC_") && !v.is_empty() {
+                cmd.env(&k, v);
+            }
+        }
+        // User-requested additional variables allowlist (comma-separated names)
+        if let Ok(list) = std::env::var("AIFO_NOTIFICATIONS_ENV_ALLOW") {
+            for name in list.split(',') {
+                let key = name.trim();
+                if key.is_empty() {
+                    continue;
+                }
+                if let Ok(val) = std::env::var(key) {
+                    cmd.env(key, val);
+                }
+            }
+        }
+    }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = {
         // Retry on transient EBUSY (Text file busy) a few times with small sleeps
