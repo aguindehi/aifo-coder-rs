@@ -336,23 +336,42 @@ fn main() -> ExitCode {
         if cli.dry_run {
             // Dry-run: print detailed previews and skip starting sidecars/proxy
             if cli.verbose {
-                eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: would attach toolchains: {:?}", kinds),
+                );
                 if !overrides.is_empty() {
-                    eprintln!("aifo-coder: would use image overrides: {:?}", overrides);
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: would use image overrides: {:?}", overrides),
+                    );
                 }
                 if cli.no_toolchain_cache {
-                    eprintln!("aifo-coder: would disable toolchain caches");
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: would disable toolchain caches",
+                    );
                 }
                 if cfg!(target_os = "linux") && cli.toolchain_unix_socket {
-                    eprintln!("aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo");
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo",
+                    );
                 }
                 if !cli.toolchain_bootstrap.is_empty() {
-                    eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap),
+                    );
                 }
-                eprintln!(concat!(
-                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
-                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
-                ));
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    concat!(
+                        "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
+                        "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                    ),
+                );
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
@@ -406,7 +425,10 @@ fn main() -> ExitCode {
                 match aifo_coder::acquire_lock() {
                     Ok(f) => Some(f),
                     Err(e) => {
-                        eprintln!("{e}");
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            aifo_coder::log_error_stderr(use_err, &e.to_string());
+                        }
                         return ExitCode::from(1);
                     }
                 }
@@ -423,7 +445,10 @@ fn main() -> ExitCode {
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
-            eprintln!("{e}");
+            {
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(use_err, &e.to_string());
+            }
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             let code = aifo_coder::exit_code_for_io_error(&e);
             ExitCode::from(code)

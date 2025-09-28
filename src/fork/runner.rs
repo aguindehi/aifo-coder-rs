@@ -203,9 +203,12 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         _ => "tiled".to_string(),
     };
     if cli.verbose {
-        eprintln!(
-            "aifo-coder: tmux layout requested: {} -> effective: {}",
-            layout, layout_effective
+        aifo_coder::log_info_stderr(
+            use_err_color,
+            &format!(
+                "aifo-coder: tmux layout requested: {} -> effective: {}",
+                layout, layout_effective
+            ),
         );
     }
 
