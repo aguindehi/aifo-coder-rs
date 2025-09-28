@@ -1,182 +1,195 @@
-Here is a focused assessment of the codebase, with concrete improvement opportunities, likely impact, and a pragmatic plan to iterate without destabilizing
-existing behavior and tests.
+Focused refactor and hardening plan (updated 2025-09-28)
 
-Executive summary
+Summary
 
- • The project is well-structured, with clean separations (fork, toolchain, proxy/shim, doctor), good test coverage (unit + integration + acceptance with
-   #[ignore]), and careful preservation of user-visible strings.
- • Most critical paths (proxy accept/exec, notifications policy, sidecar run/exec previews, lock semantics, registry probing) are covered by tests or guarded
-   with environment overrides.
- • A few correctness/consistency gaps remain in proxy error semantics, robustness around parsing and timeouts, and some minor portability and standardization
-   issues. These are fixable in small, incremental steps.
- • Quick wins can improve robustness and maintainability without changing UX (log harmonization, minor error mapping, guardrails). Mid-term improvements can
-   address performance for the proxy and further harden policy surfaces.
+ • Strong architecture and test coverage; careful preservation of user-facing strings.
+ • Several prior quick wins are already implemented in code:
+    – Proxy v1 maps timeouts to 504 (src/toolchain/proxy.rs).
+    – HTTP parser guards: header count limit, CL mismatch, TE:chunked precedence
+      (src/toolchain/http.rs).
+ • Remaining opportunities focus on runtime harmonization, notifications hardening,
+   proxy streaming backpressure, and minor portability.
 
-Notable strengths
+Current strengths
 
- • Defensive design: allowlists for tools, notifications policy with absolute paths and argument matching, timeouts with INT→TERM→KILL escalation, lock
-   files, and test-only registry probe overrides.
- • Sidecar management: consistent run/exec previews, volume ownership initialization, rust/node cache support, image selection logic with overrides, and
-   well-scoped environment propagation.
- • Fork orchestration: thorough handling of base detection, snapshot creation, cloning with LFS/submodules best-effort, merge strategies, and detailed
-   JSON/plain renders.
- • Test suite: broad coverage, many edge cases (header case, LF-only, bad proto, signals, large payloads), golden outputs, Windows/Linux/macOS handling, and
-   good use of env/guards to keep CI stable.
+ • Defensive surfaces: tool allowlists, absolute-path notifications, timeout escalation,
+   fork locks, registry probing with overrides, sidecar caches/ownership init.
+ • Clean run/exec previews (agent + toolchains), consistent shell escaping helpers.
+ • Fork flows: base detection, snapshot commit, cloning best-effort with LFS/submodules,
+   merge strategies, summaries, and metadata writers.
+ • Broad tests on parsing, signaling, chunked trailers, editor presence, named volumes,
+   network flags, unix socket transport, and preview formatting.
 
-Gaps and issues
+New insights and gaps
 
- 1 Buffered proxy (proto v1) timeout HTTP status
+ 1 Runtime harmonization in doctor and AppArmor
 
- • Observed: The streaming path (v2) returns 200 with trailers. The buffered path (v1) always returns 200 OK on success/error, but acceptance/spec tests
-   (ignored by default) expect 504 Gateway Timeout for runtime timeouts in v1 (see tests/proxy_error_semantics.rs).
- • Impact: When those tests are enabled, they will fail; also, API consumers expect an HTTP status reflective of timeout semantics (even if X-Exit-Code
-   encodes 124).
- • Quick fix: In v1 path, when the max-runtime watcher escalates and the child is terminated for timeout, respond with “504 Gateway Timeout” and X-Exit-Code:
-   124, instead of 200 OK. Keep 200 OK for normal completion and spawn errors still 500. This does not affect v2 streaming.
+ • Observed: doctor.rs uses Command::new("docker") for several run/info checks; some
+   calls already use container_runtime_path(). apparmor.rs resolves "docker" via which().
+ • Impact: Inconsistent runtime resolution makes future runtime changes harder and can
+   break environments with non-standard docker paths.
+ • Plan: Standardize all doctor/app-armor docker invocations to use the resolved path
+   (container_runtime_path()). Keep preview strings as "docker ..." for user familiarity.
 
- 2 HTTP parser robustness and edge-case tolerance
+ 2 Notifications execution path: canonicalization and env hygiene
 
- • Observed: The parser tolerates CRLFCRLF and LFLF, caps headers at 64 KiB and body at 1 MiB, and de-chunks in v1 parsing. It does not explicitly guard
-   against pathological many-header cases, invalid Content-Length, or multi-Transfer-Encoding values. It always trusts chunk sizes (bounded by cap).
- • Impact: Low risk, but additional hardening reduces chance of resource abuse or parsing inconsistencies (particularly for future public exposure or
-   fuzzing).
- • Quick fix: Add cheap guardrails:
-    • Reject Content-Length that disagrees with actual bytes available (400).
-    • Limit number of header lines (e.g., 1,024; 431 Request Header Fields Too Large if exceeded).
-    • If both Content-Length and Transfer-Encoding: chunked are present, prefer chunked per RFC and ignore Content-Length.
+ • Observed: notifications.rs validates absolute exec path and basename allowlist, but
+   spawns using the provided path without fs::canonicalize. Env is inherited wholesale.
+ • Impact: Symlink surprises are low-risk but worth guarding against. Over-inherited env
+   could leak sensitive vars into notification commands in stricter environments.
+ • Plan: Canonicalize exec_abs best-effort before spawn; continue using basename of the
+   canonicalized path. Provide an opt-in allowlist mode to trim child env by default
+   (conservative, disabled unless explicitly enabled by env).
 
- 3 Logging consistency and diagnostics
+ 3 Global env marker for official rust bootstrap
 
- • Observed: Logging mixes eprintln, custom log_* helpers, and explicit teeing to AIFO_TEST_LOG_PATH. Some doctor/docker invocations hardcode “docker”
-   instead of reusing the resolved runtime in all places.
- • Impact: Minor UX inconsistencies; harder to grep logs uniformly; harder to switch runtime in the future.
- • Quick fix:
-    • Route docker invocations in doctor.rs consistently via the resolved runtime path where feasible (matches existing patterns in other modules).
-    • Use log helpers for repeated patterns (“aifo-coder: docker: ...”) to harmonize preview lines.
+ • Observed: AIFO_RUST_OFFICIAL_BOOTSTRAP is set at start and removed at the end of
+   toolchain_run(), but not wrapped by an RAII guard across all code paths (including
+   session start flows).
+ • Impact: A panic or early error path can leave the marker set for subsequent runs.
+ • Plan: Introduce a small RAII guard struct (Drop unsets) scoped to toolchain session
+   lifecycle; use in both toolchain_run() and toolchain_start_session().
 
- 4 Global-environment side effects
+ 4 Proxy streaming backpressure (v2 stdout channel)
 
- • Observed: AIFO_RUST_OFFICIAL_BOOTSTRAP is set/unset globally across calls. This is safe but can leak across threads/tests if panics occur mid-run.
- • Impact: Low; tests appear to set/restore envs around asserts. Still safer to scope.
- • Quick fix: Prefer passing a “bootstrap marker” down call chains or using a guard object that unsets in Drop. This avoids persistent global state.
+ • Observed: v2 streaming uses std::sync::mpsc::channel (unbounded). stderr drain is
+   handled; stdout may grow unbounded if the client stalls.
+ • Impact: Under heavy concurrent loads, memory usage can spike.
+ • Plan: Switch to crossbeam-channel bounded (e.g., 32–128 chunks) with best-effort send:
+   try_send, drop or short block + timeout. Emit a single warning line when dropping.
+   Preserve current output format and exit codes.
 
- 5 Proxy concurrency model and backpressure
+ 5 Portability: sed -i usage in container shell script
 
- • Observed: The proxy spawns a thread per accepted connection and a watcher per exec; stdout/stderr are streamed (v2) via mpsc channel. It drains stderr to
-   avoid backpressure, but the stdout channel is unbounded.
- • Impact: Low to moderate under heavy concurrent loads; potential memory pressure if a client stops reading mid-stream while child writes aggressively.
- • Quick fix: Use a bounded channel with drop/backpressure policy (e.g., crossbeam-channel bounded), and make chunk-send best-effort when the downstream is
-   not reading. Keep existing behavior for normal workloads.
+ • Observed: docker.rs uses sed -i without backup suffix. Busybox vs GNU sed variance
+   can bite on future image changes.
+ • Impact: Very low in current images; low-effort to harden.
+ • Plan: Use sed -i'' -e "<pattern>" everywhere we depend on -i. Gate behind a helper
+   function for readability.
 
- 6 Notifications policy hardening
+ 6 Logging consistency
 
- • Observed: Already enforces absolute path, allowlist on basename, argument matching or bounded placeholder expansion, and timeouts with signal escalation.
- • Impact: Solid. Minor improvements are still possible.
- • Quick fix:
-    • Normalize and canonicalize exec_abs (fs::canonicalize) before running to avoid symlink surprises (best-effort).
-    • Trim environment for child exec (e.g., remove sensitive env vars by default, or allow an allowlist) if security posture requires it in your
-      environment.
+ • Observed: Mixed use of raw eprintln and log_* color-aware helpers. Preview lines are
+   mostly consistent but a few places still print raw.
+ • Impact: Minor UX inconsistencies and grepping friction.
+ • Plan: Prefer crate::log_* in new surfaces. Keep exact message texts unchanged.
 
- 7 Docker run preview shell fragment portability
+ 7 Minor cleanups: dead parameters and small helpers
 
- • Observed: The /bin/sh -lc script in docker.rs uses sed -i in a way that relies on GNU/busybox behavior; on some distros, -i requires a backup suffix.
- • Impact: Very low for your current base images, but a future base change (e.g., different sed) could break the preview-time gpg-agent setup script.
- • Quick fix: Use a sed invocation compatible across GNU/busybox (e.g., sed -i'' -e ...), or gate by a small helper that chooses the safest variant. This
-   only affects runtime inside the container and not host.
+ • Observed: Minor unused parameters (e.g., show(..., _mounted) in doctor.rs), small
+   reusable helpers could be centralized (sed portable helper).
+ • Impact: Low; improves maintainability.
+ • Plan: Remove or rename unused params where safe (no user-facing string changes).
+   Centralize portable-sed wrapper.
 
- 8 Minor portability and standardization
+Status check (implemented vs outstanding)
 
- • Observed: Several places use the literal “docker” command in doctor/banner, other places use container_runtime_path() and pass args. The project seems
-   committed to Docker-only, so this is OK.
- • Impact: None today. If a switch to an alternative runtime is planned, centralize more invocations around a helper that prefixes “docker” string in preview
-   and uses runtime path in Command.
- • Quick fix: Harmonize doctor.rs and banner.rs with container_runtime_path() for all docker run/info calls.
+ • Implemented:
+   – Proxy v1 timeout to 504 (buffered path).
+   – HTTP parser guardrails: header count and CL mismatch; TE precedence.
+ • Outstanding:
+   – Runtime harmonization in doctor.rs and apparmor.rs.
+   – Notifications canonicalization + optional env allowlist trimming.
+   – RAII guard for rust bootstrap marker across session lifecycle.
+   – Bounded channel for v2 stdout streaming with drop/backpressure policy.
+   – sed -i portability helper and adoption.
+   – Logging consistency touch-ups.
 
-  9 Test support duplication
+Production-ready phase plan
 
- • Observed: Simple port-extraction code from a URL and LF/CRLF header building appear in multiple tests.
- • Impact: None functionally; minor maintenance overhead.
- • Quick fix: Consolidate these helpers in tests/support/mod.rs (e.g., parse_http_port, render_http_headers), keeping tests concise.
+Phase 1: Runtime harmonization and logging (low risk, no UX changes)
+ • doctor.rs: replace all Command::new("docker") with resolved runtime path; reuse args
+   already constructed. Preview strings remain "docker ...".
+ • apparmor.rs: resolve runtime via container_runtime_path() instead of which("docker").
+ • Minor logging harmonization: prefer log_* wrappers where we add new messages; keep
+   exact texts for existing ones.
+ • Tests: no changes required; behavior does not change.
 
-Quick wins (small patches with immediate ROI)
+Phase 2: Notifications hardening
+ • Canonicalize exec_abs before spawn; use canonicalized basename for allowlist check.
+ • Add opt-in AIFO_NOTIFICATIONS_TRIM_ENV=1:
+   – When enabled, spawn with a minimal env allowlist (PATH, HOME, LANG, LC_*,
+     user-requested vars), omitting sensitive vars by default.
+   – Default remains current (no trim) to avoid breaking environments.
+ • Tests: add unit tests to ensure canonicalization tolerates failures and preserves
+   behavior; add opt-in env trimming tests behind feature/env gates.
 
- • Proxy v1 timeout status: Map max-runtime timeout to 504 in v1 path. File: src/toolchain/proxy.rs. Change: after child is killed due to watcher timeout,
-   detect that condition and respond_plain(..., "504 Gateway Timeout", 124, ...). Keep string messages unchanged elsewhere.
- • Use resolved docker path in doctor.rs for docker run/info. Replace hardcoded Command::new("docker") with Command::new(&rt), where rt was resolved via
-   container_runtime_path(); reuse assembled args.
- • Add simple header-count limit and Content-Length sanity checks in src/toolchain/http.rs:
-    • If too many headers, return 431 with X-Exit-Code 86.
-    • If Content-Length is present and less than bytes already read, return 400 with X-Exit-Code 86.
- • Canonicalize notifications exec_abs before spawn (best-effort). File: src/toolchain/notifications.rs. Before run_with_timeout, turn exec_abs into
-   fs::canonicalize(exec_abs).unwrap_or(exec_abs.clone()) and use that; ensure basename extraction uses canonicalized path.
- • Wrap AIFO_RUST_OFFICIAL_BOOTSTRAP with a small scope guard in sidecar.rs (set at entry, unset in Drop) to avoid lingering env when early errors occur.
- • Tests: factor url→port parsing into support::http_port(url: &str) and reuse across tests. No behavior change.
+Phase 3: Rust bootstrap RAII guard
+ • Introduce BootstrapGuard that sets AIFO_RUST_OFFICIAL_BOOTSTRAP on creation and
+   unsets in Drop. Use in toolchain_run() and toolchain_start_session() around
+   mark_official_rust_bootstrap(...).
+ • Ensure guard lifetime aligns with preview + exec flow and session start lifecycle.
+ • Tests: add a small test to assert the env is cleared on early error paths.
 
-Medium-term improvements
+Phase 4: Proxy v2 bounded streaming channel
+ • Replace unbounded mpsc with crossbeam-channel bounded:
+   – Producer: try_send with short retry; on persistent backpressure, drop chunk and
+     emit a single warning line "aifo-coder: proxy stream: dropping output (backpressure)".
+   – Consumer: unchanged chunked prelude and trailer semantics; exit codes unchanged.
+ • Add a small metric counter (in-memory, printed only when AIFO_TOOLCHAIN_VERBOSE=1).
+ • Tests: add backpressure simulation under #[ignore] acceptance lane; no change in
+   default unit tests.
 
- • Bounded streaming channel in v2: replace unbounded mpsc with bounded channel and handle backpressure gracefully (drop or block with small timeout). This
-   prevents memory spikes if a client becomes slow or stalls.
- • Structured logging hooks: optional JSON log lines guarded by AIFO_TOOLCHAIN_VERBOSE or a new env; same messages but ready for ingestion when needed.
- • Add fuzz-like tests for HTTP parser: invalid chunk sizes, multiple TE headers, invalid mixed headers, excessive chunks (bounded by cap), to confirm safe
-   failure modes.
- • Proxy acceptors: thread-per-connection is simple and fine; consider a small threadpool if the proxy ever faces high concurrency.
+Phase 5: Sed portability helper
+ • Introduce a tiny helper (container script generator) that emits sed -i'' -e ... forms
+   instead of plain -i. Replace current sed calls in docker.rs script building.
+ • Tests: keep existing preview assertions (strings differ only in sed flags inside the
+   container script). Verify no functional change.
+
+Phase 6: Parser fuzzing and documentation
+ • Expand http.rs tests: multiple TE headers, malformed chunk sizes, excessive headers,
+   mixed CL+TE precedence confirmed.
+ • Document proxy HTTP semantics (v1 buffered vs v2 streaming, status vs trailers) in
+   docs/TOOLEEXEC_PROTOCOL.md.
+
+Risk management and roll-back
+
+ • Runtime harmonization: zero-risk; guarded by existing container_runtime_path() error
+   mapping and identical preview strings.
+ • Notifications: canonicalization is best-effort; failures fall back to original path.
+   Env trimming is opt-in; default disabled.
+ • Bootstrap guard: scope-restricted; Drop guarantees cleanup even on early returns.
+ • Bounded streaming: gated by a small bounded size; if regressions appear, fallback to
+   unbounded can be feature-gated via AIFO_PROXY_UNBOUNDED=1.
+ • Sed helper: only affects container-internal setup; fallback to current behavior if
+   helper is disabled via AIFO_SED_PORTABLE=0.
+
+Testing plan (incremental)
+
+ • Unit: notifications canonicalization + allowlist; bootstrap guard lifetime; sed helper.
+ • Integration: doctor runtime harmonization on hosts with docker path variations.
+ • Acceptance (#[ignore]): proxy backpressure simulation; streaming warning line presence.
 
 Security posture
 
- • Current guardrails are good for a developer tool: allowlists, absolute-path exec, timeouts, deny by default; all sensitive flows are opt-in via env and
-   guarded. The quick hardening steps above (canonicalize, trim env for child exec, parser clamps) reduce risk further with low complexity.
- • Consider documenting the notifications execution surface in README/VERIFY to set expectations.
+ • Tighten notifications exec path via canonicalization; optional child env trimming.
+ • No new exposed surfaces; auth/proto validation unchanged.
+ • Maintain allowlist basenames and argument policies; user-visible texts unchanged.
 
-Testing gaps to consider (for a future lane, not default CI)
+Observability
 
- • Enable and validate v1 timeout semantics (504) once implemented. Tests exist but are #[ignore].
- • Add a test for Content-Length mismatch handling (expect 400).
- • Add a fuzz-ish test for header count overflow (expect 431).
+ • Optional verbose counters for dropped chunks in v2; single-line warning when dropping.
+ • Consider future opt-in JSON log lines gated by AIFO_TOOLCHAIN_JSON_LOG=1; message
+   texts remain identical in human-readable mode.
 
-Performance considerations
+What not to change
 
- • Under normal dev use, the proxy and sidecar lifecycle should be fine. The only potentially hot path is streaming large outputs; bounded channels and chunk
-   sizes are already used, with overall body caps in parsing.
+ • All user-facing strings (including colors, spacing, punctuation) remain identical.
+ • Tool allowlists, image selection strings, preview formats, ordering, and quoting are
+   preserved.
+ • Notifications policy error messages stay unchanged.
 
-Suggested iterative plan
+Implementation notes (brief)
 
- • Iteration 1 (quick wins, no UX change except v1-timeout HTTP status):
-    • Implement v1 504 mapping when max-runtime triggers (proxy.rs).
-    • Standardize doctor.rs to use resolved docker path consistently.
-    • Add header-count limit and Content-Length sanity checks (http.rs).
-    • Canonicalize notifications exec_abs (notifications.rs).
-    • Add a small AIFO_RUST_OFFICIAL_BOOTSTRAP scope guard (sidecar.rs).
-    • Consolidate test helpers for URL→port extraction.
- • Iteration 2 (robustness + logging quality):
-    • Bounded streaming channel for v2; best-effort drop/flush policy with logging when dropping.
-    • Optional JSON logging lines toggled by env for better observability.
- • Iteration 3 (hardening + optional behavior flags):
-    • Add an env flag to emit 5xx vs 2xx in more cases if desired (configurable error semantics); keep defaults unchanged to respect current tests.
-    • Trim env for notifications child processes via allowlist mode (opt-in).
- • Iteration 4 (parser fuzzing + doc updates):
-    • Fuzz-style tests for http.rs with malformed chunk sizes, mixed headers; assert clean error statuses.
-    • Document proxy HTTP semantics (v1 vs v2, status vs trailers) in protocol docs (docs/TOOLEEXEC_PROTOCOL.md).
+ • doctor.rs/app-armor: refactor Command::new("docker") to resolved runtime; reuse args.
+ • notifications.rs: canonicalize exec_abs and use canonicalized basename; add env trim
+   path guarded by env; default off.
+ • sidecar.rs: RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP; ensure guard spans preview
+   and exec; apply similarly in toolchain_start_session().
+ • proxy.rs: crossbeam-channel bounded for v2 stdout; best-effort backpressure handling;
+   single warning line on drop; no change to trailer semantics.
+ • docker.rs: emit sed -i'' -e forms via a helper; keep rest of script intact.
 
-Brief examples of changes (no heavy diffs)
-
- • v1 timeout mapping (src/toolchain/proxy.rs)
-    • Track a timed_out boolean in the watcher, set before last KILL escalation.
-    • After child.wait(), if timed_out is true, respond_plain(stream, "504 Gateway Timeout", 124, b"timeout\n") instead of writing 200 OK body. Otherwise
-      keep current 200 OK response.
- • HTTP parser header limits (src/toolchain/http.rs)
-    • Count header lines, if > 1024 then return io::Error and have caller map to 431.
-    • If Content-Length present and smaller than bytes already read into body, bail with 400.
- • Notifications canonicalization (src/toolchain/notifications.rs)
-    • Right before spawn, resolve let resolved = fs::canonicalize(&cfg.exec_abs).unwrap_or(cfg.exec_abs.clone()); use resolved in spawn and in basename
-      extraction to prevent symlink tricks.
- • Doctor docker usage (src/doctor.rs)
-    • Where Command::new("docker") is used for run/info, replace with resolved rt and reuse the args construction pattern used elsewhere.
-
-What not to change (to keep tests and UX stable)
-
- • Keep all user-facing strings identical, including spacing, punctuation, and coloring, unless a specific test expects the change (e.g., v1 timeout 504).
- • Maintain tool allowlists, image selection strings, and preview formats, including order and quotes.
- • Preserve notifications policy error message texts.
-
- By following the quick wins first and then iterating on robustness and performance, you keep today’s behavior intact while closing the few observable gaps
- and preparing the codebase for heavier concurrency and stricter environments.
+By following these phases, we harden runtime resolution, improve notifications safety,
+reduce proxy memory risk under stalls, and make the container script more portable —
+all without changing today’s UX or breaking existing tests.
