@@ -37,13 +37,8 @@ fn test_proxy_tsc_prefers_local_compiler() {
     let kinds = vec!["node".to_string()];
     let image = std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
         .unwrap_or_else(|_| "node:20-bookworm-slim".to_string());
-    let present = std::process::Command::new("docker")
-        .args(["image", "inspect", &image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let rt = aifo_coder::container_runtime_path().expect("runtime");
+    let present = support::docker_image_present(&rt.as_path(), &image);
     if !present {
         eprintln!("skipping: test image not present locally: {}", image);
         return;
