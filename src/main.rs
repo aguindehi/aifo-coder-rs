@@ -51,8 +51,10 @@ fn require_repo_root() -> Result<PathBuf, ExitCode> {
     match aifo_coder::repo_root() {
         Some(p) => Ok(p),
         None => {
-            eprintln!(
-                "aifo-coder: error: fork maintenance commands must be run inside a Git repository."
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_error_stderr(
+                use_err,
+                "aifo-coder: error: fork maintenance commands must be run inside a Git repository.",
             );
             Err(ExitCode::from(1))
         }
@@ -238,10 +240,14 @@ fn print_verbose_run_info(
     cli_verbose: bool,
     dry_run: bool,
 ) {
+    let use_err = aifo_coder::color_enabled_stderr();
     if cli_verbose {
-        eprintln!(
-            "aifo-coder: effective apparmor profile: {}",
-            apparmor_opt.unwrap_or("(disabled)")
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: effective apparmor profile: {}",
+                apparmor_opt.unwrap_or("(disabled)")
+            ),
         );
         // Show chosen registry and source for transparency
         let rp = aifo_coder::preferred_registry_prefix_quiet();
@@ -251,12 +257,18 @@ fn print_verbose_run_info(
             rp.trim_end_matches('/').to_string()
         };
         let reg_src = aifo_coder::preferred_registry_source();
-        eprintln!("aifo-coder: registry: {reg_display} (source: {reg_src})");
-        eprintln!("aifo-coder: image: {image}");
-        eprintln!("aifo-coder: agent: {agent}");
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: registry: {} (source: {})",
+                reg_display, reg_src
+            ),
+        );
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image));
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
     }
     if cli_verbose || dry_run {
-        eprintln!("aifo-coder: docker: {preview}");
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
 }
 
@@ -272,6 +284,7 @@ fn main() -> ExitCode {
         std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");
     }
     apply_cli_globals(&cli);
+    let use_err = aifo_coder::color_enabled_stderr();
 
     // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
@@ -309,12 +322,12 @@ fn main() -> ExitCode {
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines
     if !warn_if_tmp_workspace(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return ExitCode::from(1);
     }
     // Warn and optionally block if LLM credentials are missing
     if !crate::warnings::warn_if_missing_llm_credentials(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return ExitCode::from(1);
     }
 
@@ -327,23 +340,42 @@ fn main() -> ExitCode {
         if cli.dry_run {
             // Dry-run: print detailed previews and skip starting sidecars/proxy
             if cli.verbose {
-                eprintln!("aifo-coder: would attach toolchains: {:?}", kinds);
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: would attach toolchains: {:?}", kinds),
+                );
                 if !overrides.is_empty() {
-                    eprintln!("aifo-coder: would use image overrides: {:?}", overrides);
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: would use image overrides: {:?}", overrides),
+                    );
                 }
                 if cli.no_toolchain_cache {
-                    eprintln!("aifo-coder: would disable toolchain caches");
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: would disable toolchain caches",
+                    );
                 }
                 if cfg!(target_os = "linux") && cli.toolchain_unix_socket {
-                    eprintln!("aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo");
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: would use unix:/// socket transport for proxy and mount /run/aifo",
+                    );
                 }
                 if !cli.toolchain_bootstrap.is_empty() {
-                    eprintln!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap);
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: would bootstrap: {:?}", cli.toolchain_bootstrap),
+                    );
                 }
-                eprintln!(concat!(
-                    "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
-                    "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
-                ));
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    concat!(
+                        "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
+                        "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                    ),
+                );
             }
         } else {
             match crate::toolchain_session::ToolchainSession::start_if_requested(&cli) {
@@ -383,7 +415,13 @@ fn main() -> ExitCode {
             );
             if cli.dry_run {
                 // Skip actual Docker execution in dry-run mode
-                eprintln!("aifo-coder: dry-run requested; not executing Docker.");
+                {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        "aifo-coder: dry-run requested; not executing Docker.",
+                    );
+                }
                 return ExitCode::from(0);
             }
             // Acquire lock only for real execution; honor AIFO_CODER_SKIP_LOCK=1 for child panes
@@ -394,7 +432,10 @@ fn main() -> ExitCode {
                 match aifo_coder::acquire_lock() {
                     Ok(f) => Some(f),
                     Err(e) => {
-                        eprintln!("{e}");
+                        {
+                            let use_err = aifo_coder::color_enabled_stderr();
+                            aifo_coder::log_error_stderr(use_err, &e.to_string());
+                        }
                         return ExitCode::from(1);
                     }
                 }
@@ -411,7 +452,10 @@ fn main() -> ExitCode {
             ExitCode::from(status.code().unwrap_or(1) as u8)
         }
         Err(e) => {
-            eprintln!("{e}");
+            {
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(use_err, &e.to_string());
+            }
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             let code = aifo_coder::exit_code_for_io_error(&e);
             ExitCode::from(code)

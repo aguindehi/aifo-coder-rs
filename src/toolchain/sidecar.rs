@@ -37,6 +37,7 @@ pub(crate) fn sidecar_network_name(id: &str) -> String {
 }
 
 pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
+    let use_err = crate::color_enabled_stderr();
     // Fast path: already exists
     let exists = Command::new(runtime)
         .arg("network")
@@ -53,14 +54,17 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
 
     // Create the network (best-effort)
     if verbose {
-        eprintln!(
-            "aifo-coder: docker: {}",
-            shell_join(&[
-                "docker".to_string(),
-                "network".to_string(),
-                "create".to_string(),
-                name.to_string()
-            ])
+        crate::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: docker: {}",
+                shell_join(&[
+                    "docker".to_string(),
+                    "network".to_string(),
+                    "create".to_string(),
+                    name.to_string()
+                ])
+            ),
         );
     }
     let mut cmd = Command::new(runtime);
@@ -90,6 +94,7 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
 }
 
 pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
+    let use_err = crate::color_enabled_stderr();
     // Only attempt removal if network exists to avoid noisy errors
     let exists = Command::new(runtime)
         .arg("network")
@@ -110,14 +115,17 @@ pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
     if verbose {
-        eprintln!(
-            "aifo-coder: docker: {}",
-            shell_join(&[
-                "docker".to_string(),
-                "network".to_string(),
-                "rm".to_string(),
-                name.to_string()
-            ])
+        crate::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: docker: {}",
+                shell_join(&[
+                    "docker".to_string(),
+                    "network".to_string(),
+                    "rm".to_string(),
+                    name.to_string()
+                ])
+            ),
         );
     }
     let _ = cmd.status();
@@ -294,7 +302,7 @@ pub fn build_sidecar_run_preview(
             push_env(
                 &mut args,
                 "PATH",
-                "/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "/opt/aifo/bin:/usr/local/bin:/home/coder/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             );
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
@@ -430,7 +438,7 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             push_env(
                 &mut args,
                 "PATH",
-                "/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "/opt/aifo/bin:/usr/local/bin:$PNPM_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             );
             // Pass-through proxies for node exec
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
@@ -497,6 +505,7 @@ pub(crate) fn choose_session_network(
     verbose: bool,
     skip_creation: bool,
 ) -> Option<String> {
+    let use_err = crate::color_enabled_stderr();
     let net_name = sidecar_network_name(session_id);
     if skip_creation {
         return Some(net_name);
@@ -505,9 +514,12 @@ pub(crate) fn choose_session_network(
         Some(net_name)
     } else {
         if verbose {
-            eprintln!(
-                "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
-                net_name
+            crate::log_warn_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
+                    net_name
+                ),
             );
         }
         None
@@ -582,6 +594,7 @@ pub fn toolchain_run(
     dry_run: bool,
 ) -> io::Result<i32> {
     let runtime = container_runtime_path()?;
+    let use_err = crate::color_enabled_stderr();
     let pwd = {
         let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         fs::canonicalize(&p).unwrap_or(p)
@@ -629,7 +642,7 @@ pub fn toolchain_run(
     let run_preview = shell_join(&run_preview_args);
 
     if verbose || dry_run {
-        eprintln!("aifo-coder: docker: {}", run_preview);
+        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", run_preview));
     }
 
     if !dry_run {
@@ -718,7 +731,7 @@ pub fn toolchain_run(
     let exec_preview = shell_join(&exec_preview_args);
 
     if verbose || dry_run {
-        eprintln!("aifo-coder: docker: {}", exec_preview);
+        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", exec_preview));
     }
 
     let mut exit_code: i32 = 0;
@@ -757,10 +770,10 @@ pub fn toolchain_run(
     Ok(exit_code)
 }
 
-//// Start sidecar session for requested kinds; returns the session id.
-//// Note: When invoked stand-alone (without ToolchainSession), callers that rely on the
-//// AIFO_RUST_OFFICIAL_BOOTSTRAP marker during exec should create a BootstrapGuard
-//// themselves around the session lifecycle to keep the marker set across preview+exec.
+/// Start sidecar session for requested kinds; returns the session id.
+/// Note: When invoked stand-alone (without ToolchainSession), callers that rely on the
+/// AIFO_RUST_OFFICIAL_BOOTSTRAP marker during exec should create a BootstrapGuard
+/// themselves around the session lifecycle to keep the marker set across preview+exec.
 pub fn toolchain_start_session(
     kinds: &[String],
     overrides: &[(String, String)],
@@ -768,6 +781,7 @@ pub fn toolchain_start_session(
     verbose: bool,
 ) -> io::Result<String> {
     let runtime = container_runtime_path()?;
+    let use_err = crate::color_enabled_stderr();
     let pwd = {
         let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         fs::canonicalize(&p).unwrap_or(p)
@@ -810,7 +824,10 @@ pub fn toolchain_start_session(
             apparmor_profile.as_deref(),
         );
         if verbose {
-            eprintln!("aifo-coder: docker: {}", shell_join(&args));
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: docker: {}", shell_join(&args)),
+            );
         }
         // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
         if kind == "node" && !no_cache {
@@ -883,6 +900,7 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
         Ok(p) => p,
         Err(_) => return,
     };
+    let use_err = crate::color_enabled_stderr();
     let kinds = ["rust", "node", "python", "c-cpp", "go"];
     for k in kinds {
         let name = sidecar_container_name(k, session_id);
@@ -897,7 +915,10 @@ pub fn toolchain_cleanup_session(session_id: &str, verbose: bool) {
             .unwrap_or(false);
         if exists {
             if verbose {
-                eprintln!("aifo-coder: docker: docker stop {}", name);
+                crate::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: docker: docker stop {}", name),
+                );
             }
             let _ = Command::new(&runtime)
                 .arg("stop")
@@ -938,12 +959,16 @@ pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
+    let use_err = crate::color_enabled_stderr();
     // Phase 7: Purge caches
     // Include consolidated Node cache volume; retain legacy npm cache for back-compat cleanup.
     let volumes = toolchain_purge_volume_names();
     for v in volumes {
         if verbose {
-            eprintln!("aifo-coder: docker: docker volume rm -f {}", v);
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: docker: docker volume rm -f {}", v),
+            );
         }
         let _ = Command::new(&runtime)
             .arg("volume")
@@ -960,6 +985,7 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
 /// Bootstrap: install a global typescript in the node sidecar (best-effort).
 pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
+    let use_err = crate::color_enabled_stderr();
     let name = sidecar_container_name("node", session_id);
 
     #[cfg(unix)]
@@ -983,7 +1009,10 @@ pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) ->
     args.push("typescript".to_string());
 
     if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: {}", shell_join(&args)),
+        );
     }
 
     let mut cmd = Command::new(&runtime);

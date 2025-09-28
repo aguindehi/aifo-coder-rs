@@ -8,7 +8,9 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let _ = cli; // silence unused for future extensions
     print_startup_banner();
     let _ = warn_if_tmp_workspace(false);
-    eprintln!("aifo-coder images");
+
+    let use_err = aifo_coder::color_enabled_stderr();
+    aifo_coder::log_info_stderr(use_err, "aifo-coder images");
     eprintln!();
 
     // Flavor and registry display
@@ -75,7 +77,8 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
 
 pub fn run_cache_clear(_cli: &Cli) -> std::process::ExitCode {
     aifo_coder::invalidate_registry_cache();
-    eprintln!("aifo-coder: cleared on-disk registry cache.");
+    let use_err = aifo_coder::color_enabled_stderr();
+    aifo_coder::log_info_stderr(use_err, "aifo-coder: cleared on-disk registry cache.");
     std::process::ExitCode::from(0)
 }
 
@@ -84,7 +87,8 @@ pub fn run_toolchain_cache_clear(cli: &Cli) -> std::process::ExitCode {
     let _ = warn_if_tmp_workspace(false);
     match aifo_coder::toolchain_purge_caches(cli.verbose) {
         Ok(()) => {
-            eprintln!("aifo-coder: purged toolchain cache volumes.");
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_info_stderr(use_err, "aifo-coder: purged toolchain cache volumes.");
             std::process::ExitCode::from(0)
         }
         Err(e) => {
@@ -106,17 +110,28 @@ pub fn run_toolchain(
     args: Vec<String>,
 ) -> std::process::ExitCode {
     print_startup_banner();
+    let use_err = aifo_coder::color_enabled_stderr();
     if !warn_if_tmp_workspace(true) {
-        eprintln!("aborted.");
+        aifo_coder::log_error_stderr(use_err, "aborted.");
         return std::process::ExitCode::from(1);
     }
+    let use_err = aifo_coder::color_enabled_stderr();
     if cli.verbose {
-        eprintln!("aifo-coder: toolchain kind: {}", kind.as_str());
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: toolchain kind: {}", kind.as_str()),
+        );
         if let Some(img) = image.as_deref() {
-            eprintln!("aifo-coder: toolchain image override: {}", img);
+            aifo_coder::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: toolchain image override: {}", img),
+            );
         }
         if no_cache {
-            eprintln!("aifo-coder: toolchain caches disabled for this run");
+            aifo_coder::log_info_stderr(
+                use_err,
+                "aifo-coder: toolchain caches disabled for this run",
+            );
         }
     }
     if cli.dry_run {

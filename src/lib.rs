@@ -27,6 +27,7 @@ Style guidance
 "#]
 
 mod apparmor;
+#[allow(clippy::doc_overindented_list_items)]
 mod color;
 mod docker;
 mod errors;

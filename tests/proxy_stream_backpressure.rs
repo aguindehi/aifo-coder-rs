@@ -48,6 +48,12 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let overrides: Vec<(String, String)> = Vec::new();
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, false)
         .expect("toolchain_start_session");
+    // Force proxy to use the container's default user (avoid odd host UID/GID failures)
+    std::env::set_var("AIFO_TOOLEEXEC_DISABLE_USER", "1");
+    // Disable TTY to avoid PTY quirks and ensure pipe behavior
+    std::env::set_var("AIFO_TOOLEEXEC_TTY", "0");
+    // Shrink channel capacity to accentuate backpressure
+    std::env::set_var("AIFO_PROXY_CHANNEL_CAP", "1");
     // Start proxy in verbose mode
     let (url, token, running, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
@@ -70,13 +76,13 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let port = port_str.parse::<u16>().expect("port parse");
 
     // Build a request body that streams a lot of output quickly
-    // Script: generate many lines rapidly to fill the bounded channel
-    let script = "i=0; while [ $i -lt 8000 ]; do echo x; i=$((i+1)); done";
+    // Use node to generate an effectively infinite stream using blocking writes (no shell)
+    let script = "const fs=require('fs');const b='x\\n'.repeat(65536);for(;;){try{fs.writeSync(1,b);}catch(e){process.exit(0);}}";
     let body = format!(
         "tool={}&cwd={}&arg={}&arg={}",
-        urlencode_component("sh"),
+        urlencode_component("node"),
         urlencode_component("/workspace"),
-        urlencode_component("-lc"),
+        urlencode_component("-e"),
         urlencode_component(script)
     );
 
@@ -115,9 +121,9 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
         }
     }
 
-    // Stall client reads to induce server-side backpressure
-    std::thread::sleep(Duration::from_millis(600));
-    // Close connection now (server will detect write failure and escalate)
+    // Close connection immediately to force proxy-side write failure/backpressure
+    use std::net::Shutdown;
+    let _ = stream.shutdown(Shutdown::Both);
     drop(stream);
 
     // Allow proxy threads to process cleanup and emit logs
@@ -144,4 +150,7 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     // Cleanup env
     std::env::remove_var("AIFO_TEST_LOG_PATH");
     std::env::remove_var("AIFO_PROXY_SIGNAL_GRACE_MS");
+    std::env::remove_var("AIFO_TOOLEEXEC_DISABLE_USER");
+    std::env::remove_var("AIFO_TOOLEEXEC_TTY");
+    std::env::remove_var("AIFO_PROXY_CHANNEL_CAP");
 }

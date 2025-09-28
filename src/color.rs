@@ -1,5 +1,17 @@
 #![allow(clippy::module_name_repetitions)]
 //! Color mode configuration and ANSI painting helpers.
+//!
+//! Logging helpers policy (stderr one-liners):
+//! - Apply only to stderr single-line messages.
+//! - Use log_info_stderr for info, log_warn_stderr for warnings/notes,
+//!   and log_error_stderr for errors/refusals.
+//! - Precompute once per scope and reuse:
+//!     let use_err = aifo_coder::color_enabled_stderr();
+//! - Keep exact message strings; helpers only add color when enabled.
+//! - Exclusions: proxy.rs, bin/aifo-shim.rs, banner.rs, doctor.rs,
+//!   and any stdout printing surfaces (lists/JSON/summaries).
+//! - Do not add explicit flushes; keep existing buffering behavior.
+//! - Prefer one use_err per function, not per log line.
 
 use clap::ValueEnum;
 use once_cell::sync::OnceCell;

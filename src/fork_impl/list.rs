@@ -268,7 +268,11 @@ pub(crate) fn fork_list_impl(
             Ok(0)
         }
         Err(_) => {
-            eprintln!("aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.");
+            let use_err = crate::color_enabled_stderr();
+            crate::log_error_stderr(
+                use_err,
+                "aifo-coder: --all-repos requires AIFO_CODER_WORKSPACE_ROOT to be set to an existing directory.",
+            );
             Ok(1)
         }
     }

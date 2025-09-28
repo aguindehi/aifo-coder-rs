@@ -26,6 +26,7 @@ fn init_rust_named_volume(
     gid: u32,
     verbose: bool,
 ) {
+    let use_err = crate::color_enabled_stderr();
     let mount = format!("aifo-cargo-{subdir}:/home/coder/.cargo/{subdir}");
     let script = format!(
         "set -e; d=\"/home/coder/.cargo/{sd}\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
@@ -45,7 +46,10 @@ fn init_rust_named_volume(
         script,
     ];
     if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: {}", shell_join(&args)),
+        );
     }
     let mut cmd = Command::new(runtime);
     for a in &args[1..] {
@@ -106,6 +110,7 @@ pub(crate) fn init_node_cache_volume(
     gid: u32,
     verbose: bool,
 ) {
+    let use_err = crate::color_enabled_stderr();
     let mount = "aifo-node-cache:/home/coder/.cache".to_string();
     let script = format!(
         "set -e; d=\"/home/coder/.cache\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
@@ -124,7 +129,10 @@ pub(crate) fn init_node_cache_volume(
         script,
     ];
     if verbose {
-        eprintln!("aifo-coder: docker: {}", shell_join(&args));
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: {}", shell_join(&args)),
+        );
     }
     let mut cmd = Command::new(runtime);
     for a in &args[1..] {

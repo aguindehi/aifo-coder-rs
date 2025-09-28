@@ -55,7 +55,11 @@ pub fn check_and_prompt(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) -> Re
     // Interactive confirmation before deletion (safety prompt)
     if !opts.force && !opts.dry_run && !opts.yes && !opts.json {
         if !atty::is(atty::Stream::Stdin) {
-            eprintln!("aifo-coder: refusing to delete without confirmation on non-interactive stdin. Re-run with --yes or --dry-run.");
+            let use_err = color_enabled_stderr();
+            crate::log_error_stderr(
+                use_err,
+                "aifo-coder: refusing to delete without confirmation on non-interactive stdin. Re-run with --yes or --dry-run.",
+            );
             return Err(1);
         }
         let mut del_sessions = 0usize;
@@ -92,7 +96,7 @@ pub fn check_and_prompt(plan: &[SessionPlan], opts: &crate::ForkCleanOpts) -> Re
             let _ = std::io::stdin().read_line(&mut line);
             let ans = line.trim().to_ascii_lowercase();
             if ans != "y" && ans != "yes" {
-                eprintln!("aborted.");
+                crate::log_error_stderr(use_err, "aborted.");
                 return Err(1);
             }
         }
