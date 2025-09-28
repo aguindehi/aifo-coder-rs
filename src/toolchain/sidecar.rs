@@ -529,6 +529,51 @@ pub(crate) fn mark_official_rust_bootstrap(kind: &str, image: &str) {
     }
 }
 
+/// RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP: set on create, clear on Drop.
+struct BootstrapGuard {
+    _was_set: bool,
+}
+
+impl BootstrapGuard {
+    fn new(kind: &str, image: &str) -> Self {
+        // Set marker according to rules and record whether it is set
+        mark_official_rust_bootstrap(kind, image);
+        let _was_set = std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
+            .ok()
+            .as_deref()
+            == Some("1");
+        BootstrapGuard { _was_set }
+    }
+}
+
+impl Drop for BootstrapGuard {
+    fn drop(&mut self) {
+        // Always clear marker best-effort
+        std_env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_guard_tests {
+    use super::*;
+
+    #[test]
+    fn bootstrap_guard_sets_and_clears_var() {
+        // Force official mode so guard sets the marker even with non-official images
+        std_env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+        // Ensure unset before
+        std_env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+        {
+            let _g = BootstrapGuard::new("rust", "rust:1.80-bookworm");
+            let v = std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
+            assert_eq!(v.as_deref(), Some("1"));
+        }
+        // After Drop, marker must be cleared
+        assert!(std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").is_err());
+        std_env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+    }
+}
+
 /// Run a tool in a toolchain sidecar; returns exit code.
 /// Obeys --no-toolchain-cache and image overrides; prints docker previews when verbose/dry-run.
 pub fn toolchain_run(
@@ -558,7 +603,7 @@ pub fn toolchain_run(
         Some(s) if !s.trim().is_empty() => s.to_string(),
         _ => default_toolchain_image(sidecar_kind.as_str()),
     };
-    mark_official_rust_bootstrap(sidecar_kind.as_str(), &image);
+    let _bootstrap_guard = BootstrapGuard::new(sidecar_kind.as_str(), &image);
 
     let session_id = std_env::var("AIFO_CODER_FORK_SESSION")
         .ok()
@@ -696,8 +741,7 @@ pub fn toolchain_run(
         })?;
         exit_code = status.code().unwrap_or(1);
     }
-    // Clear bootstrap marker from environment (best-effort)
-    std_env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+    // BootstrapGuard will clear marker on Drop
 
     // Cleanup: stop sidecar and remove network (best-effort)
     if !dry_run {
@@ -752,7 +796,7 @@ pub fn toolchain_start_session(
                 image = vv.clone();
             }
         }
-        mark_official_rust_bootstrap(&kind, &image);
+        let _bootstrap_guard = BootstrapGuard::new(kind.as_str(), &image);
 
         let name = sidecar_container_name(kind.as_str(), &session_id);
         let args = build_sidecar_run_preview(
