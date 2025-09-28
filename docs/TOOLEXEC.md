@@ -1,6 +1,5 @@
 # AIFO ToolExec Protocol (Shim ↔ Proxy)
 
-This document consolidates and replaces “TOOLEEXEC_PROTOCOL.md” and “TOOLEXEC.md”.
 It describes the HTTP protocol between the aifo-shim clients (Rust and POSIX)
 and the in-agent proxy server, including versions, endpoints, auth, request and
 response formats, parser tolerances, timeouts, and error semantics.
