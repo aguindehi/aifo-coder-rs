@@ -1,3 +1,4 @@
+mod support;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
@@ -12,8 +13,7 @@ fn node_named_cache_ownership_stamp_files() {
     };
 
     // Start node sidecar and run a harmless command to init cache
-    let image = std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
-        .unwrap_or_else(|_| "node:20-bookworm-slim".into());
+    let image = support::default_node_test_image();
     let img_ok = std::process::Command::new(&rt)
         .args(["image", "inspect", &image])
         .stdout(std::process::Stdio::null())

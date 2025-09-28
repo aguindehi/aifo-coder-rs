@@ -11,8 +11,7 @@ fn proxy_streaming_slow_consumer_disconnect() {
 
     // Use node sidecar (skip if image not present locally to avoid pulling)
     let rt = aifo_coder::container_runtime_path().expect("runtime");
-    let node_image = std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
-        .unwrap_or_else(|_| "node:20-bookworm-slim".into());
+    let node_image = support::default_node_test_image();
     let img_ok = std::process::Command::new(&rt)
         .args(["image", "inspect", &node_image])
         .stdout(std::process::Stdio::null())

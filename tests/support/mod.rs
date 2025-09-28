@@ -164,6 +164,13 @@ pub fn http_send_raw(port: u16, request: &str) -> String {
     String::from_utf8_lossy(&buf).to_string()
 }
 
+/// Return default Node image for tests, from env or fallback to node:22-bookworm-slim
+#[allow(dead_code)]
+pub fn default_node_test_image() -> String {
+    std::env::var("AIFO_CODER_TEST_NODE_IMAGE")
+        .unwrap_or_else(|_| "node:22-bookworm-slim".to_string())
+}
+ 
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
 #[allow(dead_code)]
