@@ -1903,7 +1903,10 @@ mod tests {
                     }
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut => { break; }
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        break;
+                    }
                     Err(_) => break,
                 }
             }
@@ -1920,7 +1923,10 @@ mod tests {
                     }
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut => { break; }
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        break;
+                    }
                     Err(_) => break,
                 }
                 if start.elapsed() > Duration::from_millis(250) {
