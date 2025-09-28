@@ -51,8 +51,10 @@ fn require_repo_root() -> Result<PathBuf, ExitCode> {
     match aifo_coder::repo_root() {
         Some(p) => Ok(p),
         None => {
-            eprintln!(
-                "aifo-coder: error: fork maintenance commands must be run inside a Git repository."
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_error_stderr(
+                use_err,
+                "aifo-coder: error: fork maintenance commands must be run inside a Git repository.",
             );
             Err(ExitCode::from(1))
         }

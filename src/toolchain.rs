@@ -114,10 +114,16 @@ fn random_token() -> String {
         }
         Err(e) => {
             // Very rare fallback: deterministic-ish token with warning
-            eprintln!(
-                "aifo-coder: warning: secure RNG failed ({}); falling back to time^pid",
-                e
-            );
+            {
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: warning: secure RNG failed ({}); falling back to time^pid",
+                        e
+                    ),
+                );
+            }
             let now = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_else(|_| Duration::from_secs(0))

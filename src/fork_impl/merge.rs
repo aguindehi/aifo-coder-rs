@@ -204,6 +204,7 @@ pub(crate) fn fork_merge_branches_impl(
     verbose: bool,
     dry_run: bool,
 ) -> io::Result<()> {
+    let use_err = aifo_coder::color_enabled_stderr();
     if matches!(strategy, crate::MergingStrategy::None) {
         return Ok(());
     }
@@ -225,7 +226,7 @@ pub(crate) fn fork_merge_branches_impl(
         args.push(pdir_str.clone());
         args.push(refspec.clone());
         if verbose || dry_run {
-            eprintln!("aifo-coder: git: {}", shell_join(&args));
+            aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: git: {}", shell_join(&args)));
         }
         if !dry_run {
             let mut cmd = Command::new("git");
@@ -284,7 +285,10 @@ pub(crate) fn fork_merge_branches_impl(
         base_ref_or_sha.to_string(),
     ];
     if verbose || dry_run {
-        eprintln!("aifo-coder: git: {}", shell_join(&checkout_args));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: git: {}", shell_join(&checkout_args)),
+        );
     }
     if !dry_run {
         let st = {
@@ -309,16 +313,22 @@ pub(crate) fn fork_merge_branches_impl(
     let msg_path =
         std::env::temp_dir().join(format!("aifo-merge-{}-{}.txt", sid, std::process::id()));
     if verbose {
-        eprintln!(
-            "aifo-coder: preparing octopus merge message at {}",
-            msg_path.display()
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: preparing octopus merge message at {}",
+                msg_path.display()
+            ),
         );
     }
     if !dry_run {
         if fs::write(&msg_path, &merge_message).is_ok() {
             merge_msg_path = Some(msg_path.clone());
         } else if verbose {
-            eprintln!("aifo-coder: warning: failed to write merge message file; falling back to default message");
+            aifo_coder::log_warn_stderr(
+                use_err,
+                "aifo-coder: warning: failed to write merge message file; falling back to default message",
+            );
         }
     }
 
@@ -339,7 +349,10 @@ pub(crate) fn fork_merge_branches_impl(
         merge_args.push(br.clone());
     }
     if verbose || dry_run {
-        eprintln!("aifo-coder: git: {}", shell_join(&merge_args));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: git: {}", shell_join(&merge_args)),
+        );
     }
     if !dry_run {
         let mut cmd = Command::new("git");
@@ -447,7 +460,7 @@ pub(crate) fn fork_merge_branches_impl(
         for (_p, br) in &pane_branches {
             preview.push(br.clone());
         }
-        eprintln!("aifo-coder: git: {}", shell_join(&preview));
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: git: {}", shell_join(&preview)));
     }
 
     Ok(())

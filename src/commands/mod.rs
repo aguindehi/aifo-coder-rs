@@ -86,7 +86,8 @@ pub fn run_toolchain_cache_clear(cli: &Cli) -> std::process::ExitCode {
     let _ = warn_if_tmp_workspace(false);
     match aifo_coder::toolchain_purge_caches(cli.verbose) {
         Ok(()) => {
-            eprintln!("aifo-coder: purged toolchain cache volumes.");
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_info_stderr(use_err, "aifo-coder: purged toolchain cache volumes.");
             std::process::ExitCode::from(0)
         }
         Err(e) => {

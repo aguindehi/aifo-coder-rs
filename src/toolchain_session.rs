@@ -97,7 +97,11 @@ impl ToolchainSession {
 
         // Inform about embedded shims (same text)
         if cli.verbose {
-            eprintln!("aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)");
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_info_stderr(
+                use_err,
+                "aifo-coder: using embedded PATH shims from agent image (/opt/aifo/bin)",
+            );
         }
 
         let (kinds, overrides) = plan_from_cli(cli);
@@ -159,7 +163,11 @@ impl ToolchainSession {
             if want_ts_global && kinds.iter().any(|k| k == "node") {
                 if let Err(e) = aifo_coder::toolchain_bootstrap_typescript_global(&sid, cli.verbose)
                 {
-                    eprintln!("aifo-coder: typescript bootstrap failed: {}", e);
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    aifo_coder::log_error_stderr(
+                        use_err,
+                        &format!("aifo-coder: typescript bootstrap failed: {}", e),
+                    );
                 }
             }
         }
