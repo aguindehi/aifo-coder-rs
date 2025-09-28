@@ -151,7 +151,7 @@ pub fn http_post_tcp(
     }
     (status, headers_s, body_out)
 }
- 
+
 /// Minimal raw HTTP sender over TCP returning the full response as a String.
 #[allow(dead_code)]
 pub fn http_send_raw(port: u16, request: &str) -> String {
@@ -163,7 +163,7 @@ pub fn http_send_raw(port: u16, request: &str) -> String {
     let _ = stream.read_to_end(&mut buf);
     String::from_utf8_lossy(&buf).to_string()
 }
- 
+
 /// Initialize a git repository at `dir` and set a default user identity.
 /// Idempotent: safe to call when repo already exists.
 #[allow(dead_code)]
