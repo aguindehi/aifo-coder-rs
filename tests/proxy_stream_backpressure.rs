@@ -76,8 +76,8 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let port = port_str.parse::<u16>().expect("port parse");
 
     // Build a request body that streams a lot of output quickly
-    // Use node to generate a large stream with a single fast write (no shell)
-    let script = "process.stdout.write('x\\n'.repeat(100000))";
+    // Use node to generate an effectively infinite stream using blocking writes (no shell)
+    let script = "const fs=require('fs');const b='x\\n'.repeat(65536);for(;;){try{fs.writeSync(1,b);}catch(e){process.exit(0);}}";
     let body = format!(
         "tool={}&cwd={}&arg={}&arg={}",
         urlencode_component("node"),
@@ -121,8 +121,8 @@ fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
         }
     }
 
-    // Stall client reads to induce server-side backpressure
-    std::thread::sleep(Duration::from_millis(600));
+    // Stall client briefly, then close to induce proxy-side write failure/backpressure
+    std::thread::sleep(Duration::from_millis(100));
     // Close connection now (server will detect write failure and escalate)
     drop(stream);
 
