@@ -226,3 +226,35 @@ impl Drop for ToolchainSession {
         self.cleanup_inner(verbose, in_fork_pane);
     }
 }
+
+#[cfg(test)]
+mod bootstrap_session_tests {
+    #[test]
+    fn test_bootstrap_marker_cleared_on_early_error_session_scope() {
+        // Force official mode so guard sets the marker even with non-official images
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+        // Ensure unset before
+        std::env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
+
+        // Simulate an early error path: guard is created and then scope exits before session completes
+        {
+            let _g = aifo_coder::BootstrapGuard::new("rust", "rust:1.80-bookworm");
+            let v = std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
+            assert_eq!(
+                v.as_deref(),
+                Some("1"),
+                "bootstrap marker should be set while guard is alive"
+            );
+            // early return simulated by scope end (Drop runs)
+        }
+
+        // After scope exit, marker must be cleared by Drop
+        assert!(
+            std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").is_err(),
+            "bootstrap marker should be cleared after early error scope ends"
+        );
+
+        // Cleanup env
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+    }
+}
