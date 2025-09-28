@@ -116,8 +116,10 @@ Phase 2: Notifications hardening
 
 Phase 3: Rust bootstrap RAII guard
  • Introduce BootstrapGuard that sets AIFO_RUST_OFFICIAL_BOOTSTRAP on creation and
-   unsets in Drop. Use in toolchain_run() and toolchain_start_session() around
-   mark_official_rust_bootstrap(...).
+   unsets in Drop.
+ • Use in toolchain_run() and in ToolchainSession (which wraps toolchain_start_session());
+   standalone callers invoking toolchain_start_session directly should create a BootstrapGuard
+   themselves to keep AIFO_RUST_OFFICIAL_BOOTSTRAP set across preview + exec.
  • Ensure guard lifetime aligns with preview + exec flow and session start lifecycle.
  • Tests: add a small test to assert the env is cleared on early error paths.
 
