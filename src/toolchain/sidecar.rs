@@ -529,7 +529,7 @@ pub(crate) fn mark_official_rust_bootstrap(kind: &str, image: &str) {
     }
 }
 
-//// RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP: set on create, clear on Drop.
+/// RAII guard for AIFO_RUST_OFFICIAL_BOOTSTRAP: set on create, clear on Drop.
 pub struct BootstrapGuard {
     _was_set: bool,
 }
