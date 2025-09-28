@@ -538,10 +538,7 @@ impl BootstrapGuard {
     pub fn new(kind: &str, image: &str) -> Self {
         // Set marker according to rules and record whether it is set
         mark_official_rust_bootstrap(kind, image);
-        let _was_set = std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
-            .ok()
-            .as_deref()
-            == Some("1");
+        let _was_set = std_env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok().as_deref() == Some("1");
         BootstrapGuard { _was_set }
     }
 }
@@ -796,7 +793,7 @@ pub fn toolchain_start_session(
                 image = vv.clone();
             }
         }
-// Bootstrap marker held at session level via ToolchainSession guard
+        // Bootstrap marker held at session level via ToolchainSession guard
 
         let name = sidecar_container_name(kind.as_str(), &session_id);
         let args = build_sidecar_run_preview(
