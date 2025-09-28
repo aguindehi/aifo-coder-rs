@@ -139,7 +139,7 @@ pub fn run_doctor(verbose: bool) {
     eprintln!("  apparmor profile:      {}", prof_str);
 
     // Confirm active AppArmor profile from inside a short-lived container
-    if aifo_coder::container_runtime_path().is_ok() {
+    if let Ok(rt) = aifo_coder::container_runtime_path() {
         let image = default_image_for_quiet("crush");
         let mut args = vec!["run".to_string(), "--rm".to_string()];
         if aifo_coder::docker_supports_apparmor() {
@@ -155,7 +155,7 @@ pub fn run_doctor(verbose: bool) {
         args.push(
             "cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined".to_string(),
         );
-        let mut cmd = Command::new("docker");
+        let mut cmd = Command::new(&rt);
         for a in &args {
             cmd.arg(a);
         }
@@ -318,7 +318,7 @@ pub fn run_doctor(verbose: bool) {
     };
 
     // Editor availability for installed images (full and/or slim) via crush image
-    if aifo_coder::container_runtime_path().is_ok() {
+    if let Ok(rt) = aifo_coder::container_runtime_path() {
         let prefix =
             std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
         let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
@@ -332,7 +332,7 @@ pub fn run_doctor(verbose: bool) {
 
         for (label, img) in candidates {
             // Show only for locally present images; avoid pulling during doctor
-            let present = Command::new("docker")
+            let present = Command::new(&rt)
                 .args(["image", "inspect", &img])
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -343,7 +343,7 @@ pub fn run_doctor(verbose: bool) {
                 continue;
             }
 
-            if let Ok(out) = Command::new("docker")
+            if let Ok(out) = Command::new(&rt)
                 .args(["run", "--rm", "--entrypoint", "sh", &img, "-lc", check])
                 .output()
             {
@@ -366,7 +366,7 @@ pub fn run_doctor(verbose: bool) {
         // Fallback: if neither full nor slim is installed locally, show the default image result once
         if !printed_any {
             let image = default_image_for_quiet("crush");
-            if let Ok(out) = Command::new("docker")
+            if let Ok(out) = Command::new(&rt)
                 .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
                 .output()
             {
@@ -861,7 +861,7 @@ pub fn run_doctor(verbose: bool) {
     eprintln!();
 
     // Workspace write test to validate mounts and UID mapping
-    if aifo_coder::container_runtime_path().is_ok() {
+    if let Ok(rt) = aifo_coder::container_runtime_path() {
         let image = default_image_for_quiet("crush");
         let tmpname = format!(
             ".aifo-coder-doctor-{}-{}.tmp",
@@ -889,7 +889,7 @@ pub fn run_doctor(verbose: bool) {
             .unwrap_or_else(|| "0".to_string());
 
         // Run a short-lived container to validate workspace mount writeability; silence its output
-        let mut cmd = Command::new("docker");
+        let mut cmd = Command::new(&rt);
         cmd.arg("run")
             .arg("--rm")
             .arg("--user")
