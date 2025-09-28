@@ -1125,18 +1125,32 @@ fn handle_connection<S: Read + Write>(
                             if use_unbounded_cl {
                                 let _ = txo.send(chunk);
                             } else {
-                                match txo.try_send(chunk) {
-                                    Ok(()) => {}
-                                    Err(std::sync::mpsc::TrySendError::Full(_c)) => {
-                                        // drop chunk on backpressure; warn once
-                                        if !drop_warned_cl.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                                            log_stderr_and_file(
-                                                "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
-                                            );
+                                // Best-effort small backoff attempts before dropping under backpressure
+                                let mut msg = chunk;
+                                let mut attempts = 0usize;
+                                loop {
+                                    match txo.try_send(msg) {
+                                        Ok(()) => break,
+                                        Err(std::sync::mpsc::TrySendError::Full(c)) => {
+                                            attempts += 1;
+                                            if attempts <= 2 {
+                                                // brief backoff then retry
+                                                std::thread::sleep(std::time::Duration::from_millis(5));
+                                                msg = c;
+                                                continue;
+                                            }
+                                            // drop chunk on persistent backpressure; warn once
+                                            if !drop_warned_cl.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                                log_stderr_and_file(
+                                                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                                                );
+                                            }
+                                            let _ = dropped_count_cl
+                                                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                            break;
                                         }
-                                        let _ = dropped_count_cl.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                        Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => break,
                                     }
-                                    Err(std::sync::mpsc::TrySendError::Disconnected(_c)) => break,
                                 }
                             }
                         }
