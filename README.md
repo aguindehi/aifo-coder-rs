@@ -90,6 +90,20 @@ Subcommands:
 Tips:
 - Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.
 - To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
+- Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR, and AIFO_CODER_REGISTRY_PREFIX.
+- Fallback: if images are not yet published, use --image to provide an explicit image ref.
+
+Examples (dry-run previews):
+```bash
+./aifo-coder openhands -- --help --dry-run
+./aifo-coder opencode  -- --help --dry-run
+./aifo-coder plandex   -- --help --dry-run
+```
+
+PATH policy:
+- openhands, opencode, plandex: shims-first (/opt/aifo/bin first)
+- codex, crush: node-first
+- aider: adds /opt/venv/bin before system paths
 
 # The aifo-coder
 
