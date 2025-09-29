@@ -95,9 +95,9 @@ Tips:
 
 Examples (dry-run previews):
 ```bash
-./aifo-coder openhands -- --help --dry-run
-./aifo-coder opencode  -- --help --dry-run
-./aifo-coder plandex   -- --help --dry-run
+./aifo-coder --dry-run openhands -- --help
+./aifo-coder --dry-run opencode  -- --help
+./aifo-coder --dry-run plandex   -- --help
 ```
 
 PATH policy:
