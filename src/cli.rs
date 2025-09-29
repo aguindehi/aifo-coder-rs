@@ -149,6 +149,24 @@ pub(crate) enum Agent {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Run OpenHands
+    OpenHands {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    /// Run OpenCode
+    OpenCode {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    /// Run Plandex
+    Plandex {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 
     /// Fork maintenance commands
     #[command(

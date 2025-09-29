@@ -228,6 +228,9 @@ fn resolve_agent_and_args(cli: &Cli) -> Option<(&'static str, Vec<String>)> {
         Agent::Codex { args } => ("codex", args.clone()).into(),
         Agent::Crush { args } => ("crush", args.clone()).into(),
         Agent::Aider { args } => ("aider", args.clone()).into(),
+        Agent::OpenHands { args } => ("openhands", args.clone()).into(),
+        Agent::OpenCode { args } => ("opencode", args.clone()).into(),
+        Agent::Plandex { args } => ("plandex", args.clone()).into(),
         _ => None,
     }
 }

@@ -47,6 +47,10 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     let codex_img = default_image_for("codex");
     let crush_img = default_image_for("crush");
     let aider_img = default_image_for("aider");
+    let openhands_img = default_image_for("openhands");
+    let opencode_img = default_image_for("opencode");
+    let plandex_img = default_image_for("plandex");
+
     let codex_val = if use_color {
         format!("\x1b[34;1m{}\x1b[0m", &codex_img)
     } else {
@@ -62,15 +66,37 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     } else {
         aider_img.clone()
     };
+    let openhands_val = if use_color {
+        format!("\x1b[34;1m{}\x1b[0m", &openhands_img)
+    } else {
+        openhands_img.clone()
+    };
+    let opencode_val = if use_color {
+        format!("\x1b[34;1m{}\x1b[0m", &opencode_img)
+    } else {
+        opencode_img.clone()
+    };
+    let plandex_val = if use_color {
+        format!("\x1b[34;1m{}\x1b[0m", &plandex_img)
+    } else {
+        plandex_img.clone()
+    };
+
     eprintln!("  codex: {}", codex_val);
     eprintln!("  crush: {}", crush_val);
     eprintln!("  aider: {}", aider_val);
+    eprintln!("  openhands: {}", openhands_val);
+    eprintln!("  opencode: {}", opencode_val);
+    eprintln!("  plandex: {}", plandex_val);
     eprintln!();
 
     // stdout: machine-readable image list (no colors, no banner)
     println!("codex {}", codex_img);
     println!("crush {}", crush_img);
     println!("aider {}", aider_img);
+    println!("openhands {}", openhands_img);
+    println!("opencode {}", opencode_img);
+    println!("plandex {}", plandex_img);
 
     std::process::ExitCode::from(0)
 }
