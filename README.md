@@ -107,11 +107,14 @@ PATH policy:
 
 # The aifo-coder
 
-Containerized launcher and Docker images bundling three terminal AI coding agents:
+Containerized launcher and Docker images bundling six terminal AI coding agents:
 
 - OpenAI Codex CLI (`codex`)
 - Charmbracelet Crush (`crush`)
 - Aider (`aider`)
+- OpenHands (`openhands`)
+- OpenCode (`opencode`)
+- Plandex (`plandex`)
 
 Run these tools inside containers while keeping them feeling “native” on your machine:
 - Seamless access to your working directory
