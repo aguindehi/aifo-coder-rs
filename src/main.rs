@@ -424,7 +424,10 @@ fn main() -> ExitCode {
             true,
         );
         let use_err = aifo_coder::color_enabled_stderr();
-        aifo_coder::log_info_stderr(use_err, "aifo-coder: dry-run requested; not executing Docker.");
+        aifo_coder::log_info_stderr(
+            use_err,
+            "aifo-coder: dry-run requested; not executing Docker.",
+        );
         return ExitCode::from(0);
     }
 
