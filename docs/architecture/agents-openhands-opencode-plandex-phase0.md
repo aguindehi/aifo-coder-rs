@@ -16,6 +16,7 @@ Overview
 PATH policy
 - Shims-first PATH for these agents:
   PATH="/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+- In container images, set ENV PATH="/opt/aifo/bin:${PATH}" to guarantee shims-first at process start.
 - No node-first special casing needed for openhands/opencode/plandex.
 - Compatible with existing sidecars, proxy and shims; preserve current behavior.
 
@@ -53,12 +54,14 @@ Dependencies
 - Slim retains minimal editors:
   - mg, nvi
 - Cleanup mirrors existing images: remove apt caches and docs/locales by default.
+- Default KEEP_APT=0; drop apt/procps in final layers; retain curl only in full images.
 
 Image naming and flavors
 - Full: aifo-coder-<agent>:<tag>
 - Slim: aifo-coder-<agent>-slim:<tag>
 - Registry prefix selection and normalization follow preferred_registry_prefix[_quiet]
   and environment overrides (AIFO_CODER_IMAGE*, AIFO_CODER_REGISTRY_PREFIX).
+- Registry prefix is normalized to "<host>/".
 
 Consistency with existing code
 - agent_images.rs composes "<prefix>-<agent>{-slim}:{tag}" with registry prefix; no
