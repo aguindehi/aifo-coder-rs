@@ -40,10 +40,7 @@ static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
 
 pub fn container_runtime_path() -> io::Result<PathBuf> {
     // Allow tests or callers to explicitly disable Docker detection to avoid hard failures
-    if env::var("AIFO_CODER_TEST_DISABLE_DOCKER")
-        .ok()
-        .as_deref()
-        == Some("1")
+    if env::var("AIFO_CODER_TEST_DISABLE_DOCKER").ok().as_deref() == Some("1")
         || env::var("AIFO_CODER_SKIP_DOCKER").ok().as_deref() == Some("1")
     {
         return Err(io::Error::new(
