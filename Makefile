@@ -205,6 +205,8 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
+	@echo "  PLATFORMS examples: linux/amd64,linux/arm64 (recommended); linux/amd64 (Intel); linux/arm64 (Apple Silicon)"
+	@echo "  Note: base images support amd64/arm64; use other arches only if upstream supports them."
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
