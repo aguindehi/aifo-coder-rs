@@ -3,7 +3,7 @@ name = "aifo-coder"
 version = "0.6.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider) using Docker; includes Fork mode with tmux/Windows Terminal orchestration, per-pane state mounts, and repo-scoped locking"
+description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider, OpenHands, OpenCode, Plandex) using Docker; includes Fork mode with tmux/Windows Terminal orchestration, per-pane state mounts, and repo-scoped locking"
 repository = ""
 default-run = "aifo-coder"
 

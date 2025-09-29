@@ -62,6 +62,7 @@ profile __PROFILE_NAME__ flags=(attach_disconnected,mediate_deleted) {
   /usr/sbin/** rix,
   /usr/local/bin/** rix,
   /usr/local/sbin/** rix,
+  /opt/aifo/bin/** rix,
   /opt/venv/** rixm,
   # Git plumbing and shared data reads required by pinentry/gpg/git
   /usr/lib/git-core/** rix,
