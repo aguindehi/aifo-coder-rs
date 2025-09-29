@@ -44,8 +44,8 @@ ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-q
 .PHONY: help banner
 .DEFAULT_GOAL := help
 
-# Colorize help titles (bold light blue) only when stdout is a TTY and NO_COLOR is unset
-COLOR_OK := $(shell sh -c '[ -t 1 ] && [ -z "$$NO_COLOR" ] && echo 1 || echo 0')
+# Colorize help titles (bold light blue). Honors NO_COLOR; always color otherwise
+COLOR_OK := $(shell sh -c '[ -z "$$NO_COLOR" ] && echo 1 || echo 0')
 ifeq ($(COLOR_OK),1)
   C_TITLE := \033[1;38;5;117m
   C_RESET := \033[0m
@@ -53,7 +53,7 @@ else
   C_TITLE :=
   C_RESET :=
 endif
-title = @printf '$(C_TITLE)%s$(C_RESET)\n' "$(1)"
+title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 
 banner:
 	@echo ""
