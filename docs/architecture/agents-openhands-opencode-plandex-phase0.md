@@ -35,7 +35,9 @@ Entrypoint contract
 - Set HOME and GNUPGHOME (GNUPGHOME="$HOME/.gnupg").
 - Prepare XDG_RUNTIME_DIR.
 - Configure pinentry-curses.
-- Launch gpg-agent at startup.
+- Launch gpg-agent at startup (default-cache-ttl=7200, max-cache-ttl=86400).
+- Mount host $HOME/.gnupg read-only to /home/coder/.gnupg-host and copy first-run essentials.
+- Export SHELL=/opt/aifo/bin/sh to prefer shims.
 - Preserve invariants (e.g., dumb-init if present) and avoid root-owned writes in
   /workspace.
 
@@ -44,6 +46,7 @@ Security posture
 - Do not mount host Docker socket.
 - AppArmor compatible.
 - Minimal mounts; avoid unnecessary host exposure.
+- If an AppArmor profile is specified, apply it best-effort and continue without if unsupported.
 
 Dependencies
 - Shared minimum for both flavors:
@@ -62,6 +65,11 @@ Image naming and flavors
 - Registry prefix selection and normalization follow preferred_registry_prefix[_quiet]
   and environment overrides (AIFO_CODER_IMAGE*, AIFO_CODER_REGISTRY_PREFIX).
 - Registry prefix is normalized to "<host>/".
+
+Build stage names (reserved)
+- Full stages: openhands, opencode, plandex
+- Slim stages: openhands-slim, opencode-slim, plandex-slim
+- Each stage will export ENV PATH="/opt/aifo/bin:${PATH}" during build to enforce shims-first.
 
 Consistency with existing code
 - agent_images.rs composes "<prefix>-<agent>{-slim}:{tag}" with registry prefix; no
