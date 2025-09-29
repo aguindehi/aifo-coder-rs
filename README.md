@@ -53,7 +53,7 @@ Notes:
 
 Synopsis:
 ```bash
-./aifo-coder {codex|crush|aider|toolchain|toolchain-cache-clear|doctor|images|cache-clear|fork} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|openhands|opencode|plandex|toolchain|toolchain-cache-clear|doctor|images|cache-clear|fork} [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
@@ -76,6 +76,9 @@ Subcommands:
 - codex [args...]                Run OpenAI Codex CLI inside container
 - crush [args...]                Run Charmbracelet Crush inside container
 - aider [args...]                Run Aider inside container
+- openhands [args...]            Run OpenHands inside container
+- opencode [args...]             Run OpenCode inside container
+- plandex [args...]              Run Plandex inside container
 - toolchain <kind> -- [args...]  Run a command inside a language toolchain sidecar (Phase 1)
 - toolchain-cache-clear          Purge all toolchain cache volumes (cargo, npm, pip, ccache, go)
 - doctor                         Run environment diagnostics (Docker/AppArmor/UID mapping)
