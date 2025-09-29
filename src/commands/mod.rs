@@ -6,7 +6,14 @@ use crate::warnings::warn_if_tmp_workspace;
 
 pub fn images_effective() -> Vec<(String, String)> {
     // Keep order consistent with docs and tests
-    let agents = ["codex", "crush", "aider", "openhands", "opencode", "plandex"];
+    let agents = [
+        "codex",
+        "crush",
+        "aider",
+        "openhands",
+        "opencode",
+        "plandex",
+    ];
     agents
         .iter()
         .map(|a| (a.to_string(), default_image_for(a)))

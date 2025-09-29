@@ -447,7 +447,8 @@ pub fn toolexec_start_proxy(
                     let session_cl = session.clone();
                     std::thread::spawn(move || {
                         let disable_user =
-                            std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref() == Some("1");
+                            std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref()
+                                == Some("1");
                         let ctx2 = ProxyCtx {
                             runtime: runtime_cl,
                             token: token_cl,
