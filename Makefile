@@ -833,7 +833,7 @@ publish-toolchain-node:
 	fi
 
 # Publish agent images (full and slim). Tags both local and registry-prefixed refs when REGISTRY is set.
-.PHONY: publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim
+.PHONY: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim
 
 publish-codex:
 	@set -e; \
