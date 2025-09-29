@@ -44,6 +44,17 @@ ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-q
 .PHONY: help banner
 .DEFAULT_GOAL := help
 
+# Colorize help titles (bold light blue) only when stdout is a TTY and NO_COLOR is unset
+COLOR_OK := $(shell sh -c '[ -t 1 ] && [ -z "$$NO_COLOR" ] && echo 1 || echo 0')
+ifeq ($(COLOR_OK),1)
+  C_TITLE := \033[1;38;5;117m
+  C_RESET := \033[0m
+else
+  C_TITLE :=
+  C_RESET :=
+endif
+title = @printf '$(C_TITLE)%s$(C_RESET)\n' "$(1)"
+
 banner:
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
@@ -70,7 +81,7 @@ banner:
 
 help: banner
 	@echo ""
-	@echo "Variables:"
+	$(call title,Variables:)
 	@echo "──────────"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
@@ -102,7 +113,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-	@echo "Install paths (for 'make install'):"
+	$(call title,Install paths (for 'make install'):)
 	@echo "───────────────────────────────────"
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
@@ -113,10 +124,10 @@ help: banner
 	@echo "  DOC_DIR ..................... Documentation dir ($${PREFIX}/share/doc/$${BIN_NAME})"
 	@echo "  EXAMPLES_DIR ................ Examples directory ($${DOC_DIR}/examples)"
 	@echo ""
-	@echo "Available Makefile targets:"
+	$(call title,Available Makefile targets:)
 	@echo "───────────────────────────"
 	@echo ""
-	@echo "Release and cross-compile:"
+	$(call title,Release and cross-compile:)
 	@echo ""
 	@echo "  release ..................... Aggregate: build launcher, mac .app + .dmg, and both mac (host) and Linux"
 	@echo "  release-for-linux ........... Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)"
@@ -128,16 +139,16 @@ help: banner
 	@echo ""
 	@echo "  Hints: set RELEASE_TARGETS to: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin]"
 	@echo ""
-	@echo "Install:"
+	$(call title,Install:)
 	@echo ""
 	@echo "  install ..................... Install binary, man page, LICENSE/README and examples, then build Docker images locally"
 	@echo ""
-	@echo "Build shim:"
+	$(call title,Build shim:)
 	@echo ""
 	@echo "  build-shim .................. Build the aifo-shim binary with host toolchain"
 	@echo "  build-shim-with-builder ..... Build aifo-shim using the Rust Builder container"
 	@echo ""
-	@echo "Build images:"
+	$(call title,Build images:)
 	@echo ""
 	@echo "  build ....................... Build all images"
 	@echo ""
@@ -164,7 +175,7 @@ help: banner
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
 	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
 	@echo ""
-	@echo "Rebuild images:"
+	$(call title,Rebuild images:)
 	@echo ""
 	@echo "  rebuild ..................... Rebuild all images without cache"
 	@echo ""
@@ -186,18 +197,18 @@ help: banner
 	@echo ""
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
 	@echo ""
-	@echo "Rebuild existing images by prefix:"
+	$(call title,Rebuild existing images by prefix:)
 	@echo ""
 	@echo "  rebuild-existing ............ Rebuild any existing local images with IMAGE_PREFIX (using cache)"
 	@echo "  rebuild-existing-nocache .... Same, but without cache"
 	@echo ""
-	@echo "Publish images:"
+	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push C-CPP toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
-	@echo "Utilities:"
+	$(call title,Utilities:)
 	@echo ""
 	@echo "  clean ....................... Remove built and base images (ignores errors if not present)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
@@ -222,7 +233,7 @@ help: banner
 	@echo "  git-commit-no-sign-all ...... Stage all and commit without signing (MESSAGE='your message' optional)"
 	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
 	@echo ""
-	@echo "Test targets:"
+	$(call title,Test targets:)
 	@echo ""
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target)"
 	@echo ""
@@ -248,27 +259,27 @@ help: banner
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
-	@echo "Test suites:"
+	$(call title,Test suites:)
 	@echo ""
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
-	@echo "AppArmor (security) profile:"
+	$(call title,AppArmor (security) profile:)
 	@echo
 	@echo "  apparmor .................... Generate build/apparmor/$${APPARMOR_PROFILE_NAME} from template"
 	@echo ""
 	@echo "  apparmor-load-colima ........ Load the generated profile directly into the Colima VM"
 	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log"
 	@echo ""
-	@echo "Usage:"
+	$(call title,Usage:)
 	@echo ""
 	@echo "   make IMAGE_PREFIX=myrepo/aifo-coder TAG=v1 build"
 	@echo ""
 	@echo "   Load AppArmor policy into Colima VM (macOS):"
 	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
 	@echo ""
-	@echo "Fork mode:"
+	$(call title,Fork mode:)
 	@echo ""
 	@echo "  aifo-coder --fork N [--fork-include-dirty] [--fork-dissociate] [--fork-session-name NAME]"
 	@echo "             [--fork-layout tiled|even-h|even-v] [--fork-keep-on-failure] aider -- [<aider arguments>]"
@@ -277,11 +288,11 @@ help: banner
 	@echo ""
 	@echo "  Variables: AIFO_CODER_FORK_STALE_DAYS to tune stale threshold; AIFO_CODER_FORK_AUTOCLEAN=1 to auto-clean old clean sessions."
 	@echo ""
-	@echo "Docs:"
+	$(call title,Docs:)
 	@echo ""
 	@echo "  See docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
 	@echo ""
-	@echo "Tip:"
+	$(call title,Tip:)
 	@echo ""
 	@echo "  Override variables inline, e.g.: make TAG=dev build-codex"
 	@echo ""
