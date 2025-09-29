@@ -35,7 +35,14 @@ fn images_lists_all_agents_with_slim_flavor() {
     );
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    for agent in ["codex", "crush", "aider", "openhands", "opencode", "plandex"] {
+    for agent in [
+        "codex",
+        "crush",
+        "aider",
+        "openhands",
+        "opencode",
+        "plandex",
+    ] {
         let line = stdout
             .lines()
             .find(|l| l.starts_with(&format!("{agent} ")))
@@ -78,7 +85,14 @@ fn images_respects_registry_env_override() {
     );
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    for agent in ["codex", "crush", "aider", "openhands", "opencode", "plandex"] {
+    for agent in [
+        "codex",
+        "crush",
+        "aider",
+        "openhands",
+        "opencode",
+        "plandex",
+    ] {
         let line = stdout
             .lines()
             .find(|l| l.starts_with(&format!("{agent} ")))
