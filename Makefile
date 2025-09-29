@@ -274,8 +274,6 @@ help: banner
 	@echo ""
 	$(call title_ul,Usage:)
 	@echo ""
-	@echo "   make IMAGE_PREFIX=myrepo/aifo-coder TAG=v1 build"
-	@echo ""
 	@echo "   Load AppArmor policy into Colima VM (macOS):"
 	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
 	@echo ""
@@ -288,6 +286,11 @@ help: banner
 	@echo ""
 	@echo "  Variables: AIFO_CODER_FORK_STALE_DAYS to tune stale threshold; AIFO_CODER_FORK_AUTOCLEAN=1 to auto-clean old clean sessions."
 	@echo ""
+	$(call title_ul,AppArmor:)
+	@echo ""
+	@echo "   Load AppArmor policy into Colima VM (macOS):"
+	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
+	@echo ""
 	$(call title_ul,Docs:)
 	@echo ""
 	@echo "  docs/INSTALL.md ............ Install instructions, prerequisites, targets"
@@ -298,7 +301,7 @@ help: banner
 	@echo ""
 	$(call title_ul,Tip:)
 	@echo ""
-	@echo "  Override variables inline, e.g.: make TAG=dev build-codex"
+	@echo "  Override variables inline, e.g.: make IMAGE_PREFIX=myrepo/aifo-coder TAG=dev build-codex"
 	@echo ""
 
 # Detect docker buildx availability
