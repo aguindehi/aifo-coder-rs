@@ -84,7 +84,7 @@ banner:
 
 help: banner
 	@echo ""
-	$(call title,Variables:)
+	$(call title_ul,Variables:)
 	@echo "──────────"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
@@ -116,7 +116,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-	$(call title,Install paths (for 'make install'):)
+	$(call title_ul,Install paths (for 'make install'):)
 	@echo "───────────────────────────────────"
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
@@ -127,7 +127,7 @@ help: banner
 	@echo "  DOC_DIR ..................... Documentation dir ($${PREFIX}/share/doc/$${BIN_NAME})"
 	@echo "  EXAMPLES_DIR ................ Examples directory ($${DOC_DIR}/examples)"
 	@echo ""
-	$(call title,Available Makefile targets:)
+	$(call title_ul,Available Makefile targets:)
 	@echo "───────────────────────────"
 	@echo ""
 	$(call title,Release and cross-compile:)
