@@ -141,11 +141,11 @@ fn test_proxy_smoke_c_cpp() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
-    let (code, out) = post_exec(&url, &token, "cmake", &["--version"]);
-    assert_eq!(code, 0, "cmake --version failed: {}", out);
+    let (code, out) = post_exec(&url, &token, "make", &["--version"]);
+    assert_eq!(code, 0, "make --version failed: {}", out);
     assert!(
-        out.to_lowercase().contains("cmake version"),
-        "unexpected cmake version output: {}",
+        out.to_lowercase().contains("gnu make"),
+        "unexpected make version output: {}",
         out
     );
 
