@@ -44,16 +44,19 @@ ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-q
 .PHONY: help banner
 .DEFAULT_GOAL := help
 
-# Colorize help titles (bold light blue). Honors NO_COLOR; always color otherwise
+# Colorize help titles (bold colors). Honors NO_COLOR; always color otherwise
 COLOR_OK := $(shell sh -c '[ -z "$$NO_COLOR" ] && echo 1 || echo 0')
 ifeq ($(COLOR_OK),1)
-  C_TITLE := \033[1;38;5;117m
+  C_TITLE := \033[1;38;5;27m
+  C_TITLE_UL := \033[4;1;38;5;117m
   C_RESET := \033[0m
 else
   C_TITLE :=
+  C_TITLE_UL :=
   C_RESET :=
 endif
 title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
+title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
 banner:
 	@echo ""
@@ -272,14 +275,14 @@ help: banner
 	@echo "  apparmor-load-colima ........ Load the generated profile directly into the Colima VM"
 	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log"
 	@echo ""
-	$(call title,Usage:)
+	$(call title_ul,Usage:)
 	@echo ""
 	@echo "   make IMAGE_PREFIX=myrepo/aifo-coder TAG=v1 build"
 	@echo ""
 	@echo "   Load AppArmor policy into Colima VM (macOS):"
 	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
 	@echo ""
-	$(call title,Fork mode:)
+	$(call title_ul,Fork mode:)
 	@echo ""
 	@echo "  aifo-coder --fork N [--fork-include-dirty] [--fork-dissociate] [--fork-session-name NAME]"
 	@echo "             [--fork-layout tiled|even-h|even-v] [--fork-keep-on-failure] aider -- [<aider arguments>]"
@@ -288,11 +291,11 @@ help: banner
 	@echo ""
 	@echo "  Variables: AIFO_CODER_FORK_STALE_DAYS to tune stale threshold; AIFO_CODER_FORK_AUTOCLEAN=1 to auto-clean old clean sessions."
 	@echo ""
-	$(call title,Docs:)
+	$(call title_ul,Docs:)
 	@echo ""
 	@echo "  See docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
 	@echo ""
-	$(call title,Tip:)
+	$(call title_ul,Tip:)
 	@echo ""
 	@echo "  Override variables inline, e.g.: make TAG=dev build-codex"
 	@echo ""
