@@ -23,16 +23,12 @@ fn test_path_policy_and_naming_openhands_opencode_plandex() {
         preview_oh
     );
     assert!(
-        preview_oh.contains("--name ")
-            && (preview_oh.contains("aifo-coder-openhands-")
-                || preview_oh.contains("aifo-coder-opencode-")),
+        preview_oh.contains("--name ") && preview_oh.contains("aifo-coder-openhands-"),
         "container name should include agent string; preview:\n{}",
         preview_oh
     );
     assert!(
-        preview_oh.contains("--hostname ")
-            && (preview_oh.contains("aifo-coder-openhands-")
-                || preview_oh.contains("aifo-coder-opencode-")),
+        preview_oh.contains("--hostname ") && preview_oh.contains("aifo-coder-openhands-"),
         "hostname should include agent string; preview:\n{}",
         preview_oh
     );
