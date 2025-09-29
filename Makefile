@@ -253,14 +253,8 @@ help: banner
 	@echo ""
 	$(call title,Test targets:)
 	@echo ""
-	@echo "  check ....................... Run 'lint' then 'test' (composite validation target)"
-	@echo ""
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
-	@echo ""
-	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
-	@echo "  coverage-html ............... Generate HTML coverage via nextest+grcov (rustup/cargo/docker fallback)"
-	@echo "  coverage-lcov ............... Generate lcov.info via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
@@ -277,11 +271,17 @@ help: banner
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
+	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
+	@echo "  coverage-html ............... Generate HTML coverage via nextest+grcov (rustup/cargo/docker fallback)"
+	@echo "  coverage-lcov ............... Generate lcov.info via nextest+grcov (rustup/cargo/docker fallback)"
+	@echo ""
 	$(call title,Test suites:)
+	@echo ""
+	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
+	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
-	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
 	$(call title,AppArmor (security) profile:)
 	@echo
