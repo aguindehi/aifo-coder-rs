@@ -5,7 +5,14 @@ fn test_images_effective_includes_all_agents() {
     let mut keys = pairs.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>();
     keys.sort_unstable();
 
-    let mut expected = vec!["aider", "codex", "crush", "opencode", "openhands", "plandex"];
+    let mut expected = vec![
+        "aider",
+        "codex",
+        "crush",
+        "opencode",
+        "openhands",
+        "plandex",
+    ];
     expected.sort_unstable();
 
     assert_eq!(keys, expected, "images_effective must list all agents");
