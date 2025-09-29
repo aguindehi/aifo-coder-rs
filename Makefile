@@ -290,7 +290,11 @@ help: banner
 	@echo ""
 	$(call title_ul,Docs:)
 	@echo ""
-	@echo "  See docs/TOOLCHAINS.md for toolchain usage, unix sockets, caches and c-cpp image."
+	@echo "  docs/INSTALL.md ............ Install instructions, prerequisites, targets"
+	@echo "  docs/TESTING.md ............ Test lanes, toggles and how to run"
+	@echo "  docs/TOOLEXEC.md ........... Shim ↔ proxy HTTP protocol (v1/v2), auth, errors"
+	@echo "  docs/CONTRIBUTING.md ....... Toolchain overrides, cache layout, environment notes"
+	@echo "  docs/TOOLCHAINS.md ......... Toolchain usage, unix sockets, caches, C/CPP image"
 	@echo ""
 	$(call title_ul,Tip:)
 	@echo ""
