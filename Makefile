@@ -820,6 +820,93 @@ publish-toolchain-node:
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
 	fi
 
+# Publish agent images (full and slim). Tags both local and registry-prefixed refs when REGISTRY is set.
+.PHONY: publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim
+
+publish-openhands:
+	@set -e; \
+	echo "Publishing $(OPENHANDS_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	fi
+
+publish-openhands-slim:
+	@set -e; \
+	echo "Publishing $(OPENHANDS_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) $(CA_SECRET) .; \
+	fi
+
+publish-opencode:
+	@set -e; \
+	echo "Publishing $(OPENCODE_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	fi
+
+publish-opencode-slim:
+	@set -e; \
+	echo "Publishing $(OPENCODE_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) $(CA_SECRET) .; \
+	fi
+
+publish-plandex:
+	@set -e; \
+	echo "Publishing $(PLANDEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	fi
+
+publish-plandex-slim:
+	@set -e; \
+	echo "Publishing $(PLANDEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
+	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
+	RP=""; \
+	echo "Checking reachability of https://repository.migros.net ..."; \
+	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	fi
+
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 
