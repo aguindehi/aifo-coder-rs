@@ -85,7 +85,6 @@ banner:
 help: banner
 	@echo ""
 	$(call title_ul,Variables:)
-	@echo "──────────"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
 	@echo "  TAG ......................... Tag for images (default: latest)"
@@ -117,7 +116,6 @@ help: banner
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
 	$(call title_ul,Install paths (for 'make install'):)
-	@echo "───────────────────────────────────"
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -128,7 +126,6 @@ help: banner
 	@echo "  EXAMPLES_DIR ................ Examples directory ($${DOC_DIR}/examples)"
 	@echo ""
 	$(call title_ul,Available Makefile targets:)
-	@echo "───────────────────────────"
 	@echo ""
 	$(call title,Release and cross-compile:)
 	@echo ""
