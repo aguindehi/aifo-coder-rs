@@ -1,10 +1,77 @@
-.PHONY: help
+#
+# ──────────────────────────────────────────────────────────────────────────────────────────────
+#  🚀  Welcome to the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀
+# ──────────────────────────────────────────────────────────────────────────────────────────────
+#  🔒  Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO
+#
+#  ✨ Features:
+#     - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces.
+#     - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM.
+#     - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration.
+#
+#  🔧 Building a safer future for coding automation in Migros Group...
+#     - Containerized agents; no privileged mode, no host Docker socket.
+#     - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.
+#     - Seccomp and cgroup namespaces as reported by Docker.
+#     - Per-pane isolated state for forks.
+#     - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy.
+#     - Optional unix:// proxy on Linux; host-gateway bridging when needed.
+#     - Minimal mounts: project workspace, config files, optional GnuPG keyrings.
+# ──────────────────────────────────────────────────────────────────────────────────────────────
+#  📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB
+# ──────────────────────────────────────────────────────────────────────────────────────────────
+#
+
+# Build one image per agent with shared base layers for maximal cache reuse.
+IMAGE_PREFIX ?= aifo-coder
+TAG ?= latest
+# Set to 1 to keep apt/procps in final images (default drops them in final stages)
+KEEP_APT ?= 0
+
+# BuildKit/Buildx configuration
+USE_BUILDX ?= 1
+PLATFORMS ?=
+PUSH ?= 0
+CACHE_DIR ?= .buildx-cache
+
+# Nextest niceness
+NICENESS_CARGO_NEXTEST =? -1
+
+# Nextest arguments
+ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
+
+# Help
+.PHONY: help banner
 .DEFAULT_GOAL := help
-help:
+
+banner:
 	@echo ""
-	@echo "aifo-coder - Makefile targets"
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo " 🚀  Welcome to the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀  "
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo " 🔒  Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO   "
+	@echo ""
+	@echo " ✨ Features:"
+	@echo "    - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces."
+	@echo "    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM."
+	@echo "    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration."
+	@echo ""
+	@echo " 🔧 Building a safer future for coding automation in Migros Group..."
+	@echo "    - Containerized agents; no privileged mode, no host Docker socket."
+	@echo "    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available."
+	@echo "    - Seccomp and cgroup namespaces as reported by Docker."
+	@echo "    - Per-pane isolated state for forks."
+	@echo "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy."
+	@echo "    - Optional unix:// proxy on Linux; host-gateway bridging when needed."
+	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB "
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+
+help: banner
 	@echo ""
 	@echo "Variables:"
+	@echo "──────────"
 	@echo ""
 	@echo "  IMAGE_PREFIX  ............... Image name prefix for per-agent images (aifo-coder)"
 	@echo "  TAG ......................... Tag for images (default: latest)"
@@ -36,6 +103,7 @@ help:
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
 	@echo "Install paths (for 'make install'):"
+	@echo "───────────────────────────────────"
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -44,6 +112,9 @@ help:
 	@echo "  MAN1_DIR .................... Section 1 manpages ($${MAN_DIR}/man1)"
 	@echo "  DOC_DIR ..................... Documentation dir ($${PREFIX}/share/doc/$${BIN_NAME})"
 	@echo "  EXAMPLES_DIR ................ Examples directory ($${DOC_DIR}/examples)"
+	@echo ""
+	@echo "Available Makefile targets:"
+	@echo "───────────────────────────"
 	@echo ""
 	@echo "Release and cross-compile:"
 	@echo ""
@@ -214,24 +285,6 @@ help:
 	@echo ""
 	@echo "  Override variables inline, e.g.: make TAG=dev build-codex"
 	@echo ""
-
-# Build one image per agent with shared base layers for maximal cache reuse.
-IMAGE_PREFIX ?= aifo-coder
-TAG ?= latest
-# Set to 1 to keep apt/procps in final images (default drops them in final stages)
-KEEP_APT ?= 0
-
-# BuildKit/Buildx configuration
-USE_BUILDX ?= 1
-PLATFORMS ?=
-PUSH ?= 0
-CACHE_DIR ?= .buildx-cache
-
-# Nextest niceness
-NICENESS_CARGO_NEXTEST =? -1
-
-# Nextest arguments
-ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
 
 # Detect docker buildx availability
 BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || echo 0)
