@@ -58,6 +58,426 @@ pub fn container_runtime_path() -> io::Result<PathBuf> {
     ))
 }
 
+/// Build a docker run preview string without requiring docker in PATH (used for dry-run).
+pub fn build_docker_preview_only(
+    agent: &str,
+    passthrough: &[String],
+    image: &str,
+    apparmor_profile: Option<&str>,
+) -> String {
+    // TTY flags
+    let tty_flags: Vec<&str> = if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
+        vec!["-it"]
+    } else {
+        vec!["-i"]
+    };
+
+    let pwd = {
+        let p = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        fs::canonicalize(&p).unwrap_or(p)
+    };
+
+    // UID/GID mapping (unix only; ignored elsewhere)
+    #[cfg(unix)]
+    let (uid, gid) = { (u32::from(getuid()), u32::from(getgid())) };
+
+    // Forward selected env vars (inherit from host)
+    let mut env_flags: Vec<OsString> = Vec::new();
+    for var in PASS_ENV_VARS.iter().copied() {
+        if let Ok(val) = env::var(var) {
+            if !val.is_empty() {
+                env_flags.push(OsString::from("-e"));
+                env_flags.push(OsString::from(var));
+            }
+        }
+    }
+
+    // Always set these inside container
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("HOME=/home/coder"));
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("USER=coder"));
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("CODEX_HOME=/home/coder/.codex"));
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("GNUPGHOME=/home/coder/.gnupg"));
+    // Ensure our auto-exit shell wrapper is preferred for transient shells
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
+
+    // XDG_RUNTIME_DIR for gpg-agent sockets
+    #[cfg(unix)]
+    {
+        env_flags.push(OsString::from("-e"));
+        env_flags.push(OsString::from(format!(
+            "XDG_RUNTIME_DIR=/tmp/runtime-{}",
+            uid
+        )));
+    }
+    // Ensure pinentry can bind to the terminal when interactive sessions are used
+    if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
+        env_flags.push(OsString::from("-e"));
+        env_flags.push(OsString::from("GPG_TTY=/dev/tty"));
+    }
+
+    // Map unified AIFO_* environment to agent-specific variables
+    if let Ok(v) = env::var("AIFO_API_KEY") {
+        if !v.is_empty() {
+            // OpenAI-style
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_KEY={v}")));
+            // Azure-style
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_KEY={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_KEY={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_API_BASE") {
+        if !v.is_empty() {
+            // OpenAI-style base URL
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_BASE_URL={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_BASE={v}")));
+            // Azure-style endpoint/base
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_ENDPOINT={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_BASE={v}")));
+            // Hint some clients that this is Azure-backed endpoint
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from("OPENAI_API_TYPE=azure"));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_API_VERSION") {
+        if !v.is_empty() {
+            // OpenAI-style API version (used by some clients for Azure)
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("OPENAI_API_VERSION={v}")));
+            // Azure-style version
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_VERSION={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AZURE_API_VERSION={v}")));
+        }
+    }
+    // Pass through tool-exec proxy URL and token if set
+    if let Ok(v) = env::var("AIFO_TOOLEEXEC_URL") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_URL={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_TOOLEEXEC_TOKEN") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_TOOLCHAIN_VERBOSE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_TOOLCHAIN_VERBOSE={v}")));
+        }
+    }
+
+    // Disable commit signing for Aider if requested
+    if agent == "aider" {
+        if let Ok(v) = env::var("AIFO_CODER_GIT_SIGN") {
+            let vl = v.to_lowercase();
+            if ["0", "false", "no", "off"].contains(&vl.as_str()) {
+                env_flags.push(OsString::from("-e"));
+                env_flags.push(OsString::from("GIT_CONFIG_COUNT=1"));
+                env_flags.push(OsString::from("-e"));
+                env_flags.push(OsString::from("GIT_CONFIG_KEY_0=commit.gpgsign"));
+                env_flags.push(OsString::from("-e"));
+                env_flags.push(OsString::from("GIT_CONFIG_VALUE_0=false"));
+            }
+        }
+    }
+
+    // Volume mounts and host prep
+    let mut volume_flags: Vec<OsString> = Vec::new();
+    let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
+
+    // Per-pane state mounts: fork mode
+    if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
+        let sd = state_dir.trim();
+        if !sd.is_empty() {
+            let base = PathBuf::from(sd);
+            let aider_dir = base.join(".aider");
+            let codex_dir = base.join(".codex");
+            let crush_dir = base.join(".crush");
+            let _ = fs::create_dir_all(&aider_dir);
+            let _ = fs::create_dir_all(&codex_dir);
+            let _ = fs::create_dir_all(&crush_dir);
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
+        } else {
+            // Fallback to legacy HOME-based mounts if the env var is empty
+            let crush_dir = host_home.join(".local").join("share").join("crush");
+            fs::create_dir_all(&crush_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+            let crush_state_dir = host_home.join(".crush");
+            fs::create_dir_all(&crush_state_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+            let codex_dir = host_home.join(".codex");
+            fs::create_dir_all(&codex_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+            let aider_dir = host_home.join(".aider");
+            fs::create_dir_all(&aider_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+        }
+    } else {
+        // Legacy HOME-based mounts (non-fork mode)
+        let crush_dir = host_home.join(".local").join("share").join("crush");
+        fs::create_dir_all(&crush_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+        let crush_state_dir = host_home.join(".crush");
+        fs::create_dir_all(&crush_state_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&crush_state_dir, "/home/coder/.crush"));
+        let codex_dir = host_home.join(".codex");
+        fs::create_dir_all(&codex_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
+        let aider_dir = host_home.join(".aider");
+        fs::create_dir_all(&aider_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+    }
+
+    // Aider root-level config files
+    for fname in [
+        ".aider.conf.yml",
+        ".aider.model.metadata.json",
+        ".aider.model.settings.yml",
+    ] {
+        let src = host_home.join(fname);
+        ensure_file_exists(&src).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&src, &format!("/home/coder/{fname}")));
+    }
+
+    // Git config
+    let gitconfig = host_home.join(".gitconfig");
+    ensure_file_exists(&gitconfig).ok();
+    volume_flags.push(OsString::from("-v"));
+    volume_flags.push(path_pair(&gitconfig, "/home/coder/.gitconfig"));
+
+    // Timezone files (optional)
+    for (host_path, container_path) in [
+        ("/etc/localtime", "/etc/localtime"),
+        ("/etc/timezone", "/etc/timezone"),
+    ] {
+        let hp = Path::new(host_path);
+        if hp.exists() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!(
+                "{}:{}:ro",
+                hp.display(),
+                container_path
+            )));
+        }
+    }
+
+    // Host logs dir
+    let host_logs_dir = pwd.join("build").join("logs");
+    fs::create_dir_all(&host_logs_dir).ok();
+    volume_flags.push(OsString::from("-v"));
+    volume_flags.push(path_pair(&host_logs_dir, "/var/log/host"));
+
+    // GnuPG: mount host ~/.gnupg read-only to /home/coder/.gnupg-host
+    let gnupg_dir = host_home.join(".gnupg");
+    fs::create_dir_all(&gnupg_dir).ok();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&gnupg_dir, fs::Permissions::from_mode(0o700));
+    }
+    volume_flags.push(OsString::from("-v"));
+    volume_flags.push(OsString::from(format!(
+        "{}:/home/coder/.gnupg-host:ro",
+        gnupg_dir.display()
+    )));
+    // Optional: mount host-provided shim directory into PATH front inside the agent
+    if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
+        if !shim_dir.trim().is_empty() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!("{}:/opt/aifo/bin:ro", shim_dir)));
+        }
+    }
+
+    // Phase 4 (Linux): mount unix socket directory if unix transport is enabled
+    if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
+        if !dir.trim().is_empty() {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!("{}:/run/aifo", dir)));
+        }
+    }
+
+    // User mapping
+    #[allow(unused_mut)]
+    let mut user_flags: Vec<OsString> = Vec::new();
+    #[cfg(unix)]
+    {
+        user_flags.push(OsString::from("--user"));
+        user_flags.push(OsString::from(format!("{uid}:{gid}")));
+    }
+
+    // AppArmor security flags
+    let mut security_flags: Vec<OsString> = Vec::new();
+    if let Some(profile) = apparmor_profile {
+        if crate::docker_supports_apparmor() {
+            security_flags.push(OsString::from("--security-opt"));
+            security_flags.push(OsString::from(format!("apparmor={profile}")));
+        } else {
+            crate::warn_print(
+                "docker daemon does not report apparmor support. continuing without apparmor.",
+            );
+        }
+    }
+
+    // Image prefix used for container naming
+    let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+
+    // Container name/hostname (best-effort reuse when provided)
+    let cn_env = env::var("AIFO_CODER_CONTAINER_NAME").ok();
+    let cn_src = env::var("AIFO_CODER_CONTAINER_NAME_SOURCE").ok();
+    let container_name = if let Some(ref v) = cn_env {
+        if cn_src.as_deref() == Some("generated") && !v.contains(&format!("-{}-", agent)) {
+            format!("{}-{}-{}", prefix, agent, crate::create_session_id())
+        } else {
+            v.clone()
+        }
+    } else {
+        format!("{}-{}-{}", prefix, agent, crate::create_session_id())
+    };
+    let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
+
+    // Agent command vector and join with shell escaping (use absolute agent paths; ensure system/venv precede shims)
+    let agent_abs = match agent {
+        "aider" => "/opt/venv/bin/aider",
+        "codex" => "/usr/local/bin/codex",
+        "crush" => "/usr/local/bin/crush",
+        "openhands" => "/usr/local/bin/openhands",
+        "opencode" => "/usr/local/bin/opencode",
+        "plandex" => "/usr/local/bin/plandex",
+        _ => agent,
+    };
+    let mut agent_cmd = vec![agent_abs.to_string()];
+    agent_cmd.extend(passthrough.iter().cloned());
+    let agent_joined = crate::shell_join(&agent_cmd);
+    let path_value = match agent {
+        // For aider, keep shims first so preview tests expecting a shim-prefixed PATH pass,
+        // while the venv shebang points to an absolute python path.
+        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+        // For node-based agents, ensure native node precedes shims to avoid shim node at startup.
+        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
+        // Default: prefer shims early for generic tools, keep system paths, and include host PATH tail.
+        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+    };
+
+    // Compose preview args
+    let mut preview_args: Vec<String> = Vec::new();
+
+    // program
+    preview_args.push("docker".to_string());
+
+    // subcommand and common flags
+    preview_args.push("run".to_string());
+    preview_args.push("--rm".to_string());
+
+    // TTY flags
+    for f in tty_flags {
+        preview_args.push(f.to_string());
+    }
+
+    // name/hostname
+    preview_args.push("--name".to_string());
+    preview_args.push(container_name.clone());
+    preview_args.push("--hostname".to_string());
+    preview_args.push(hostname.clone());
+
+    // Session network (if provided)
+    if let Ok(net) = env::var("AIFO_SESSION_NETWORK") {
+        if !net.trim().is_empty() {
+            preview_args.push("--network".to_string());
+            preview_args.push(net);
+        }
+    }
+    // Linux host add-host (if requested)
+    #[cfg(target_os = "linux")]
+    {
+        if env::var("AIFO_TOOLEEXEC_ADD_HOST").ok().as_deref() == Some("1") {
+            preview_args.push("--add-host".to_string());
+            preview_args.push("host.docker.internal:host-gateway".to_string());
+        }
+    }
+
+    // volumes
+    for f in &volume_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+    }
+    let workspace_mount = format!("{}:/workspace", pwd.display());
+    preview_args.push("-v".to_string());
+    preview_args.push(workspace_mount);
+
+    // workdir
+    preview_args.push("-w".to_string());
+    preview_args.push("/workspace".to_string());
+
+    // env flags
+    for f in &env_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+    }
+
+    // user flags
+    for f in &user_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+    }
+
+    // security flags
+    for f in &security_flags {
+        preview_args.push(f.to_string_lossy().to_string());
+    }
+
+    // image
+    preview_args.push(image.to_string());
+
+    // shell and command
+    preview_args.push("/bin/sh".to_string());
+    preview_args.push("-lc".to_string());
+
+    let sh_cmd = format!(
+        "set -e; umask 077; \
+         if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
+         export PATH=\"{path_value}\"; sed_port(){{ if [ \"${{AIFO_SED_PORTABLE:-1}}\" = \"1\" ]; then sed -i'' \"$@\"; else sed -i \"$@\"; fi; }}; \
+         uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
+         mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
+         unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
+         exec {agent_joined}"
+    );
+    preview_args.push(sh_cmd.clone());
+
+    // Render preview string with conservative shell escaping
+    let mut parts = Vec::with_capacity(preview_args.len());
+    for p in preview_args {
+        parts.push(crate::shell_escape(&p));
+    }
+    parts.join(" ")
+}
+
 /// Build the docker run command for the given agent invocation, and return a preview string.
 pub fn build_docker_cmd(
     agent: &str,

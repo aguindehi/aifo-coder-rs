@@ -406,6 +406,29 @@ fn main() -> ExitCode {
 
     // Determine desired AppArmor profile (may be disabled on non-Linux)
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
+
+    // In dry-run, render a preview without requiring docker to be present
+    if cli.dry_run {
+        let preview = aifo_coder::build_docker_preview_only(
+            agent,
+            &args,
+            &image,
+            apparmor_profile.as_deref(),
+        );
+        print_verbose_run_info(
+            agent,
+            &image,
+            apparmor_profile.as_deref(),
+            &preview,
+            cli.verbose,
+            true,
+        );
+        let use_err = aifo_coder::color_enabled_stderr();
+        aifo_coder::log_info_stderr(use_err, "aifo-coder: dry-run requested; not executing Docker.");
+        return ExitCode::from(0);
+    }
+
+    // Real execution path: require docker runtime
     match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
@@ -414,19 +437,8 @@ fn main() -> ExitCode {
                 apparmor_profile.as_deref(),
                 &preview,
                 cli.verbose,
-                cli.dry_run,
+                false,
             );
-            if cli.dry_run {
-                // Skip actual Docker execution in dry-run mode
-                {
-                    let use_err = aifo_coder::color_enabled_stderr();
-                    aifo_coder::log_info_stderr(
-                        use_err,
-                        "aifo-coder: dry-run requested; not executing Docker.",
-                    );
-                }
-                return ExitCode::from(0);
-            }
             // Acquire lock only for real execution; honor AIFO_CODER_SKIP_LOCK=1 for child panes
             let skip_lock = std::env::var("AIFO_CODER_SKIP_LOCK").ok().as_deref() == Some("1");
             let maybe_lock = if skip_lock {
