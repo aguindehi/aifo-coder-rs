@@ -342,10 +342,15 @@ pub fn build_docker_cmd(
     let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
 
     // Container name/hostname
-    let container_name = env::var("AIFO_CODER_CONTAINER_NAME")
-        .unwrap_or_else(|_| format!("{}-{}-{}", prefix, agent, crate::create_session_id()));
+    // Reuse AIFO_CODER_CONTAINER_NAME only if it matches the current agent string; otherwise regenerate.
+    let container_name = match env::var("AIFO_CODER_CONTAINER_NAME").ok() {
+        Some(v) if v.contains(&format!("-{}-", agent)) => v,
+        _ => format!("{}-{}-{}", prefix, agent, crate::create_session_id()),
+    };
     // Make container name available to other subsystems (e.g., proxy) via env
     env::set_var("AIFO_CODER_CONTAINER_NAME", &container_name);
+
+    // Reuse AIFO_CODER_HOSTNAME if provided; otherwise default to container_name
     let hostname = env::var("AIFO_CODER_HOSTNAME").unwrap_or_else(|_| container_name.clone());
     let name_flags = vec![
         OsString::from("--name"),
