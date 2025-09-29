@@ -1343,6 +1343,7 @@ test:
 	@set -e; \
 	export AIFO_SHIM_EXIT_ZERO_ON_SIGINT=0; \
 	export AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT=0; \
+	export AIFO_CODER_TEST_DISABLE_DOCKER=1; \
 	if [ "$(CLIPPY)" = "1" ]; then $(MAKE) lint; fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
