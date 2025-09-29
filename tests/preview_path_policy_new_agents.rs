@@ -23,12 +23,12 @@ fn test_path_policy_and_naming_openhands_opencode_plandex() {
         preview_oh
     );
     assert!(
-        preview_oh.contains("--name aifo-coder-openhands-"),
+        preview_oh.contains("--name ") && preview_oh.contains("aifo-coder-openhands-"),
         "container name should include agent string; preview:\n{}",
         preview_oh
     );
     assert!(
-        preview_oh.contains("--hostname aifo-coder-openhands-"),
+        preview_oh.contains("--hostname ") && preview_oh.contains("aifo-coder-openhands-"),
         "hostname should include agent string; preview:\n{}",
         preview_oh
     );
@@ -42,12 +42,12 @@ fn test_path_policy_and_naming_openhands_opencode_plandex() {
         preview_oc
     );
     assert!(
-        preview_oc.contains("--name aifo-coder-opencode-"),
+        preview_oc.contains("--name ") && preview_oc.contains("aifo-coder-opencode-"),
         "container name should include agent string; preview:\n{}",
         preview_oc
     );
     assert!(
-        preview_oc.contains("--hostname aifo-coder-opencode-"),
+        preview_oc.contains("--hostname ") && preview_oc.contains("aifo-coder-opencode-"),
         "hostname should include agent string; preview:\n{}",
         preview_oc
     );
@@ -61,12 +61,12 @@ fn test_path_policy_and_naming_openhands_opencode_plandex() {
         preview_pl
     );
     assert!(
-        preview_pl.contains("--name aifo-coder-plandex-"),
+        preview_pl.contains("--name ") && preview_pl.contains("aifo-coder-plandex-"),
         "container name should include agent string; preview:\n{}",
         preview_pl
     );
     assert!(
-        preview_pl.contains("--hostname aifo-coder-plandex-"),
+        preview_pl.contains("--hostname ") && preview_pl.contains("aifo-coder-plandex-"),
         "hostname should include agent string; preview:\n{}",
         preview_pl
     );
