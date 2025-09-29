@@ -359,6 +359,9 @@ pub fn build_docker_cmd(
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
+        "openhands" => "/usr/local/bin/openhands",
+        "opencode" => "/usr/local/bin/opencode",
+        "plandex" => "/usr/local/bin/plandex",
         _ => agent,
     };
     let mut agent_cmd = vec![agent_abs.to_string()];
