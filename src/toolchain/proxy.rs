@@ -1297,7 +1297,6 @@ fn handle_connection<S: Read + Write>(
         // Emit timeout chunk late if not already sent
         if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
             let _ = respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
-            timeout_chunk_emitted = true;
         }
 
         let mut code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
