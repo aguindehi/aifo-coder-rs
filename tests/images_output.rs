@@ -1,8 +1,8 @@
 #[test]
 fn test_images_effective_includes_all_agents() {
     // Compose expected refs using environment and preferred registry prefix
-    let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX")
-        .unwrap_or_else(|_| "aifo-coder".to_string());
+    let prefix =
+        std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
     let flavor = std::env::var("AIFO_CODER_IMAGE_FLAVOR").ok();
     let suffix = if flavor
@@ -15,7 +15,14 @@ fn test_images_effective_includes_all_agents() {
         ""
     };
     let reg = aifo_coder::preferred_registry_prefix_quiet();
-    let agents = vec!["aider", "codex", "crush", "opencode", "openhands", "plandex"];
+    let agents = vec![
+        "aider",
+        "codex",
+        "crush",
+        "opencode",
+        "openhands",
+        "plandex",
+    ];
     let mut pairs = Vec::new();
     for a in &agents {
         let name = format!("{prefix}-{a}{suffix}:{tag}");
@@ -30,7 +37,14 @@ fn test_images_effective_includes_all_agents() {
     let mut keys = pairs.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>();
     keys.sort_unstable();
 
-    let mut expected = vec!["aider", "codex", "crush", "opencode", "openhands", "plandex"];
+    let mut expected = vec![
+        "aider",
+        "codex",
+        "crush",
+        "opencode",
+        "openhands",
+        "plandex",
+    ];
     expected.sort_unstable();
 
     assert_eq!(keys, expected, "must list all agents");
@@ -51,11 +65,18 @@ fn test_images_effective_respects_flavor_env() {
     // Set slim and check that -slim appears in refs
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim");
 
-    let prefix = std::env::var("AIFO_CODER_IMAGE_PREFIX")
-        .unwrap_or_else(|_| "aifo-coder".to_string());
+    let prefix =
+        std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
     let reg = aifo_coder::preferred_registry_prefix_quiet();
-    let agents = vec!["aider", "codex", "crush", "opencode", "openhands", "plandex"];
+    let agents = vec![
+        "aider",
+        "codex",
+        "crush",
+        "opencode",
+        "openhands",
+        "plandex",
+    ];
 
     for a in &agents {
         let name = format!("{prefix}-{a}-slim:{tag}");
