@@ -155,15 +155,21 @@ help: banner
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
 	@echo ""
 	@echo "  build-coder ................. Build both slim and fat images (all agents)"
-	@echo "  build-fat ................... Build all fat images (codex, crush, aider)"
-	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim)"
+	@echo "  build-fat ................... Build all fat images (codex, crush, aider, openhands, opencode, plandex)"
+	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim, openhands-slim, opencode-slim, plandex-slim)"
 	@echo ""
 	@echo "  build-codex ................. Build only the Codex image ($${IMAGE_PREFIX}-codex:$${TAG})"
 	@echo "  build-crush ................. Build only the Crush image ($${IMAGE_PREFIX}-crush:$${TAG})"
 	@echo "  build-aider ................. Build only the Aider image ($${IMAGE_PREFIX}-aider:$${TAG})"
+	@echo "  build-openhands ............. Build only the OpenHands image ($${IMAGE_PREFIX}-openhands:$${TAG})"
+	@echo "  build-opencode .............. Build only the OpenCode image ($${IMAGE_PREFIX}-opencode:$${TAG})"
+	@echo "  build-plandex ............... Build only the Plandex image ($${IMAGE_PREFIX}-plandex:$${TAG})"
 	@echo "  build-codex-slim ............ Build only the Codex slim image ($${IMAGE_PREFIX}-codex-slim:$${TAG})"
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
+	@echo "  build-openhands-slim ........ Build only the OpenHands slim image ($${IMAGE_PREFIX}-openhands-slim:$${TAG})"
+	@echo "  build-opencode-slim ......... Build only the OpenCode slim image ($${IMAGE_PREFIX}-opencode-slim:$${TAG})"
+	@echo "  build-plandex-slim .......... Build only the Plandex slim image ($${IMAGE_PREFIX}-plandex-slim:$${TAG})"
 	@echo ""
 	@echo "  build-toolchain ............. Build all toolchain sidecar images (rust/node/cpp)"
 	@echo "  build-toolchain-rust ........ Build the Rust toolchain sidecar image (aifo-rust-toolchain:latest)"
@@ -186,9 +192,15 @@ help: banner
 	@echo "  rebuild-codex ............... Rebuild only the Codex image without cache"
 	@echo "  rebuild-crush ............... Rebuild only the Crush image without cache"
 	@echo "  rebuild-aider ............... Rebuild only the Aider image without cache"
+	@echo "  rebuild-openhands ........... Rebuild only the OpenHands image without cache"
+	@echo "  rebuild-opencode ............ Rebuild only the OpenCode image without cache"
+	@echo "  rebuild-plandex ............. Rebuild only the Plandex image without cache"
 	@echo "  rebuild-codex-slim .......... Rebuild only the Codex slim image without cache"
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
+	@echo "  rebuild-openhands-slim ...... Rebuild only the OpenHands slim image without cache"
+	@echo "  rebuild-opencode-slim ....... Rebuild only the OpenCode slim image without cache"
+	@echo "  rebuild-plandex-slim ........ Rebuild only the Plandex slim image without cache"
 	@echo ""
 	@echo "  rebuild-toolchain ........... Rebuild all toolchain sidecar images without cache"
 	@echo "  rebuild-toolchain-rust ...... Rebuild only the Rust toolchain image without cache"
@@ -387,7 +399,7 @@ COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
-.PHONY: build build-coder build-fat build-codex build-crush build-aider build-rust-builder build-launcher
+.PHONY: build build-coder build-fat build-codex build-crush build-aider build-openhands build-opencode build-plandex build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider build-openhands build-opencode build-plandex
 
 build: build-slim build-fat build-rust-builder build-toolchain build-launcher
@@ -1012,7 +1024,7 @@ publish-plandex-slim:
 .PHONY: publish
 publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim publish-toolchain-rust publish-toolchain-node publish-toolchain-cpp
 
-.PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim
+.PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 
 build-codex-slim:
@@ -1724,7 +1736,7 @@ toolchain-cache-clear:
 	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-node-cache aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
 	@echo "Done."
 
-.PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-rust-builder
+.PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex rebuild-rust-builder
 rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
 
 rebuild-coder: rebuild-slim rebuild-fat rebuild-rust-builder
@@ -1892,7 +1904,7 @@ rebuild-rust-builder:
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
-.PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim
+.PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim
 rebuild-slim: rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim
 
 rebuild-codex-slim:
