@@ -40,6 +40,7 @@ Architecture and installation overview
     NODE_EXTRA_CA_CERTS=/run/secrets/migros_root_ca (when present),
     NODE_OPTIONS="--use-openssl-ca",
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt,
+    SSL_CERT_DIR=/etc/ssl/certs,
     CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt.
   - Post-install cleanup:
     npm prune --omit=dev; npm cache clean --force; remove npm/npx/yarn symlinks in slim images;
@@ -52,13 +53,13 @@ Architecture and installation overview
     UV_TOOL_DIR="/usr/local/bin" so uv manages a shim/symlink at /usr/local/bin/openhands.
     uv tool install --python 3.12 --from openhands-ai openhands.
   - TLS and enterprise CA during install:
-    UV_NATIVE_TLS=1; REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE, SSL_CERT_FILE set to consolidated CA;
-    inject corporate CA via BuildKit secret only during RUN steps; remove afterward.
+    UV_NATIVE_TLS=1; REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE, SSL_CERT_FILE, SSL_CERT_DIR=/etc/ssl/certs set to consolidated CA;
+    ensure curl for uv installer runs with CA env set; inject corporate CA via BuildKit secret only during RUN steps; remove afterward.
   - Post-install cleanup:
     remove /root/.cache/uv and pip caches; wipe docs/locales and apt caches when KEEP_APT=0.
 
 - Plandex (Go):
-  - Builder stage: golang:1.22-bookworm with CA env for git/curl.
+  - Builder stage: golang:1.22-bookroom with CA env for git/curl (GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt, SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt, CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt).
     git clone https://github.com/plandex-ai/plandex.git.
     Build in plandex/app/cli:
       CGO_ENABLED=0; GOFLAGS="-trimpath -mod=readonly";
@@ -82,8 +83,10 @@ Phase 0 — Validation and preparatory decisions
 - Non-root execution and entrypoint invariants:
   - Preserve dumb-init and aifo-entrypoint (HOME/GNUPGHOME/XDG runtime, pinentry-curses,
     gpg-agent launch).
-- Enterprise CA handling:
-  - Use BuildKit secret (migros_root_ca) for install steps; set TLS env vars; remove CA after step.
+- Enterprise CA handling (DPI-friendly):
+  - Use BuildKit secret id=migros_root_ca mounted at /run/secrets/migros_root_ca during RUN steps; set TLS env vars (SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt, SSL_CERT_DIR=/etc/ssl/certs, CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt, REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt); for Node add NODE_EXTRA_CA_CERTS=/run/secrets/migros_root_ca and NODE_OPTIONS="--use-openssl-ca"; for Git add GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt; for uv set UV_NATIVE_TLS=1.
+  - Optionally install the secret CA as /usr/local/share/ca-certificates/migros-root-ca.crt and run update-ca-certificates; delete the file and rerun update-ca-certificates immediately after the step to avoid persistence.
+  - Apply this pattern to npm installs (OpenCode), curl+uv installs (OpenHands), and git clone/go build (Plandex).
 
 Phase 1 — CLI wiring (no changes if v3 landed)
 - src/cli.rs:
