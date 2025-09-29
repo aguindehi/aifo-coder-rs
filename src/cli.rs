@@ -150,12 +150,14 @@ pub(crate) enum Agent {
         args: Vec<String>,
     },
     /// Run OpenHands
+    #[command(name = "openhands")]
     OpenHands {
         /// Additional arguments passed through to the agent
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
     /// Run OpenCode
+    #[command(name = "opencode")]
     OpenCode {
         /// Additional arguments passed through to the agent
         #[arg(trailing_var_arg = true)]
