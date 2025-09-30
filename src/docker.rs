@@ -208,7 +208,10 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             ];
             if agent == "opencode" {
                 pairs.push((base.join(".opencode"), "/home/coder/.local/share/opencode"));
-                pairs.push((base.join(".opencode_config"), "/home/coder/.config/opencode"));
+                pairs.push((
+                    base.join(".opencode_config"),
+                    "/home/coder/.config/opencode",
+                ));
                 pairs.push((base.join(".opencode_cache"), "/home/coder/.cache/opencode"));
             }
             if agent == "openhands" {

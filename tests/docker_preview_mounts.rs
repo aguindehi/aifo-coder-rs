@@ -5,12 +5,7 @@ fn test_preview_mounts_for_opencode_include_config_share_cache() {
     let td = tempfile::tempdir().expect("tmpdir");
     std::env::set_var("HOME", td.path());
 
-    let preview = aifo_coder::build_docker_preview_only(
-        "opencode",
-        &[],
-        "example:latest",
-        None,
-    );
+    let preview = aifo_coder::build_docker_preview_only("opencode", &[], "example:latest", None);
 
     let cfg = format!(
         "{}/.config/opencode:/home/coder/.config/opencode",
@@ -48,17 +43,9 @@ fn test_preview_mounts_for_openhands_include_user_dir() {
     let td = tempfile::tempdir().expect("tmpdir");
     std::env::set_var("HOME", td.path());
 
-    let preview = aifo_coder::build_docker_preview_only(
-        "openhands",
-        &[],
-        "example:latest",
-        None,
-    );
+    let preview = aifo_coder::build_docker_preview_only("openhands", &[], "example:latest", None);
 
-    let expected = format!(
-        "{}/.openhands:/home/coder/.openhands",
-        td.path().display()
-    );
+    let expected = format!("{}/.openhands:/home/coder/.openhands", td.path().display());
     assert!(
         preview.contains(&expected),
         "expected openhands mount missing; preview:\n{}",
@@ -72,12 +59,7 @@ fn test_preview_mounts_for_plandex_include_home_dir() {
     let td = tempfile::tempdir().expect("tmpdir");
     std::env::set_var("HOME", td.path());
 
-    let preview = aifo_coder::build_docker_preview_only(
-        "plandex",
-        &[],
-        "example:latest",
-        None,
-    );
+    let preview = aifo_coder::build_docker_preview_only("plandex", &[], "example:latest", None);
 
     let expected = format!(
         "{}/.plandex-home:/home/coder/.plandex-home",
