@@ -314,14 +314,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands"; \
-  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
+  PKG="openhands-ai"; \
+  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands-ai==$OPENHANDS_CONSTRAINT"; fi; \
   apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv; \
   /usr/bin/python3 -m venv /opt/venv-openhands; \
   /opt/venv-openhands/bin/python -m pip install --upgrade pip; \
   /opt/venv-openhands/bin/python -m pip install "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/python -m openhands "$@"' > /usr/local/bin/openhands; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
   chmod 0755 /usr/local/bin/openhands; \
+  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
@@ -673,14 +674,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands"; \
-  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
+  PKG="openhands-ai"; \
+  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands-ai==$OPENHANDS_CONSTRAINT"; fi; \
   apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv; \
   /usr/bin/python3 -m venv /opt/venv-openhands; \
   /opt/venv-openhands/bin/python -m pip install --upgrade pip; \
   /opt/venv-openhands/bin/python -m pip install "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/python -m openhands "$@"' > /usr/local/bin/openhands; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
   chmod 0755 /usr/local/bin/openhands; \
+  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
