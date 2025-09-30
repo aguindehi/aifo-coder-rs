@@ -323,6 +323,13 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   chmod 0755 /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  # Allow non-root user to traverse uv-managed Python in /root (needed for shebang interpreter resolution)
+  chmod 0755 /root; \
+  chmod 0755 /root/.local || true; \
+  chmod 0755 /root/.local/share || true; \
+  chmod 0755 /root/.local/share/uv || true; \
+  find /root/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
+  find /root/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -682,6 +689,13 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   chmod 0755 /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  # Allow non-root user to traverse uv-managed Python in /root (needed for shebang interpreter resolution)
+  chmod 0755 /root; \
+  chmod 0755 /root/.local || true; \
+  chmod 0755 /root/.local/share || true; \
+  chmod 0755 /root/.local/share/uv || true; \
+  find /root/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
+  find /root/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
