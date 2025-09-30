@@ -370,12 +370,20 @@ pub fn build_docker_preview_only(
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
-        "openhands" => "/usr/local/bin/openhands",
+        "openhands" => "/opt/venv-openhands/bin/python",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
         _ => agent,
     };
-    let mut agent_cmd = vec![agent_abs.to_string()];
+    let mut agent_cmd = if agent == "openhands" {
+        vec![
+            "/opt/venv-openhands/bin/python".to_string(),
+            "-m".to_string(),
+            "openhands".to_string(),
+        ]
+    } else {
+        vec![agent_abs.to_string()]
+    };
     agent_cmd.extend(passthrough.iter().cloned());
     let agent_joined = crate::shell_join(&agent_cmd);
     let path_value = match agent {
@@ -808,12 +816,20 @@ pub fn build_docker_cmd(
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
-        "openhands" => "/usr/local/bin/openhands",
+        "openhands" => "/opt/venv-openhands/bin/python",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
         _ => agent,
     };
-    let mut agent_cmd = vec![agent_abs.to_string()];
+    let mut agent_cmd = if agent == "openhands" {
+        vec![
+            "/opt/venv-openhands/bin/python".to_string(),
+            "-m".to_string(),
+            "openhands".to_string(),
+        ]
+    } else {
+        vec![agent_abs.to_string()]
+    };
     agent_cmd.extend(passthrough.iter().cloned());
     let agent_joined = crate::shell_join(&agent_cmd);
     let path_value = match agent {

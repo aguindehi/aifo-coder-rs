@@ -522,7 +522,7 @@ Tip:
   - `opencode-ai` installed globally via npm (OpenCode)
 - Python-based CLIs via `uv`:
   - `aider` installed into `/opt/venv` (PEP 668‑safe)
-  - `openhands` installed via `uv tool install` to `/usr/local/bin`
+  - `openhands` installed into `/opt/venv-openhands` via `uv`; wrapper at `/usr/local/bin/openhands` (invoked as `python -m openhands`)
 - Go-based CLI:
   - `plandex` built from source and installed to `/usr/local/bin`
 - `dumb-init`, `git`, `ripgrep`, `curl`, `emacs-nox`, `vim`, `nano`, `mg`, `nvi`
