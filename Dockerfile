@@ -396,13 +396,14 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   git -c advice.detachedHead=false checkout "$PLX_GIT_REF" || true; \
   mkdir -p /out; \
   cd app/cli; \
+  export PATH="/usr/local/go/bin:${PATH}"; \
   export CGO_ENABLED=0; \
   export GOFLAGS="-trimpath -mod=readonly"; \
   V="$([ -f version.txt ] && cat version.txt || echo dev)"; \
   LDFLAGS="-s -w -X plandex/version.Version=$V"; \
-  case "${TARGETOS:-}" in "") GOOS="$(go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
-  case "${TARGETARCH:-}" in "") GOARCH="$(go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
-  GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o /out/plandex .; \
+  case "${TARGETOS:-}" in "") GOOS="$(/usr/local/go/bin/go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
+  case "${TARGETARCH:-}" in "") GOARCH="$(/usr/local/go/bin/go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
+  GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go build -ldflags "$LDFLAGS" -o /out/plandex .; \
   rm -rf /root/go/pkg /go/pkg/mod; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
