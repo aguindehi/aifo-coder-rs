@@ -322,16 +322,18 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     }
 
-    // Aider root-level config files
-    for fname in [
-        ".aider.conf.yml",
-        ".aider.model.metadata.json",
-        ".aider.model.settings.yml",
-    ] {
-        let src = host_home.join(fname);
-        ensure_file_exists(&src).ok();
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&src, &format!("/home/coder/{fname}")));
+    // Aider root-level config files (only for aider agent)
+    if agent == "aider" {
+        for fname in [
+            ".aider.conf.yml",
+            ".aider.model.metadata.json",
+            ".aider.model.settings.yml",
+        ] {
+            let src = host_home.join(fname);
+            ensure_file_exists(&src).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&src, &format!("/home/coder/{fname}")));
+        }
     }
 
     // Git config
