@@ -316,7 +316,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   PKG="openhands"; \
   if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
-  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 --from openhands-ai "$PKG"; \
+  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 "$PKG"; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -666,7 +666,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   PKG="openhands"; \
   if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
-  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 --from openhands-ai "$PKG"; \
+  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 "$PKG"; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
