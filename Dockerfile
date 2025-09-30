@@ -316,7 +316,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   PKG="openhands"; \
   if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
-  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 "$PKG"; \
+  uv venv /opt/venv-openhands; \
+  uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/python -m openhands "$@"' > /usr/local/bin/openhands; \
+  chmod 0755 /usr/local/bin/openhands; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -666,7 +669,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   PKG="openhands"; \
   if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands==$OPENHANDS_CONSTRAINT"; fi; \
-  UV_TOOL_DIR=/usr/local/bin uv tool install --python 3.12 "$PKG"; \
+  uv venv /opt/venv-openhands; \
+  uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/python -m openhands "$@"' > /usr/local/bin/openhands; \
+  chmod 0755 /usr/local/bin/openhands; \
   rm -rf /root/.cache/uv /root/.cache/pip; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
