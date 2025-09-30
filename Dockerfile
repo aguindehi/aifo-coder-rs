@@ -375,13 +375,14 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
   fi
 
 # --- Plandex builder (Go) ---
-FROM ${REGISTRY_PREFIX}golang:1.22-bookworm AS plandex-builder
+FROM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG PLX_GIT_REF=main
 WORKDIR /src
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOTOOLCHAIN=auto
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
