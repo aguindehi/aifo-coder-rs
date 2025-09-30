@@ -546,122 +546,16 @@ pub fn build_docker_cmd(
 
     // UID/GID mapping
     #[cfg(unix)]
-    let (uid, gid) = { (u32::from(getuid()), u32::from(getgid())) };
-
-    // Forward selected env vars (inherit from host)
-    let mut env_flags: Vec<OsString> = Vec::new();
-    for var in PASS_ENV_VARS.iter().copied() {
-        if let Ok(val) = env::var(var) {
-            if !val.is_empty() {
-                env_flags.push(OsString::from("-e"));
-                env_flags.push(OsString::from(var));
-            }
-        }
-    }
-
-    // Always set these inside container
-    env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("HOME=/home/coder"));
-    env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("USER=coder"));
-    env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("CODEX_HOME=/home/coder/.codex"));
-    env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("GNUPGHOME=/home/coder/.gnupg"));
-    // Ensure our auto-exit shell wrapper is preferred for transient shells
-    env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
-
-    // XDG_RUNTIME_DIR for gpg-agent sockets
+    let uid_opt = Some(u32::from(getuid()));
     #[cfg(unix)]
-    {
-        env_flags.push(OsString::from("-e"));
-        env_flags.push(OsString::from(format!(
-            "XDG_RUNTIME_DIR=/tmp/runtime-{uid}"
-        )));
-    }
-    // Ensure pinentry can bind to the terminal when interactive sessions are used
-    if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
-        env_flags.push(OsString::from("-e"));
-        env_flags.push(OsString::from("GPG_TTY=/dev/tty"));
-    }
+    let gid_opt = Some(u32::from(getgid()));
+    #[cfg(not(unix))]
+    let (uid_opt, gid_opt) = (None, None);
 
-    // Map unified AIFO_* environment to agent-specific variables
-    if let Ok(v) = env::var("AIFO_API_KEY") {
-        if !v.is_empty() {
-            // OpenAI-style
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("OPENAI_API_KEY={v}")));
-            // Azure-style
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_KEY={v}")));
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_API_KEY={v}")));
-        }
-    }
-    if let Ok(v) = env::var("AIFO_API_BASE") {
-        if !v.is_empty() {
-            // OpenAI-style base URL
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("OPENAI_BASE_URL={v}")));
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("OPENAI_API_BASE={v}")));
-            // Azure-style endpoint/base
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_OPENAI_ENDPOINT={v}")));
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_API_BASE={v}")));
-            // Hint some clients that this is Azure-backed endpoint
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from("OPENAI_API_TYPE=azure"));
-        }
-    }
-    if let Ok(v) = env::var("AIFO_API_VERSION") {
-        if !v.is_empty() {
-            // OpenAI-style API version (used by some clients for Azure)
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("OPENAI_API_VERSION={v}")));
-            // Azure-style version
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_OPENAI_API_VERSION={v}")));
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AZURE_API_VERSION={v}")));
-        }
-    }
-    // Phase 2: pass through tool-exec proxy URL and token if set
-    if let Ok(v) = env::var("AIFO_TOOLEEXEC_URL") {
-        if !v.is_empty() {
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_URL={v}")));
-        }
-    }
-    if let Ok(v) = env::var("AIFO_TOOLEEXEC_TOKEN") {
-        if !v.is_empty() {
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AIFO_TOOLEEXEC_TOKEN={v}")));
-        }
-    }
-    if let Ok(v) = env::var("AIFO_TOOLCHAIN_VERBOSE") {
-        if !v.is_empty() {
-            env_flags.push(OsString::from("-e"));
-            env_flags.push(OsString::from(format!("AIFO_TOOLCHAIN_VERBOSE={v}")));
-        }
-    }
+    // Env flags
+    let env_flags = collect_env_flags(agent, uid_opt);
 
-    // Disable commit signing for Aider if requested
-    if agent == "aider" {
-        if let Ok(v) = env::var("AIFO_CODER_GIT_SIGN") {
-            let vl = v.to_lowercase();
-            if ["0", "false", "no", "off"].contains(&vl.as_str()) {
-                env_flags.push(OsString::from("-e"));
-                env_flags.push(OsString::from("GIT_CONFIG_COUNT=1"));
-                env_flags.push(OsString::from("-e"));
-                env_flags.push(OsString::from("GIT_CONFIG_KEY_0=commit.gpgsign"));
-                env_flags.push(OsString::from("-e"));
-                env_flags.push(OsString::from("GIT_CONFIG_VALUE_0=false"));
-            }
-        }
-    }
+    // Env flags collected via helper (collect_env_flags)
 
     // Volume mounts and host prep
     let mut volume_flags: Vec<OsString> = Vec::new();
@@ -883,26 +777,10 @@ pub fn build_docker_cmd(
     }
 
     // User mapping
-    #[allow(unused_mut)]
-    let mut user_flags: Vec<OsString> = Vec::new();
-    #[cfg(unix)]
-    {
-        user_flags.push(OsString::from("--user"));
-        user_flags.push(OsString::from(format!("{uid}:{gid}")));
-    }
+    let user_flags = collect_user_flags(uid_opt, gid_opt);
 
     // AppArmor security flags
-    let mut security_flags: Vec<OsString> = Vec::new();
-    if let Some(profile) = apparmor_profile {
-        if crate::docker_supports_apparmor() {
-            security_flags.push(OsString::from("--security-opt"));
-            security_flags.push(OsString::from(format!("apparmor={profile}")));
-        } else {
-            crate::warn_print(
-                "docker daemon does not report apparmor support. continuing without apparmor.",
-            );
-        }
-    }
+    let security_flags = collect_security_flags(apparmor_profile);
     // Image prefix used for container naming
     let prefix = env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
 
