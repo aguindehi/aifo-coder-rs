@@ -381,6 +381,7 @@ ARG TARGETARCH
 ARG PLX_GIT_REF=main
 WORKDIR /src
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/go/bin:${PATH}"
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
