@@ -252,29 +252,6 @@ pub fn build_docker_preview_only(
             volume_flags.push(path_pair(&openhands_dir, "/home/coder/.openhands"));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&plandex_home_dir, "/home/coder/.plandex-home"));
-            // Additional per-pane mounts for agent config/cache/state
-            let opencode_config_dir = base.join(".opencode_config");
-            let opencode_cache_dir = base.join(".opencode_cache");
-            let openhands_dir = base.join(".openhands");
-            let plandex_home_dir = base.join(".plandex-home");
-            let _ = fs::create_dir_all(&opencode_config_dir);
-            let _ = fs::create_dir_all(&opencode_cache_dir);
-            let _ = fs::create_dir_all(&openhands_dir);
-            let _ = fs::create_dir_all(&plandex_home_dir);
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(
-                &opencode_config_dir,
-                "/home/coder/.config/opencode",
-            ));
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(
-                &opencode_cache_dir,
-                "/home/coder/.cache/opencode",
-            ));
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&openhands_dir, "/home/coder/.openhands"));
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&plandex_home_dir, "/home/coder/.plandex-home"));
         } else {
             // Fallback to legacy HOME-based mounts if the env var is empty
             let crush_dir = host_home.join(".local").join("share").join("crush");
@@ -304,23 +281,6 @@ pub fn build_docker_preview_only(
             fs::create_dir_all(&aider_dir).ok();
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
-            // Agent config/cache/state mounts (HOME-based)
-            let opencode_config = host_home.join(".config").join("opencode");
-            fs::create_dir_all(&opencode_config).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_config, "/home/coder/.config/opencode"));
-            let opencode_cache = host_home.join(".cache").join("opencode");
-            fs::create_dir_all(&opencode_cache).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_cache, "/home/coder/.cache/opencode"));
-            let openhands_home = host_home.join(".openhands");
-            fs::create_dir_all(&openhands_home).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&openhands_home, "/home/coder/.openhands"));
-            let plandex_home = host_home.join(".plandex-home");
-            fs::create_dir_all(&plandex_home).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&plandex_home, "/home/coder/.plandex-home"));
             // Agent config/cache/state mounts (HOME-based)
             let opencode_config = host_home.join(".config").join("opencode");
             fs::create_dir_all(&opencode_config).ok();
@@ -368,23 +328,6 @@ pub fn build_docker_preview_only(
         fs::create_dir_all(&aider_dir).ok();
         volume_flags.push(OsString::from("-v"));
         volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
-        // Agent config/cache/state mounts (HOME-based)
-        let opencode_config = host_home.join(".config").join("opencode");
-        fs::create_dir_all(&opencode_config).ok();
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&opencode_config, "/home/coder/.config/opencode"));
-        let opencode_cache = host_home.join(".cache").join("opencode");
-        fs::create_dir_all(&opencode_cache).ok();
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&opencode_cache, "/home/coder/.cache/opencode"));
-        let openhands_home = host_home.join(".openhands");
-        fs::create_dir_all(&openhands_home).ok();
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&openhands_home, "/home/coder/.openhands"));
-        let plandex_home = host_home.join(".plandex-home");
-        fs::create_dir_all(&plandex_home).ok();
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&plandex_home, "/home/coder/.plandex-home"));
         // Agent config/cache/state mounts (HOME-based)
         let opencode_config = host_home.join(".config").join("opencode");
         fs::create_dir_all(&opencode_config).ok();
@@ -797,6 +740,29 @@ pub fn build_docker_cmd(
             ));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
+            // Additional per-pane mounts for agent config/cache/state
+            let opencode_config_dir = base.join(".opencode_config");
+            let opencode_cache_dir = base.join(".opencode_cache");
+            let openhands_dir = base.join(".openhands");
+            let plandex_home_dir = base.join(".plandex-home");
+            let _ = fs::create_dir_all(&opencode_config_dir);
+            let _ = fs::create_dir_all(&opencode_cache_dir);
+            let _ = fs::create_dir_all(&openhands_dir);
+            let _ = fs::create_dir_all(&plandex_home_dir);
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(
+                &opencode_config_dir,
+                "/home/coder/.config/opencode",
+            ));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(
+                &opencode_cache_dir,
+                "/home/coder/.cache/opencode",
+            ));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&openhands_dir, "/home/coder/.openhands"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&plandex_home_dir, "/home/coder/.plandex-home"));
         } else {
             // Fallback to legacy HOME-based mounts if the env var is empty
             let crush_dir = host_home.join(".local").join("share").join("crush");
@@ -826,6 +792,23 @@ pub fn build_docker_cmd(
             fs::create_dir_all(&aider_dir).ok();
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+            // Agent config/cache/state mounts (HOME-based)
+            let opencode_config = host_home.join(".config").join("opencode");
+            fs::create_dir_all(&opencode_config).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_config, "/home/coder/.config/opencode"));
+            let opencode_cache = host_home.join(".cache").join("opencode");
+            fs::create_dir_all(&opencode_cache).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_cache, "/home/coder/.cache/opencode"));
+            let openhands_home = host_home.join(".openhands");
+            fs::create_dir_all(&openhands_home).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&openhands_home, "/home/coder/.openhands"));
+            let plandex_home = host_home.join(".plandex-home");
+            fs::create_dir_all(&plandex_home).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&plandex_home, "/home/coder/.plandex-home"));
         }
     } else {
         // Legacy HOME-based mounts (non-fork mode)
@@ -856,6 +839,23 @@ pub fn build_docker_cmd(
         fs::create_dir_all(&aider_dir).ok();
         volume_flags.push(OsString::from("-v"));
         volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
+        // Agent config/cache/state mounts (HOME-based)
+        let opencode_config = host_home.join(".config").join("opencode");
+        fs::create_dir_all(&opencode_config).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&opencode_config, "/home/coder/.config/opencode"));
+        let opencode_cache = host_home.join(".cache").join("opencode");
+        fs::create_dir_all(&opencode_cache).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&opencode_cache, "/home/coder/.cache/opencode"));
+        let openhands_home = host_home.join(".openhands");
+        fs::create_dir_all(&openhands_home).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&openhands_home, "/home/coder/.openhands"));
+        let plandex_home = host_home.join(".plandex-home");
+        fs::create_dir_all(&plandex_home).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&plandex_home, "/home/coder/.plandex-home"));
     }
 
     // Aider root-level config files
