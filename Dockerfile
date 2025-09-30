@@ -297,6 +297,102 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         rm -rf /opt/yarn-v1.22.22; \
     fi
 
+# --- OpenHands image (stub wrapper; shims-first PATH) ---
+FROM base AS openhands
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="openhands"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "openhands: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "openhands: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/openhands \
+ && chmod 0755 /usr/local/bin/openhands
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi
+
+# --- OpenCode image (stub wrapper; shims-first PATH) ---
+FROM base AS opencode
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="opencode"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "opencode: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "opencode: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/opencode \
+ && chmod 0755 /usr/local/bin/opencode
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi
+
+# --- Plandex image (stub wrapper; shims-first PATH) ---
+FROM base AS plandex
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="plandex"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "plandex: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "plandex: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/plandex \
+ && chmod 0755 /usr/local/bin/plandex
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi
+
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
@@ -519,3 +615,99 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
     fi
+
+# --- OpenHands slim image (stub wrapper; shims-first PATH) ---
+FROM base-slim AS openhands-slim
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="openhands"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "openhands: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "openhands: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/openhands \
+ && chmod 0755 /usr/local/bin/openhands
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps curl || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi
+
+# --- OpenCode slim image (stub wrapper; shims-first PATH) ---
+FROM base-slim AS opencode-slim
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="opencode"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "opencode: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "opencode: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/opencode \
+ && chmod 0755 /usr/local/bin/opencode
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps curl || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi
+
+# --- Plandex slim image (stub wrapper; shims-first PATH) ---
+FROM base-slim AS plandex-slim
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'agent="plandex"' \
+ 'case "${1:-}" in --help|-h|-V|--version) ' \
+ '  echo "plandex: containerized wrapper (stub)";' \
+ '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
+ '  exit 0;;' \
+ 'esac' \
+ 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
+ '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
+ 'fi' \
+ 'echo "plandex: executable not found in PATH." >&2' \
+ 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
+ 'exit 86' > /usr/local/bin/plandex \
+ && chmod 0755 /usr/local/bin/plandex
+ENV PATH="/opt/aifo/bin:${PATH}"
+ARG KEEP_APT=0
+RUN if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps curl || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    npm prune --omit=dev || true; \
+    npm cache clean --force; \
+    rm -rf /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi

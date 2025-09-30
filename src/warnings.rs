@@ -83,7 +83,13 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
         return;
     }
     // Only warn for interactive agent runs
-    if agent != "aider" && agent != "crush" && agent != "codex" {
+    if !(agent == "aider"
+        || agent == "crush"
+        || agent == "codex"
+        || agent == "openhands"
+        || agent == "opencode"
+        || agent == "plandex")
+    {
         return;
     }
     if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
@@ -166,7 +172,13 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str)
         return true;
     }
     // Only warn for coding agents
-    if agent != "aider" && agent != "crush" && agent != "codex" {
+    if !(agent == "aider"
+        || agent == "crush"
+        || agent == "codex"
+        || agent == "openhands"
+        || agent == "opencode"
+        || agent == "plandex")
+    {
         return true;
     }
     // No toolchain flags?

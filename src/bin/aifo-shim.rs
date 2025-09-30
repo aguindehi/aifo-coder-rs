@@ -1009,12 +1009,10 @@ fn try_notify_native(
         tok = token,
         len = body.len()
     );
-    if w.write_all(req.as_bytes()).is_err()
-        || w.write_all(body.as_bytes()).is_err()
-        || w.flush().is_err()
-    {
-        return None;
-    }
+    // Best-effort writes: proceed to read response even if peer closed early.
+    let _ = w.write_all(req.as_bytes());
+    let _ = w.write_all(body.as_bytes());
+    let _ = w.flush();
 
     // Read response, print body, parse X-Exit-Code
     let mut buf = Vec::new();

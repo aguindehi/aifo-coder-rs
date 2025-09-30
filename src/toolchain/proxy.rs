@@ -447,7 +447,8 @@ pub fn toolexec_start_proxy(
                     let session_cl = session.clone();
                     std::thread::spawn(move || {
                         let disable_user =
-                            std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref() == Some("1");
+                            std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref()
+                                == Some("1");
                         let ctx2 = ProxyCtx {
                             runtime: runtime_cl,
                             token: token_cl,
@@ -1057,8 +1058,10 @@ fn handle_connection<S: Read + Write>(
 
         // Optional max-runtime escalation watcher
         let done = Arc::new(AtomicBool::new(false));
+        let timed_out = Arc::new(AtomicBool::new(false));
         if timeout_secs > 0 {
             let done_cl = done.clone();
+            let timed_out_cl = timed_out.clone();
             let runtime_cl = ctx.runtime.clone();
             let container_cl = name.clone();
             let exec_id_cl = exec_id.clone();
@@ -1084,6 +1087,9 @@ fn handle_connection<S: Read + Write>(
                             "\raifo-coder: max-runtime: sending {} to exec_id={} after {}s",
                             sig, exec_id_cl, accum
                         );
+                    }
+                    if sig == "INT" {
+                        timed_out_cl.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                     kill_in_container(&runtime_cl, &container_cl, &exec_id_cl, sig, verbose_cl);
                 }
@@ -1196,7 +1202,13 @@ fn handle_connection<S: Read + Write>(
 
         // Stream until EOF or write error
         let mut write_failed = false;
+        let mut timeout_chunk_emitted = false;
         loop {
+            // Emit timeout chunk once when INT has been sent
+            if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+                let _ = respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
+                timeout_chunk_emitted = true;
+            }
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(chunk) => {
                     if let Err(_e) = respond_chunked_write_chunk(stream, &chunk) {
@@ -1282,7 +1294,15 @@ fn handle_connection<S: Read + Write>(
             return;
         }
 
-        let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+        // Emit timeout chunk late if not already sent
+        if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+            let _ = respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
+        }
+
+        let mut code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
+        if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+            code = 124;
+        }
         // Mark watcher done and remove from registry
         done.store(true, std::sync::atomic::Ordering::SeqCst);
         {

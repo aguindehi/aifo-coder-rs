@@ -149,6 +149,26 @@ pub(crate) enum Agent {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Run OpenHands
+    #[command(name = "openhands")]
+    OpenHands {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    /// Run OpenCode
+    #[command(name = "opencode")]
+    OpenCode {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+    /// Run Plandex
+    Plandex {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 
     /// Fork maintenance commands
     #[command(
@@ -164,7 +184,7 @@ pub(crate) enum Agent {
 #[command(
     name = "aifo-coder",
     version,
-    about = "Run Codex, Crush or Aider inside Docker with current directory mounted.",
+    about = "Run Codex, Crush, Aider, Opencode, Openhands or Plandex inside Docker with current directory mounted.",
     override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]",
     after_long_help = "Examples:\n  aifo-coder --fork 2 aider -- --help\n  aifo-coder --fork 3 --fork-include-dirty --fork-session-name aifo-work aider --\n  aifo-coder fork list --json\n  aifo-coder fork clean --older-than 14 --yes\n\n",
     after_help = "\n"
