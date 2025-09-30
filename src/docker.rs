@@ -192,7 +192,7 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     env_flags
 }
 
-fn collect_volume_flags(host_home: &Path, pwd: &Path) -> Vec<OsString> {
+fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
     // Fork-state mounts or HOME-based mounts
@@ -200,17 +200,24 @@ fn collect_volume_flags(host_home: &Path, pwd: &Path) -> Vec<OsString> {
         let sd = state_dir.trim();
         if !sd.is_empty() {
             let base = PathBuf::from(sd);
-            for (src, dst) in [
+            let mut pairs: Vec<(PathBuf, &str)> = vec![
                 (base.join(".aider"), "/home/coder/.aider"),
                 (base.join(".codex"), "/home/coder/.codex"),
                 (base.join(".crush"), "/home/coder/.crush"),
-                (base.join(".opencode"), "/home/coder/.local/share/opencode"),
                 (base.join(".local_state"), "/home/coder/.local/state"),
-                (base.join(".opencode_config"), "/home/coder/.config/opencode"),
-                (base.join(".opencode_cache"), "/home/coder/.cache/opencode"),
-                (base.join(".openhands"), "/home/coder/.openhands"),
-                (base.join(".plandex-home"), "/home/coder/.plandex-home"),
-            ] {
+            ];
+            if agent == "opencode" {
+                pairs.push((base.join(".opencode"), "/home/coder/.local/share/opencode"));
+                pairs.push((base.join(".opencode_config"), "/home/coder/.config/opencode"));
+                pairs.push((base.join(".opencode_cache"), "/home/coder/.cache/opencode"));
+            }
+            if agent == "openhands" {
+                pairs.push((base.join(".openhands"), "/home/coder/.openhands"));
+            }
+            if agent == "plandex" {
+                pairs.push((base.join(".plandex-home"), "/home/coder/.plandex-home"));
+            }
+            for (src, dst) in pairs {
                 let _ = fs::create_dir_all(&src);
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(path_pair(&src, dst));
@@ -222,33 +229,51 @@ fn collect_volume_flags(host_home: &Path, pwd: &Path) -> Vec<OsString> {
     if volume_flags.is_empty() {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
+        #[cfg(windows)]
+        let opencode_share = env::var("LOCALAPPDATA")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| host_home.join(".local").join("share"))
+            .join("opencode");
+        #[cfg(not(windows))]
         let opencode_share = host_home.join(".local").join("share").join("opencode");
         let local_state_dir = host_home.join(".local").join("state");
         let crush_state_dir = host_home.join(".crush");
         let codex_dir = host_home.join(".codex");
         let aider_dir = host_home.join(".aider");
 
-        for d in [
-            &crush_dir,
-            &opencode_share,
-            &local_state_dir,
-            &crush_state_dir,
-            &codex_dir,
-            &aider_dir,
-        ] {
-            fs::create_dir_all(d).ok();
+        {
+            let mut base_dirs: Vec<&Path> = vec![
+                &crush_dir,
+                &local_state_dir,
+                &crush_state_dir,
+                &codex_dir,
+                &aider_dir,
+            ];
+            if agent == "opencode" {
+                base_dirs.push(&opencode_share);
+            }
+            for d in base_dirs {
+                fs::create_dir_all(d).ok();
+            }
         }
 
-        for (src, dst) in [
-            (crush_dir, "/home/coder/.local/share/crush"),
-            (opencode_share, "/home/coder/.local/share/opencode"),
-            (local_state_dir, "/home/coder/.local/state"),
-            (crush_state_dir, "/home/coder/.crush"),
-            (codex_dir, "/home/coder/.codex"),
-            (aider_dir, "/home/coder/.aider"),
-        ] {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&src, dst));
+        {
+            let mut pairs: Vec<(PathBuf, &str)> = vec![
+                (crush_dir, "/home/coder/.local/share/crush"),
+                (local_state_dir, "/home/coder/.local/state"),
+                (crush_state_dir, "/home/coder/.crush"),
+                (codex_dir, "/home/coder/.codex"),
+                (aider_dir, "/home/coder/.aider"),
+            ];
+            if agent == "opencode" {
+                pairs.push((opencode_share, "/home/coder/.local/share/opencode"));
+            }
+            for (src, dst) in pairs {
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(path_pair(&src, dst));
+            }
         }
 
         // OpenCode config/cache (HOME/XDG), OpenHands, Plandex
@@ -277,17 +302,23 @@ fn collect_volume_flags(host_home: &Path, pwd: &Path) -> Vec<OsString> {
         let openhands_home = host_home.join(".openhands");
         let plandex_home = host_home.join(".plandex-home");
 
-        for d in [&opencode_config, &opencode_cache, &openhands_home, &plandex_home] {
-            fs::create_dir_all(d).ok();
-        }
-        for (src, dst) in [
-            (opencode_config, "/home/coder/.config/opencode"),
-            (opencode_cache, "/home/coder/.cache/opencode"),
-            (openhands_home, "/home/coder/.openhands"),
-            (plandex_home, "/home/coder/.plandex-home"),
-        ] {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&src, dst));
+        {
+            let mut extra_dirs: Vec<(PathBuf, &str)> = Vec::new();
+            if agent == "opencode" {
+                extra_dirs.push((opencode_config, "/home/coder/.config/opencode"));
+                extra_dirs.push((opencode_cache, "/home/coder/.cache/opencode"));
+            }
+            if agent == "openhands" {
+                extra_dirs.push((openhands_home, "/home/coder/.openhands"));
+            }
+            if agent == "plandex" {
+                extra_dirs.push((plandex_home, "/home/coder/.plandex-home"));
+            }
+            for (src, dst) in extra_dirs {
+                fs::create_dir_all(&src).ok();
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(path_pair(&src, dst));
+            }
         }
     }
 
@@ -436,7 +467,7 @@ pub fn build_docker_preview_only(
 
     // Volume mounts
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
-    let volume_flags = collect_volume_flags(&host_home, &pwd);
+    let volume_flags = collect_volume_flags(agent, &host_home, &pwd);
 
     // User and security flags
     let user_flags = collect_user_flags(uid_opt, gid_opt);
@@ -559,7 +590,7 @@ pub fn build_docker_cmd(
 
     // Volume mounts
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
-    let volume_flags = collect_volume_flags(&host_home, &pwd);
+    let volume_flags = collect_volume_flags(agent, &host_home, &pwd);
 
     // User mapping
     let user_flags = collect_user_flags(uid_opt, gid_opt);
