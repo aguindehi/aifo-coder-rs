@@ -13,6 +13,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Ensure traditional compiler entrypoints exist (hardlink cc/c++ to gcc/g++)
 # Some build scripts expect 'cc'/'c++' explicitly.
 RUN ln -f /usr/bin/gcc /usr/bin/cc && ln -f /usr/bin/g++ /usr/bin/c++
+# Ensure common build tools are on /usr/local/bin for PATH precedence in some setups
+RUN ln -sf /usr/bin/cmake /usr/local/bin/cmake && \
+    ln -sf /usr/bin/ninja /usr/local/bin/ninja && \
+    ln -sf /usr/bin/pkg-config /usr/local/bin/pkg-config
 
 # Prepare a world-writable HOME for arbitrary uid:gid mappings
 RUN mkdir -p /home/coder/.cache/ccache \

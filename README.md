@@ -95,9 +95,9 @@ Tips:
 
 Examples (dry-run previews):
 ```bash
-./aifo-coder openhands -- --help --dry-run
-./aifo-coder opencode  -- --help --dry-run
-./aifo-coder plandex   -- --help --dry-run
+./aifo-coder --dry-run openhands -- --help
+./aifo-coder --dry-run opencode  -- --help
+./aifo-coder --dry-run plandex   -- --help
 ```
 
 PATH policy:
@@ -107,11 +107,14 @@ PATH policy:
 
 # The aifo-coder
 
-Containerized launcher and Docker images bundling three terminal AI coding agents:
+Containerized launcher and Docker images bundling six terminal AI coding agents:
 
 - OpenAI Codex CLI (`codex`)
 - Charmbracelet Crush (`crush`)
 - Aider (`aider`)
+- OpenHands (`openhands`)
+- OpenCode (`opencode`)
+- Plandex (`plandex`)
 
 Run these tools inside containers while keeping them feeling “native” on your machine:
 - Seamless access to your working directory
@@ -123,7 +126,7 @@ Run these tools inside containers while keeping them feeling “native” on you
 
 ## Why aifo-coder?
 
-Modern coding agents are powerful, but installing and managing multiple CLIs (and their fast‑moving dependencies) can feel heavy and risky on a developer laptop. aifo‑coder bundles three best‑in‑class terminal agents (Codex, Crush and Aider) into reproducible container images and gives you a tiny Rust launcher that makes them feel native. You get a clean, consistent runtime every time without polluting the host.
+Modern coding agents are powerful, but installing and managing multiple CLIs (and their fast‑moving dependencies) can feel heavy and risky on a developer laptop. aifo‑coder bundles six terminal agents (Codex, Crush, Aider, OpenHands, OpenCode and Plandex) into reproducible container images and gives you a tiny Rust launcher that makes them feel native. You get a clean, consistent runtime every time without polluting the host.
 
 Typical use cases:
 - Try or evaluate multiple agents without touching your host Python/Node setups.
@@ -133,8 +136,9 @@ Typical use cases:
 
 ## How it works (at a glance)
 
-- The Dockerfile builds a shared base and three per‑agent images via multi‑stage targets:
-  - aifo-coder-codex:TAG, aifo-coder-crush:TAG, aifo-coder-aider:TAG
+- The Dockerfile builds a shared base and six per‑agent images via multi‑stage targets:
+  - aifo-coder-codex:TAG, aifo-coder-crush:TAG, aifo-coder-aider:TAG,
+    aifo-coder-openhands:TAG, aifo-coder-opencode:TAG, aifo-coder-plandex:TAG
 - The Rust `aifo-coder` launcher runs the selected agent inside the appropriate image, mounting only what’s needed:
   - Your current working directory is mounted at `/workspace`.
   - Minimal, well‑known config/state directories are mounted into the container `$HOME=/home/coder` so agents behave like locally installed tools.
@@ -356,11 +360,11 @@ A quick reference of all Makefile targets.
 | Target                     | Category   | Description                                                                                   |
 |---------------------------|------------|-----------------------------------------------------------------------------------------------|
 | build                     | Build      | Build both slim and fat images (all agents)                                                   |
-| build-fat                 | Build      | Build all fat images (codex, crush, aider)                                                    |
+| build-fat                 | Build      | Build all fat images (codex, crush, aider, openhands, opencode, plandex)                      |
 | build-codex               | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
 | build-crush               | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
 | build-aider               | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
-| build-slim                | Build      | Build all slim images (codex-slim, crush-slim, aider-slim)                                    |
+| build-slim                | Build      | Build all slim images (codex-slim, crush-slim, aider-slim, openhands-slim, opencode-slim, plandex-slim) |
 | build-codex-slim          | Build      | Build only the Codex slim image (`${IMAGE_PREFIX}-codex-slim:${TAG}`)                         |
 | build-crush-slim          | Build      | Build only the Crush slim image (`${IMAGE_PREFIX}-crush-slim:${TAG}`)                         |
 | build-aider-slim          | Build      | Build only the Aider slim image (`${IMAGE_PREFIX}-aider-slim:${TAG}`)                         |
@@ -513,9 +517,14 @@ Tip:
 ## What the images contain
 
 - Node-based global CLIs:
-  - `@openai/codex`
-  - `@charmland/crush`
-- Python-based Aider installed via `uv` into `/opt/venv` (PEP 668‑safe)
+  - `@openai/codex` (Codex)
+  - `@charmland/crush` (Crush)
+  - `opencode-ai` installed globally via npm (OpenCode)
+- Python-based CLIs via `uv`:
+  - `aider` installed into `/opt/venv` (PEP 668‑safe)
+  - `openhands` installed into `/opt/venv-openhands` via `uv` + pip; wrapper at `/usr/local/bin/openhands` (executes the venv console script `openhands`)
+- Go-based CLI:
+  - `plandex` built from source and installed to `/usr/local/bin`
 - `dumb-init`, `git`, `ripgrep`, `curl`, `emacs-nox`, `vim`, `nano`, `mg`, `nvi`
 - GnuPG (`gnupg`, `pinentry-curses`) and NSS wrapper (`libnss-wrapper`)
 - Default working directory: `/workspace`
@@ -550,6 +559,9 @@ For smaller footprints, use the -slim variants of each image:
 - aifo-coder-codex-slim:TAG
 - aifo-coder-crush-slim:TAG
 - aifo-coder-aider-slim:TAG
+- aifo-coder-openhands-slim:TAG
+- aifo-coder-opencode-slim:TAG
+- aifo-coder-plandex-slim:TAG
 
 Differences from the full images:
 - Based on the same Debian Bookworm base
@@ -753,7 +765,7 @@ Crush example config:
 
 ## Rust implementation notes
 
-- CLI parsing is powered by Clap; subcommands are `codex`, `crush`, and `aider`. Trailing arguments are passed through to the agent unchanged.
+- CLI parsing is powered by Clap; subcommands are `codex`, `crush`, `aider`, `openhands`, `opencode`, `plandex`. Trailing arguments are passed through to the agent unchanged.
 - TTY detection uses `atty` to select `-it` vs `-i` for interactive runs.
 - The launcher uses Docker; ensure it is installed and available in PATH.
 - The default image selection can be overridden via `AIFO_CODER_IMAGE`, or computed from `AIFO_CODER_IMAGE_PREFIX` and `AIFO_CODER_IMAGE_TAG`.

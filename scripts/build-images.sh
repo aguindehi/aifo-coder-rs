@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Build aifo-coder images without requiring GNU make.
 # Usage:
-#   ./scripts/build-images.sh              # builds codex, crush, aider
+#   ./scripts/build-images.sh              # builds codex, crush, aider, openhands, opencode, plandex
 #   ./scripts/build-images.sh codex aider  # builds only specified targets
 #   ./scripts/build-images.sh codex-slim   # also supports -slim targets
 
@@ -28,15 +28,15 @@ fi
 
 targets="$*"
 if [ -z "${targets}" ]; then
-  targets="codex crush aider"
+  targets="codex crush aider openhands opencode plandex"
 fi
 
 for t in ${targets}; do
   case "${t}" in
-    codex|crush|aider|codex-slim|crush-slim|aider-slim) ;;
+    codex|crush|aider|openhands|opencode|plandex|codex-slim|crush-slim|aider-slim|openhands-slim|opencode-slim|plandex-slim) ;;
     *)
       echo "Unknown target: ${t}"
-      echo "Valid targets: codex crush aider codex-slim crush-slim aider-slim"
+      echo "Valid targets: codex crush aider openhands opencode plandex codex-slim crush-slim aider-slim openhands-slim opencode-slim plandex-slim"
       exit 2
       ;;
   esac

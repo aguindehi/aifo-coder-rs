@@ -209,21 +209,37 @@ pub fn build_docker_preview_only(
             let aider_dir = base.join(".aider");
             let codex_dir = base.join(".codex");
             let crush_dir = base.join(".crush");
+            let opencode_dir = base.join(".opencode");
+            let local_state_dir = base.join(".local_state");
             let _ = fs::create_dir_all(&aider_dir);
             let _ = fs::create_dir_all(&codex_dir);
             let _ = fs::create_dir_all(&crush_dir);
+            let _ = fs::create_dir_all(&opencode_dir);
+            let _ = fs::create_dir_all(&local_state_dir);
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
         } else {
             // Fallback to legacy HOME-based mounts if the env var is empty
             let crush_dir = host_home.join(".local").join("share").join("crush");
             fs::create_dir_all(&crush_dir).ok();
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+            let opencode_dir = host_home.join(".local").join("share").join("opencode");
+            fs::create_dir_all(&opencode_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            let local_state_dir = host_home.join(".local").join("state");
+            fs::create_dir_all(&local_state_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
             let crush_state_dir = host_home.join(".crush");
             fs::create_dir_all(&crush_state_dir).ok();
             volume_flags.push(OsString::from("-v"));
@@ -243,6 +259,14 @@ pub fn build_docker_preview_only(
         fs::create_dir_all(&crush_dir).ok();
         volume_flags.push(OsString::from("-v"));
         volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+        let opencode_dir = host_home.join(".local").join("share").join("opencode");
+        fs::create_dir_all(&opencode_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+        let local_state_dir = host_home.join(".local").join("state");
+        fs::create_dir_all(&local_state_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
         let crush_state_dir = host_home.join(".crush");
         fs::create_dir_all(&crush_state_dir).ok();
         volume_flags.push(OsString::from("-v"));
@@ -370,7 +394,7 @@ pub fn build_docker_preview_only(
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
-        "openhands" => "/usr/local/bin/openhands",
+        "openhands" => "/opt/venv-openhands/bin/openhands",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
         _ => agent,
@@ -630,21 +654,37 @@ pub fn build_docker_cmd(
             let aider_dir = base.join(".aider");
             let codex_dir = base.join(".codex");
             let crush_dir = base.join(".crush");
+            let opencode_dir = base.join(".opencode");
+            let local_state_dir = base.join(".local_state");
             let _ = fs::create_dir_all(&aider_dir);
             let _ = fs::create_dir_all(&codex_dir);
             let _ = fs::create_dir_all(&crush_dir);
+            let _ = fs::create_dir_all(&opencode_dir);
+            let _ = fs::create_dir_all(&local_state_dir);
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&aider_dir, "/home/coder/.aider"));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&codex_dir, "/home/coder/.codex"));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
         } else {
             // Fallback to legacy HOME-based mounts if the env var is empty
             let crush_dir = host_home.join(".local").join("share").join("crush");
             fs::create_dir_all(&crush_dir).ok();
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+            let opencode_dir = host_home.join(".local").join("share").join("opencode");
+            fs::create_dir_all(&opencode_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            let local_state_dir = host_home.join(".local").join("state");
+            fs::create_dir_all(&local_state_dir).ok();
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
             let crush_state_dir = host_home.join(".crush");
             fs::create_dir_all(&crush_state_dir).ok();
             volume_flags.push(OsString::from("-v"));
@@ -664,6 +704,14 @@ pub fn build_docker_cmd(
         fs::create_dir_all(&crush_dir).ok();
         volume_flags.push(OsString::from("-v"));
         volume_flags.push(path_pair(&crush_dir, "/home/coder/.local/share/crush"));
+        let opencode_dir = host_home.join(".local").join("share").join("opencode");
+        fs::create_dir_all(&opencode_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+        let local_state_dir = host_home.join(".local").join("state");
+        fs::create_dir_all(&local_state_dir).ok();
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
         let crush_state_dir = host_home.join(".crush");
         fs::create_dir_all(&crush_state_dir).ok();
         volume_flags.push(OsString::from("-v"));
@@ -808,7 +856,7 @@ pub fn build_docker_cmd(
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
-        "openhands" => "/usr/local/bin/openhands",
+        "openhands" => "/opt/venv-openhands/bin/openhands",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
         _ => agent,

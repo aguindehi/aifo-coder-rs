@@ -297,23 +297,41 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         rm -rf /opt/yarn-v1.22.22; \
     fi
 
-# --- OpenHands image (stub wrapper; shims-first PATH) ---
+# --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="openhands"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "openhands: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "openhands: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/openhands \
- && chmod 0755 /usr/local/bin/openhands
+ARG OPENHANDS_CONSTRAINT=""
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+  fi; \
+  export UV_NATIVE_TLS=1; \
+  curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
+  sh /tmp/uv.sh; \
+  mv /root/.local/bin/uv /usr/local/bin/uv; \
+  PKG="openhands-ai"; \
+  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands-ai==$OPENHANDS_CONSTRAINT"; fi; \
+  install -d -m 0755 /opt/uv-home; \
+  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
+  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
+  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
+  chmod 0755 /usr/local/bin/openhands; \
+  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
+  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
+  find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
+  find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
+  rm -rf /root/.cache/uv /root/.cache/pip; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -329,23 +347,25 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/cache/apt/apt-file/; \
   fi
 
-# --- OpenCode image (stub wrapper; shims-first PATH) ---
+# --- OpenCode image (npm install; shims-first PATH) ---
 FROM base AS opencode
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="opencode"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "opencode: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "opencode: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/opencode \
- && chmod 0755 /usr/local/bin/opencode
+ARG OPCODE_VERSION=latest
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export NODE_EXTRA_CA_CERTS="$CAF"; \
+    export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+  fi; \
+  npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -361,23 +381,46 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/cache/apt/apt-file/; \
   fi
 
-# --- Plandex image (stub wrapper; shims-first PATH) ---
+# --- Plandex builder (Go) ---
+FROM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG PLX_GIT_REF=main
+WORKDIR /src
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOTOOLCHAIN=auto
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+  fi; \
+  apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*; \
+  git clone https://github.com/plandex-ai/plandex.git .; \
+  git -c advice.detachedHead=false checkout "$PLX_GIT_REF" || true; \
+  mkdir -p /out; \
+  cd app/cli; \
+  export PATH="/usr/local/go/bin:${PATH}"; \
+  export CGO_ENABLED=0; \
+  export GOFLAGS="-trimpath -mod=readonly"; \
+  V="$([ -f version.txt ] && cat version.txt || echo dev)"; \
+  LDFLAGS="-s -w -X plandex/version.Version=$V"; \
+  case "${TARGETOS:-}" in "") GOOS="$(/usr/local/go/bin/go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
+  case "${TARGETARCH:-}" in "") GOARCH="$(/usr/local/go/bin/go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
+  GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go build -ldflags "$LDFLAGS" -o /out/plandex .; \
+  rm -rf /root/go/pkg /go/pkg/mod; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
+# --- Plandex runtime (copy binary; shims-first PATH) ---
 FROM base AS plandex
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="plandex"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "plandex: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "plandex: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/plandex \
- && chmod 0755 /usr/local/bin/plandex
+COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
+RUN chmod 0755 /usr/local/bin/plandex
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -388,7 +431,8 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     npm prune --omit=dev || true; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache; \
-    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
+    rm -rf /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
   fi
@@ -616,23 +660,41 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
         rm -rf /opt/yarn-v1.22.22; \
     fi
 
-# --- OpenHands slim image (stub wrapper; shims-first PATH) ---
+# --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="openhands"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "openhands: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "openhands: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/openhands \
- && chmod 0755 /usr/local/bin/openhands
+ARG OPENHANDS_CONSTRAINT=""
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+  fi; \
+  export UV_NATIVE_TLS=1; \
+  curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
+  sh /tmp/uv.sh; \
+  mv /root/.local/bin/uv /usr/local/bin/uv; \
+  PKG="openhands-ai"; \
+  if [ -n "$OPENHANDS_CONSTRAINT" ]; then PKG="openhands-ai==$OPENHANDS_CONSTRAINT"; fi; \
+  install -d -m 0755 /opt/uv-home; \
+  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
+  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
+  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
+  chmod 0755 /usr/local/bin/openhands; \
+  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
+  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
+  find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
+  find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
+  rm -rf /root/.cache/uv /root/.cache/pip; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -648,23 +710,25 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/cache/apt/apt-file/; \
   fi
 
-# --- OpenCode slim image (stub wrapper; shims-first PATH) ---
+# --- OpenCode slim image (npm install; shims-first PATH) ---
 FROM base-slim AS opencode-slim
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="opencode"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "opencode: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "opencode: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/opencode \
- && chmod 0755 /usr/local/bin/opencode
+ARG OPCODE_VERSION=latest
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export NODE_EXTRA_CA_CERTS="$CAF"; \
+    export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+  fi; \
+  npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -678,25 +742,15 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
+    rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+    rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
+    rm -rf /opt/yarn-v1.22.22; \
   fi
 
-# --- Plandex slim image (stub wrapper; shims-first PATH) ---
+# --- Plandex slim image (copy binary; shims-first PATH) ---
 FROM base-slim AS plandex-slim
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'agent="plandex"' \
- 'case "${1:-}" in --help|-h|-V|--version) ' \
- '  echo "plandex: containerized wrapper (stub)";' \
- '  echo "Hint: provide the real CLI via PATH inside the container or use --image override.";' \
- '  exit 0;;' \
- 'esac' \
- 'if cmd="$(command -v "$agent" 2>/dev/null)"; then' \
- '  if [ "$cmd" != "/usr/local/bin/$agent" ]; then exec "$agent" "$@"; fi' \
- 'fi' \
- 'echo "plandex: executable not found in PATH." >&2' \
- 'echo "Provide the agent CLI via PATH inside the container or use --image override." >&2' \
- 'exit 86' > /usr/local/bin/plandex \
- && chmod 0755 /usr/local/bin/plandex
+COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
+RUN chmod 0755 /usr/local/bin/plandex
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \

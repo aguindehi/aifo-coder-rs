@@ -237,6 +237,8 @@ help: banner
 	@echo "  publish-openhands-slim ...... Buildx multi-arch and push OpenHands (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-opencode-slim ....... Buildx multi-arch and push OpenCode (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-plandex-slim ........ Buildx multi-arch and push Plandex (slim; set PLATFORMS=... PUSH=1)"
+	@echo "  Note: set PLATFORMS=linux/amd64,linux/arm64 and PUSH=1 to push multi-arch."
+	@echo "        The Plandex Go builder honors TARGETOS/TARGETARCH for buildx."
 	@echo ""
 	$(call title,Utilities:)
 	@echo ""
