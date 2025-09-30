@@ -223,7 +223,10 @@ pub fn build_docker_preview_only(
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_dir,
+                "/home/coder/.local/share/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
             // Additional per-pane mounts for agent config/cache/state
@@ -236,9 +239,15 @@ pub fn build_docker_preview_only(
             let _ = fs::create_dir_all(&openhands_dir);
             let _ = fs::create_dir_all(&plandex_home_dir);
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_config_dir, "/home/coder/.config/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_config_dir,
+                "/home/coder/.config/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_cache_dir, "/home/coder/.cache/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_cache_dir,
+                "/home/coder/.cache/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&openhands_dir, "/home/coder/.openhands"));
             volume_flags.push(OsString::from("-v"));
@@ -253,9 +262,15 @@ pub fn build_docker_preview_only(
             let _ = fs::create_dir_all(&openhands_dir);
             let _ = fs::create_dir_all(&plandex_home_dir);
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_config_dir, "/home/coder/.config/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_config_dir,
+                "/home/coder/.config/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_cache_dir, "/home/coder/.cache/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_cache_dir,
+                "/home/coder/.cache/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&openhands_dir, "/home/coder/.openhands"));
             volume_flags.push(OsString::from("-v"));
@@ -269,7 +284,10 @@ pub fn build_docker_preview_only(
             let opencode_dir = host_home.join(".local").join("share").join("opencode");
             fs::create_dir_all(&opencode_dir).ok();
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_dir,
+                "/home/coder/.local/share/opencode",
+            ));
             let local_state_dir = host_home.join(".local").join("state");
             fs::create_dir_all(&local_state_dir).ok();
             volume_flags.push(OsString::from("-v"));
@@ -330,7 +348,10 @@ pub fn build_docker_preview_only(
         let opencode_dir = host_home.join(".local").join("share").join("opencode");
         fs::create_dir_all(&opencode_dir).ok();
         volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+        volume_flags.push(path_pair(
+            &opencode_dir,
+            "/home/coder/.local/share/opencode",
+        ));
         let local_state_dir = host_home.join(".local").join("state");
         fs::create_dir_all(&local_state_dir).ok();
         volume_flags.push(OsString::from("-v"));
@@ -770,7 +791,10 @@ pub fn build_docker_cmd(
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&crush_dir, "/home/coder/.crush"));
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_dir,
+                "/home/coder/.local/share/opencode",
+            ));
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&local_state_dir, "/home/coder/.local/state"));
         } else {
@@ -782,7 +806,10 @@ pub fn build_docker_cmd(
             let opencode_dir = host_home.join(".local").join("share").join("opencode");
             fs::create_dir_all(&opencode_dir).ok();
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+            volume_flags.push(path_pair(
+                &opencode_dir,
+                "/home/coder/.local/share/opencode",
+            ));
             let local_state_dir = host_home.join(".local").join("state");
             fs::create_dir_all(&local_state_dir).ok();
             volume_flags.push(OsString::from("-v"));
@@ -809,7 +836,10 @@ pub fn build_docker_cmd(
         let opencode_dir = host_home.join(".local").join("share").join("opencode");
         fs::create_dir_all(&opencode_dir).ok();
         volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&opencode_dir, "/home/coder/.local/share/opencode"));
+        volume_flags.push(path_pair(
+            &opencode_dir,
+            "/home/coder/.local/share/opencode",
+        ));
         let local_state_dir = host_home.join(".local").join("state");
         fs::create_dir_all(&local_state_dir).ok();
         volume_flags.push(OsString::from("-v"));
