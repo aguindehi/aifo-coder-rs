@@ -335,8 +335,8 @@ fn try_run_native(
             let path = "/exec".to_string();
             match UnixStream::connect(sock) {
                 Ok(stream) => {
-                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
-                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
                     Conn::Uds(stream, path)
                 }
                 Err(_) => return None, // fall back to curl on connect error
@@ -365,8 +365,8 @@ fn try_run_native(
         let addr = format!("{}:{}", host, port);
         match TcpStream::connect(&addr) {
             Ok(stream) => {
-                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
-                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
                 Conn::Tcp(stream, host, path)
             }
             Err(_) => return None, // fall back to curl on connect error
@@ -818,6 +818,14 @@ fn try_run_native(
                 match reader_box.read(&mut tmp4) {
                     Ok(0) => break,
                     Ok(n) => buf.extend_from_slice(&tmp4[..n]),
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        // Idle gap before CRLF: wait briefly and continue to avoid premature disconnect
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                        continue;
+                    }
                     Err(_) => break,
                 }
             }
