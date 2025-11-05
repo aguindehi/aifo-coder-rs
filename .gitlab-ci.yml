@@ -10,18 +10,17 @@ include:
 
 # Rules
 .rules_build_image: &rules_build_image
-  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == "main"
-  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
+  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test
 
 .rules_build_executable: &rules_build_executable
   - if: $CI_COMMIT_BRANCH == "main"
-  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
+  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test
 
-# Base job
-
+# Base job provided as cicd-component by the cloud team. Used as template and should not run on its own
 container-build:
   variables:
+    #TARGET: Has to be provided by a child job. Defines the name of the target container within the Dockerfile.
     KANIKO_CACHE_ARGS: "--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
   before_script:
     - |
@@ -50,8 +49,21 @@ build:
   parallel:
     matrix:
       - TARGET: [ "codex","crush","aider","openhands","opencode","plandex",
-                  "codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim",
-                  "toolchain-rust", "build-toolchain-node", "build-toolchain-cpp" ]
+                  "codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim" ]
+
+build-toolchain:
+  extends: container-build
+  stage: build
+  needs:
+    - build-rust-builder  # Wait for first build to reuse layers
+  before_script:
+    - |
+      TARGET="toolchain-$FOLDER"
+      DOCKER_FILE="./toolchains/$FOLDER/Dockerfile"
+  rules: *rules_build_image
+  parallel:
+    matrix:
+      - FOLDER: [ "rust", "node", "cpp" ]
 
 
 # Build executables
@@ -60,7 +72,7 @@ build-launcher:
   stage: build
   needs:
     - job: build-rust-builder
-  image: $CI_REGISTRY_IMAGE/rust-builder/feat-aifo-1530-add-pipelines:$CI_COMMIT_SHA  # TODO Remove custom branch
+  image: $CI_REGISTRY_IMAGE/rust-builder:$CI_COMMIT_SHA
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
   script:
@@ -68,8 +80,9 @@ build-launcher:
     - rustc --version
     - echo "Building launcher (Linux native) ..."
     - cargo build --release
+    - cp target/release/aifo-coder ./aifo-coder  # Copy to root folder to not have folder structure in GitLab artifacts
   artifacts:
     expire_in: 1 week
     paths:
-      - target/release/aifo-coder
+      - aifo-coder
   rules: *rules_build_executable
