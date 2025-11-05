@@ -18,14 +18,6 @@ include:
   - if: $CI_COMMIT_BRANCH == "main"
   - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
 
-
-# Caches
-.build_cache: &build_cache
-  key: "kaniko-cache-$CI_COMMIT_REF_SLUG"
-  policy: pull-push
-  paths:
-    - .kaniko-cache/
-
 container-build:
   rules: # Turn of component rules
     - if: $CI_COMMIT_BRANCH == "never"
@@ -41,17 +33,7 @@ build-rust-builder:
     - |
       IMAGE_PATH_EXTRA="rust-builder"
       KANIKO_BUILD_OPTIONS="--target rust-builder"
-      # Enable Kaniko remote cache in GitLab Container Registry (preferred)
       KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
-      
-      # Ensure Kaniko has auth for $CI_REGISTRY (component usually sets this; keep as fallback)
-      #mkdir -p /kaniko/.docker
-      #printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}\n' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
-
-      # Alternative local cache (disabled): no registry auth required
-      #KANIKO_CACHE_ARGS="--cache=true --cache-dir /workspace/.kaniko-cache"
-      # To enable local cache persistence across pipelines, also add a job cache:
-  #  cache: *build_cache
   rules: *rules_build_image
 
 build:
@@ -64,15 +46,6 @@ build:
       IMAGE_PATH_EXTRA="$TARGET"
       KANIKO_BUILD_OPTIONS="--target $TARGET"
       KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
-      
-      #      # Ensure Kaniko has auth for $CI_REGISTRY (component usually sets this; keep as fallback)
-      #      mkdir -p /kaniko/.docker
-      #      printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}\n' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
-
-      # Alternative local cache (disabled): no registry auth required
-      # KANIKO_CACHE_ARGS="--cache=true --cache-dir /workspace/.kaniko-cache"
-      # To enable local cache persistence across pipelines, also add a job cache:
-  #  cache: *build_cache
   rules: *rules_build_image
   parallel:
     matrix:
