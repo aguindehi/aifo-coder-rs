@@ -655,10 +655,9 @@ fn try_run_native(
                         if e.kind() == std::io::ErrorKind::WouldBlock
                             || e.kind() == std::io::ErrorKind::TimedOut =>
                     {
-                        if buf.is_empty() {
-                            return None;
-                        }
-                        // otherwise, keep looping to see if more bytes arrive
+                        // Timeout/idle: wait briefly and continue to avoid premature disconnect
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                        continue;
                     }
                     Err(_) => return None,
                 }
@@ -803,7 +802,11 @@ fn try_run_native(
                         Ok(n) => buf.extend_from_slice(&tmp3[..n]),
                         Err(ref e)
                             if e.kind() == std::io::ErrorKind::WouldBlock
-                                || e.kind() == std::io::ErrorKind::TimedOut => {}
+                                || e.kind() == std::io::ErrorKind::TimedOut => {
+                            // Avoid busy-spin; keep waiting for more data to arrive
+                            std::thread::sleep(std::time::Duration::from_millis(25));
+                            continue;
+                        }
                         Err(_) => break,
                     }
                 }
@@ -849,7 +852,11 @@ fn try_run_native(
                 }
                 Err(ref e)
                     if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut => {}
+                        || e.kind() == std::io::ErrorKind::TimedOut => {
+                    // Idle period: wait briefly and continue to avoid premature disconnect
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    continue;
+                }
                 Err(_) => break,
             }
         }
