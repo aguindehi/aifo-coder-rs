@@ -323,7 +323,9 @@ fn build_exec_args_with_wrapper(
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
     // Allocate a TTY for streaming to improve interactive flushing when requested.
     if use_tty {
+        // Keep STDIN open as well to behave like interactive docker exec (-it)
         spawn_args.insert(1, "-t".to_string());
+        spawn_args.insert(1, "-i".to_string());
     }
     // User command slice after container name
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
@@ -937,7 +939,7 @@ fn handle_connection<S: Read + Write>(
         }
     }
 
-    let (authorized, proto_v2) = match auth_res {
+    let (authorized, mut proto_v2) = match auth_res {
         auth::AuthResult::Authorized { proto } => (true, matches!(proto, auth::Proto::V2)),
         auth::AuthResult::MissingOrInvalidProto => {
             respond_plain(stream, "426 Upgrade Required", 86, ERR_UNSUPPORTED_PROTO);
@@ -951,6 +953,18 @@ fn handle_connection<S: Read + Write>(
         }
     };
     debug_assert!(authorized);
+    // Env override: AIFO_PROXY_PROTO=1 forces buffered (v1), =2 forces streaming (v2)
+    if let Ok(v) = std_env::var("AIFO_PROXY_PROTO") {
+        match v.trim() {
+            "1" => {
+                proto_v2 = false;
+            }
+            "2" => {
+                proto_v2 = true;
+            }
+            _ => {}
+        }
+    }
 
     // Route to sidecar kind and enforce allowlist
     let selected_kind = {
@@ -1120,7 +1134,7 @@ fn handle_connection<S: Read + Write>(
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
             .filter(|&v| v > 0)
-            .unwrap_or(64);
+            .unwrap_or(256);
         let dropped_count = Arc::new(AtomicUsize::new(0));
         let drop_warned = Arc::new(AtomicBool::new(false));
 
