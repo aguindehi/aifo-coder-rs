@@ -85,4 +85,7 @@ build-launcher:
     expire_in: 1 week
     paths:
       - aifo-coder
+      - README.md
+      - NOTICE
+      - LICENSE
   rules: *rules_build_executable
