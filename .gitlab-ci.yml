@@ -18,7 +18,15 @@ include:
   - if: $CI_COMMIT_BRANCH == "main"
   - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
 
+# Base job
+
 container-build:
+  variables:
+    KANIKO_CACHE_ARGS: "--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
+  before_script:
+    - |
+      IMAGE_PATH_EXTRA="${TARGET_NAME:-$TARGET}"
+      KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
   rules: # Turn of component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
@@ -29,11 +37,8 @@ container-build:
 build-rust-builder:
   extends: container-build
   stage: build
-  before_script:
-    - |
-      IMAGE_PATH_EXTRA="rust-builder"
-      KANIKO_BUILD_OPTIONS="--target rust-builder"
-      KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
+  variables:
+    TARGET_NAME: "rust-builder"
   rules: *rules_build_image
 
 build:
@@ -41,15 +46,12 @@ build:
   stage: build
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
-  before_script:
-    - |
-      IMAGE_PATH_EXTRA="$TARGET"
-      KANIKO_BUILD_OPTIONS="--target $TARGET"
-      KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
   rules: *rules_build_image
   parallel:
     matrix:
-      - TARGET: [ "codex","crush","aider","openhands","opencode","plandex","codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim" ]
+      - TARGET: [ "codex","crush","aider","openhands","opencode","plandex",
+                  "codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim",
+                  "toolchain-rust", "build-toolchain-node", "build-toolchain-cpp" ]
 
 
 # Build executables
