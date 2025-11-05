@@ -401,6 +401,50 @@ COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 
+# Centralized registry reachability and tagging prefix logic
+MIRROR_REGISTRY ?= repository.migros.net
+DOCKER_HUB_REGISTRY ?= registry-1.docker.io
+
+define MIRROR_CHECK_STRICT
+  RP=""; \
+  echo "Checking reachability of https://$(MIRROR_REGISTRY) ..."; \
+  if command -v curl >/dev/null 2>&1 && \
+     curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(MIRROR_REGISTRY)/v2/ >/dev/null 2>&1; then \
+    echo "$(MIRROR_REGISTRY) reachable via HTTPS; using registry prefix for base images."; RP="$(MIRROR_REGISTRY)/"; \
+  else \
+    echo "$(MIRROR_REGISTRY) not reachable via HTTPS; using Docker Hub (no prefix)."; \
+    if command -v curl >/dev/null 2>&1 && \
+       curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(DOCKER_HUB_REGISTRY)/v2/ >/dev/null 2>&1; then \
+      echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+    else \
+      echo "Error: Neither $(MIRROR_REGISTRY) nor Docker Hub is reachable via HTTPS; cannot proceed."; \
+      exit 1; \
+    fi; \
+  fi
+endef
+
+define MIRROR_CHECK_LAX
+  RP=""; \
+  echo "Checking reachability of https://$(MIRROR_REGISTRY) ..."; \
+  if command -v curl >/dev/null 2>&1 && \
+     curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(MIRROR_REGISTRY)/v2/ >/dev/null 2>&1; then \
+    echo "$(MIRROR_REGISTRY) reachable via HTTPS; using registry prefix for base images."; RP="$(MIRROR_REGISTRY)/"; \
+  else \
+    echo "$(MIRROR_REGISTRY) not reachable via HTTPS; proceeding without prefix."; \
+  fi
+endef
+
+define REG_SETUP_COMMON
+  REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+  if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi
+endef
+
+define REG_SETUP_WITH_FALLBACK
+  REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+  if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
+  if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi
+endef
+
 .PHONY: build build-coder build-fat build-codex build-crush build-aider build-openhands build-opencode build-plandex build-rust-builder build-launcher
 build-fat: build-codex build-crush build-aider build-openhands build-opencode build-plandex
 
@@ -409,22 +453,8 @@ build: build-slim build-fat build-rust-builder build-toolchain build-launcher
 build-coder: build-slim build-fat build-rust-builder
 
 build-codex:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -432,22 +462,8 @@ build-codex:
 	fi
 
 build-crush:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -455,22 +471,8 @@ build-crush:
 	fi
 
 build-aider:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -478,22 +480,8 @@ build-aider:
 	fi
 
 build-openhands:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -501,22 +489,8 @@ build-openhands:
 	fi
 
 build-opencode:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -524,22 +498,8 @@ build-opencode:
 	fi
 
 build-plandex:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -547,22 +507,8 @@ build-plandex:
 	fi
 
 build-rust-builder:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
@@ -574,13 +520,7 @@ build-debug:
 	@set -e; \
 	STAGE="$${STAGE:-aider}"; \
 	echo "Debug building stage '$$STAGE' with docker buildx (plain progress) ..."; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	fi; \
+	$(MIRROR_CHECK_LAX); \
 	case "$$STAGE" in \
 	  codex) OUT="$(CODEX_IMAGE)" ;; \
 	  crush) OUT="$(CRUSH_IMAGE)" ;; \
@@ -601,9 +541,7 @@ build-debug:
 	  echo "Error: docker buildx is not available; please install/enable buildx." >&2; \
 	  exit 1; \
 	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
@@ -623,20 +561,8 @@ build-debug:
 build-toolchain-rust:
 	@set -e; \
 	echo "Building aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) ..."; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	  echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	$(MIRROR_CHECK_STRICT); \
+	if [ -n "$$RP" ]; then echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; fi; \
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
 	else \
@@ -646,19 +572,7 @@ build-toolchain-rust:
 rebuild-toolchain-rust:
 	@set -e; \
 	echo "Rebuilding aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build rust toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
 	else \
@@ -669,19 +583,7 @@ rebuild-toolchain-rust:
 build-toolchain-node:
 	@set -e; \
 	echo "Building aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) ..."; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build node toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
 	else \
@@ -691,19 +593,7 @@ build-toolchain-node:
 rebuild-toolchain-node:
 	@set -e; \
 	echo "Rebuilding aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) (no cache) ..."; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild node toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
 	else \
@@ -720,19 +610,8 @@ rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolcha
 publish-toolchain-rust:
 	@set -e; \
 	echo "Publishing aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in \
-	  */) ;; \
-	  "") ;; \
-	  *) REG="$$REG/";; \
-	esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
@@ -750,93 +629,48 @@ publish-toolchain-rust:
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build c-cpp toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	@$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-cpp:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild c-cpp toolchain image."; \
-	    exit 1; \
-	  fi; \
-	fi; \
+	@$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest -t "$${RP}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing aifo-cpp-toolchain:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging with registry prefix when pushing."; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; proceeding without prefix unless REGISTRY is set."; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in \
-	  */) ;; \
-	  "") ;; \
-	  *) REG="$$REG/";; \
-	esac; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    $(DOCKER_BUILD) --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t "$${REG}aifo-cpp-toolchain:latest" $(CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-cpp-toolchain-latest.oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/aifo-cpp-toolchain-latest.oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  $(DOCKER_BUILD) --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-cpp-toolchain:latest $(CA_SECRET) .; \
 	fi
 
 .PHONY: publish-toolchain-node
 publish-toolchain-node:
 	@set -e; \
 	echo "Publishing aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in \
-	  */) ;; \
-	  "") ;; \
-	  *) REG="$$REG/";; \
-	esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; using registry prefix for base images."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
@@ -858,11 +692,8 @@ publish-toolchain-node:
 publish-codex:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -872,11 +703,8 @@ publish-codex:
 publish-codex-slim:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -886,11 +714,8 @@ publish-codex-slim:
 publish-crush:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -900,11 +725,8 @@ publish-crush:
 publish-crush-slim:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -914,11 +736,8 @@ publish-crush-slim:
 publish-aider:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -928,11 +747,8 @@ publish-aider:
 publish-aider-slim:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -942,11 +758,8 @@ publish-aider-slim:
 publish-openhands:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -956,11 +769,8 @@ publish-openhands:
 publish-openhands-slim:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -970,11 +780,8 @@ publish-openhands-slim:
 publish-opencode:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -984,11 +791,8 @@ publish-opencode:
 publish-opencode-slim:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -998,11 +802,8 @@ publish-opencode-slim:
 publish-plandex:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1012,11 +813,8 @@ publish-plandex:
 publish-plandex-slim:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	case "$$REG" in */) ;; "") ;; *) REG="$$REG/";; esac; \
-	RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..."; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then RP="repository.migros.net/"; fi; \
+	$(REG_SETUP_COMMON); \
+	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1030,22 +828,8 @@ publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publi
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 
 build-codex-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1053,22 +837,8 @@ build-codex-slim:
 	fi
 
 build-crush-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1076,22 +846,8 @@ build-crush-slim:
 	fi
 
 build-aider-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1099,22 +855,8 @@ build-aider-slim:
 	fi
 
 build-openhands-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1122,22 +864,8 @@ build-openhands-slim:
 	fi
 
 build-opencode-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1145,22 +873,8 @@ build-opencode-slim:
 	fi
 
 build-plandex-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1746,22 +1460,8 @@ rebuild-coder: rebuild-slim rebuild-fat rebuild-rust-builder
 rebuild-fat: rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex
 
 rebuild-codex:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1769,22 +1469,8 @@ rebuild-codex:
 	fi
 
 rebuild-crush:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1792,22 +1478,8 @@ rebuild-crush:
 	fi
 
 rebuild-aider:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1815,22 +1487,8 @@ rebuild-aider:
 	fi
 
 rebuild-openhands:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1838,22 +1496,8 @@ rebuild-openhands:
 	fi
 
 rebuild-opencode:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1861,22 +1505,8 @@ rebuild-opencode:
 	fi
 
 rebuild-plandex:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -1884,22 +1514,8 @@ rebuild-plandex:
 	fi
 
 rebuild-rust-builder:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
@@ -1910,22 +1526,8 @@ rebuild-rust-builder:
 rebuild-slim: rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim
 
 rebuild-codex-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1933,22 +1535,8 @@ rebuild-codex-slim:
 	fi
 
 rebuild-crush-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1956,22 +1544,8 @@ rebuild-crush-slim:
 	fi
 
 rebuild-aider-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -1979,22 +1553,8 @@ rebuild-aider-slim:
 	fi
 
 rebuild-openhands-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -2002,22 +1562,8 @@ rebuild-openhands-slim:
 	fi
 
 rebuild-opencode-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
@@ -2025,22 +1571,8 @@ rebuild-opencode-slim:
 	fi
 
 rebuild-plandex-slim:
-	@RP=""; \
-	echo "Checking reachability of https://repository.migros.net ..." ; \
-	if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then \
-	  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."; RP="repository.migros.net/"; \
-	else \
-	  echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."; \
-	  if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://registry-1.docker.io/v2/ >/dev/null 2>&1; then \
-	    echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
-	  else \
-	    echo "Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot rebuild images."; \
-	    exit 1; \
-	  fi; \
-	fi; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi; \
+	@$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
