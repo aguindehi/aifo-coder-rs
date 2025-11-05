@@ -71,6 +71,5 @@ build-launcher:
   artifacts:
     expire_in: 1 week
     paths:
-      - target/release/*
-      - target/x86_64-pc-windows-gnu/release/*
+      - target/release/aifo-coder
   rules: *rules_build_executable
