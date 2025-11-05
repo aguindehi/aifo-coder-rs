@@ -25,6 +25,8 @@
 # Build one image per agent with shared base layers for maximal cache reuse.
 IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
+RUST_TOOLCHAIN_TAG ?= latest
+
 # Set to 1 to keep apt/procps in final images (default drops them in final stages)
 KEEP_APT ?= 0
 
@@ -57,6 +59,8 @@ else
 endif
 title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
+
+export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG
 
 banner:
 	@echo ""
