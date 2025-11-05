@@ -1,0 +1,101 @@
+stages:
+  - build
+  - publish
+
+include:
+  - component: $CI_SERVER_FQDN/devops-services-public/infrastructure-as-code/cicd-components/container/build@0.14.0
+    inputs:
+      image_tag_custom: $CI_COMMIT_SHA
+
+
+# Rules
+.rules_build_image: &rules_build_image
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == "main"
+  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
+
+.rules_build_executable: &rules_build_executable
+  - if: $CI_COMMIT_BRANCH == "main"
+  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test rule
+
+
+# Caches
+.build_cache: &build_cache
+  key: "kaniko-cache-$CI_COMMIT_REF_SLUG"
+  policy: pull-push
+  paths:
+    - .kaniko-cache/
+
+container-build:
+  rules: # Turn of component rules
+    - if: $CI_COMMIT_BRANCH == "never"
+      when: never
+
+
+# Build images
+
+build-rust-builder:
+  extends: container-build
+  stage: build
+  before_script:
+    - |
+      IMAGE_PATH_EXTRA="rust-builder"
+      KANIKO_BUILD_OPTIONS="--target rust-builder"
+      # Enable Kaniko remote cache in GitLab Container Registry (preferred)
+      KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
+      
+      # Ensure Kaniko has auth for $CI_REGISTRY (component usually sets this; keep as fallback)
+      #mkdir -p /kaniko/.docker
+      #printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}\n' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
+
+      # Alternative local cache (disabled): no registry auth required
+      #KANIKO_CACHE_ARGS="--cache=true --cache-dir /workspace/.kaniko-cache"
+      # To enable local cache persistence across pipelines, also add a job cache:
+  #  cache: *build_cache
+  rules: *rules_build_image
+
+build:
+  extends: container-build
+  stage: build
+  needs:
+    - build-rust-builder  # Wait for first build to reuse layers
+  before_script:
+    - |
+      IMAGE_PATH_EXTRA="$TARGET"
+      KANIKO_BUILD_OPTIONS="--target $TARGET"
+      KANIKO_CACHE_ARGS="--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
+      
+      #      # Ensure Kaniko has auth for $CI_REGISTRY (component usually sets this; keep as fallback)
+      #      mkdir -p /kaniko/.docker
+      #      printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}\n' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
+
+      # Alternative local cache (disabled): no registry auth required
+      # KANIKO_CACHE_ARGS="--cache=true --cache-dir /workspace/.kaniko-cache"
+      # To enable local cache persistence across pipelines, also add a job cache:
+  #  cache: *build_cache
+  rules: *rules_build_image
+  parallel:
+    matrix:
+      - TARGET: [ "codex","crush","aider","openhands","opencode","plandex","codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim" ]
+
+
+# Build executables
+
+build-launcher:
+  stage: build
+  needs:
+    - job: build-rust-builder
+  image: $CI_REGISTRY_IMAGE/rust-builder/feat-aifo-1530-add-pipelines:$CI_COMMIT_SHA  # TODO Remove custom branch
+  tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
+    - qual-mcap-gcp
+  script:
+    - cargo --version
+    - rustc --version
+    - echo "Building launcher (Linux native) ..."
+    - cargo build --release
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - target/release/*
+      - target/x86_64-pc-windows-gnu/release/*
+  rules: *rules_build_executable
