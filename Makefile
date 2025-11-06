@@ -1351,9 +1351,9 @@ test-integration-suite:
 	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/)' ; \
+	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/) | test(/^test_e2e_stream_cargo_/)' ; \
 	else \
-	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/)' ; \
+	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_e2e_stream_cargo_/)' ; \
 	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
