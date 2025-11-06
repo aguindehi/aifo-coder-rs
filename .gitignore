@@ -9,7 +9,6 @@
 .DS_Store
 .venv/**
 aifo-coder.cdx.*
-build.*
 build/**
 dist
 ISSUES
