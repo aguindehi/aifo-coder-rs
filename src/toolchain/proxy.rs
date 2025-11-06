@@ -788,8 +788,8 @@ fn handle_connection<S: Read + Write>(
                 .as_deref()
                 .map(|c| format!(" client={}", c))
                 .unwrap_or_default();
-            log_stderr_and_file(&format!(
-                "\r\naifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}\r\n\r",
+            log_compact(&format!(
+                "aifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}",
                 notif_cmd,
                 shell_join(&argv),
                 cwd,
@@ -1325,8 +1325,8 @@ fn handle_connection<S: Read + Write>(
                                                 if !drop_warned_cl
                                                     .swap(true, std::sync::atomic::Ordering::SeqCst)
                                                 {
-                                                    log_stderr_and_file(
-                                                        "\raifo-coder: proxy stream: dropping output (backpressure)",
+                                                    log_compact(
+                                                        "aifo-coder: proxy stream: dropping output (backpressure)",
                                                     );
                                                 }
                                                 let _ = dropped_count_cl.fetch_add(
@@ -1407,15 +1407,11 @@ fn handle_connection<S: Read + Write>(
                         }
                         write_failed = true;
                         if verbose {
-                            vlog_fn(
-                                verbose,
-                                &mut boundary_needed,
-                                &format!(
-                                    "aifo-coder: proxy stream: chunk write failed: kind={:?} errno={:?}",
-                                    e.kind(),
-                                    e.raw_os_error()
-                                ),
-                            );
+                            logger.boundary_log(&format!(
+                                "aifo-coder: proxy stream: chunk write failed: kind={:?} errno={:?}",
+                                e.kind(),
+                                e.raw_os_error()
+                            ));
                         }
                         break;
                     } else {
