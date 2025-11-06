@@ -1061,6 +1061,12 @@ fn handle_connection<S: Read + Write>(
         let started = std::time::Instant::now();
 
         let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+        if verbose {
+            log_stderr_and_file(&format!(
+                "\raifo-coder: proxy stream: use_tty={}\r\n\r",
+                use_tty
+            ));
+        }
         let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
@@ -1175,6 +1181,7 @@ fn handle_connection<S: Read + Write>(
                 TxKind::Unbounded(s) => TxKind::Unbounded(s.clone()),
                 TxKind::Bounded(s) => TxKind::Bounded(s.clone()),
             };
+            let verbose_cl = verbose;
             let drop_warned_cl = drop_warned.clone();
             let dropped_count_cl = dropped_count.clone();
             std::thread::spawn(move || {
@@ -1183,6 +1190,14 @@ fn handle_connection<S: Read + Write>(
                     match so.read(&mut buf) {
                         Ok(0) => break,
                         Ok(n) => {
+                            if verbose_cl {
+                                let mut prev = String::from_utf8_lossy(&buf[..n.min(120)]).into_owned();
+                                prev = prev.replace("\r", "\\r").replace("\n", "\\n");
+                                log_stderr_and_file(&format!(
+                                    "\raifo-coder: proxy stream: stdout reader read {} bytes preview='{}'\r\n\r",
+                                    n, prev
+                                ));
+                            }
                             let chunk = buf[..n].to_vec();
                             match txo {
                                 TxKind::Unbounded(ref s) => {
@@ -1240,6 +1255,8 @@ fn handle_connection<S: Read + Write>(
         let mut prelude_failed = false;
         let mut first_chunk_write_failed = false;
         let mut first_wait_logged = false;
+        let mut total_bytes: usize = 0;
+        let mut chunk_count_log: usize = 0;
         loop {
             // Emit timeout chunk once when INT has been sent
             if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1262,6 +1279,15 @@ fn handle_connection<S: Read + Write>(
                             log_stderr_and_file("\raifo-coder: proxy stream: prelude sent\r\n\r");
                         }
                     }
+                    if verbose {
+                        let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(120)]).into_owned();
+                        prev = prev.replace("\r", "\\r").replace("\n", "\\n");
+                        log_stderr_and_file(&format!(
+                            "\raifo-coder: proxy stream: chunk size={} preview='{}'\r\n\r",
+                            chunk.len(),
+                            prev
+                        ));
+                    }
                     if let Err(_e) = respond_chunked_write_chunk(stream, &chunk) {
                         if !wrote_any_chunk {
                             first_chunk_write_failed = true;
@@ -1270,6 +1296,8 @@ fn handle_connection<S: Read + Write>(
                         break;
                     } else {
                         wrote_any_chunk = true;
+                        total_bytes = total_bytes.saturating_add(chunk.len());
+                        chunk_count_log = chunk_count_log.saturating_add(1);
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -1279,7 +1307,12 @@ fn handle_connection<S: Read + Write>(
                     }
                     continue;
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    if !prelude_sent && !wrote_any_chunk && verbose {
+                        log_stderr_and_file("\raifo-coder: proxy stream: stdout closed before any data\r\n\r");
+                    }
+                    break;
+                }
             }
         }
 
@@ -1394,6 +1427,12 @@ fn handle_connection<S: Read + Write>(
             let _ = rs.remove(&exec_id);
         }
         log_request_result(verbose, &tool, kind, code, &started);
+        if verbose {
+            log_stderr_and_file(&format!(
+                "\raifo-coder: proxy stream: totals bytes={} chunks={}\r\n\r",
+                total_bytes, chunk_count_log
+            ));
+        }
         if let Err(_e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 log_stderr_and_file(
