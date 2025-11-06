@@ -1120,6 +1120,10 @@ fn handle_connection<S: Read + Write>(
     } else {
         full_args = vec![tool.clone()];
         full_args.extend(argv.clone());
+        // For python sidecar, prefer python3 when 'python' may be absent in slim images
+        if kind == "python" && tool == "python" && !full_args.is_empty() {
+            full_args[0] = "python3".to_string();
+        }
     }
 
     // ExecId already determined above; reuse
