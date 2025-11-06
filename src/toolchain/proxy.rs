@@ -1079,6 +1079,12 @@ fn handle_connection<S: Read + Write>(
                 return;
             }
         };
+        if verbose {
+            log_stderr_and_file(&format!(
+                "\r\naifo-coder: proxy exec: spawned child pid={}\r\n\r",
+                child.id()
+            ));
+        }
 
         // Optional max-runtime escalation watcher
         let done = Arc::new(AtomicBool::new(false));
@@ -1120,21 +1126,9 @@ fn handle_connection<S: Read + Write>(
             });
         }
 
-        // Send prelude after successful spawn (include ExecId)
-        if respond_chunked_prelude(stream, Some(&exec_id)).is_err() {
-            // Client disconnected before reading prelude: clean up and return quietly
-            log_disconnect();
-            let _ = child.kill();
-            let _ = child.wait();
-            {
-                let mut er = exec_registry.lock().unwrap();
-                let _ = er.remove(&exec_id);
-            }
-            {
-                let mut rs = recent_signals.lock().unwrap();
-                let _ = rs.remove(&exec_id);
-            }
-            return;
+        // Defer sending prelude until the first chunk is available to avoid early client disconnects
+        if verbose {
+            log_stderr_and_file("\raifo-coder: proxy stream: deferring prelude until first chunk\r\n\r");
         }
 
         // Drain stderr to avoid backpressure
@@ -1241,6 +1235,11 @@ fn handle_connection<S: Read + Write>(
         // Stream until EOF or write error
         let mut write_failed = false;
         let mut timeout_chunk_emitted = false;
+        let mut prelude_sent = false;
+        let mut wrote_any_chunk = false;
+        let mut prelude_failed = false;
+        let mut first_chunk_write_failed = false;
+        let mut first_wait_logged = false;
         loop {
             // Emit timeout chunk once when INT has been sent
             if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1249,12 +1248,37 @@ fn handle_connection<S: Read + Write>(
             }
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(chunk) => {
+                    if !prelude_sent {
+                        if verbose {
+                            log_stderr_and_file("\raifo-coder: proxy stream: sending prelude before first chunk\r\n\r");
+                        }
+                        if let Err(_e) = respond_chunked_prelude(stream, Some(&exec_id)) {
+                            prelude_failed = true;
+                            write_failed = true;
+                            break;
+                        }
+                        prelude_sent = true;
+                        if verbose {
+                            log_stderr_and_file("\raifo-coder: proxy stream: prelude sent\r\n\r");
+                        }
+                    }
                     if let Err(_e) = respond_chunked_write_chunk(stream, &chunk) {
+                        if !wrote_any_chunk {
+                            first_chunk_write_failed = true;
+                        }
                         write_failed = true;
                         break;
+                    } else {
+                        wrote_any_chunk = true;
                     }
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if !prelude_sent && !first_wait_logged && verbose {
+                        log_stderr_and_file("\raifo-coder: proxy stream: waiting for first chunk...\r\n\r");
+                        first_wait_logged = true;
+                    }
+                    continue;
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
@@ -1269,6 +1293,24 @@ fn handle_connection<S: Read + Write>(
         }
 
         if write_failed {
+            // Detail why the write failed when verbose
+            if verbose {
+                if prelude_failed {
+                    log_stderr_and_file(
+                        "\raifo-coder: proxy stream: prelude write failed; client closed before reading headers\r\n\r",
+                    );
+                } else if prelude_sent && !wrote_any_chunk && first_chunk_write_failed {
+                    log_stderr_and_file(
+                        "\raifo-coder: proxy stream: first chunk write failed; client closed before first payload\r\n\r",
+                    );
+                } else {
+                    let line = format!(
+                        "\r\naifo-coder: proxy stream: write failed after {} dropped chunk(s)\r\n\r",
+                        dropped_count.load(std::sync::atomic::Ordering::SeqCst)
+                    );
+                    log_stderr_and_file(&line);
+                }
+            }
             // Emit a single drop-warning and mark at least one dropped chunk for metrics.
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 log_stderr_and_file(
