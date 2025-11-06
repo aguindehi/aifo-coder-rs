@@ -809,7 +809,8 @@ fn try_run_native(
                         Err(ref e)
                             if e.kind() == std::io::ErrorKind::WouldBlock
                                 || e.kind() == std::io::ErrorKind::TimedOut
-                                || e.kind() == std::io::ErrorKind::Interrupted => {
+                                || e.kind() == std::io::ErrorKind::Interrupted =>
+                        {
                             // Avoid busy-spin; keep waiting for more data to arrive
                             std::thread::sleep(std::time::Duration::from_millis(25));
                             continue;
@@ -869,7 +870,8 @@ fn try_run_native(
                 Err(ref e)
                     if e.kind() == std::io::ErrorKind::WouldBlock
                         || e.kind() == std::io::ErrorKind::TimedOut
-                        || e.kind() == std::io::ErrorKind::Interrupted => {
+                        || e.kind() == std::io::ErrorKind::Interrupted =>
+                {
                     // Idle period or interrupted: wait briefly and continue to avoid premature disconnect
                     std::thread::sleep(std::time::Duration::from_millis(25));
                     continue;

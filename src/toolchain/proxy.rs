@@ -1163,10 +1163,7 @@ fn handle_connection<S: Read + Write>(
 
         let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
         if verbose {
-            log_compact(&format!(
-                "aifo-coder: proxy stream: use_tty={}",
-                use_tty
-            ));
+            log_compact(&format!("aifo-coder: proxy stream: use_tty={}", use_tty));
         }
         let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
         let mut cmd = Command::new(&ctx.runtime);
@@ -1294,7 +1291,9 @@ fn handle_connection<S: Read + Write>(
                         Ok(0) => break,
                         Ok(n) => {
                             if verbose_cl && verbose_level_cl >= 2 {
-                                let mut prev = String::from_utf8_lossy(&buf[..n.min(preview_bytes_cl)]).into_owned();
+                                let mut prev =
+                                    String::from_utf8_lossy(&buf[..n.min(preview_bytes_cl)])
+                                        .into_owned();
                                 prev = prev.replace("\r", "\\r").replace("\n", "\\n");
                                 log_compact(&format!(
                                     "aifo-coder: proxy stream: stdout reader read {} bytes preview='{}'",
@@ -1371,7 +1370,9 @@ fn handle_connection<S: Read + Write>(
                     if !prelude_sent {
                         // Ensure this log starts at column 0
                         logger.set_boundary();
-                        logger.boundary_log("aifo-coder: proxy stream: sending prelude before first chunk");
+                        logger.boundary_log(
+                            "aifo-coder: proxy stream: sending prelude before first chunk",
+                        );
                         if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
                             prelude_failed = true;
                             write_failed = true;
@@ -1388,7 +1389,9 @@ fn handle_connection<S: Read + Write>(
                         logger.boundary_log("aifo-coder: proxy stream: prelude sent");
                     }
                     if verbose && verbose_level >= 2 {
-                        let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(preview_bytes)]).into_owned();
+                        let mut prev =
+                            String::from_utf8_lossy(&chunk[..chunk.len().min(preview_bytes)])
+                                .into_owned();
                         prev = prev.replace("\r", "\\r").replace("\n", "\\n");
                         logger.boundary_log(&format!(
                             "aifo-coder: proxy stream: chunk size={} preview='{}'",
@@ -1430,7 +1433,9 @@ fn handle_connection<S: Read + Write>(
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     if !prelude_sent && !wrote_any_chunk && verbose {
-                        logger.boundary_log("aifo-coder: proxy stream: stdout closed before any data");
+                        logger.boundary_log(
+                            "aifo-coder: proxy stream: stdout closed before any data",
+                        );
                     }
                     break;
                 }
