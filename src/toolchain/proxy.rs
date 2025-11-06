@@ -1350,10 +1350,13 @@ fn handle_connection<S: Read + Write>(
         drop(tx_kind);
 
         // Stream until EOF or write error
+        #[allow(unused_assignments)]
         let mut write_failed = false;
         let mut timeout_chunk_emitted = false;
+        #[allow(unused_assignments)]
         let mut prelude_sent = false;
         let mut wrote_any_chunk = false;
+        #[allow(unused_assignments)]
         let mut prelude_failed = false;
         let mut first_chunk_write_failed = false;
         let mut first_wait_logged = false;
