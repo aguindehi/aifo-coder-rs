@@ -296,7 +296,7 @@ help: banner
 	$(call title,Test suites:)
 	@echo ""
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
-	@echo "  test-e2e-suite .............. Run all ignored-by-default tests (acceptance + integration suites)"
+	@echo "  check-e2e .................... Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
@@ -1332,7 +1332,7 @@ test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_streaming_tcp -- --ignored
 
-.PHONY: test-acceptance-suite test-integration-suite test-e2e-suite
+.PHONY: test-acceptance-suite test-integration-suite check-e2e
 
 test-acceptance-suite:
 	@set -e; \
@@ -1358,7 +1358,7 @@ test-integration-suite:
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 	@$(MAKE) test-toolchain-rust-e2e
 
-test-e2e-suite:
+check-e2e:
 	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
