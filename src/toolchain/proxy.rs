@@ -111,7 +111,7 @@ fn workspace_access_hint(
     let script = "set -e; ls -ld /workspace 2>&1; if [ -x /workspace ] && [ -r /workspace ]; then echo OK; else echo DENIED; fi";
     args.push(script.into());
     if verbose {
-        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
+        log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));
     }
     let mut cmd = Command::new(runtime);
     for a in &args[1..] {
@@ -138,6 +138,28 @@ fn workspace_access_hint(
 /// when AIFO_TEST_LOG_PATH is set (used by acceptance tests to avoid dup2 tricks).
 fn log_stderr_and_file(s: &str) {
     eprintln!("{}", s);
+    if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
+        if !p.trim().is_empty() {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&p)
+            {
+                use std::io::Write as _;
+                let _ = writeln!(f, "{}", s);
+            }
+        }
+    }
+    let _ = io::stderr().flush();
+}
+
+/// Compact stderr logger for streaming contexts:
+/// - Re-anchors at column 0 when needed (prefix '\r').
+/// - Always terminates with '\n\r' to ensure the next line starts at column 0.
+/// - Also tees a plain line to AIFO_TEST_LOG_PATH (without CRs) when set.
+fn log_compact(s: &str) {
+    // Re-anchor at column 0, clear to end of line to avoid stale characters, terminate with \n\r
+    eprint!("\r{}\x1b[K\n\r", s);
     if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
         if !p.trim().is_empty() {
             if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -184,7 +206,7 @@ fn kill_in_container(
         script,
     ];
     if verbose {
-        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
+        log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));
     }
     // First attempt
     let mut cmd = Command::new(runtime);
@@ -258,7 +280,7 @@ fn kill_agent_shell_in_agent_container(
         script,
     ];
     if verbose {
-        eprintln!("\raifo-coder: docker: {}", shell_join(&args));
+        log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));
     }
     let mut cmd = Command::new(runtime);
     for a in &args[1..] {
@@ -1047,23 +1069,23 @@ fn handle_connection<S: Read + Write>(
     );
 
     if verbose {
-        eprintln!(
-            "\raifo-coder: proxy docker: {}",
+        log_compact(&format!(
+            "aifo-coder: proxy docker: {}",
             shell_join(&exec_preview_args)
-        );
+        ));
     }
 
     if proto_v2 {
         // Streaming (v2)
         if verbose {
-            log_stderr_and_file("\raifo-coder: proxy exec: proto=v2 (streaming)\r\n\r");
+            log_compact("aifo-coder: proxy exec: proto=v2 (streaming)");
         }
         let started = std::time::Instant::now();
 
         let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
         if verbose {
-            log_stderr_and_file(&format!(
-                "\raifo-coder: proxy stream: use_tty={}\r\n\r",
+            log_compact(&format!(
+                "aifo-coder: proxy stream: use_tty={}",
                 use_tty
             ));
         }
@@ -1086,10 +1108,35 @@ fn handle_connection<S: Read + Write>(
             }
         };
         if verbose {
-            log_stderr_and_file(&format!(
-                "\r\naifo-coder: proxy exec: spawned child pid={}\r\n\r",
+            log_compact(&format!(
+                "aifo-coder: proxy exec: spawned child pid={}",
                 child.id()
             ));
+        }
+        // Streaming log boundary: when we just wrote payload to client, next log must re-anchor with '\r'
+        let mut boundary_needed: bool = false;
+        fn vlog_fn(verbose: bool, boundary_needed: &mut bool, s: &str) {
+            if !verbose {
+                return;
+            }
+            // Prefix with CR when we just streamed payload; clear to EOL and end with \n\r.
+            let prefix = if *boundary_needed { "\r" } else { "" };
+            eprint!("{}{}\x1b[K\n\r", prefix, s);
+            // Tee to test log file (without CRs)
+            if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
+                if !p.trim().is_empty() {
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&p)
+                    {
+                        use std::io::Write as _;
+                        let _ = writeln!(f, "{}", s);
+                    }
+                }
+            }
+            let _ = io::stderr().flush();
+            *boundary_needed = false;
         }
 
         // Optional max-runtime escalation watcher
@@ -1133,9 +1180,7 @@ fn handle_connection<S: Read + Write>(
         }
 
         // Defer sending prelude until the first chunk is available to avoid early client disconnects
-        if verbose {
-            log_stderr_and_file("\raifo-coder: proxy stream: deferring prelude until first chunk\r\n\r");
-        }
+        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: deferring prelude until first chunk");
 
         // Drain stderr to avoid backpressure
         if let Some(mut se) = child.stderr.take() {
@@ -1193,8 +1238,8 @@ fn handle_connection<S: Read + Write>(
                             if verbose_cl {
                                 let mut prev = String::from_utf8_lossy(&buf[..n.min(120)]).into_owned();
                                 prev = prev.replace("\r", "\\r").replace("\n", "\\n");
-                                log_stderr_and_file(&format!(
-                                    "\raifo-coder: proxy stream: stdout reader read {} bytes preview='{}'\r\n\r",
+                                log_compact(&format!(
+                                    "aifo-coder: proxy stream: stdout reader read {} bytes preview='{}'",
                                     n, prev
                                 ));
                             }
@@ -1223,7 +1268,7 @@ fn handle_connection<S: Read + Write>(
                                                     .swap(true, std::sync::atomic::Ordering::SeqCst)
                                                 {
                                                     log_stderr_and_file(
-                                                        "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
+                                                        "\raifo-coder: proxy stream: dropping output (backpressure)",
                                                     );
                                                 }
                                                 let _ = dropped_count_cl.fetch_add(
@@ -1266,27 +1311,34 @@ fn handle_connection<S: Read + Write>(
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(chunk) => {
                     if !prelude_sent {
-                        if verbose {
-                            log_stderr_and_file("\raifo-coder: proxy stream: sending prelude before first chunk\r\n\r");
-                        }
+                        // Ensure this log starts at column 0
+                        boundary_needed = true;
+                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: sending prelude before first chunk");
                         if let Err(_e) = respond_chunked_prelude(stream, Some(&exec_id)) {
                             prelude_failed = true;
                             write_failed = true;
                             break;
                         }
                         prelude_sent = true;
-                        if verbose {
-                            log_stderr_and_file("\raifo-coder: proxy stream: prelude sent\r\n\r");
-                        }
+                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: prelude sent");
                     }
                     if verbose {
                         let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(120)]).into_owned();
                         prev = prev.replace("\r", "\\r").replace("\n", "\\n");
-                        log_stderr_and_file(&format!(
-                            "\raifo-coder: proxy stream: chunk size={} preview='{}'\r\n\r",
-                            chunk.len(),
-                            prev
-                        ));
+                        vlog_fn(
+                            verbose,
+                            &mut boundary_needed,
+                            &format!(
+                                "aifo-coder: proxy stream: chunk size={} preview='{}'",
+                                chunk.len(),
+                                prev
+                            ),
+                        );
+                    }
+                    // Insert a visual separator line before the very first streamed payload line
+                    if !wrote_any_chunk {
+                        eprint!("\n\r");
+                        let _ = io::stderr().flush();
                     }
                     if let Err(_e) = respond_chunked_write_chunk(stream, &chunk) {
                         if !wrote_any_chunk {
@@ -1298,18 +1350,19 @@ fn handle_connection<S: Read + Write>(
                         wrote_any_chunk = true;
                         total_bytes = total_bytes.saturating_add(chunk.len());
                         chunk_count_log = chunk_count_log.saturating_add(1);
+                        boundary_needed = true;
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     if !prelude_sent && !first_wait_logged && verbose {
-                        log_stderr_and_file("\raifo-coder: proxy stream: waiting for first chunk...\r\n\r");
+                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: waiting for first chunk...");
                         first_wait_logged = true;
                     }
                     continue;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     if !prelude_sent && !wrote_any_chunk && verbose {
-                        log_stderr_and_file("\raifo-coder: proxy stream: stdout closed before any data\r\n\r");
+                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: stdout closed before any data");
                     }
                     break;
                 }
@@ -1319,44 +1372,38 @@ fn handle_connection<S: Read + Write>(
         // Verbose metric: how many chunks dropped under backpressure
         if verbose && dropped_count.load(std::sync::atomic::Ordering::SeqCst) > 0 {
             let line = format!(
-                "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                "aifo-coder: proxy stream: dropped {} chunk(s)",
                 dropped_count.load(std::sync::atomic::Ordering::SeqCst)
             );
-            log_stderr_and_file(&line);
+            vlog_fn(verbose, &mut boundary_needed, &line);
         }
 
         if write_failed {
             // Detail why the write failed when verbose
             if verbose {
                 if prelude_failed {
-                    log_stderr_and_file(
-                        "\raifo-coder: proxy stream: prelude write failed; client closed before reading headers\r\n\r",
-                    );
+                    vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: prelude write failed; client closed before reading headers");
                 } else if prelude_sent && !wrote_any_chunk && first_chunk_write_failed {
-                    log_stderr_and_file(
-                        "\raifo-coder: proxy stream: first chunk write failed; client closed before first payload\r\n\r",
-                    );
+                    vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: first chunk write failed; client closed before first payload");
                 } else {
                     let line = format!(
-                        "\r\naifo-coder: proxy stream: write failed after {} dropped chunk(s)\r\n\r",
+                        "aifo-coder: proxy stream: write failed after {} dropped chunk(s)",
                         dropped_count.load(std::sync::atomic::Ordering::SeqCst)
                     );
-                    log_stderr_and_file(&line);
+                    vlog_fn(verbose, &mut boundary_needed, &line);
                 }
             }
             // Emit a single drop-warning and mark at least one dropped chunk for metrics.
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                log_stderr_and_file(
-                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
-                );
+                vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
             }
             let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if verbose {
                 let line = format!(
-                    "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                    "aifo-coder: proxy stream: dropped {} chunk(s)",
                     dropped_count.load(std::sync::atomic::Ordering::SeqCst)
                 );
-                log_stderr_and_file(&line);
+                vlog_fn(verbose, &mut boundary_needed, &line);
             }
             // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
@@ -1428,24 +1475,26 @@ fn handle_connection<S: Read + Write>(
         }
         log_request_result(verbose, &tool, kind, code, &started);
         if verbose {
-            log_stderr_and_file(&format!(
-                "\raifo-coder: proxy stream: totals bytes={} chunks={}\r\n\r",
-                total_bytes, chunk_count_log
-            ));
+            vlog_fn(
+                verbose,
+                &mut boundary_needed,
+                &format!(
+                    "aifo-coder: proxy stream: totals bytes={} chunks={}",
+                    total_bytes, chunk_count_log
+                ),
+            );
         }
         if let Err(_e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                log_stderr_and_file(
-                    "\raifo-coder: proxy stream: dropping output (backpressure)\r\n\r",
-                );
+                vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
             }
             let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if verbose {
                 let line = format!(
-                    "\r\naifo-coder: proxy stream: dropped {} chunk(s)\r\n\r",
+                    "aifo-coder: proxy stream: dropped {} chunk(s)",
                     dropped_count.load(std::sync::atomic::Ordering::SeqCst)
                 );
-                log_stderr_and_file(&line);
+                vlog_fn(verbose, &mut boundary_needed, &line);
             }
         }
         return;
@@ -1453,7 +1502,7 @@ fn handle_connection<S: Read + Write>(
 
     // Buffered (v1)
     if verbose {
-        log_stderr_and_file("\raifo-coder: proxy exec: proto=v1 (buffered)\r\n\r");
+        log_stderr_and_file("aifo-coder: proxy exec: proto=v1 (buffered)");
     }
     let started = std::time::Instant::now();
 
