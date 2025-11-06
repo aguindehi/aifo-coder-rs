@@ -56,6 +56,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # Build the Rust aifo-shim binary for the current build platform
 COPY Cargo.toml .
+COPY build.rs .
 COPY src ./src
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
