@@ -1120,9 +1120,14 @@ fn handle_connection<S: Read + Write>(
     } else {
         full_args = vec![tool.clone()];
         full_args.extend(argv.clone());
-        // For python sidecar, prefer python3 when 'python' may be absent in slim images
+        // For python sidecar, run via python3; fall back to python if python3 is missing.
         if kind == "python" && tool == "python" && !full_args.is_empty() {
-            full_args[0] = "python3".to_string();
+            let mut py3 = full_args.clone();
+            py3[0] = "python3".to_string();
+            let mut py = full_args.clone();
+            py[0] = "python".to_string();
+            let cond = format!("{} || {}", shell_join(&py3), shell_join(&py));
+            full_args = vec!["sh".to_string(), "-lc".to_string(), cond];
         }
     }
 
@@ -1165,7 +1170,7 @@ fn handle_connection<S: Read + Write>(
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(120);
 
-        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
+        let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() == Some("1");
         if verbose {
             log_compact(&format!("aifo-coder: proxy stream: use_tty={}", use_tty));
         }
