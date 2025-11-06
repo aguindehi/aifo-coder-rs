@@ -13,10 +13,6 @@ include:
   - if: $CI_COMMIT_BRANCH == "main"
   - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test
 
-.rules_build_executable: &rules_build_executable
-  - if: $CI_COMMIT_BRANCH == "main"
-  - if: $CI_COMMIT_BRANCH == "feat/AIFO-1530-add-pipelines"  # TODO Remove test
-
 # Base job provided as cicd-component by the cloud team. Used as template and should not run on its own
 container-build:
   variables:
@@ -71,7 +67,7 @@ build-launcher:
   stage: build
   needs:
     - job: build-rust-builder
-  image: $CI_REGISTRY_IMAGE/rust-builder:$CI_COMMIT_SHA
+  image: $RUST_BUILDER_IMAGE_REF
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
   script:
@@ -87,4 +83,10 @@ build-launcher:
       - README.md
       - NOTICE
       - LICENSE
-  rules: *rules_build_executable
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/rust-builder:$CI_COMMIT_SHA
+    - if: $CI_COMMIT_BRANCH != "main" || $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
