@@ -1120,14 +1120,9 @@ fn handle_connection<S: Read + Write>(
     } else {
         full_args = vec![tool.clone()];
         full_args.extend(argv.clone());
-        // For python sidecar, run via python3; fall back to python if python3 is missing.
+        // For python sidecar, prefer python3 (present in python:3.12-slim)
         if kind == "python" && tool == "python" && !full_args.is_empty() {
-            let mut py3 = full_args.clone();
-            py3[0] = "python3".to_string();
-            let mut py = full_args.clone();
-            py[0] = "python".to_string();
-            let cond = format!("{} || {}", shell_join(&py3), shell_join(&py));
-            full_args = vec!["sh".to_string(), "-lc".to_string(), cond];
+            full_args[0] = "python3".to_string();
         }
     }
 
