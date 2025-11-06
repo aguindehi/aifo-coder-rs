@@ -422,17 +422,8 @@ fn try_run_native(
     }
     let _ = stream_box.write_all(b"0\r\n\r\n");
     let _ = stream_box.flush();
-    // Best-effort: half-close the write side to signal end-of-request regardless of earlier errors.
-    let _ = stream_box;
-    match &mut conn {
-        Conn::Tcp(s, _, _) => {
-            let _ = s.shutdown(std::net::Shutdown::Write);
-        }
-        #[cfg(target_os = "linux")]
-        Conn::Uds(s, _) => {
-            let _ = s.shutdown(std::net::Shutdown::Write);
-        }
-    }
+    // Do not half-close the write side here: on some stacks (e.g., macOS+Colima) an early shutdown(Write)
+    // can race with the server’s chunked writes and cause a broken pipe/RST on the next write.
 
     // Now read response and stream stdout
     // Helper to read until headers end
