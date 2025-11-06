@@ -880,31 +880,13 @@ fn try_run_native(
         let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d);
     } else {
-        // Close the stream now so the proxy can start its disconnect sequence and logs.
-        std::mem::drop(reader_box);
-        #[cfg(target_os = "linux")]
-        {
-            // Proactively terminate the transient parent shell to keep prompt clean.
-            kill_parent_shell_if_interactive();
-        }
-        // Proactively drive escalation on the proxy while we wait.
-        proactive_disconnect_escalation(url, token, exec_id);
-        disconnect_wait(verbose);
-        // Remove exec markers so the shell wrapper won't auto-exit on the next /run
+        // Benign finish: do not treat missing trailers as disconnect; avoid sending signals or waiting.
         let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
         let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d_rm);
-        if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
-            .ok()
-            .as_deref()
-            != Some("0")
-        {
+        // Default to success unless server provided a non-zero exit code earlier.
+        if exit_code != 0 {
             exit_code = 0;
-        } else if exit_code == 0 {
-            // keep 0 if server told us explicitly
-        } else if exit_code == 1 {
-            // default fallback on disconnect when not zeroed by env
-            exit_code = 1;
         }
     }
     // Best-effort tmp dir cleanup created by caller naming scheme
