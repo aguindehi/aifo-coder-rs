@@ -65,14 +65,14 @@ fn respond_plain<W: Write>(w: &mut W, status: &str, exit_code: i32, body: &[u8])
     let _ = w.flush();
 }
 
-fn respond_chunked_prelude<W: Write>(w: &mut W, exec_id: Option<&str>) {
+fn respond_chunked_prelude<W: Write>(w: &mut W, exec_id: Option<&str>) -> io::Result<()> {
     let mut hdr = String::from("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nTransfer-Encoding: chunked\r\nTrailer: X-Exit-Code\r\nConnection: close\r\n");
     if let Some(id) = exec_id {
         hdr.push_str(&format!("X-Exec-Id: {}\r\n", id));
     }
     hdr.push_str("\r\n");
-    let _ = w.write_all(hdr.as_bytes());
-    let _ = w.flush();
+    w.write_all(hdr.as_bytes())?;
+    w.flush()
 }
 
 fn respond_chunked_write_chunk<W: Write>(w: &mut W, chunk: &[u8]) -> io::Result<()> {
@@ -1121,7 +1121,21 @@ fn handle_connection<S: Read + Write>(
         }
 
         // Send prelude after successful spawn (include ExecId)
-        respond_chunked_prelude(stream, Some(&exec_id));
+        if respond_chunked_prelude(stream, Some(&exec_id)).is_err() {
+            // Client disconnected before reading prelude: clean up and return quietly
+            log_disconnect();
+            let _ = child.kill();
+            let _ = child.wait();
+            {
+                let mut er = exec_registry.lock().unwrap();
+                let _ = er.remove(&exec_id);
+            }
+            {
+                let mut rs = recent_signals.lock().unwrap();
+                let _ = rs.remove(&exec_id);
+            }
+            return;
+        }
 
         // Drain stderr to avoid backpressure
         if let Some(mut se) = child.stderr.take() {

@@ -556,34 +556,44 @@ fn try_run_native(
         }
     }
 
+    // If headers not yet found, wait up to header_wait_ms for them to arrive (idle tolerant)
+    if header_end_idx.is_none() {
+        let wait_ms: u64 = std::env::var("AIFO_SHIM_HEADER_WAIT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(2000);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms);
+        let mut tmp_wait = [0u8; 1024];
+        while std::time::Instant::now() < deadline && header_end_idx.is_none() {
+            match reader_box.read(&mut tmp_wait) {
+                Ok(0) => break,
+                Ok(n) => {
+                    hdr_buf.extend_from_slice(&tmp_wait[..n]);
+                    if let Some(idx2) = find_header_end(&hdr_buf) {
+                        header_end_idx = Some(idx2);
+                        break;
+                    }
+                }
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    continue;
+                }
+                Err(_) => break,
+            }
+        }
+    }
     let idx = match header_end_idx {
         Some(i) => i,
         None => {
-            // No headers; treat as disconnect — ensure proxy sees it now
-            // Close the underlying stream so the proxy detects disconnect immediately.
-            std::mem::drop(reader_box);
-            #[cfg(target_os = "linux")]
-            {
-                // Proactively close the transient /run shell to keep prompt clean.
-                kill_parent_shell_if_interactive();
-            }
-            // Proactively drive escalation on the proxy while we wait.
-            proactive_disconnect_escalation(url, token, exec_id);
-            disconnect_wait(verbose);
-            // After waiting, remove exec markers so the shell wrapper won't auto-exit next /run
+            // No headers observed even after a short grace; finish benignly without escalation.
             let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
             let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
             let _ = fs::remove_dir_all(&d_rm);
-            let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
-                .ok()
-                .as_deref()
-                != Some("0")
-            {
-                0
-            } else {
-                1
-            };
-            // Keep markers for proxy cleanup; best-effort tmp cleanup
+            // Best-effort tmp cleanup created by caller naming scheme
             let tmp_base = std::env::var("TMPDIR")
                 .ok()
                 .filter(|s| !s.is_empty())
@@ -591,7 +601,7 @@ fn try_run_native(
             let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
             let _ = fs::remove_dir_all(&tmp_dir);
             eprint!("\n\r");
-            return Some(ec);
+            return Some(0);
         }
     };
 
