@@ -6,6 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider, OpenHands, OpenCode, Plandex) using Docker; includes Fork mode with tmux/Windows Terminal orchestration, per-pane state mounts, and repo-scoped locking"
 repository = ""
 default-run = "aifo-coder"
+build = "build.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

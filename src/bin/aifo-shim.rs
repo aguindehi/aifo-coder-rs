@@ -1091,6 +1091,16 @@ fn main() {
         }
     };
     let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
+    if verbose {
+        eprintln!(
+            "aifo-shim: build={} target={} profile={} rust={} ver={}",
+            env!("AIFO_SHIM_BUILD_DATE"),
+            env!("AIFO_SHIM_BUILD_TARGET"),
+            env!("AIFO_SHIM_BUILD_PROFILE"),
+            env!("AIFO_SHIM_BUILD_RUSTC"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     let tool = std::env::args_os()
         .next()

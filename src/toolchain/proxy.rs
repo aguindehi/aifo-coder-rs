@@ -345,6 +345,16 @@ pub fn toolexec_start_proxy(
     verbose: bool,
 ) -> io::Result<(String, String, Arc<AtomicBool>, JoinHandle<()>)> {
     let runtime = container_runtime_path()?;
+    if verbose {
+        eprintln!(
+            "aifo-coder: proxy build={} target={} profile={} rust={} ver={}",
+            env!("AIFO_SHIM_BUILD_DATE"),
+            env!("AIFO_SHIM_BUILD_TARGET"),
+            env!("AIFO_SHIM_BUILD_PROFILE"),
+            env!("AIFO_SHIM_BUILD_RUSTC"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     #[cfg(unix)]
     let uid: u32 = u32::from(getuid());
