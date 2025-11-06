@@ -983,8 +983,8 @@ fn handle_connection<S: Read + Write>(
                     return;
                 }
                 if verbose {
-                    log_stderr_and_file(&format!(
-                        "\n\raifo-coder: proxy signal: exec_id={} sig={}",
+                    log_compact(&format!(
+                        "aifo-coder: proxy signal: exec_id={} sig={}",
                         exec_id, sig
                     ));
                 }
