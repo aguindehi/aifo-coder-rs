@@ -175,6 +175,76 @@ fn log_compact(s: &str) {
     let _ = io::stderr().flush();
 }
 
+/// Per-connection verbose logger with boundary-aware printing.
+/// - info(): plain line (clears to EOL), ends with \n\r
+/// - compact(): forces CR anchor + clear-to-EOL, ends with \n\r
+/// - boundary_log(): compact if boundary is set, otherwise info
+/// - set_boundary(): mark that previous operation streamed payload; next log should re-anchor
+struct StreamLogger {
+    verbose: bool,
+    boundary: bool,
+    tee_path: Option<PathBuf>,
+}
+
+impl StreamLogger {
+    fn new(verbose: bool) -> Self {
+        let tee_path = std_env::var("AIFO_TEST_LOG_PATH")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(PathBuf::from);
+        StreamLogger {
+            verbose,
+            boundary: false,
+            tee_path,
+        }
+    }
+
+    fn tee(&self, s: &str) {
+        if let Some(p) = &self.tee_path {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(p)
+            {
+                use std::io::Write as _;
+                let _ = writeln!(f, "{}", s);
+            }
+        }
+    }
+
+    fn info(&mut self, s: &str) {
+        if !self.verbose {
+            return;
+        }
+        eprint!("{}\x1b[K\n\r", s);
+        self.tee(s);
+        let _ = io::stderr().flush();
+        // info() does not alter boundary
+    }
+
+    fn compact(&mut self, s: &str) {
+        if !self.verbose {
+            return;
+        }
+        eprint!("\r{}\x1b[K\n\r", s);
+        self.tee(s);
+        let _ = io::stderr().flush();
+        self.boundary = false;
+    }
+
+    fn boundary_log(&mut self, s: &str) {
+        if self.boundary {
+            self.compact(s);
+        } else {
+            self.info(s);
+        }
+    }
+
+    fn set_boundary(&mut self) {
+        self.boundary = true;
+    }
+}
+
 // Small helpers/constants to reduce duplication in proxy logs
 const DISCONNECT_MSG: &str = "aifo-coder: disconnect";
 
@@ -1123,30 +1193,7 @@ fn handle_connection<S: Read + Write>(
             ));
         }
         // Streaming log boundary: when we just wrote payload to client, next log must re-anchor with '\r'
-        let mut boundary_needed: bool = false;
-        fn vlog_fn(verbose: bool, boundary_needed: &mut bool, s: &str) {
-            if !verbose {
-                return;
-            }
-            // Prefix with CR when we just streamed payload; clear to EOL and end with \n\r.
-            let prefix = if *boundary_needed { "\r" } else { "" };
-            eprint!("{}{}\x1b[K\n\r", prefix, s);
-            // Tee to test log file (without CRs)
-            if let Ok(p) = std_env::var("AIFO_TEST_LOG_PATH") {
-                if !p.trim().is_empty() {
-                    if let Ok(mut f) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(&p)
-                    {
-                        use std::io::Write as _;
-                        let _ = writeln!(f, "{}", s);
-                    }
-                }
-            }
-            let _ = io::stderr().flush();
-            *boundary_needed = false;
-        }
+        let mut logger = StreamLogger::new(verbose);
 
         // Optional max-runtime escalation watcher
         let done = Arc::new(AtomicBool::new(false));
@@ -1189,7 +1236,7 @@ fn handle_connection<S: Read + Write>(
         }
 
         // Defer sending prelude until the first chunk is available to avoid early client disconnects
-        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: deferring prelude until first chunk");
+        logger.boundary_log("aifo-coder: proxy stream: deferring prelude until first chunk");
 
         // Drain stderr to avoid backpressure
         if let Some(mut se) = child.stderr.take() {
@@ -1323,39 +1370,31 @@ fn handle_connection<S: Read + Write>(
                 Ok(chunk) => {
                     if !prelude_sent {
                         // Ensure this log starts at column 0
-                        boundary_needed = true;
-                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: sending prelude before first chunk");
+                        logger.set_boundary();
+                        logger.boundary_log("aifo-coder: proxy stream: sending prelude before first chunk");
                         if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
                             prelude_failed = true;
                             write_failed = true;
                             if verbose {
-                                vlog_fn(
-                                    verbose,
-                                    &mut boundary_needed,
-                                    &format!(
-                                        "aifo-coder: proxy stream: prelude write failed: kind={:?} errno={:?}",
-                                        e.kind(),
-                                        e.raw_os_error()
-                                    ),
-                                );
+                                logger.boundary_log(&format!(
+                                    "aifo-coder: proxy stream: prelude write failed: kind={:?} errno={:?}",
+                                    e.kind(),
+                                    e.raw_os_error()
+                                ));
                             }
                             break;
                         }
                         prelude_sent = true;
-                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: prelude sent");
+                        logger.boundary_log("aifo-coder: proxy stream: prelude sent");
                     }
                     if verbose && verbose_level >= 2 {
                         let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(preview_bytes)]).into_owned();
                         prev = prev.replace("\r", "\\r").replace("\n", "\\n");
-                        vlog_fn(
-                            verbose,
-                            &mut boundary_needed,
-                            &format!(
-                                "aifo-coder: proxy stream: chunk size={} preview='{}'",
-                                chunk.len(),
-                                prev
-                            ),
-                        );
+                        logger.boundary_log(&format!(
+                            "aifo-coder: proxy stream: chunk size={} preview='{}'",
+                            chunk.len(),
+                            prev
+                        ));
                     }
                     // Insert a visual separator line before the very first streamed payload line
                     if !wrote_any_chunk {
@@ -1383,19 +1422,19 @@ fn handle_connection<S: Read + Write>(
                         wrote_any_chunk = true;
                         total_bytes = total_bytes.saturating_add(chunk.len());
                         chunk_count_log = chunk_count_log.saturating_add(1);
-                        boundary_needed = true;
+                        logger.set_boundary();
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     if !prelude_sent && !first_wait_logged && verbose {
-                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: waiting for first chunk...");
+                        logger.boundary_log("aifo-coder: proxy stream: waiting for first chunk...");
                         first_wait_logged = true;
                     }
                     continue;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     if !prelude_sent && !wrote_any_chunk && verbose {
-                        vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: stdout closed before any data");
+                        logger.boundary_log("aifo-coder: proxy stream: stdout closed before any data");
                     }
                     break;
                 }
@@ -1408,27 +1447,27 @@ fn handle_connection<S: Read + Write>(
                 "aifo-coder: proxy stream: dropped {} chunk(s)",
                 dropped_count.load(std::sync::atomic::Ordering::SeqCst)
             );
-            vlog_fn(verbose, &mut boundary_needed, &line);
+            logger.boundary_log(&line);
         }
 
         if write_failed {
             // Detail why the write failed when verbose
             if verbose {
                 if prelude_failed {
-                    vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: prelude write failed; client closed before reading headers");
+                    logger.boundary_log("aifo-coder: proxy stream: prelude write failed; client closed before reading headers");
                 } else if prelude_sent && !wrote_any_chunk && first_chunk_write_failed {
-                    vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: first chunk write failed; client closed before first payload");
+                    logger.boundary_log("aifo-coder: proxy stream: first chunk write failed; client closed before first payload");
                 } else {
                     let line = format!(
                         "aifo-coder: proxy stream: write failed after {} dropped chunk(s)",
                         dropped_count.load(std::sync::atomic::Ordering::SeqCst)
                     );
-                    vlog_fn(verbose, &mut boundary_needed, &line);
+                    logger.boundary_log(&line);
                 }
             }
             // Emit a single drop-warning and mark at least one dropped chunk for metrics.
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
+                logger.boundary_log("aifo-coder: proxy stream: dropping output (backpressure)");
             }
             // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
@@ -1500,29 +1539,21 @@ fn handle_connection<S: Read + Write>(
         }
         log_request_result(verbose, &tool, kind, code, &started);
         if verbose {
-            vlog_fn(
-                verbose,
-                &mut boundary_needed,
-                &format!(
-                    "aifo-coder: proxy stream: totals bytes={} chunks={}",
-                    total_bytes, chunk_count_log
-                ),
-            );
+            logger.boundary_log(&format!(
+                "aifo-coder: proxy stream: totals bytes={} chunks={}",
+                total_bytes, chunk_count_log
+            ));
         }
         if let Err(e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
+                logger.boundary_log("aifo-coder: proxy stream: dropping output (backpressure)");
             }
             if verbose {
-                vlog_fn(
-                    verbose,
-                    &mut boundary_needed,
-                    &format!(
-                        "aifo-coder: proxy stream: trailer write failed: kind={:?} errno={:?}",
-                        e.kind(),
-                        e.raw_os_error()
-                    ),
-                );
+                logger.boundary_log(&format!(
+                    "aifo-coder: proxy stream: trailer write failed: kind={:?} errno={:?}",
+                    e.kind(),
+                    e.raw_os_error()
+                ));
             }
         }
         return;
