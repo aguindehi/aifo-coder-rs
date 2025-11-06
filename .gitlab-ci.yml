@@ -26,7 +26,7 @@ container-build:
     - |
       IMAGE_PATH_EXTRA="${TARGET_NAME:-$TARGET}"
       KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
-  rules: # Turn of component rules
+  rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
 
@@ -56,10 +56,9 @@ build-toolchain:
   stage: build
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
-  before_script:
-    - |
-      TARGET="toolchain-$FOLDER"
-      DOCKER_FILE="./toolchains/$FOLDER/Dockerfile"
+  variables:
+    TARGET_NAME: "toolchain-$FOLDER"
+    DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
   rules: *rules_build_image
   parallel:
     matrix:
