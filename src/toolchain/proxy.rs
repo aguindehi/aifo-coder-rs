@@ -176,10 +176,10 @@ fn log_compact(s: &str) {
 }
 
 // Small helpers/constants to reduce duplication in proxy logs
-const DISCONNECT_MSG: &str = "\raifo-coder: disconnect";
+const DISCONNECT_MSG: &str = "aifo-coder: disconnect";
 
 fn log_disconnect() {
-    log_stderr_and_file(DISCONNECT_MSG);
+    log_compact(DISCONNECT_MSG);
 }
 
 /// Best-effort: send a signal to the process group inside container for given exec id.
@@ -303,8 +303,8 @@ fn disconnect_terminate_exec_in_container(
     log_disconnect();
     // Small grace to allow shim's trap to POST /signal.
     std::thread::sleep(Duration::from_millis(50));
-    log_stderr_and_file(&format!(
-        "\raifo-coder: disconnect escalate: sending INT to exec_id={}",
+    log_compact(&format!(
+        "aifo-coder: disconnect escalate: sending INT to exec_id={}",
         exec_id
     ));
     kill_in_container(runtime, container, exec_id, "INT", verbose);
@@ -313,14 +313,14 @@ fn disconnect_terminate_exec_in_container(
         kill_agent_shell_in_agent_container(runtime, ac, exec_id, verbose);
     }
     std::thread::sleep(Duration::from_millis(250));
-    log_stderr_and_file(&format!(
-        "\raifo-coder: disconnect escalate: sending TERM to exec_id={}",
+    log_compact(&format!(
+        "aifo-coder: disconnect escalate: sending TERM to exec_id={}",
         exec_id
     ));
     kill_in_container(runtime, container, exec_id, "TERM", verbose);
     std::thread::sleep(Duration::from_millis(750));
-    log_stderr_and_file(&format!(
-        "\raifo-coder: disconnect escalate: sending KILL to exec_id={}",
+    log_compact(&format!(
+        "aifo-coder: disconnect escalate: sending KILL to exec_id={}",
         exec_id
     ));
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
@@ -1325,9 +1325,20 @@ fn handle_connection<S: Read + Write>(
                         // Ensure this log starts at column 0
                         boundary_needed = true;
                         vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: sending prelude before first chunk");
-                        if let Err(_e) = respond_chunked_prelude(stream, Some(&exec_id)) {
+                        if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
                             prelude_failed = true;
                             write_failed = true;
+                            if verbose {
+                                vlog_fn(
+                                    verbose,
+                                    &mut boundary_needed,
+                                    &format!(
+                                        "aifo-coder: proxy stream: prelude write failed: kind={:?} errno={:?}",
+                                        e.kind(),
+                                        e.raw_os_error()
+                                    ),
+                                );
+                            }
                             break;
                         }
                         prelude_sent = true;
@@ -1351,11 +1362,22 @@ fn handle_connection<S: Read + Write>(
                         eprint!("\n\r");
                         let _ = io::stderr().flush();
                     }
-                    if let Err(_e) = respond_chunked_write_chunk(stream, &chunk) {
+                    if let Err(e) = respond_chunked_write_chunk(stream, &chunk) {
                         if !wrote_any_chunk {
                             first_chunk_write_failed = true;
                         }
                         write_failed = true;
+                        if verbose {
+                            vlog_fn(
+                                verbose,
+                                &mut boundary_needed,
+                                &format!(
+                                    "aifo-coder: proxy stream: chunk write failed: kind={:?} errno={:?}",
+                                    e.kind(),
+                                    e.raw_os_error()
+                                ),
+                            );
+                        }
                         break;
                     } else {
                         wrote_any_chunk = true;
@@ -1487,9 +1509,20 @@ fn handle_connection<S: Read + Write>(
                 ),
             );
         }
-        if let Err(_e) = respond_chunked_trailer(stream, code) {
+        if let Err(e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
+            }
+            if verbose {
+                vlog_fn(
+                    verbose,
+                    &mut boundary_needed,
+                    &format!(
+                        "aifo-coder: proxy stream: trailer write failed: kind={:?} errno={:?}",
+                        e.kind(),
+                        e.raw_os_error()
+                    ),
+                );
             }
         }
         return;
