@@ -22,7 +22,7 @@ Lanes
 - Acceptance/E2E (ignored by default)
   - Heavy tests and end-to-end paths; include unix:// transport (Linux-only).
   - Marked #[ignore] by default.
-  - Run with: make test-acceptance-suite or make test-e2e-suite
+  - Run with: make test-acceptance-suite or make check-e2e
 
 Gating helpers
 
@@ -76,9 +76,10 @@ How to run
   - or: make test
 
 - Integration/E2E (Docker and images present):
+  - make check-e2e
   - make test-integration-suite
   - make test-acceptance-suite
-  - make test-e2e-suite
+
 
 Coverage
 

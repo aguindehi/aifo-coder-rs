@@ -335,8 +335,8 @@ fn try_run_native(
             let path = "/exec".to_string();
             match UnixStream::connect(sock) {
                 Ok(stream) => {
-                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
-                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                    let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
                     Conn::Uds(stream, path)
                 }
                 Err(_) => return None, // fall back to curl on connect error
@@ -365,8 +365,8 @@ fn try_run_native(
         let addr = format!("{}:{}", host, port);
         match TcpStream::connect(&addr) {
             Ok(stream) => {
-                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(150)));
-                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(150)));
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1000)));
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(1000)));
                 Conn::Tcp(stream, host, path)
             }
             Err(_) => return None, // fall back to curl on connect error
@@ -422,17 +422,8 @@ fn try_run_native(
     }
     let _ = stream_box.write_all(b"0\r\n\r\n");
     let _ = stream_box.flush();
-    // Best-effort: half-close the write side to signal end-of-request regardless of earlier errors.
-    let _ = stream_box;
-    match &mut conn {
-        Conn::Tcp(s, _, _) => {
-            let _ = s.shutdown(std::net::Shutdown::Write);
-        }
-        #[cfg(target_os = "linux")]
-        Conn::Uds(s, _) => {
-            let _ = s.shutdown(std::net::Shutdown::Write);
-        }
-    }
+    // Do not half-close the write side here: on some stacks (e.g., macOS+Colima) an early shutdown(Write)
+    // can race with the server’s chunked writes and cause a broken pipe/RST on the next write.
 
     // Now read response and stream stdout
     // Helper to read until headers end
@@ -468,7 +459,8 @@ fn try_run_native(
             }
             Err(ref e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
-                    || e.kind() == std::io::ErrorKind::TimedOut =>
+                    || e.kind() == std::io::ErrorKind::TimedOut
+                    || e.kind() == std::io::ErrorKind::Interrupted =>
             {
                 // Check signals
                 #[cfg(unix)]
@@ -542,52 +534,73 @@ fn try_run_native(
                         } else {
                             129
                         };
+                        disconnect_wait(verbose);
                         eprint!("\n\r");
                         return Some(code);
                     }
                 }
+                // Idle/Interrupted: wait briefly to avoid tight loop and allow server to respond
+                std::thread::sleep(std::time::Duration::from_millis(25));
                 continue;
             }
             Err(_) => break,
         }
     }
 
+    // If headers not yet found, wait up to header_wait_ms for them to arrive (idle tolerant)
+    if header_end_idx.is_none() {
+        let wait_ms: u64 = std::env::var("AIFO_SHIM_HEADER_WAIT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(2000);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms);
+        let mut tmp_wait = [0u8; 1024];
+        while std::time::Instant::now() < deadline && header_end_idx.is_none() {
+            match reader_box.read(&mut tmp_wait) {
+                Ok(0) => break,
+                Ok(n) => {
+                    hdr_buf.extend_from_slice(&tmp_wait[..n]);
+                    if let Some(idx2) = find_header_end(&hdr_buf) {
+                        header_end_idx = Some(idx2);
+                        break;
+                    }
+                }
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    continue;
+                }
+                Err(_) => break,
+            }
+        }
+    }
     let idx = match header_end_idx {
         Some(i) => i,
         None => {
-            // No headers; treat as disconnect — ensure proxy sees it now
-            // Close the underlying stream so the proxy detects disconnect immediately.
-            std::mem::drop(reader_box);
-            #[cfg(target_os = "linux")]
-            {
-                // Proactively close the transient /run shell to keep prompt clean.
-                kill_parent_shell_if_interactive();
-            }
-            // Proactively drive escalation on the proxy while we wait.
-            proactive_disconnect_escalation(url, token, exec_id);
-            disconnect_wait(verbose);
-            // After waiting, remove exec markers so the shell wrapper won't auto-exit next /run
+            // No headers observed even after a short grace; finish benignly without escalation.
             let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
             let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
             let _ = fs::remove_dir_all(&d_rm);
-            let ec = if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
-                .ok()
-                .as_deref()
-                != Some("0")
-            {
-                0
-            } else {
-                1
-            };
-            // Keep markers for proxy cleanup; best-effort tmp cleanup
+            // Best-effort tmp cleanup created by caller naming scheme
             let tmp_base = std::env::var("TMPDIR")
                 .ok()
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "/tmp".to_string());
             let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
             let _ = fs::remove_dir_all(&tmp_dir);
+            // Honor override for non-zero on disconnect (default zero)
+            let zero_on_disconnect = std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .map(|s| s != "0")
+                .unwrap_or(true);
+            let code = if zero_on_disconnect { 0 } else { 1 };
             eprint!("\n\r");
-            return Some(ec);
+            return Some(code);
         }
     };
 
@@ -653,12 +666,12 @@ fn try_run_native(
                     Ok(n) => buf.extend_from_slice(&tmp2[..n]),
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                            || e.kind() == std::io::ErrorKind::TimedOut
+                            || e.kind() == std::io::ErrorKind::Interrupted =>
                     {
-                        if buf.is_empty() {
-                            return None;
-                        }
-                        // otherwise, keep looping to see if more bytes arrive
+                        // Timeout/idle/interrupted: wait briefly and continue to avoid premature disconnect
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                        continue;
                     }
                     Err(_) => return None,
                 }
@@ -803,7 +816,13 @@ fn try_run_native(
                         Ok(n) => buf.extend_from_slice(&tmp3[..n]),
                         Err(ref e)
                             if e.kind() == std::io::ErrorKind::WouldBlock
-                                || e.kind() == std::io::ErrorKind::TimedOut => {}
+                                || e.kind() == std::io::ErrorKind::TimedOut
+                                || e.kind() == std::io::ErrorKind::Interrupted =>
+                        {
+                            // Avoid busy-spin; keep waiting for more data to arrive
+                            std::thread::sleep(std::time::Duration::from_millis(25));
+                            continue;
+                        }
                         Err(_) => break,
                     }
                 }
@@ -815,6 +834,15 @@ fn try_run_native(
                 match reader_box.read(&mut tmp4) {
                     Ok(0) => break,
                     Ok(n) => buf.extend_from_slice(&tmp4[..n]),
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut
+                            || e.kind() == std::io::ErrorKind::Interrupted =>
+                    {
+                        // Idle gap before CRLF: wait briefly and continue to avoid premature disconnect
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                        continue;
+                    }
                     Err(_) => break,
                 }
             }
@@ -849,7 +877,13 @@ fn try_run_native(
                 }
                 Err(ref e)
                     if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut => {}
+                        || e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    // Idle period or interrupted: wait briefly and continue to avoid premature disconnect
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    continue;
+                }
                 Err(_) => break,
             }
         }
@@ -865,32 +899,16 @@ fn try_run_native(
         let d = PathBuf::from(&home).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d);
     } else {
-        // Close the stream now so the proxy can start its disconnect sequence and logs.
-        std::mem::drop(reader_box);
-        #[cfg(target_os = "linux")]
-        {
-            // Proactively terminate the transient parent shell to keep prompt clean.
-            kill_parent_shell_if_interactive();
-        }
-        // Proactively drive escalation on the proxy while we wait.
-        proactive_disconnect_escalation(url, token, exec_id);
-        disconnect_wait(verbose);
-        // Remove exec markers so the shell wrapper won't auto-exit on the next /run
+        // Benign finish: do not treat missing trailers as disconnect; avoid sending signals or waiting.
         let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
         let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d_rm);
-        if std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+        // Honor override for non-zero on disconnect (default: zero)
+        let zero_on_disconnect = std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
             .ok()
-            .as_deref()
-            != Some("0")
-        {
-            exit_code = 0;
-        } else if exit_code == 0 {
-            // keep 0 if server told us explicitly
-        } else if exit_code == 1 {
-            // default fallback on disconnect when not zeroed by env
-            exit_code = 1;
-        }
+            .map(|v| v.trim() != "0")
+            .unwrap_or(true);
+        exit_code = if zero_on_disconnect { 0 } else { 1 };
     }
     // Best-effort tmp dir cleanup created by caller naming scheme
     let tmp_base = std::env::var("TMPDIR")
@@ -1094,6 +1112,16 @@ fn main() {
         }
     };
     let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
+    if verbose {
+        eprintln!(
+            "aifo-shim: build={} target={} profile={} rust={} ver={}",
+            env!("AIFO_SHIM_BUILD_DATE"),
+            env!("AIFO_SHIM_BUILD_TARGET"),
+            env!("AIFO_SHIM_BUILD_PROFILE"),
+            env!("AIFO_SHIM_BUILD_RUSTC"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     let tool = std::env::args_os()
         .next()
