@@ -1572,7 +1572,9 @@ fn handle_connection<S: Read + Write>(
         if !prelude_sent {
             if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
                 prelude_failed = true;
+                let _ = prelude_failed;
                 write_failed = true;
+                let _ = write_failed;
                 if verbose {
                     logger.boundary_log(&format!(
                         "aifo-coder: proxy stream: prelude write failed before trailer: kind={:?} errno={:?}",
@@ -1583,6 +1585,7 @@ fn handle_connection<S: Read + Write>(
                 // Fall through and attempt to write trailer; client may still accept it
             } else {
                 prelude_sent = true;
+                let _ = prelude_sent;
                 logger.boundary_log("aifo-coder: proxy stream: prelude sent");
             }
         }
