@@ -49,7 +49,7 @@ fn read_all_with_timeout(stream: &mut TcpStream, max_ms: u64) -> Vec<u8> {
 
 // Minimal chunked decoder that also captures X-Exit-Code trailer when present.
 // Returns (body, exit_code_opt).
-fn decode_chunked(mut data: Vec<u8>) -> (Vec<u8>, Option<i32>) {
+fn decode_chunked(data: Vec<u8>) -> (Vec<u8>, Option<i32>) {
     // Find header end (CRLFCRLF or LFLF)
     let hdr_end = if let Some(i) = data.windows(4).position(|w| w == b"\r\n\r\n") {
         i + 4

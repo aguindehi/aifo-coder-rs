@@ -591,8 +591,16 @@ fn try_run_native(
                 .unwrap_or_else(|| "/tmp".to_string());
             let tmp_dir = format!("{}/aifo-shim.{}", tmp_base, std::process::id());
             let _ = fs::remove_dir_all(&tmp_dir);
+            // Honor override for non-zero on disconnect (default zero)
+            let zero_on_disconnect = std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .map(|s| s != "0")
+                .unwrap_or(true);
+            let code = if zero_on_disconnect { 0 } else { 1 };
             eprint!("\n\r");
-            return Some(0);
+            return Some(code);
         }
     };
 

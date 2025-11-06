@@ -1362,6 +1362,23 @@ fn handle_connection<S: Read + Write>(
         loop {
             // Emit timeout chunk once when INT has been sent
             if !timeout_chunk_emitted && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+                // Ensure prelude is sent before emitting any chunk
+                if !prelude_sent {
+                    if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
+                        prelude_failed = true;
+                        write_failed = true;
+                        if verbose {
+                            logger.boundary_log(&format!(
+                                "aifo-coder: proxy stream: prelude write failed: kind={:?} errno={:?}",
+                                e.kind(),
+                                e.raw_os_error()
+                            ));
+                        }
+                        break;
+                    }
+                    prelude_sent = true;
+                    logger.boundary_log("aifo-coder: proxy stream: prelude sent");
+                }
                 let _ = respond_chunked_write_chunk(stream, b"aifo-coder proxy timeout\n");
                 timeout_chunk_emitted = true;
             }
@@ -1544,6 +1561,24 @@ fn handle_connection<S: Read + Write>(
                 "aifo-coder: proxy stream: totals bytes={} chunks={}",
                 total_bytes, chunk_count_log
             ));
+        }
+        // If no prelude was sent (no payload), send it now to ensure a valid chunked response
+        if !prelude_sent {
+            if let Err(e) = respond_chunked_prelude(stream, Some(&exec_id)) {
+                prelude_failed = true;
+                write_failed = true;
+                if verbose {
+                    logger.boundary_log(&format!(
+                        "aifo-coder: proxy stream: prelude write failed before trailer: kind={:?} errno={:?}",
+                        e.kind(),
+                        e.raw_os_error()
+                    ));
+                }
+                // Fall through and attempt to write trailer; client may still accept it
+            } else {
+                prelude_sent = true;
+                logger.boundary_log("aifo-coder: proxy stream: prelude sent");
+            }
         }
         if let Err(e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
