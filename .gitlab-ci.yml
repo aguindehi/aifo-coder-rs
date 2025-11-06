@@ -20,8 +20,14 @@ container-build:
     KANIKO_CACHE_ARGS: "--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
   before_script:
     - |
-      IMAGE_PATH_EXTRA="${TARGET_NAME:-$TARGET}"
-      KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
+      IMAGE_PATH_EXTRA="${IMAGE_PATH_EXTRA:-$TARGET}"
+      if [ -n "${TARGET_NAME:-}" ]; then
+        KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME}"
+      elif [ -n "${TARGET:-}" ]; then
+        KANIKO_BUILD_OPTIONS="--target ${TARGET}"
+      else
+        KANIKO_BUILD_OPTIONS=""
+      fi
   rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
@@ -34,6 +40,7 @@ build-rust-builder:
   stage: build
   variables:
     TARGET_NAME: "rust-builder"
+    IMAGE_PATH_EXTRA: "rust-builder"
   rules: *rules_build_image
 
 build:
@@ -53,7 +60,7 @@ build-toolchain:
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   variables:
-    TARGET_NAME: "toolchain-$FOLDER"
+    IMAGE_PATH_EXTRA: "toolchain-$FOLDER"
     DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
   rules: *rules_build_image
   parallel:
