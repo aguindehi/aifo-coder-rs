@@ -1500,6 +1500,16 @@ fn handle_connection<S: Read + Write>(
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 logger.boundary_log("aifo-coder: proxy stream: dropping output (backpressure)");
             }
+            // Ensure a dropped-counter line appears even if producer didn't drop due to channel backpressure.
+            let dropped_now = dropped_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                .saturating_add(1);
+            if verbose {
+                logger.boundary_log(&format!(
+                    "aifo-coder: proxy stream: dropped {} chunk(s)",
+                    dropped_now
+                ));
+            }
             // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
                 let grace_ms: u64 = std_env::var("AIFO_PROXY_SIGNAL_GRACE_MS")
@@ -1600,7 +1610,15 @@ fn handle_connection<S: Read + Write>(
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 logger.boundary_log("aifo-coder: proxy stream: dropping output (backpressure)");
             }
+            // Also show a dropped-counter line even if no producer-side drop occurred.
+            let dropped_now = dropped_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                .saturating_add(1);
             if verbose {
+                logger.boundary_log(&format!(
+                    "aifo-coder: proxy stream: dropped {} chunk(s)",
+                    dropped_now
+                ));
                 logger.boundary_log(&format!(
                     "aifo-coder: proxy stream: trailer write failed: kind={:?} errno={:?}",
                     e.kind(),
