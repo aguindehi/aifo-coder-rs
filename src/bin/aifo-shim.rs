@@ -468,7 +468,8 @@ fn try_run_native(
             }
             Err(ref e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
-                    || e.kind() == std::io::ErrorKind::TimedOut =>
+                    || e.kind() == std::io::ErrorKind::TimedOut
+                    || e.kind() == std::io::ErrorKind::Interrupted =>
             {
                 // Check signals
                 #[cfg(unix)]
@@ -542,10 +543,13 @@ fn try_run_native(
                         } else {
                             129
                         };
+                        disconnect_wait(verbose);
                         eprint!("\n\r");
                         return Some(code);
                     }
                 }
+                // Idle/Interrupted: wait briefly to avoid tight loop and allow server to respond
+                std::thread::sleep(std::time::Duration::from_millis(25));
                 continue;
             }
             Err(_) => break,
@@ -653,9 +657,10 @@ fn try_run_native(
                     Ok(n) => buf.extend_from_slice(&tmp2[..n]),
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                            || e.kind() == std::io::ErrorKind::TimedOut
+                            || e.kind() == std::io::ErrorKind::Interrupted =>
                     {
-                        // Timeout/idle: wait briefly and continue to avoid premature disconnect
+                        // Timeout/idle/interrupted: wait briefly and continue to avoid premature disconnect
                         std::thread::sleep(std::time::Duration::from_millis(25));
                         continue;
                     }
@@ -802,7 +807,8 @@ fn try_run_native(
                         Ok(n) => buf.extend_from_slice(&tmp3[..n]),
                         Err(ref e)
                             if e.kind() == std::io::ErrorKind::WouldBlock
-                                || e.kind() == std::io::ErrorKind::TimedOut => {
+                                || e.kind() == std::io::ErrorKind::TimedOut
+                                || e.kind() == std::io::ErrorKind::Interrupted => {
                             // Avoid busy-spin; keep waiting for more data to arrive
                             std::thread::sleep(std::time::Duration::from_millis(25));
                             continue;
@@ -820,7 +826,8 @@ fn try_run_native(
                     Ok(n) => buf.extend_from_slice(&tmp4[..n]),
                     Err(ref e)
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                            || e.kind() == std::io::ErrorKind::TimedOut
+                            || e.kind() == std::io::ErrorKind::Interrupted =>
                     {
                         // Idle gap before CRLF: wait briefly and continue to avoid premature disconnect
                         std::thread::sleep(std::time::Duration::from_millis(25));
@@ -860,8 +867,9 @@ fn try_run_native(
                 }
                 Err(ref e)
                     if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut => {
-                    // Idle period: wait briefly and continue to avoid premature disconnect
+                        || e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::Interrupted => {
+                    // Idle period or interrupted: wait briefly and continue to avoid premature disconnect
                     std::thread::sleep(std::time::Duration::from_millis(25));
                     continue;
                 }
