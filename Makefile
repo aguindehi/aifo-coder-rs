@@ -324,9 +324,9 @@ help: banner
 	@echo "    aifo-coder codex -- --help"
 	@echo "    aifo-coder crush -- --help"
 	@echo ""
-	@echo "    aifo-coder aider --toolchain rust -- --watch-files"
-	@echo "    aifo-coder codex --toolchain node -- resume"
-	@echo "    aifo-coder crush --toolchain ts -- --version"
+	@echo "    aifo-coder --toolchain rust aider -- --watch-files"
+	@echo "    aifo-coder --toolchain node codex -- resume"
+	@echo "    aifo-coder --toolchain ts crush -- --version"
 	@echo ""
 	$(call title_ul,Fork mode:)
 	@echo ""
