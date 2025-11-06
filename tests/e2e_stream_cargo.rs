@@ -157,7 +157,10 @@ fn test_e2e_stream_cargo_help_v2() {
     // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
     let official = "rust:1.80-bookworm";
     if !docker_image_present(&runtime, official) {
-        eprintln!("skipping: {} not present locally (avoid pulling in tests)", official);
+        eprintln!(
+            "skipping: {} not present locally (avoid pulling in tests)",
+            official
+        );
         // Cleanup env
         std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
         return;
@@ -219,7 +222,10 @@ fn test_e2e_stream_cargo_help_v2() {
     let text = String::from_utf8_lossy(&body_bytes).to_string();
 
     // Debug trace if desired:
-    eprintln!("e2e cargo output (first 200 chars): {}", &text[..text.len().min(200)]);
+    eprintln!(
+        "e2e cargo output (first 200 chars): {}",
+        &text[..text.len().min(200)]
+    );
 
     // Assert we see cargo help output
     assert!(
