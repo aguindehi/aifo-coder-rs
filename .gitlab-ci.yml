@@ -18,16 +18,13 @@ container-build:
   variables:
     #TARGET: Has to be provided by a child job. Defines the name of the target container within the Dockerfile.
     KANIKO_CACHE_ARGS: "--cache=true --cache-ttl=168h --cache-repo $CI_REGISTRY_IMAGE/kaniko-cache"
+    IMAGE_PREFIX: "coder"
   before_script:
     - |
-      IMAGE_PATH_EXTRA="${IMAGE_PATH_EXTRA:-$TARGET}"
-      if [ -n "${TARGET_NAME:-}" ]; then
-        KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME}"
-      elif [ -n "${TARGET:-}" ]; then
-        KANIKO_BUILD_OPTIONS="--target ${TARGET}"
-      else
-        KANIKO_BUILD_OPTIONS=""
-      fi
+      IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
+      KANIKO_BUILD_OPTIONS=""
+      # If TARGET_NAME or TARGET is provided, add --target attribute to build
+      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
   rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
@@ -60,7 +57,8 @@ build-toolchain:
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   variables:
-    IMAGE_PATH_EXTRA: "toolchain-$FOLDER"
+    IMAGE_PATH_EXTRA: "$FOLDER"
+    IMAGE_PREFIX: "toolchain"
     DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
   rules: *rules_build_image
   parallel:
@@ -93,7 +91,7 @@ build-launcher:
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       variables:
-        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/rust-builder:$CI_COMMIT_SHA
+        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_SHA
     - if: $CI_COMMIT_BRANCH != "main" || $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
-        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
+        RUST_BUILDER_IMAGE_REF: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
