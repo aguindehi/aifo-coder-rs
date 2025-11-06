@@ -445,7 +445,20 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
         }
         "python" => {
             let venv_bin = pwd.join(".venv").join("bin");
-            if venv_bin.exists() {
+            let venv_python = venv_bin.join("python");
+            // Only use host .venv when its python looks like a Linux ELF binary.
+            let mut use_host_venv = false;
+            if venv_bin.exists() && venv_python.exists() {
+                if let Ok(mut f) = std::fs::File::open(&venv_python) {
+                    let mut magic = [0u8; 4];
+                    if std::io::Read::read_exact(&mut f, &mut magic).is_ok()
+                        && magic == [0x7F, b'E', b'L', b'F']
+                    {
+                        use_host_venv = true;
+                    }
+                }
+            }
+            if use_host_venv {
                 push_env(&mut args, "VIRTUAL_ENV", "/workspace/.venv");
                 push_env(
                     &mut args,

@@ -903,10 +903,12 @@ fn try_run_native(
         let home_rm = std::env::var("HOME").unwrap_or_else(|_| "/home/coder".to_string());
         let d_rm = PathBuf::from(&home_rm).join(".aifo-exec").join(exec_id);
         let _ = fs::remove_dir_all(&d_rm);
-        // Default to success unless server provided a non-zero exit code earlier.
-        if exit_code != 0 {
-            exit_code = 0;
-        }
+        // Honor override for non-zero on disconnect (default: zero)
+        let zero_on_disconnect = std::env::var("AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT")
+            .ok()
+            .map(|v| v.trim() != "0")
+            .unwrap_or(true);
+        exit_code = if zero_on_disconnect { 0 } else { 1 };
     }
     // Best-effort tmp dir cleanup created by caller naming scheme
     let tmp_base = std::env::var("TMPDIR")
