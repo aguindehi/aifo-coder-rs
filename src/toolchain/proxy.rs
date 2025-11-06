@@ -1082,6 +1082,15 @@ fn handle_connection<S: Read + Write>(
         }
         let started = std::time::Instant::now();
 
+        let verbose_level: u32 = std_env::var("AIFO_TOOLCHAIN_VERBOSE")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(1);
+        let preview_bytes: usize = std_env::var("AIFO_PROXY_LOG_PREVIEW_BYTES")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(120);
+
         let use_tty = std_env::var("AIFO_TOOLEEXEC_TTY").ok().as_deref() != Some("0");
         if verbose {
             log_compact(&format!(
@@ -1227,6 +1236,8 @@ fn handle_connection<S: Read + Write>(
                 TxKind::Bounded(s) => TxKind::Bounded(s.clone()),
             };
             let verbose_cl = verbose;
+            let verbose_level_cl = verbose_level;
+            let preview_bytes_cl = preview_bytes;
             let drop_warned_cl = drop_warned.clone();
             let dropped_count_cl = dropped_count.clone();
             std::thread::spawn(move || {
@@ -1235,8 +1246,8 @@ fn handle_connection<S: Read + Write>(
                     match so.read(&mut buf) {
                         Ok(0) => break,
                         Ok(n) => {
-                            if verbose_cl {
-                                let mut prev = String::from_utf8_lossy(&buf[..n.min(120)]).into_owned();
+                            if verbose_cl && verbose_level_cl >= 2 {
+                                let mut prev = String::from_utf8_lossy(&buf[..n.min(preview_bytes_cl)]).into_owned();
                                 prev = prev.replace("\r", "\\r").replace("\n", "\\n");
                                 log_compact(&format!(
                                     "aifo-coder: proxy stream: stdout reader read {} bytes preview='{}'",
@@ -1322,8 +1333,8 @@ fn handle_connection<S: Read + Write>(
                         prelude_sent = true;
                         vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: prelude sent");
                     }
-                    if verbose {
-                        let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(120)]).into_owned();
+                    if verbose && verbose_level >= 2 {
+                        let mut prev = String::from_utf8_lossy(&chunk[..chunk.len().min(preview_bytes)]).into_owned();
                         prev = prev.replace("\r", "\\r").replace("\n", "\\n");
                         vlog_fn(
                             verbose,
@@ -1396,14 +1407,6 @@ fn handle_connection<S: Read + Write>(
             // Emit a single drop-warning and mark at least one dropped chunk for metrics.
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
-            }
-            let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if verbose {
-                let line = format!(
-                    "aifo-coder: proxy stream: dropped {} chunk(s)",
-                    dropped_count.load(std::sync::atomic::Ordering::SeqCst)
-                );
-                vlog_fn(verbose, &mut boundary_needed, &line);
             }
             // Client disconnected: allow a brief grace window for /signal to arrive, then decide suppression.
             let suppress = {
@@ -1487,14 +1490,6 @@ fn handle_connection<S: Read + Write>(
         if let Err(_e) = respond_chunked_trailer(stream, code) {
             if !drop_warned.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 vlog_fn(verbose, &mut boundary_needed, "aifo-coder: proxy stream: dropping output (backpressure)");
-            }
-            let _ = dropped_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if verbose {
-                let line = format!(
-                    "aifo-coder: proxy stream: dropped {} chunk(s)",
-                    dropped_count.load(std::sync::atomic::Ordering::SeqCst)
-                );
-                vlog_fn(verbose, &mut boundary_needed, &line);
             }
         }
         return;
