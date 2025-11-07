@@ -26,6 +26,27 @@ use std::time::{Duration, SystemTime};
 
 use crate::banner::print_startup_banner;
 
+struct CursorGuard {
+    hide: bool,
+}
+impl CursorGuard {
+    fn new(hide: bool) -> Self {
+        if hide {
+            eprint!("\x1b[?25l");
+            let _ = std::io::stderr().flush();
+        }
+        CursorGuard { hide }
+    }
+}
+impl Drop for CursorGuard {
+    fn drop(&mut self) {
+        if self.hide {
+            eprint!("\x1b[?25h");
+            let _ = std::io::stderr().flush();
+        }
+    }
+}
+
 /// Default agent list
 fn agents_default() -> Vec<&'static str> {
     vec![
@@ -408,6 +429,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let tty = atty::is(atty::Stream::Stderr);
     let animate_disabled = std::env::var("AIFO_SUPPORT_ANIMATE").ok().as_deref() == Some("0");
     let animate = tty && !animate_disabled;
+    let _cursor_guard = if animate { Some(CursorGuard::new(true)) } else { None };
     let mut spinner_idx = 0usize;
     let term_width = terminal_width_or_default();
     let (agent_col, cell_col, compressed) = compute_layout(toolchains.len(), term_width);
