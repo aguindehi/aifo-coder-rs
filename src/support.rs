@@ -178,12 +178,9 @@ fn color_token(use_color: bool, status: &str) -> String {
 /// Repaint only the affected agent row using ANSI cursor movement when available.
 fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, _total_rows: usize) {
     if use_ansi {
-        // Restore saved anchor at the first matrix row, move down to target row, repaint in-place,
-        // then restore back to the anchor to keep the cursor stable.
-        eprint!("\x1b[u"); // restore saved cursor position (anchor at first row)
-        if row_idx > 0 {
-            eprint!("\x1b[{}B", row_idx);
-        }
+        // Anchor is saved at the blank line above the first matrix row; row i is at offset (1 + i).
+        eprint!("\x1b[u"); // restore saved cursor position (anchor at top-of-matrix blank)
+        eprint!("\x1b[{}B", row_idx + 1);
         eprint!("\r{}\x1b[K", line);
         eprint!("\x1b[u"); // restore anchor again
         let _ = std::io::stderr().flush();
@@ -209,7 +206,7 @@ fn repaint_summary(
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        // Restore anchor at first row, move down N rows + 2 (spacer + summary) to the summary line, overwrite in-place, then restore anchor.
+        // Restore anchor at top-of-matrix blank, move down N rows + 2 (blank + summary), overwrite in-place, then restore anchor.
         eprint!("\x1b[u");
         eprint!("\x1b[{}B", total_rows.saturating_add(2));
         eprint!("\r{}\x1b[K", line);
@@ -440,6 +437,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // Empty line between column headers and the matrix
         eprintln!();
 
+        // Save a stable anchor at the top-of-matrix blank line (above first row)
+        if total_rows > 0 {
+            eprint!("\x1b[s");
+            let _ = std::io::stderr().flush();
+        }
+
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
         for a in &agents {
@@ -454,14 +457,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
             eprintln!("{}", line);
         }
 
-        // Save a stable anchor at the FIRST matrix row:
-        // We are currently on the line after the last matrix row; move up total_rows, save, then move back down total_rows.
-        if total_rows > 0 {
-            eprint!("\x1b[{}A", total_rows);
-            eprint!("\x1b[s");                  // anchor = first row
-            eprint!("\x1b[{}B", total_rows);    // return to line after last row for printing below
-            let _ = std::io::stderr().flush();
-        }
+        // Anchor saved earlier above the first row.
 
         // Spacer blank line between matrix rows and the summary
         eprintln!();
