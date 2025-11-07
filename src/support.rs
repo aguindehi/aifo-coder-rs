@@ -195,10 +195,16 @@ enum Event {
     },
 }
 
-/// Map agent name to its CLI --version command basename.
+—/// Map agent name to its absolute CLI path used for --version checks (inside container).
++/// Map agent name to its absolute CLI path used for --version checks (inside container).
 fn agent_cli_for(agent: &str) -> String {
     match agent {
-        "aider" | "crush" | "codex" | "openhands" | "opencode" | "plandex" => agent.to_string(),
+        "aider" => "/opt/venv/bin/aider".to_string(),
+        "codex" => "/usr/local/bin/codex".to_string(),
+        "crush" => "/usr/local/bin/crush".to_string(),
+        "openhands" => "/opt/venv-openhands/bin/openhands".to_string(),
+        "opencode" => "/usr/local/bin/opencode".to_string(),
+        "plandex" => "/usr/local/bin/plandex".to_string(),
         _ => agent.to_string(),
     }
 }
