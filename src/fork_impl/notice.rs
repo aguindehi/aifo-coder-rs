@@ -45,7 +45,7 @@ pub fn fork_print_stale_notice_impl() {
         if created_at == 0 {
             continue;
         }
-        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        let age_days = now.saturating_sub(created_at) / 86400;
         if age_days >= threshold_days {
             count += 1;
             if age_days > oldest {
@@ -108,7 +108,7 @@ pub fn fork_autoclean_if_enabled_impl() {
         if created_at == 0 {
             continue;
         }
-        let age_days = (now.saturating_sub(created_at) / 86400) as u64;
+        let age_days = now.saturating_sub(created_at) / 86400;
         if age_days < threshold_days {
             continue;
         }
