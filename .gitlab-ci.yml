@@ -130,7 +130,7 @@ build-launcher:
 
 check:
   stage: test
-  image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_SHA
+  image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
   needs:
     - build-rust-builder-checkimg
   tags:
