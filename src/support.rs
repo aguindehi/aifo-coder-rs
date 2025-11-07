@@ -173,12 +173,13 @@ fn color_token(use_color: bool, status: &str) -> String {
 /// Repaint only the affected agent row using ANSI cursor movement when available.
 fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     if use_ansi {
-        // Move the cursor up from the bottom to the target row, repaint, then move back down.
-        let up = total_rows.saturating_sub(row_idx);
-        eprint!("\x1b[{}A\r{}\x1b[K\n", up, line);
-        let down = up;
-        if down > 0 {
-            eprint!("\x1b[{}B", down - 1);
+        // Move the cursor up to the target row (header not included), repaint in-place, move back down.
+        // We printed one header line before rows; current cursor is at the end of the last agent row.
+        // Rows are 0..total_rows-1, so distance up from bottom is (total_rows-1-row_idx).
+        let up = total_rows.saturating_sub(1 + row_idx);
+        eprint!("\x1b[{}A\r{}\x1b[K", up, line);
+        if up > 0 {
+            eprint!("\x1b[{}B", up);
         }
         let _ = std::io::stderr().flush();
     } else {
@@ -196,6 +197,7 @@ fn render_row_line(
     spin_cell: Option<usize>,
     agent_col: usize,
     cell_col: usize,
+    compressed: bool,
     frames: &[&str],
     spinner_idx: usize,
     use_err: bool,
@@ -207,7 +209,17 @@ fn render_row_line(
         line.push(' ');
         match &statuses[ai][ki] {
             Some(st) => {
-                let tok = fit(st, cell_col);
+                let src = if compressed {
+                    match st.as_str() {
+                        "PASS" => "G",
+                        "WARN" => "Y",
+                        "FAIL" => "R",
+                        _ => st.as_str(),
+                    }
+                } else {
+                    st.as_str()
+                };
+                let tok = fit(src, cell_col);
                 line.push_str(&color_token(use_err, &tok));
             }
             None => {
@@ -369,7 +381,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let frames = pending_spinner_frames(ascii);
     let mut spinner_idx = 0usize;
     let term_width = terminal_width_or_default();
-    let (agent_col, cell_col, _compressed) = compute_layout(toolchains.len(), term_width);
+    let (agent_col, cell_col, compressed) = compute_layout(toolchains.len(), term_width);
 
     // Matrix state
     let total_rows = agents.len();
@@ -514,6 +526,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         None,
                         agent_col,
                         cell_col,
+                        compressed,
                         frames,
                         spinner_idx,
                         use_err,
@@ -541,6 +554,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                             Some(ki),
                             agent_col,
                             cell_col,
+                            compressed,
                             frames,
                             spinner_idx,
                             use_err,
@@ -560,9 +574,15 @@ pub fn run_support(verbose: bool) -> ExitCode {
             std::collections::HashMap::new();
         let mut pm_diag: std::collections::HashMap<(String, String), Option<String>> =
             std::collections::HashMap::new();
+        let mut seen_agent_progress: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let use_err2 = aifo_coder::color_enabled_stderr();
         while remaining > 0 {
             match rx.recv() {
                 Ok(Event::AgentCached { agent, ok, reason }) => {
+                    if verbose && seen_agent_progress.insert(agent.clone()) {
+                        aifo_coder::log_info_stderr(use_err2, &format!("checking {} ...", agent));
+                    }
                     agent_diag.insert(agent, (ok, reason));
                 }
                 Ok(Event::CellDone {
@@ -572,6 +592,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     reason,
                     ..
                 }) => {
+                    if verbose && seen_agent_progress.insert(agent.clone()) {
+                        aifo_coder::log_info_stderr(use_err2, &format!("checking {} ...", agent));
+                    }
                     let ai = *agent_index.get(&agent).unwrap_or(&0);
                     let ki = *kind_index.get(&kind).unwrap_or(&0);
                     statuses[ai][ki] = Some(status);
@@ -600,8 +623,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
             line.push_str(&label);
             for (ki, _k) in toolchains.iter().enumerate() {
                 line.push(' ');
-                let tok = statuses[ai][ki].as_deref().unwrap_or("FAIL");
-                let tokf = fit(tok, cell_col);
+                let raw = statuses[ai][ki].as_deref().unwrap_or("FAIL");
+                let disp = if compressed {
+                    match raw {
+                        "PASS" => "G",
+                        "WARN" => "Y",
+                        "FAIL" => "R",
+                        _ => raw,
+                    }
+                } else {
+                    raw
+                };
+                let tokf = fit(disp, cell_col);
                 line.push_str(&color_token(false, &tokf));
             }
             eprintln!("{}", line);
@@ -662,6 +695,15 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let summary = format!("summary: PASS={} WARN={} FAIL={}", pass, warn, fail);
     let use_err = aifo_coder::color_enabled_stderr();
     aifo_coder::log_info_stderr(use_err, &summary);
+    if verbose {
+        let rp = aifo_coder::preferred_registry_prefix_quiet();
+        let reg_display = if rp.is_empty() {
+            "Docker Hub".to_string()
+        } else {
+            rp.trim_end_matches('/').to_string()
+        };
+        aifo_coder::log_info_stderr(use_err, &format!("registry: {}", reg_display));
+    }
 
     ExitCode::from(0)
 }
