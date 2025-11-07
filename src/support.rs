@@ -173,14 +173,13 @@ fn color_token(use_color: bool, status: &str) -> String {
 /// Repaint only the affected agent row using ANSI cursor movement when available.
 fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     if use_ansi {
-        // Move the cursor up to the target row (header not included), repaint in-place, move back down.
-        // We printed one header line before rows; current cursor is at the end of the last agent row.
-        // Rows are 0..total_rows-1, so distance up from bottom is (total_rows-1-row_idx).
-        let up = total_rows.saturating_sub(1 + row_idx);
+        // Restore saved anchor below the matrix, move up to the target row, repaint in-place,
+        // then restore back to the anchor to keep the cursor stable.
+        // Distance from anchor to row_idx is (total_rows - row_idx).
+        let up = total_rows.saturating_sub(row_idx);
+        eprint!("\x1b[u"); // restore saved cursor position (anchor)
         eprint!("\x1b[{}A\r{}\x1b[K", up, line);
-        if up > 0 {
-            eprint!("\x1b[{}B", up);
-        }
+        eprint!("\x1b[u"); // restore anchor again
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -411,6 +410,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
             eprintln!("{}", line);
         }
+        // Save cursor position as an anchor right below the matrix for stable repaints
+        eprint!("\x1b[s");
+        let _ = std::io::stderr().flush();
     }
 
     // Phase 5: Worker/painter channel
