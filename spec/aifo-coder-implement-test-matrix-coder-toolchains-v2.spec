@@ -2,7 +2,7 @@
 # Adds animated, doctor-like colorized matrix rendering while checks run.
 
 Summary
-- Extend the "support" subcommand to animate a colorized matrix (doctor style)
+- Implement the "support" subcommand to animate a colorized matrix (doctor style)
   showing compatibility of each coder agent with each toolchain while checks
   execute. Each cell transitions from a pending spinner to PASS/WARN/FAIL.
 - Animation is enabled only on TTY stderr; non-TTY environments render a static
@@ -16,7 +16,8 @@ Scope and goals
   - PASS: agent OK and PM OK.
   - WARN: exactly one OK.
   - FAIL: both fail or runtime/image errors.
-- Doctor-style color rules and alignment; smooth animated updates when possible.
+  - Doctor-style color rules and alignment; smooth animated updates at randomized
+    positions in the matrix when possible.
 
 Runtime and images
 - Detect docker via aifo_coder::container_runtime_path().
