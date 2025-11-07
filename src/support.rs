@@ -149,6 +149,27 @@ fn fit(s: &str, width: usize) -> String {
     }
     out
 }
+ 
+/// Capitalize a label for headers (TitleCase each hyphen-separated segment)
+fn capitalize_label(s: &str) -> String {
+    if s.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    for (i, part) in s.split('-').enumerate() {
+        if i > 0 {
+            out.push('-');
+        }
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            out.push(first.to_ascii_uppercase());
+            for c in chars {
+                out.push(c.to_ascii_lowercase());
+            }
+        }
+    }
+    out
+}
 
 /// Spinner frames for pending cells
 fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
@@ -254,7 +275,8 @@ fn render_row_line(
     use_err: bool,
 ) -> String {
     let mut line = String::new();
-    let label_raw = fit(&agents[ai], agent_col);
+    let cap = capitalize_label(&agents[ai]);
+    let label_raw = fit(&cap, agent_col);
     let label = aifo_coder::paint(use_err, "\x1b[34;1m", &label_raw);
     line.push_str(&label);
     for (ki, _k) in toolchains.iter().enumerate() {
@@ -451,7 +473,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
         header_line.push_str(&" ".repeat(agent_col));
         for k in &toolchains {
             header_line.push(' ');
-            let name = fit(k, cell_col);
+            let cap = capitalize_label(k);
+            let name = fit(&cap, cell_col);
             let painted = aifo_coder::paint(use_err, "\x1b[34;1m", &name);
             header_line.push_str(&painted);
         }
@@ -464,7 +487,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
         for a in &agents {
             let mut line = String::new();
-            let label_raw = fit(a, agent_col);
+            let cap = capitalize_label(a);
+            let label_raw = fit(&cap, agent_col);
             let label = aifo_coder::paint(use_err, "\x1b[34;1m", &label_raw);
             line.push_str(&label);
             for _ in &toolchains {
@@ -701,7 +725,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
         header_line.push_str(&" ".repeat(agent_col));
         for k in &toolchains {
             header_line.push(' ');
-            let name = fit(k, cell_col);
+            let cap = capitalize_label(k);
+            let name = fit(&cap, cell_col);
             let painted = aifo_coder::paint(false, "\x1b[34;1m", &name);
             header_line.push_str(&painted);
         }
@@ -710,7 +735,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
         eprintln!();
         for (ai, a) in agents.iter().enumerate() {
             let mut line = String::new();
-            let label_raw = fit(a, agent_col);
+            let cap = capitalize_label(a);
+            let label_raw = fit(&cap, agent_col);
             // Non-TTY/static path: also paint row headers in bold blue for consistency
             let label = aifo_coder::paint(use_err2, "\x1b[34;1m", &label_raw);
             line.push_str(&label);
