@@ -9,9 +9,9 @@ mod commands;
 mod doctor;
 mod fork_args;
 mod guidance;
+mod support;
 mod toolchain_session;
 mod warnings;
-mod support;
 // Fork orchestration modules
 mod fork {
     pub mod cleanup;

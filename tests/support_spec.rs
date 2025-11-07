@@ -2,8 +2,8 @@
 // ignore-tidy-linelength
 
 use std::env;
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn find_aifo_binary() -> String {
     if let Ok(p) = env::var("CARGO_BIN_EXE_aifo-coder") {
