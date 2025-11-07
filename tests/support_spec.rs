@@ -122,3 +122,39 @@ fn test_agent_check_once_per_agent() {
         );
     }
 }
+
+/// Smoke: with docker present, run a tiny non-TTY support and assert tokens appear.
+#[test]
+fn test_support_matrix_smoke_non_tty() {
+    // Skip if docker isn't available on this host
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+
+    let bin = env::var("CARGO_BIN_EXE_aifo-coder").expect("binary path not set by cargo");
+    let mut cmd = Command::new(bin);
+    cmd.arg("support");
+    // Limit scope to a tiny matrix and disable animation (non-TTY static render)
+    cmd.env("AIFO_SUPPORT_AGENTS", "crush");
+    cmd.env("AIFO_SUPPORT_TOOLCHAINS", "node");
+    cmd.env("AIFO_SUPPORT_ANIMATE", "0");
+
+    let out = cmd.output().expect("failed to exec support command");
+    assert!(
+        out.status.success(),
+        "support should succeed (matrix printed)"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(
+        stderr.contains("support matrix:"),
+        "stderr should include header; got: {}",
+        stderr
+    );
+    let has_any = stderr.contains("PASS") || stderr.contains("WARN") || stderr.contains("FAIL");
+    assert!(
+        has_any,
+        "matrix must contain at least one PASS/WARN/FAIL token; stderr: {}",
+        stderr
+    );
+}
