@@ -106,6 +106,147 @@ fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
     }
 }
 
+/// Support mode event channel messages
+enum Event {
+    AgentCached { agent: String, ok: bool },
+    CellDone {
+        agent: String,
+        kind: String,
+        pm_ok: bool,
+        status: String,
+    },
+}
+
+/// Map agent name to its CLI --version command basename.
+fn agent_cli_for(agent: &str) -> &'static str {
+    match agent {
+        "aider" => "aider",
+        "crush" => "crush",
+        "codex" => "codex",
+        "openhands" => "openhands",
+        "opencode" => "opencode",
+        "plandex" => "plandex",
+        _ => agent,
+    }
+}
+
+/// Colorize a status token (TTY-only)
+fn color_token(use_color: bool, status: &str) -> String {
+    match status {
+        "PASS" => aifo_coder::paint(use_color, "\x1b[32m", "PASS"),
+        "WARN" => aifo_coder::paint(use_color, "\x1b[33m", "WARN"),
+        "FAIL" => aifo_coder::paint(use_color, "\x1b[31m", "FAIL"),
+        _ => status.to_string(),
+    }
+}
+
+/// Repaint only the affected agent row using ANSI cursor movement when available.
+fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
+    if use_ansi {
+        // Move the cursor up from the bottom to the target row, repaint, then move back down.
+        let up = total_rows.saturating_sub(row_idx);
+        eprint!("\x1b[{}A\r{}\x1b[K\n", up, line);
+        let down = up;
+        if down > 0 {
+            eprint!("\x1b[{}B", down - 1);
+        }
+        let _ = std::io::stderr().flush();
+    } else {
+        eprintln!("{}", line);
+    }
+}
+
+/// Minimal deterministic RNG (xorshift64*) for seeded shuffle
+struct XorShift64 {
+    state: u64,
+}
+impl XorShift64 {
+    fn new(seed: u64) -> Self {
+        let s = if seed == 0 { 0x9e3779b97f4a7c15 } else { seed };
+        Self { state: s }
+    }
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.state = x;
+        x.wrapping_mul(0x2545F4914F6CDD1D)
+    }
+    fn next_usize(&mut self, bound: usize) -> usize {
+        if bound <= 1 {
+            0
+        } else {
+            (self.next_u64() as usize) % bound
+        }
+    }
+}
+
+/// Shuffle a vector of (row,col) pairs using Fisher–Yates with the seeded RNG
+fn shuffle_pairs(pairs: &mut Vec<(usize, usize)>, seed: u64) {
+    let mut rng = XorShift64::new(seed);
+    let n = pairs.len();
+    for i in (1..n).rev() {
+        let j = rng.next_usize(i + 1);
+        pairs.swap(i, j);
+    }
+}
+
+/// PM command mapping for toolchain kinds
+fn pm_cmd_for(kind: &str) -> String {
+    match kind {
+        "rust" => "rustc --version".to_string(),
+        "node" => "node --version".to_string(),
+        "typescript" => "npx tsc --version || true".to_string(),
+        "python" => "python3 --version".to_string(),
+        "c-cpp" => "gcc --version || cc --version || make --version".to_string(),
+        "go" => "go version".to_string(),
+        _ => "true".to_string(),
+    }
+}
+
+/// Run a version check inside an image; honor NO_PULL inspect first.
+fn run_version_check(
+    rt: &std::path::Path,
+    image: &str,
+    cmd: &str,
+    no_pull: bool,
+) -> Result<(), String> {
+    use std::process::{Command, Stdio};
+    if no_pull {
+        let ok = Command::new(rt)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !ok {
+            return Err("not-present".to_string());
+        }
+    }
+    let mut child = Command::new(rt)
+        .arg("run")
+        .arg("--rm")
+        .arg("--entrypoint")
+        .arg("sh")
+        .arg(image)
+        .arg("-lc")
+        .arg(cmd)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let st = child.wait().map_err(|e| e.to_string())?;
+    if st.success() {
+        Ok(())
+    } else {
+        Err(format!("exit={}", st.code().unwrap_or(1)))
+    }
+}
+
 /// Phase 2+3+4: scaffolding + lists/images/RNG seed + static layout & initial render.
 /// - Detect docker path; on error, print a red line and return 1.
 /// - Print header: version/host lines via banner; blank line; then "support matrix:".
@@ -118,11 +259,14 @@ pub fn run_support(verbose: bool) -> ExitCode {
     print_startup_banner();
 
     // Require docker runtime; print prominent red line and exit 1 on missing
-    if let Err(e) = aifo_coder::container_runtime_path() {
-        let use_err = aifo_coder::color_enabled_stderr();
-        aifo_coder::log_error_stderr(use_err, &format!("aifo-coder: {}", e));
-        return ExitCode::from(1);
-    }
+    let runtime = match aifo_coder::container_runtime_path() {
+        Ok(p) => p,
+        Err(e) => {
+            let use_err = aifo_coder::color_enabled_stderr();
+            aifo_coder::log_error_stderr(use_err, &format!("aifo-coder: {}", e));
+            return ExitCode::from(1);
+        }
+    };
 
     // Header line for the matrix
     eprintln!();
@@ -134,13 +278,13 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let toolchains = parse_csv_env("AIFO_SUPPORT_TOOLCHAINS", toolchains_default());
 
     // Resolve images
-    let _agent_images: Vec<(String, String)> = agents
+    let agent_images: Vec<String> = agents
         .iter()
-        .map(|a| (a.clone(), crate::agent_images::default_image_for_quiet(a)))
+        .map(|a| crate::agent_images::default_image_for_quiet(a))
         .collect();
-    let _toolchain_images: Vec<(String, String)> = toolchains
+    let toolchain_images: Vec<String> = toolchains
         .iter()
-        .map(|k| (k.clone(), aifo_coder::default_toolchain_image(k)))
+        .map(|k| aifo_coder::default_toolchain_image(k))
         .collect();
 
     // Initialize RNG seed and log when verbose
@@ -153,39 +297,202 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let tty = atty::is(atty::Stream::Stderr);
     let animate_disabled = std::env::var("AIFO_SUPPORT_ANIMATE").ok().as_deref() == Some("0");
     let animate = tty && !animate_disabled;
+    let ascii = std::env::var("AIFO_SUPPORT_ASCII").ok().as_deref() == Some("1");
+    let frames = pending_spinner_frames(ascii);
+    let mut spinner_idx = 0usize;
+    let term_width = terminal_width_or_default();
+    let (agent_col, cell_col, _compressed) = compute_layout(toolchains.len(), term_width);
 
-    if animate {
-        let term_width = terminal_width_or_default();
-        let (agent_col, cell_col, _compressed) = compute_layout(toolchains.len(), term_width);
-        let ascii = std::env::var("AIFO_SUPPORT_ASCII").ok().as_deref() == Some("1");
-        let frames = pending_spinner_frames(ascii);
-        let frame0 = frames[0];
+    // Draw header + initial rows
+    let mut header_line = String::new();
+    header_line.push_str(&" ".repeat(agent_col));
+    for k in &toolchains {
+        header_line.push(' ');
+        let name = fit(k, cell_col);
+        let painted = aifo_coder::paint(use_err, "\x1b[34;1m", &name);
+        header_line.push_str(&painted);
+    }
+    eprintln!("{}", header_line);
 
-        // Header row: toolchain names across columns (strong blue value color)
-        let mut header_line = String::new();
-        header_line.push_str(&" ".repeat(agent_col));
-        for k in &toolchains {
-            header_line.push(' ');
-            let name = fit(k, cell_col);
-            let painted = aifo_coder::paint(use_err, "\x1b[34;1m", &name);
-            header_line.push_str(&painted);
+    // Matrix state
+    let total_rows = agents.len();
+    let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
+    let mut statuses: Vec<Vec<Option<String>>> = vec![vec![None; toolchains.len()]; total_rows];
+
+    for a in &agents {
+        let mut line = String::new();
+        let label = fit(a, agent_col);
+        line.push_str(&label);
+        for _ in &toolchains {
+            line.push(' ');
+            line.push_str(&pending_token0);
         }
-        eprintln!("{}", header_line);
+        eprintln!("{}", line);
+    }
 
-        // Initial rows: each agent row with pending cells (dim gray)
-        let pending_token = fit(frame0, cell_col);
-        let pending_colored = aifo_coder::paint(use_err, "\x1b[90m", &pending_token);
-        for a in &agents {
-            let mut line = String::new();
-            let label = fit(a, agent_col);
-            line.push_str(&label);
-            for _ in &toolchains {
-                line.push(' ');
-                line.push_str(&pending_colored);
-            }
-            eprintln!("{}", line);
+    // Phase 5: Worker/painter channel
+    let no_pull = std::env::var("AIFO_SUPPORT_NO_PULL").ok().as_deref() == Some("1");
+    let tick_ms: u64 = std::env::var("AIFO_SUPPORT_ANIMATE_RATE_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|v| v.clamp(40, 250))
+        .unwrap_or(80);
+
+    // Build shuffled worklist of (agent_idx, kind_idx)
+    let mut worklist: Vec<(usize, usize)> = Vec::new();
+    for (ai, _) in agents.iter().enumerate() {
+        for (ki, _) in toolchains.iter().enumerate() {
+            worklist.push((ai, ki));
         }
     }
+    shuffle_pairs(&mut worklist, seed);
+
+    // Active pending set and cell
+    let mut pending: std::collections::HashSet<(usize, usize)> =
+        worklist.iter().copied().collect();
+    let mut active: Option<(usize, usize)> = if pending.is_empty() {
+        None
+    } else {
+        // pick first after shuffle
+        Some(worklist[0])
+    };
+
+    // Event channel
+    let (tx, rx) = std::sync::mpsc::channel::<Event>();
+
+    // Worker thread: cache agent_ok once per agent; run PM check; never sleeps.
+    {
+        let agents_cl = agents.clone();
+        let kinds_cl = toolchains.clone();
+        let agent_imgs = agent_images.clone();
+        let tc_imgs = toolchain_images.clone();
+        let rt = runtime.clone();
+        let tx_cl = tx.clone();
+        std::thread::spawn(move || {
+            let mut agent_ok: Vec<Option<bool>> = vec![None; agents_cl.len()];
+            for (ai, ki) in worklist.into_iter() {
+                if agent_ok[ai].is_none() {
+                    let cmd = format!("{} --version", agent_cli_for(&agents_cl[ai]));
+                    let ok = run_version_check(&rt, &agent_imgs[ai], &cmd, no_pull).is_ok();
+                    agent_ok[ai] = Some(ok);
+                    let _ = tx_cl.send(Event::AgentCached {
+                        agent: agents_cl[ai].clone(),
+                        ok,
+                    });
+                }
+                let cmd = pm_cmd_for(&kinds_cl[ki]);
+                let pm_ok = run_version_check(&rt, &tc_imgs[ki], &cmd, no_pull).is_ok();
+                let aok = agent_ok[ai].unwrap_or(false);
+                let status = if aok && pm_ok {
+                    "PASS"
+                } else if aok || pm_ok {
+                    "WARN"
+                } else {
+                    "FAIL"
+                }
+                .to_string();
+                let _ = tx_cl.send(Event::CellDone {
+                    agent: agents_cl[ai].clone(),
+                    kind: kinds_cl[ki].clone(),
+                    pm_ok,
+                    status,
+                });
+            }
+        });
+    }
+
+    // Name→index maps
+    let mut agent_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut kind_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (i, a) in agents.iter().enumerate() {
+        agent_index.insert(a.clone(), i);
+    }
+    for (i, k) in toolchains.iter().enumerate() {
+        kind_index.insert(k.clone(), i);
+    }
+
+    // Row render helper
+    let render_row = |ai: usize, spin_cell: Option<usize>| -> String {
+        let mut line = String::new();
+        let label = fit(&agents[ai], agent_col);
+        line.push_str(&label);
+        for (ki, k) in toolchains.iter().enumerate() {
+            line.push(' ');
+            match &statuses[ai][ki] {
+                Some(st) => {
+                    let tok = fit(st, cell_col);
+                    line.push_str(&color_token(use_err, &tok));
+                }
+                None => {
+                    let frame = if Some(ki) == spin_cell {
+                        frames[spinner_idx % frames.len()]
+                    } else {
+                        frames[0]
+                    };
+                    let tok = fit(frame, cell_col);
+                    line.push_str(&aifo_coder::paint(use_err, "\x1b[90m", &tok));
+                }
+            }
+        }
+        line
+    };
+
+    // Painter loop (TTY-only animation); non-TTY will still consume events without spinner.
+    let use_ansi = animate;
+    while !pending.is_empty() {
+        match rx.recv_timeout(std::time::Duration::from_millis(tick_ms)) {
+            Ok(Event::AgentCached { .. }) => {
+                // Optional: could annotate rows in verbose mode; keep minimal for v3.
+            }
+            Ok(Event::CellDone { agent, kind, status, .. }) => {
+                let ai = *agent_index.get(&agent).unwrap_or(&0);
+                let ki = *kind_index.get(&kind).unwrap_or(&0);
+                statuses[ai][ki] = Some(status);
+                pending.remove(&(ai, ki));
+                let line = render_row(ai, None);
+                repaint_row(ai, &line, use_ansi, total_rows);
+                // Choose a new active pending cell at random (scattered updates)
+                if !pending.is_empty() {
+                    // Pick using seeded RNG
+                    let idx = (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
+                    if let Some(&(pai, pki)) = pending.iter().nth(idx) {
+                        active = Some((pai, pki));
+                    }
+                } else {
+                    active = None;
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Advance spinner on active cell and repaint only that row
+                if let Some((ai, ki)) = active {
+                    spinner_idx = (spinner_idx + 1) % frames.len();
+                    let line = render_row(ai, Some(ki));
+                    repaint_row(ai, &line, use_ansi, total_rows);
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                break;
+            }
+        }
+    }
+
+    // Final summary
+    let mut pass = 0usize;
+    let mut warn = 0usize;
+    let mut fail = 0usize;
+    for row in &statuses {
+        for cell in row {
+            match cell.as_deref() {
+                Some("PASS") => pass += 1,
+                Some("WARN") => warn += 1,
+                Some("FAIL") => fail += 1,
+                _ => {}
+            }
+        }
+    }
+    let summary = format!("summary: PASS={} WARN={} FAIL={}", pass, warn, fail);
+    let use_err = aifo_coder::color_enabled_stderr();
+    aifo_coder::log_info_stderr(use_err, &summary);
 
     ExitCode::from(0)
 }
