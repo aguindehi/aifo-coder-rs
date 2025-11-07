@@ -184,15 +184,17 @@ fn agent_cli_for(agent: &str) -> String {
 
 /// Colorize a status token (TTY-only)
 fn color_token(use_color: bool, status: &str) -> String {
-    match status {
-        "PASS" => aifo_coder::paint(use_color, "\x1b[32m", "PASS"),
-        "WARN" => aifo_coder::paint(use_color, "\x1b[33m", "WARN"),
-        "FAIL" => aifo_coder::paint(use_color, "\x1b[31m", "FAIL"),
-        // Compressed single-letter tokens for narrow terminals
-        "G" => aifo_coder::paint(use_color, "\x1b[32m", "G"),
-        "Y" => aifo_coder::paint(use_color, "\x1b[33m", "Y"),
-        "R" => aifo_coder::paint(use_color, "\x1b[31m", "R"),
-        _ => status.to_string(),
+    let key = status.trim();
+    let code = match key {
+        "PASS" | "G" => "\x1b[32m",
+        "WARN" | "Y" => "\x1b[33m",
+        "FAIL" | "R" => "\x1b[31m",
+        _ => "",
+    };
+    if code.is_empty() {
+        status.to_string()
+    } else {
+        aifo_coder::paint(use_color, code, status)
     }
 }
 
