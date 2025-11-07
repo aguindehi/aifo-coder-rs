@@ -201,8 +201,8 @@ fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_co
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        // Restore cursor to the saved summary line and overwrite it in-place.
-        eprint!("\x1b[u\r{}\x1b[K", line);
+        // Restore anchor (blank spacer), move down to summary line, overwrite in-place, then restore anchor.
+        eprint!("\x1b[u\x1b[B\r{}\x1b[K\x1b[u", line);
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -444,7 +444,10 @@ pub fn run_support(verbose: bool) -> ExitCode {
         }
         // Initial blank line and summary under the matrix
         eprintln!();
-        // Print initial summary once, then save anchor at the summary line
+        // Save cursor anchor at the blank spacer above the summary
+        eprint!("\x1b[s");
+        let _ = std::io::stderr().flush();
+        // Print initial summary one line below the anchor
         let pass_tok0 = color_token(use_err, "PASS");
         let warn_tok0 = color_token(use_err, "WARN");
         let fail_tok0 = color_token(use_err, "FAIL");
@@ -453,9 +456,6 @@ pub fn run_support(verbose: bool) -> ExitCode {
             pass_tok0, pass_count, warn_tok0, warn_count, fail_tok0, fail_count
         );
         eprintln!("{}", init_summary);
-        // Move cursor up to summary line and save anchor there for stable in-place updates
-        eprint!("\x1b[A\x1b[s");
-        let _ = std::io::stderr().flush();
     }
 
     // Phase 5: Worker/painter channel
