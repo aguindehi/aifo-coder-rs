@@ -212,6 +212,7 @@ fn agent_cli_for(agent: &str) -> String {
 fn agent_path_for(agent: &str) -> &'static str {
     match agent {
         "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+        "openhands" => "/opt/venv-openhands/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
         "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
         // Include /opt/aifo/bin for shims; otherwise a standard UNIX PATH
         _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
@@ -226,12 +227,13 @@ fn agent_check_cmd(agent: &str) -> String {
         "openhands" => {
             let a = "/opt/venv-openhands/bin/openhands";
             let b = "/opt/venv/bin/openhands";
-            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH; 3) treat presence as success even if --version is noisy
+            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH; 3) Python package presence as offline fallback.
             format!(
                 "export PATH=\"{pathv}\"; \
                  if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; \
                  elif [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; \
                  elif command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; \
+                 elif command -v python3 >/dev/null 2>&1 && python3 -c \"import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('openhands') else 1)\" >/dev/null 2>&1; then exit 0; \
                  else exit 1; fi"
             )
         }
@@ -400,8 +402,8 @@ fn pm_cmd_for(kind: &str) -> String {
         "rust" => "rustc --version".to_string(),
         // Some distros expose node as nodejs
         "node" => "node --version || nodejs --version".to_string(),
-        // Offline: prefer tsc; fallback to presence of the TS module via require.resolve
-        "typescript" => r#"tsc --version >/dev/null 2>&1 || node -e "try{require.resolve('typescript/package.json');process.exit(0);}catch(e){process.exit(1)}" >/dev/null 2>&1"#.to_string(),
+        // TypeScript viability: tsc OR tsserver OR (node AND any package manager)
+        "typescript" => r#"(tsc --version >/dev/null 2>&1) || (tsserver --version >/dev/null 2>&1) || ((node --version >/dev/null 2>&1 || nodejs --version >/dev/null 2>&1) && (npm -v >/dev/null 2>&1 || corepack -v >/dev/null 2>&1 || pnpm -v >/dev/null 2>&1 || yarn -v >/dev/null 2>&1))"#.to_string(),
         // Some images only have python; accept either
         "python" => "python3 --version || python --version".to_string(),
         // Accept gcc or clang or cc or make present in the image.
