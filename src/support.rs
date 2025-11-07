@@ -20,15 +20,22 @@ Layout and tokens
 - Agent column ~16 chars; cell ~6 chars; compresses to single-letter tokens on narrow terminals.
 - Status tokens: PASS (green), WARN (yellow), FAIL (red), PENDING/spinner (dim gray).
 "#]
+use std::io::Write as _;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
-use std::io::Write as _;
 
 use crate::banner::print_startup_banner;
 
 /// Default agent list
 fn agents_default() -> Vec<&'static str> {
-    vec!["aider", "crush", "codex", "openhands", "opencode", "plandex"]
+    vec![
+        "aider",
+        "crush",
+        "codex",
+        "openhands",
+        "opencode",
+        "plandex",
+    ]
 }
 
 /// Default toolchain kinds
@@ -88,7 +95,8 @@ fn compute_layout(toolchains_len: usize, term_width: usize) -> (usize, usize, bo
     let agent_col = 16usize;
     let mut cell_col = 6usize;
     // Minimal spacing: one leading space between columns
-    let row_width = agent_col.saturating_add(1)
+    let row_width = agent_col
+        .saturating_add(1)
         .saturating_add(toolchains_len.saturating_mul(cell_col.saturating_add(1)));
     if row_width > term_width || row_width > 100 {
         // Compress to single-letter/spinner-only cells
@@ -131,7 +139,11 @@ fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
 
 /// Support mode event channel messages
 enum Event {
-    AgentCached { agent: String, ok: bool, reason: Option<String> },
+    AgentCached {
+        agent: String,
+        ok: bool,
+        reason: Option<String>,
+    },
     CellDone {
         agent: String,
         kind: String,
@@ -407,8 +419,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     shuffle_pairs(&mut worklist, seed);
 
     // Active pending set and cell
-    let mut pending: std::collections::HashSet<(usize, usize)> =
-        worklist.iter().copied().collect();
+    let mut pending: std::collections::HashSet<(usize, usize)> = worklist.iter().copied().collect();
     let mut active: Option<(usize, usize)> = if pending.is_empty() {
         None
     } else {
@@ -465,7 +476,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
     }
 
     // Name→index maps
-    let mut agent_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut agent_index: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     let mut kind_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for (i, a) in agents.iter().enumerate() {
         agent_index.insert(a.clone(), i);
@@ -485,7 +497,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 Ok(Event::AgentCached { .. }) => {
                     // Optional: could annotate rows in verbose mode; keep minimal for v3.
                 }
-                Ok(Event::CellDone { agent, kind, status, .. }) => {
+                Ok(Event::CellDone {
+                    agent,
+                    kind,
+                    status,
+                    ..
+                }) => {
                     let ai = *agent_index.get(&agent).unwrap_or(&0);
                     let ki = *kind_index.get(&kind).unwrap_or(&0);
                     statuses[ai][ki] = Some(status);
@@ -505,8 +522,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     repaint_row(ai, &line, use_ansi, total_rows);
                     // Choose a new active pending cell at random (scattered updates)
                     if !pending.is_empty() {
-                        let idx =
-                            (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
+                        let idx = (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
                         if let Some(&(pai, pki)) = pending.iter().nth(idx) {
                             active = Some((pai, pki));
                         }
@@ -550,7 +566,13 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 Ok(Event::AgentCached { agent, ok, reason }) => {
                     agent_diag.insert(agent, (ok, reason));
                 }
-                Ok(Event::CellDone { agent, kind, status, reason, .. }) => {
+                Ok(Event::CellDone {
+                    agent,
+                    kind,
+                    status,
+                    reason,
+                    ..
+                }) => {
                     let ai = *agent_index.get(&agent).unwrap_or(&0);
                     let ki = *kind_index.get(&kind).unwrap_or(&0);
                     statuses[ai][ki] = Some(status);
@@ -604,10 +626,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     }
                 }
                 if !bad.is_empty() {
-                    let (aok, areason) = agent_diag
-                        .get(a)
-                        .cloned()
-                        .unwrap_or((false, None));
+                    let (aok, areason) = agent_diag.get(a).cloned().unwrap_or((false, None));
                     let mut agent_part = format!("agent={}", if aok { "ok" } else { "fail" });
                     if !aok {
                         if let Some(r) = areason {
