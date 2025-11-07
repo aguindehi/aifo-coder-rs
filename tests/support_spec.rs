@@ -3,13 +3,50 @@
 
 use std::env;
 use std::process::Command;
+use std::path::PathBuf;
+
+fn find_aifo_binary() -> String {
+    if let Ok(p) = env::var("CARGO_BIN_EXE_aifo-coder") {
+        if !p.trim().is_empty() {
+            return p;
+        }
+    }
+    if let Ok(p) = env::var("CARGO_BIN_EXE_aifo_coder") {
+        if !p.trim().is_empty() {
+            return p;
+        }
+    }
+    #[cfg(windows)]
+    let name = "aifo-coder.exe";
+    #[cfg(not(windows))]
+    let name = "aifo-coder";
+    let mut cands: Vec<PathBuf> = Vec::new();
+    if let Ok(td) = env::var("CARGO_TARGET_DIR") {
+        let b = PathBuf::from(td);
+        cands.push(b.join("debug").join(name));
+        cands.push(b.join("release").join(name));
+    }
+    cands.push(PathBuf::from("target").join("debug").join(name));
+    cands.push(PathBuf::from("target").join("release").join(name));
+    if let Ok(root) = env::var("CARGO_MANIFEST_DIR") {
+        cands.push(PathBuf::from(root).join("aifo-coder"));
+    } else {
+        cands.push(PathBuf::from("aifo-coder"));
+    }
+    for p in cands {
+        if p.exists() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    "aifo-coder".to_string()
+}
 
 /// Integration: docker missing should return nonzero and print a clear error line.
 /// Forces container_runtime_path() to fail via AIFO_CODER_TEST_DISABLE_DOCKER=1.
 #[test]
 fn test_support_docker_missing_integration() {
     // Resolve compiled binary path provided by cargo
-    let bin = env::var("CARGO_BIN_EXE_aifo-coder").expect("binary path not set by cargo");
+    let bin = find_aifo_binary();
     let mut cmd = Command::new(bin);
     cmd.arg("support");
     cmd.env("AIFO_CODER_TEST_DISABLE_DOCKER", "1");
@@ -133,7 +170,7 @@ fn test_support_matrix_smoke_non_tty() {
         return;
     }
 
-    let bin = env::var("CARGO_BIN_EXE_aifo-coder").expect("binary path not set by cargo");
+    let bin = find_aifo_binary();
     let mut cmd = Command::new(bin);
     cmd.arg("support");
     // Limit scope to a tiny matrix and disable animation (non-TTY static render)
