@@ -117,9 +117,6 @@ build-launcher:
 check:
   stage: test
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci
-  needs:
-    - job: build-rust-builder-ci
-      optional: true
   tags:
     - qual-mcap-gcp
   variables:
