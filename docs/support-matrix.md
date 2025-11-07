@@ -37,7 +37,7 @@ Terminal layout
 - When terminal width is tight, columns compress to single-letter colored tokens (G/Y/R).
 
 Sample output (non-TTY, colors disabled)
-  support matrix:
+  Support matrix:
                  rust  node   ts    py    c-cpp  go
   aider          PASS  WARN   FAIL  PASS  WARN   PASS
   crush          WARN  PASS   WARN  PASS  FAIL   PASS

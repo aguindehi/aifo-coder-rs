@@ -185,7 +185,7 @@ fn test_support_matrix_smoke_non_tty() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("support matrix:"),
+        stderr.contains("Support matrix:"),
         "stderr should include header; got: {}",
         stderr
     );

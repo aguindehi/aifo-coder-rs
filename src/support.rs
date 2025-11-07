@@ -402,11 +402,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
     // Matrix state
     let total_rows = agents.len();
     let mut statuses: Vec<Vec<Option<String>>> = vec![vec![None; toolchains.len()]; total_rows];
+    // Live summary counters (updated as cells finish)
+    let mut pass_count: usize = 0;
+    let mut warn_count: usize = 0;
+    let mut fail_count: usize = 0;
 
     if animate {
-        let mut pass_count = 0usize;
-        let mut warn_count = 0usize;
-        let mut fail_count = 0usize;
         // Draw header + initial rows
         let mut header_line = String::new();
         header_line.push_str(&" ".repeat(agent_col));
