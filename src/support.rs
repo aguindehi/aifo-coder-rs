@@ -109,14 +109,15 @@ fn compute_layout(toolchains_len: usize, term_width: usize) -> (usize, usize, bo
 
 /// Fit a string to exactly width columns (truncate or pad with spaces)
 fn fit(s: &str, width: usize) -> String {
+    // Count character columns, not UTF-8 byte length, to keep Unicode spinners aligned.
     let mut out = String::new();
     let mut used = 0usize;
     for ch in s.chars() {
-        if used + ch.len_utf8() > width {
+        if used + 1 > width {
             break;
         }
         out.push(ch);
-        used += ch.len_utf8();
+        used += 1;
         if used >= width {
             break;
         }
@@ -166,6 +167,10 @@ fn color_token(use_color: bool, status: &str) -> String {
         "PASS" => aifo_coder::paint(use_color, "\x1b[32m", "PASS"),
         "WARN" => aifo_coder::paint(use_color, "\x1b[33m", "WARN"),
         "FAIL" => aifo_coder::paint(use_color, "\x1b[31m", "FAIL"),
+        // Compressed single-letter tokens for narrow terminals
+        "G" => aifo_coder::paint(use_color, "\x1b[32m", "G"),
+        "Y" => aifo_coder::paint(use_color, "\x1b[33m", "Y"),
+        "R" => aifo_coder::paint(use_color, "\x1b[31m", "R"),
         _ => status.to_string(),
     }
 }
@@ -221,7 +226,8 @@ fn render_row_line(
     use_err: bool,
 ) -> String {
     let mut line = String::new();
-    let label = fit(&agents[ai], agent_col);
+    let label_raw = fit(&agents[ai], agent_col);
+    let label = aifo_coder::paint(use_err, "\x1b[34;1m", &label_raw);
     line.push_str(&label);
     for (ki, _k) in toolchains.iter().enumerate() {
         line.push(' ');
@@ -421,12 +427,15 @@ pub fn run_support(verbose: bool) -> ExitCode {
             header_line.push_str(&painted);
         }
         eprintln!("{}", header_line);
+        // Empty line between column headers and the matrix
+        eprintln!();
 
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
         for a in &agents {
             let mut line = String::new();
-            let label = fit(a, agent_col);
+            let label_raw = fit(a, agent_col);
+            let label = aifo_coder::paint(use_err, "\x1b[34;1m", &label_raw);
             line.push_str(&label);
             for _ in &toolchains {
                 line.push(' ');
@@ -659,10 +668,13 @@ pub fn run_support(verbose: bool) -> ExitCode {
             header_line.push_str(&painted);
         }
         eprintln!("{}", header_line);
+        // Empty line between column headers and the matrix
+        eprintln!();
         for (ai, a) in agents.iter().enumerate() {
             let mut line = String::new();
-            let label = fit(a, agent_col);
-            line.push_str(&label);
+            let label_raw = fit(a, agent_col);
+            // Non-TTY path: keep labels plain (no color)
+            line.push_str(&label_raw);
             for (ki, _k) in toolchains.iter().enumerate() {
                 line.push(' ');
                 let raw = statuses[ai][ki].as_deref().unwrap_or("FAIL");
@@ -734,16 +746,22 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
         }
     }
-    eprintln!();
     let use_err = aifo_coder::color_enabled_stderr();
-    let pass_tok = color_token(use_err, "PASS");
-    let warn_tok = color_token(use_err, "WARN");
-    let fail_tok = color_token(use_err, "FAIL");
-    let summary = format!(
-        "Summary: {}={} {}={} {}={}",
-        pass_tok, pass, warn_tok, warn, fail_tok, fail
-    );
-    aifo_coder::log_info_stderr(use_err, &summary);
+    if animate {
+        // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
+        repaint_summary(pass, warn, fail, true, use_err);
+    } else {
+        // Non-TTY/static: add a separating blank line and print a final colored summary line.
+        eprintln!();
+        let pass_tok = color_token(use_err, "PASS");
+        let warn_tok = color_token(use_err, "WARN");
+        let fail_tok = color_token(use_err, "FAIL");
+        let summary = format!(
+            "Summary: {}={} {}={} {}={}",
+            pass_tok, pass, warn_tok, warn, fail_tok, fail
+        );
+        aifo_coder::log_info_stderr(use_err, &summary);
+    }
     if verbose {
         let rp = aifo_coder::preferred_registry_prefix_quiet();
         let reg_display = if rp.is_empty() {
