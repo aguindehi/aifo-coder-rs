@@ -440,10 +440,6 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // Empty line between column headers and the matrix
         eprintln!();
 
-        // Save cursor anchor at the first matrix row (stable base for all repaints)
-        eprint!("\x1b[s");
-        let _ = std::io::stderr().flush();
-
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
         for a in &agents {
@@ -457,6 +453,16 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
             eprintln!("{}", line);
         }
+
+        // Save a stable anchor at the FIRST matrix row:
+        // We are currently on the last matrix row; move up (total_rows-1), save, then move back down.
+        if total_rows > 0 {
+            eprint!("\x1b[{}A", total_rows - 1);
+            eprint!("\x1b[s");                  // anchor = first row
+            eprint!("\x1b[{}B", total_rows - 1); // return to last row for printing below
+            let _ = std::io::stderr().flush();
+        }
+
         // Spacer blank line between matrix rows and the summary
         eprintln!();
         // Print initial summary one line below the anchor
