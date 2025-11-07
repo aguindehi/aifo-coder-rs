@@ -81,17 +81,18 @@ fn test_support_shuffle_is_deterministic() {
         "shuffle with the same seed must produce the same sequence"
     );
     // Spot-check the first few entries to guard against accidental changes
-    assert!(
-        !v1.is_empty(),
-        "worklist should not be empty after shuffle"
-    );
+    assert!(!v1.is_empty(), "worklist should not be empty after shuffle");
 }
 
 /// Agent check caching: only one agent --version per agent across all toolchains.
 #[test]
 fn test_agent_check_once_per_agent() {
     // Simulate worker caching behavior with 3 agents × 2 toolchains
-    let agents = vec!["aider".to_string(), "crush".to_string(), "codex".to_string()];
+    let agents = vec![
+        "aider".to_string(),
+        "crush".to_string(),
+        "codex".to_string(),
+    ];
     let kinds = vec!["rust".to_string(), "node".to_string()];
     let mut worklist: Vec<(usize, usize)> = Vec::new();
     for ai in 0..agents.len() {
