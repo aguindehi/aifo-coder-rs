@@ -176,14 +176,15 @@ fn color_token(use_color: bool, status: &str) -> String {
 }
 
 /// Repaint only the affected agent row using ANSI cursor movement when available.
-fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
+fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, _total_rows: usize) {
     if use_ansi {
-        // Restore saved anchor below the matrix, move up to the target row, repaint in-place,
+        // Restore saved anchor at the first matrix row, move down to target row, repaint in-place,
         // then restore back to the anchor to keep the cursor stable.
-        // Distance from anchor to row_idx is (total_rows - row_idx) because anchor is one line below the last row.
-        let up = total_rows.saturating_sub(row_idx);
-        eprint!("\x1b[u"); // restore saved cursor position (anchor)
-        eprint!("\x1b[{}A\r{}\x1b[K", up, line);
+        eprint!("\x1b[u"); // restore saved cursor position (anchor at first row)
+        if row_idx > 0 {
+            eprint!("\x1b[{}B", row_idx);
+        }
+        eprint!("\r{}\x1b[K", line);
         eprint!("\x1b[u"); // restore anchor again
         let _ = std::io::stderr().flush();
     } else {
@@ -192,7 +193,14 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
 }
 
 /// Repaint the summary line (anchor is saved at the summary line).
-fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
+fn repaint_summary(
+    pass: usize,
+    warn: usize,
+    fail: usize,
+    use_ansi: bool,
+    use_color: bool,
+    total_rows: usize,
+) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
     let fail_tok = color_token(use_color, "FAIL");
@@ -201,8 +209,11 @@ fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_co
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        // Restore anchor (blank spacer), move down to summary line, overwrite in-place, then restore anchor.
-        eprint!("\x1b[u\x1b[B\r{}\x1b[K\x1b[u", line);
+        // Restore anchor at first row, move down N rows + 1 spacer to the summary line, overwrite in-place, then restore anchor.
+        eprint!("\x1b[u");
+        eprint!("\x1b[{}B", total_rows.saturating_add(1));
+        eprint!("\r{}\x1b[K", line);
+        eprint!("\x1b[u");
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -429,6 +440,10 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // Empty line between column headers and the matrix
         eprintln!();
 
+        // Save cursor anchor at the first matrix row (stable base for all repaints)
+        eprint!("\x1b[s");
+        let _ = std::io::stderr().flush();
+
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
         for a in &agents {
@@ -442,11 +457,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
             eprintln!("{}", line);
         }
-        // Initial blank line and summary under the matrix
+        // Spacer blank line between matrix rows and the summary
         eprintln!();
-        // Save cursor anchor at the blank spacer above the summary
-        eprint!("\x1b[s");
-        let _ = std::io::stderr().flush();
         // Print initial summary one line below the anchor
         let pass_tok0 = color_token(use_err, "PASS");
         let warn_tok0 = color_token(use_err, "WARN");
@@ -598,7 +610,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     }
 
                     // Repaint summary after each completed cell
-                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err);
+                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err, total_rows);
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Advance spinner on active cell and repaint only that row
@@ -758,12 +770,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let use_err = aifo_coder::color_enabled_stderr();
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
-        repaint_summary(pass, warn, fail, true, use_err);
+        repaint_summary(pass, warn, fail, true, use_err, total_rows);
         // Move cursor below the summary and add two blank lines so the shell prompt doesn't overwrite it.
-        eprint!("\x1b[u");        // restore anchor (line just below the last matrix row)
-        eprint!("\x1b[2B");       // move down: blank spacer + summary line
-        eprintln!();              // one empty line below summary
-        eprintln!();              // second empty line below summary
+        eprint!("\x1b[u");                   // restore anchor (first matrix row)
+        eprint!("\x1b[{}B", total_rows + 2); // move down: spacer + summary line
+        eprintln!();                         // one empty line below summary
+        eprintln!();                         // second empty line below summary
         let _ = std::io::stderr().flush();
     } else {
         // Non-TTY/static: add a separating blank line and print a final colored summary line.
