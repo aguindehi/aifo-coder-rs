@@ -209,9 +209,9 @@ fn repaint_summary(
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        // Restore anchor at first row, move down N rows + 1 spacer to the summary line, overwrite in-place, then restore anchor.
+        // Restore anchor at first row, move down N rows + 2 (spacer + summary) to the summary line, overwrite in-place, then restore anchor.
         eprint!("\x1b[u");
-        eprint!("\x1b[{}B", total_rows.saturating_add(1));
+        eprint!("\x1b[{}B", total_rows.saturating_add(2));
         eprint!("\r{}\x1b[K", line);
         eprint!("\x1b[u");
         let _ = std::io::stderr().flush();
@@ -779,7 +779,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
         repaint_summary(pass, warn, fail, true, use_err, total_rows);
         // Move cursor below the summary and add two blank lines so the shell prompt doesn't overwrite it.
         eprint!("\x1b[u");                   // restore anchor (first matrix row)
-        eprint!("\x1b[{}B", total_rows + 2); // move down: spacer + summary line
+        eprint!("\x1b[{}B", total_rows + 3); // move down: spacer + summary line + one extra line
         eprintln!();                         // one empty line below summary
         eprintln!();                         // second empty line below summary
         let _ = std::io::stderr().flush();
