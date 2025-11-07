@@ -208,6 +208,22 @@ fn agent_cli_for(agent: &str) -> String {
     }
 }
 
+/// Build a robust agent probe: ensure the binary exists and run --version.
+/// OpenHands may be installed in different venv prefixes across images; try both.
+fn agent_check_cmd(agent: &str) -> String {
+    match agent {
+        "openhands" => {
+            let a = "/opt/venv-openhands/bin/openhands";
+            let b = "/opt/venv/bin/openhands";
+            format!("( [ -x {a} ] && {a} --version ) || ( [ -x {b} ] && {b} --version )")
+        }
+        _ => {
+            let abs = agent_cli_for(agent);
+            format!("[ -x {abs} ] && {abs} --version")
+        }
+    }
+}
+
 /// Colorize a status token (TTY-only)
 fn color_token(use_color: bool, status: &str) -> String {
     let key = status.trim();
@@ -351,14 +367,16 @@ fn shuffle_pairs(pairs: &mut [(usize, usize)], seed: u64) {
     }
 }
 
-/// PM command mapping for toolchain kinds
+//// PM command mapping for toolchain kinds (offline, deterministic)
 fn pm_cmd_for(kind: &str) -> String {
     match kind {
         "rust" => "rustc --version".to_string(),
         "node" => "node --version".to_string(),
-        "typescript" => "npx tsc --version || true".to_string(),
+        // Require a real tsc installed in the image; avoid npx/network.
+        "typescript" => "tsc --version".to_string(),
         "python" => "python3 --version".to_string(),
-        "c-cpp" => "gcc --version || cc --version || make --version".to_string(),
+        // Accept gcc or clang or cc or make present in the image.
+        "c-cpp" => "gcc --version || clang --version || cc --version || make --version".to_string(),
         "go" => "go version".to_string(),
         _ => "true".to_string(),
     }
@@ -390,7 +408,7 @@ fn run_version_check(
         .arg("run")
         .arg("--rm")
         .arg("--entrypoint")
-        .arg("sh")
+        .arg("/bin/sh")
         .arg(image)
         .arg("-c")
         .arg(cmd)
@@ -559,7 +577,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
             let mut agent_ok: Vec<Option<bool>> = vec![None; agents_cl.len()];
             for (ai, ki) in worklist.into_iter() {
                 if agent_ok[ai].is_none() {
-                    let cmd = format!("{} --version", agent_cli_for(&agents_cl[ai]));
+                    let cmd = agent_check_cmd(&agents_cl[ai]);
                     let res = run_version_check(&rt, &agent_imgs[ai], &cmd, no_pull);
                     let ok = res.is_ok();
                     agent_ok[ai] = Some(ok);
