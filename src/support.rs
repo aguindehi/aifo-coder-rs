@@ -212,14 +212,13 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     }
 }
 
-/// Repaint the summary line (anchor is saved at the top-of-matrix blank line).
+/// Repaint the summary line (relative to the baseline: one line above).
 fn repaint_summary(
     pass: usize,
     warn: usize,
     fail: usize,
     use_ansi: bool,
     use_color: bool,
-    total_rows: usize,
 ) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
@@ -630,7 +629,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     }
 
                     // Repaint summary after each completed cell
-                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err, total_rows);
+                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err);
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Advance spinner on active cell and repaint only that row
@@ -790,7 +789,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let use_err = aifo_coder::color_enabled_stderr();
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
-        repaint_summary(pass, warn, fail, true, use_err, total_rows);
+        repaint_summary(pass, warn, fail, true, use_err);
         // We are at the baseline (line after summary); add two blank lines.
         eprintln!();
         eprintln!();
