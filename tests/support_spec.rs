@@ -196,3 +196,67 @@ fn test_support_matrix_smoke_non_tty() {
         stderr
     );
 }
+
+#[test]
+fn test_support_matrix_green_summary_for_crush_node() {
+    // Skip if docker isn't available on this host
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+
+    let bin = find_aifo_binary();
+    let mut cmd = Command::new(bin);
+    cmd.arg("support");
+    // Limit matrix to a single well-supported combination and disable animation
+    cmd.env("AIFO_SUPPORT_AGENTS", "crush");
+    cmd.env("AIFO_SUPPORT_TOOLCHAINS", "node");
+    cmd.env("AIFO_SUPPORT_ANIMATE", "0");
+    // Ensure color codes don't interfere with parsing in non-TTY
+    cmd.env("NO_COLOR", "1");
+
+    let out = cmd.output().expect("failed to exec support command");
+    assert!(
+        out.status.success(),
+        "support should succeed; stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    // Find the final Summary line
+    let summary = stderr
+        .lines()
+        .filter(|l| l.starts_with("Summary:"))
+        .last()
+        .unwrap_or("");
+    assert!(
+        !summary.is_empty(),
+        "expected a Summary line in stderr; got: {}",
+        stderr
+    );
+
+    // Extract PASS/WARN/FAIL counts from the Summary line
+    let mut pass = None;
+    let mut warn = None;
+    let mut fail = None;
+    for part in summary.split_whitespace() {
+        if let Some(v) = part.strip_prefix("PASS=") {
+            pass = v.parse::<usize>().ok();
+        } else if let Some(v) = part.strip_prefix("WARN=") {
+            warn = v.parse::<usize>().ok();
+        } else if let Some(v) = part.strip_prefix("FAIL=") {
+            fail = v.parse::<usize>().ok();
+        }
+    }
+    let (p, w, f) = (
+        pass.unwrap_or(0),
+        warn.unwrap_or(usize::MAX),
+        fail.unwrap_or(usize::MAX),
+    );
+
+    assert!(
+        w == 0 && f == 0 && p > 0,
+        "expected green matrix (no WARN/FAIL); got summary: {}",
+        summary
+    );
+}
