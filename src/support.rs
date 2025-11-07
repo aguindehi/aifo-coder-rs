@@ -195,8 +195,7 @@ enum Event {
     },
 }
 
-—/// Map agent name to its absolute CLI path used for --version checks (inside container).
-+/// Map agent name to its absolute CLI path used for --version checks (inside container).
+/// Map agent name to its absolute CLI path used for --version checks (inside container).
 fn agent_cli_for(agent: &str) -> String {
     match agent {
         "aider" => "/opt/venv/bin/aider".to_string(),
