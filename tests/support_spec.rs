@@ -198,7 +198,7 @@ fn test_support_matrix_smoke_non_tty() {
 }
 
 #[test]
-fn test_support_matrix_green_summary_for_crush_node() {
+fn test_support_matrix_is_fully_green() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -208,11 +208,8 @@ fn test_support_matrix_green_summary_for_crush_node() {
     let bin = find_aifo_binary();
     let mut cmd = Command::new(bin);
     cmd.arg("support");
-    // Limit matrix to a single well-supported combination and disable animation
-    cmd.env("AIFO_SUPPORT_AGENTS", "crush");
-    cmd.env("AIFO_SUPPORT_TOOLCHAINS", "node");
+    // Test the full default matrix; disable animation; avoid ANSI for parsing
     cmd.env("AIFO_SUPPORT_ANIMATE", "0");
-    // Ensure color codes don't interfere with parsing in non-TTY
     cmd.env("NO_COLOR", "1");
 
     let out = cmd.output().expect("failed to exec support command");
@@ -256,7 +253,7 @@ fn test_support_matrix_green_summary_for_crush_node() {
 
     assert!(
         w == 0 && f == 0 && p > 0,
-        "expected green matrix (no WARN/FAIL); got summary: {}",
+        "expected green full matrix (no WARN/FAIL); got summary: {}",
         summary
     );
 }
