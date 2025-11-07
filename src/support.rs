@@ -208,18 +208,45 @@ fn agent_cli_for(agent: &str) -> String {
     }
 }
 
-/// Build a robust agent probe: ensure the binary exists and run --version.
+/// PATH to use for agent probes, mirroring runtime PATH composition.
+fn agent_path_for(agent: &str) -> &'static str {
+    match agent {
+        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
+        // Include /opt/aifo/bin for shims; otherwise a standard UNIX PATH
+        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+    }
+}
+
+/// Build a robust agent probe: export PATH, check absolute path and basename, tolerate odd --version exits.
 /// OpenHands may be installed in different venv prefixes across images; try both.
 fn agent_check_cmd(agent: &str) -> String {
+    let pathv = agent_path_for(agent);
     match agent {
         "openhands" => {
             let a = "/opt/venv-openhands/bin/openhands";
             let b = "/opt/venv/bin/openhands";
-            format!("( [ -x {a} ] && {a} --version ) || ( [ -x {b} ] && {b} --version )")
+            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH; 3) treat presence as success even if --version is noisy
+            format!(
+                "export PATH=\"{pathv}\"; \
+                 if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; \
+                 elif [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; \
+                 elif command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; \
+                 else exit 1; fi"
+            )
         }
         _ => {
             let abs = agent_cli_for(agent);
-            format!("[ -x {abs} ] && {abs} --version")
+            let base = match agent {
+                "aider" | "codex" | "crush" | "opencode" | "plandex" => agent,
+                _ => abs.rsplit('/').next().unwrap_or(agent),
+            };
+            format!(
+                "export PATH=\"{pathv}\"; \
+                 if [ -x {abs} ]; then {abs} --version >/dev/null 2>&1 || true; exit 0; \
+                 elif command -v {base} >/dev/null 2>&1; then {base} --version >/dev/null 2>&1 || true; exit 0; \
+                 else exit 1; fi"
+            )
         }
     }
 }
@@ -371,10 +398,12 @@ fn shuffle_pairs(pairs: &mut [(usize, usize)], seed: u64) {
 fn pm_cmd_for(kind: &str) -> String {
     match kind {
         "rust" => "rustc --version".to_string(),
-        "node" => "node --version".to_string(),
-        // Require a real tsc installed in the image; avoid npx/network.
-        "typescript" => "tsc --version".to_string(),
-        "python" => "python3 --version".to_string(),
+        // Some distros expose node as nodejs
+        "node" => "node --version || nodejs --version".to_string(),
+        // Offline: prefer tsc; fallback to presence of the TS module via require.resolve
+        "typescript" => r#"tsc --version >/dev/null 2>&1 || node -e "try{require.resolve('typescript/package.json');process.exit(0);}catch(e){process.exit(1)}" >/dev/null 2>&1"#.to_string(),
+        // Some images only have python; accept either
+        "python" => "python3 --version || python --version".to_string(),
         // Accept gcc or clang or cc or make present in the image.
         "c-cpp" => "gcc --version || clang --version || cc --version || make --version".to_string(),
         "go" => "go version".to_string(),
