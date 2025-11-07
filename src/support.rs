@@ -191,7 +191,7 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     }
 }
 
-/// Repaint the summary line below the matrix (uses saved cursor anchor).
+/// Repaint the summary line (anchor is saved at the summary line).
 fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
@@ -201,9 +201,8 @@ fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_co
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        eprint!("\x1b[u"); // restore anchor
-        eprint!("\x1b[2B\r{}\x1b[K", line); // move down one blank line and summary line, repaint
-        eprint!("\x1b[u"); // restore anchor again
+        // Restore cursor to the saved summary line and overwrite it in-place.
+        eprint!("\x1b[u\r{}\x1b[K", line);
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -443,12 +442,20 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
             eprintln!("{}", line);
         }
-        // Save cursor position as an anchor right below the matrix for stable repaints
-        eprint!("\x1b[s");
-        let _ = std::io::stderr().flush();
         // Initial blank line and summary under the matrix
         eprintln!();
-        repaint_summary(pass_count, warn_count, fail_count, true, use_err);
+        // Print initial summary once, then save anchor at the summary line
+        let pass_tok0 = color_token(use_err, "PASS");
+        let warn_tok0 = color_token(use_err, "WARN");
+        let fail_tok0 = color_token(use_err, "FAIL");
+        let init_summary = format!(
+            "Summary: {}={} {}={} {}={}",
+            pass_tok0, pass_count, warn_tok0, warn_count, fail_tok0, fail_count
+        );
+        eprintln!("{}", init_summary);
+        // Move cursor up to summary line and save anchor there for stable in-place updates
+        eprint!("\x1b[A\x1b[s");
+        let _ = std::io::stderr().flush();
     }
 
     // Phase 5: Worker/painter channel
