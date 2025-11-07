@@ -185,7 +185,23 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
         eprintln!("{}", line);
     }
 }
-
+ 
+/// Repaint the summary line below the matrix (uses saved cursor anchor).
+fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
+    let pass_tok = color_token(use_color, "PASS");
+    let warn_tok = color_token(use_color, "WARN");
+    let fail_tok = color_token(use_color, "FAIL");
+    let line = format!("Summary: {}={} {}={} {}={}", pass_tok, pass, warn_tok, warn, fail_tok, fail);
+    if use_ansi {
+        eprint!("\x1b[u"); // restore anchor
+        eprint!("\x1b[2B\r{}\x1b[K", line); // move down one blank line and summary line, repaint
+        eprint!("\x1b[u"); // restore anchor again
+        let _ = std::io::stderr().flush();
+    } else {
+        eprintln!("{}", line);
+    }
+}
+ 
 /// Render a single agent row given current statuses and spinner state (TTY-aware colors).
 #[allow(clippy::too_many_arguments)]
 fn render_row_line(
@@ -350,7 +366,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
     // Header line for the matrix
     eprintln!();
     let use_err = aifo_coder::color_enabled_stderr();
-    aifo_coder::log_info_stderr(use_err, "support matrix:");
+    aifo_coder::log_info_stderr(use_err, "Support matrix:");
+    eprintln!();
 
     // Phase 3: lists, images and RNG
     let agents = parse_csv_env("AIFO_SUPPORT_AGENTS", agents_default());
@@ -376,17 +393,20 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let tty = atty::is(atty::Stream::Stderr);
     let animate_disabled = std::env::var("AIFO_SUPPORT_ANIMATE").ok().as_deref() == Some("0");
     let animate = tty && !animate_disabled;
-    let ascii = std::env::var("AIFO_SUPPORT_ASCII").ok().as_deref() == Some("1");
-    let frames = pending_spinner_frames(ascii);
     let mut spinner_idx = 0usize;
     let term_width = terminal_width_or_default();
     let (agent_col, cell_col, compressed) = compute_layout(toolchains.len(), term_width);
+    let ascii_env = std::env::var("AIFO_SUPPORT_ASCII").ok().as_deref() == Some("1");
+    let frames = pending_spinner_frames(ascii_env || compressed);
 
     // Matrix state
     let total_rows = agents.len();
     let mut statuses: Vec<Vec<Option<String>>> = vec![vec![None; toolchains.len()]; total_rows];
 
     if animate {
+        let mut pass_count = 0usize;
+        let mut warn_count = 0usize;
+        let mut fail_count = 0usize;
         // Draw header + initial rows
         let mut header_line = String::new();
         header_line.push_str(&" ".repeat(agent_col));
@@ -413,6 +433,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // Save cursor position as an anchor right below the matrix for stable repaints
         eprint!("\x1b[s");
         let _ = std::io::stderr().flush();
+        // Initial blank line and summary under the matrix
+        eprintln!();
+        repaint_summary(pass_count, warn_count, fail_count, true, use_err);
     }
 
     // Phase 5: Worker/painter channel
@@ -518,8 +541,17 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 }) => {
                     let ai = *agent_index.get(&agent).unwrap_or(&0);
                     let ki = *kind_index.get(&kind).unwrap_or(&0);
-                    statuses[ai][ki] = Some(status);
+                    statuses[ai][ki] = Some(status.clone());
                     pending.remove(&(ai, ki));
+
+                    // Increment live summary counters
+                    match status.as_str() {
+                        "PASS" => pass_count = pass_count.saturating_add(1),
+                        "WARN" => warn_count = warn_count.saturating_add(1),
+                        "FAIL" => fail_count = fail_count.saturating_add(1),
+                        _ => {}
+                    }
+
                     let line = render_row_line(
                         &agents,
                         &toolchains,
@@ -534,6 +566,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         use_err,
                     );
                     repaint_row(ai, &line, use_ansi, total_rows);
+
                     // Choose a new active pending cell at random (scattered updates)
                     if !pending.is_empty() {
                         let idx = (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
@@ -543,6 +576,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     } else {
                         active = None;
                     }
+
+                    // Repaint summary after each completed cell
+                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err);
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Advance spinner on active cell and repaint only that row
@@ -694,8 +730,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
             }
         }
     }
-    let summary = format!("summary: PASS={} WARN={} FAIL={}", pass, warn, fail);
+    eprintln!();
     let use_err = aifo_coder::color_enabled_stderr();
+    let pass_tok = color_token(use_err, "PASS");
+    let warn_tok = color_token(use_err, "WARN");
+    let fail_tok = color_token(use_err, "FAIL");
+    let summary = format!("Summary: {}={} {}={} {}={}", pass_tok, pass, warn_tok, warn, fail_tok, fail);
     aifo_coder::log_info_stderr(use_err, &summary);
     if verbose {
         let rp = aifo_coder::preferred_registry_prefix_quiet();
