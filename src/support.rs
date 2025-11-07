@@ -147,7 +147,6 @@ enum Event {
     CellDone {
         agent: String,
         kind: String,
-        pm_ok: bool,
         status: String,
         reason: Option<String>,
     },
@@ -188,6 +187,7 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
 }
 
 /// Render a single agent row given current statuses and spinner state (TTY-aware colors).
+#[allow(clippy::too_many_arguments)]
 fn render_row_line(
     agents: &[String],
     toolchains: &[String],
@@ -251,7 +251,7 @@ impl XorShift64 {
 }
 
 /// Shuffle a vector of (row,col) pairs using Fisher–Yates with the seeded RNG
-fn shuffle_pairs(pairs: &mut Vec<(usize, usize)>, seed: u64) {
+fn shuffle_pairs(pairs: &mut [(usize, usize)], seed: u64) {
     let mut rng = XorShift64::new(seed);
     let n = pairs.len();
     for i in (1..n).rev() {
@@ -416,7 +416,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
             worklist.push((ai, ki));
         }
     }
-    shuffle_pairs(&mut worklist, seed);
+    shuffle_pairs(worklist.as_mut_slice(), seed);
 
     // Active pending set and cell
     let mut pending: std::collections::HashSet<(usize, usize)> = worklist.iter().copied().collect();
@@ -467,7 +467,6 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 let _ = tx_cl.send(Event::CellDone {
                     agent: agents_cl[ai].clone(),
                     kind: kinds_cl[ki].clone(),
-                    pm_ok,
                     status,
                     reason: pm_res.err(),
                 });
@@ -515,7 +514,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         None,
                         agent_col,
                         cell_col,
-                        &frames,
+                        frames,
                         spinner_idx,
                         use_err,
                     );
@@ -542,7 +541,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                             Some(ki),
                             agent_col,
                             cell_col,
-                            &frames,
+                            frames,
                             spinner_idx,
                             use_err,
                         );
