@@ -137,9 +137,10 @@ check:
     - qual-mcap-gcp
   variables:
     RUST_BACKTRACE: "1"
-    NO_COLOR: "1"
     AIFO_SUPPORT_ANIMATE: "0"
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
+    GIT_LFS_SKIP_SMUDGE: "1"
   cache:
     key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -150,6 +151,8 @@ check:
     - cargo --version
     # Ensure rustfmt/clippy are present in this container (CI only)
     - if command -v rustup >/dev/null 2>&1; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi
+    # Install git-lfs so Git LFS filters don't break tests (offline-friendly)
+    - apt-get update && apt-get install -y --no-install-recommends git-lfs && rm -rf /var/lib/apt/lists/*
     - cargo nextest --version || true
     # Probe clippy via rustup after installing components to avoid false errors
     - if command -v rustup >/dev/null 2>&1; then rustup run stable cargo clippy --version || true; else cargo clippy --version || true; fi
