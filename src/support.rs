@@ -180,8 +180,8 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     if use_ansi {
         // Restore saved anchor below the matrix, move up to the target row, repaint in-place,
         // then restore back to the anchor to keep the cursor stable.
-        // Distance from anchor to row_idx is (total_rows - row_idx).
-        let up = total_rows.saturating_sub(row_idx);
+        // Distance from anchor to row_idx is (total_rows - 1 - row_idx) because anchor is one line below last row.
+        let up = total_rows.saturating_sub(1 + row_idx);
         eprint!("\x1b[u"); // restore saved cursor position (anchor)
         eprint!("\x1b[{}A\r{}\x1b[K", up, line);
         eprint!("\x1b[u"); // restore anchor again
@@ -750,6 +750,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
         repaint_summary(pass, warn, fail, true, use_err);
+        // Move cursor below the summary and add two blank lines so the shell prompt doesn't overwrite it.
+        eprint!("\x1b[u");        // restore anchor (line just below the last matrix row)
+        eprint!("\x1b[2B");       // move down: blank spacer + summary line
+        eprintln!();              // one empty line below summary
+        eprintln!();              // second empty line below summary
+        let _ = std::io::stderr().flush();
     } else {
         // Non-TTY/static: add a separating blank line and print a final colored summary line.
         eprintln!();
