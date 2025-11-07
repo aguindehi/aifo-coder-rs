@@ -1,4 +1,5 @@
 stages:
+  - test
   - build
   - release
 
@@ -42,6 +43,24 @@ build-rust-builder:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
   rules: *rules_build_image
+
+build-rust-builder-ci:
+  extends: container-build
+  stage: build
+  variables:
+    TARGET_NAME: "rust-builder"
+    IMAGE_PATH_EXTRA: "rust-builder"
+    IMAGE_TAG_CUSTOM: "ci"
+    IMAGE_TAG_CUSTOM_ONLY: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - Dockerfile
+        - src/**/*
+        - toolchains/**/*
+        - .gitlab-ci.yml
+    - when: manual
+      allow_failure: true
 
 build:
   extends: container-build
@@ -94,6 +113,37 @@ build-launcher:
   rules:
     - if: $CI_COMMIT_TAG
 
+
+check:
+  stage: test
+  image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci
+  needs:
+    - job: build-rust-builder-ci
+      optional: true
+  tags:
+    - qual-mcap-gcp
+  variables:
+    RUST_BACKTRACE: "1"
+    NO_COLOR: "1"
+    AIFO_SUPPORT_ANIMATE: "0"
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  cache:
+    key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cargo
+      - target
+  before_script:
+    - rustc --version
+    - cargo --version
+    - cargo nextest --version || true
+    - cargo clippy --version || true
+  script:
+    - make check
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
 
 # Create release
 
