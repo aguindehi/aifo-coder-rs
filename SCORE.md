@@ -1,70 +1,58 @@
-# AIFO Coder Source Code Score — 2025-09-29
+# AIFO Coder Source Code Score — 2025-11-07
 
 Author: AIFO User <aifo@example.com>
 
-Overall grade: A (91/100)
+Overall grade: A (92/100)
 
 Summary highlights:
-- Solid expansion plan: v4 spec replaces stubs with real installs for three agents.
-- Best-practice Dockerfile recipes: CA handling via BuildKit, strict cleanup, multi-arch.
-- Maintains non-root contract, entrypoint invariants, and PATH policy correctness.
-- Clear Makefile/publish flows; tests remain preview-only (no pulls).
-- Documentation alignment preserves golden strings and established UX.
+- Implemented v3 support matrix: fast, randomized exploration with TTY-only animation.
+- Clean worker/painter split avoids blocking; agent --version checks cached once per agent.
+- Deterministic shuffle via seeded RNG; clear non-TTY static render and concise diagnostics.
+- Documentation and tests added: docker-missing integration, shuffle determinism, caching count.
 
 Grade breakdown:
-- Architecture & Modularity: 93/100 (A-)
-- Correctness & Reliability: 90/100 (A-)
+- Architecture & Modularity: 94/100 (A)
+- Correctness & Reliability: 91/100 (A-)
 - Security & Hardening: 92/100 (A-)
-- Performance & Resource Use: 87/100 (B+)
+- Performance & Resource Use: 90/100 (A-)
 - Portability & Cross-Platform: 89/100 (B+)
-- Code Quality & Style: 90/100 (A-)
-- Documentation & Comments: 88/100 (B+)
-- Testing Coverage & Quality: 86/100 (B)
-- Maintainability & Extensibility: 92/100 (A-)
-- Operational Ergonomics (UX/logs): 90/100 (A-)
+- Code Quality & Style: 91/100 (A-)
+- Documentation & Comments: 90/100 (A-)
+- Testing Coverage & Quality: 87/100 (B+)
+- Maintainability & Extensibility: 93/100 (A-)
+- Operational Ergonomics (UX/logs): 92/100 (A-)
 
 Strengths:
-- Comprehensive and coherent v4 plan with explicit installation recipes per agent.
-- Enterprise CA handling follows good practice: step-scoped injection and removal.
-- Cleanup policies reduce footprint, keeping slim/full parity and minimal surface area.
-- Entry-point invariants remain consistent; PATH policies preserved and documented.
-- Multi-stage builds prevent toolchains from leaking into runtime layers.
+- Worker never sleeps; painter animates only on tick without delaying exploration.
+- Randomized worklist scattered updates; immediate row repaint on cell completion.
+- Agent check caching eliminates N× repeated cost; robust NO_PULL handling via inspect.
+- TTY/non-TTY behavior consistent with doctor-like output and color policy.
 
 Key observations and small risks:
-1) OpenHands via uv tool install
-   - Ensure UV_TOOL_DIR=/usr/local/bin; retain UV_NATIVE_TLS and CA envs during install.
-   - Validate tool resolution when PATH is shims-first; confirm CLI binary presence.
+1) ANSI repaint math
+   - repaint_row uses relative cursor moves; verify row indexing across diverse terminals.
+   - Consider guarding against terminals without ANSI support (already falls back to plain print).
 
-2) OpenCode via npm global
-   - In slim, removal of npm/npx/yarn symlinks is desired for size; confirm CLI is native and
-     no post-install hooks depend on npm. Keep node runtime present.
+2) Timeouts and PM commands
+   - AIFO_SUPPORT_TIMEOUT_SECS is parsed but not enforced in run_version_check; acceptable in v3,
+     but document or wire soft timeouts in a future version for long-running PM checks.
 
-3) Plandex build (Go)
-   - CGO off is appropriate; set GOOS/GOARCH from buildx for multi-arch.
-   - Inject version via ldflags from version.txt; add -trimpath and -mod=readonly.
+3) Verbose diagnostics
+   - Non-TTY verbose per-row hints are concise; consider bounding to avoid long lines in narrow
+     environments.
 
-4) CA handling consistency
-   - Use consolidated CA bundle; set NODE_OPTIONS/SSL_CERT_FILE/etc during installs.
-   - Remove secret CA after install steps to avoid persistence.
+4) Deterministic active-cell selection
+   - Active pending cell uses simple seed xor; acceptable, but could reuse RNG for consistency
+     across ticks if desired.
 
-5) Documentation and tests
-   - Keep wording stable in README; add concise notes on real installs and overrides.
-   - Tests should continue to assert previews and images output only (no pulls).
-
-Recommended next steps (targeted, actionable):
-- Implement Dockerfile stage changes:
-  - Add plandex-builder stage with Go build; copy binary into full/slim runtime.
-  - Replace OpenHands/OpenCode stubs with uv/npm installs and cleanup per KEEP_APT.
-- Add Makefile targets (build/rebuild/publish) for three agents; mirror codex/crush patterns.
-- Update README and docs:
-  - Reflect real installs, overrides (ARGs/ENV), and slim/full differences concisely.
-- Validate dry-run previews and images output locally:
-  - Ensure PATH policy and container naming remain unchanged.
-- Optional: add a small acceptance smoke (ignored) to detect CLI presence when local images exist.
+Recommended next steps (actionable):
+- Add a small unit test for repaint_row fallback path (non-ANSI terminals).
+- Expand tests to cover WARN/FAIL token reasons mapping (exit code vs not-present).
+- Consider wiring AIFO_SUPPORT_TIMEOUT_SECS into run_version_check via non-blocking polling loop.
+- Optional: compress columns further when agents/toolchains grow (single-letter tokens already exist).
 
 Grade summary:
-- Overall: A (91/100)
-- The repository maintains strong engineering quality and security posture. The v4 plan
-  introduces real agent installs with careful CA handling and cleanup, preserving behavior.
-  Proceed to implementation with attention to multi-arch Go builds, npm slim cleanup, and
-  uv tool placement.
+- Overall: A (92/100)
+- The v3 support mode is implemented cleanly and aligns with the specification. Performance
+  characteristics are strong and UX is polished. Minor enhancements around diagnostics and
+  optional timeouts can be pursued next without risking regressions.

@@ -1,3 +1,12 @@
+2025-11-07 AIFO User <aifo@example.com>
+
+Add v3 support: fast randomized support matrix
+
+- Add "support" CLI subcommand and module scaffolding.
+- Implement randomized worklist and worker/painter split (TTY-only animation).
+- Cache agent --version checks; repaint rows immediately on cell completion.
+- Add docs and tests: docker missing, deterministic shuffle, agent check count.
+
 2025-09-29 AIFO User <aifo@example.com>
 
 Add v4 spec: real installs for openhands/opencode/plandex
