@@ -1,5 +1,6 @@
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
+use std::io::Write as _;
 
 use crate::banner::print_startup_banner;
 
@@ -108,12 +109,13 @@ fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
 
 /// Support mode event channel messages
 enum Event {
-    AgentCached { agent: String, ok: bool },
+    AgentCached { agent: String, ok: bool, reason: Option<String> },
     CellDone {
         agent: String,
         kind: String,
         pm_ok: bool,
         status: String,
+        reason: Option<String>,
     },
 }
 
@@ -303,31 +305,34 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let term_width = terminal_width_or_default();
     let (agent_col, cell_col, _compressed) = compute_layout(toolchains.len(), term_width);
 
-    // Draw header + initial rows
-    let mut header_line = String::new();
-    header_line.push_str(&" ".repeat(agent_col));
-    for k in &toolchains {
-        header_line.push(' ');
-        let name = fit(k, cell_col);
-        let painted = aifo_coder::paint(use_err, "\x1b[34;1m", &name);
-        header_line.push_str(&painted);
-    }
-    eprintln!("{}", header_line);
-
     // Matrix state
     let total_rows = agents.len();
-    let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
     let mut statuses: Vec<Vec<Option<String>>> = vec![vec![None; toolchains.len()]; total_rows];
 
-    for a in &agents {
-        let mut line = String::new();
-        let label = fit(a, agent_col);
-        line.push_str(&label);
-        for _ in &toolchains {
-            line.push(' ');
-            line.push_str(&pending_token0);
+    if animate {
+        // Draw header + initial rows
+        let mut header_line = String::new();
+        header_line.push_str(&" ".repeat(agent_col));
+        for k in &toolchains {
+            header_line.push(' ');
+            let name = fit(k, cell_col);
+            let painted = aifo_coder::paint(use_err, "\x1b[34;1m", &name);
+            header_line.push_str(&painted);
         }
-        eprintln!("{}", line);
+        eprintln!("{}", header_line);
+
+        // Initial rows: pending tokens in dim gray
+        let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
+        for a in &agents {
+            let mut line = String::new();
+            let label = fit(a, agent_col);
+            line.push_str(&label);
+            for _ in &toolchains {
+                line.push(' ');
+                line.push_str(&pending_token0);
+            }
+            eprintln!("{}", line);
+        }
     }
 
     // Phase 5: Worker/painter channel
@@ -373,15 +378,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
             for (ai, ki) in worklist.into_iter() {
                 if agent_ok[ai].is_none() {
                     let cmd = format!("{} --version", agent_cli_for(&agents_cl[ai]));
-                    let ok = run_version_check(&rt, &agent_imgs[ai], &cmd, no_pull).is_ok();
+                    let res = run_version_check(&rt, &agent_imgs[ai], &cmd, no_pull);
+                    let ok = res.is_ok();
                     agent_ok[ai] = Some(ok);
                     let _ = tx_cl.send(Event::AgentCached {
                         agent: agents_cl[ai].clone(),
                         ok,
+                        reason: res.err(),
                     });
                 }
                 let cmd = pm_cmd_for(&kinds_cl[ki]);
-                let pm_ok = run_version_check(&rt, &tc_imgs[ki], &cmd, no_pull).is_ok();
+                let pm_res = run_version_check(&rt, &tc_imgs[ki], &cmd, no_pull);
+                let pm_ok = pm_res.is_ok();
                 let aok = agent_ok[ai].unwrap_or(false);
                 let status = if aok && pm_ok {
                     "PASS"
@@ -396,6 +404,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     kind: kinds_cl[ki].clone(),
                     pm_ok,
                     status,
+                    reason: pm_res.err(),
                 });
             }
         });
@@ -437,41 +446,131 @@ pub fn run_support(verbose: bool) -> ExitCode {
         line
     };
 
-    // Painter loop (TTY-only animation); non-TTY will still consume events without spinner.
-    let use_ansi = animate;
-    while !pending.is_empty() {
-        match rx.recv_timeout(std::time::Duration::from_millis(tick_ms)) {
-            Ok(Event::AgentCached { .. }) => {
-                // Optional: could annotate rows in verbose mode; keep minimal for v3.
-            }
-            Ok(Event::CellDone { agent, kind, status, .. }) => {
-                let ai = *agent_index.get(&agent).unwrap_or(&0);
-                let ki = *kind_index.get(&kind).unwrap_or(&0);
-                statuses[ai][ki] = Some(status);
-                pending.remove(&(ai, ki));
-                let line = render_row(ai, None);
-                repaint_row(ai, &line, use_ansi, total_rows);
-                // Choose a new active pending cell at random (scattered updates)
-                if !pending.is_empty() {
-                    // Pick using seeded RNG
-                    let idx = (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
-                    if let Some(&(pai, pki)) = pending.iter().nth(idx) {
-                        active = Some((pai, pki));
-                    }
-                } else {
-                    active = None;
+    // Painter/consumer loop
+    if animate {
+        // TTY animation path
+        let use_ansi = animate;
+        while !pending.is_empty() {
+            match rx.recv_timeout(std::time::Duration::from_millis(tick_ms)) {
+                Ok(Event::AgentCached { .. }) => {
+                    // Optional: could annotate rows in verbose mode; keep minimal for v3.
                 }
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                // Advance spinner on active cell and repaint only that row
-                if let Some((ai, ki)) = active {
-                    spinner_idx = (spinner_idx + 1) % frames.len();
-                    let line = render_row(ai, Some(ki));
+                Ok(Event::CellDone { agent, kind, status, .. }) => {
+                    let ai = *agent_index.get(&agent).unwrap_or(&0);
+                    let ki = *kind_index.get(&kind).unwrap_or(&0);
+                    statuses[ai][ki] = Some(status);
+                    pending.remove(&(ai, ki));
+                    let line = render_row(ai, None);
                     repaint_row(ai, &line, use_ansi, total_rows);
+                    // Choose a new active pending cell at random (scattered updates)
+                    if !pending.is_empty() {
+                        let idx =
+                            (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
+                        if let Some(&(pai, pki)) = pending.iter().nth(idx) {
+                            active = Some((pai, pki));
+                        }
+                    } else {
+                        active = None;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // Advance spinner on active cell and repaint only that row
+                    if let Some((ai, ki)) = active {
+                        spinner_idx = (spinner_idx + 1) % frames.len();
+                        let line = render_row(ai, Some(ki));
+                        repaint_row(ai, &line, use_ansi, total_rows);
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    break;
                 }
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                break;
+        }
+    } else {
+        // Non-TTY or animation disabled: consume events, then render a static matrix.
+        let mut remaining = pending.len();
+        let mut agent_diag: std::collections::HashMap<String, (bool, Option<String>)> =
+            std::collections::HashMap::new();
+        let mut pm_diag: std::collections::HashMap<(String, String), Option<String>> =
+            std::collections::HashMap::new();
+        while remaining > 0 {
+            match rx.recv() {
+                Ok(Event::AgentCached { agent, ok, reason }) => {
+                    agent_diag.insert(agent, (ok, reason));
+                }
+                Ok(Event::CellDone { agent, kind, status, reason, .. }) => {
+                    let ai = *agent_index.get(&agent).unwrap_or(&0);
+                    let ki = *kind_index.get(&kind).unwrap_or(&0);
+                    statuses[ai][ki] = Some(status);
+                    pm_diag.insert((agent.clone(), kind.clone()), reason);
+                    if pending.remove(&(ai, ki)) {
+                        remaining = remaining.saturating_sub(1);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        // Render header and final matrix (no spinner)
+        let mut header_line = String::new();
+        header_line.push_str(&" ".repeat(agent_col));
+        for k in &toolchains {
+            header_line.push(' ');
+            let name = fit(k, cell_col);
+            let painted = aifo_coder::paint(false, "\x1b[34;1m", &name);
+            header_line.push_str(&painted);
+        }
+        eprintln!("{}", header_line);
+        for (ai, a) in agents.iter().enumerate() {
+            let mut line = String::new();
+            let label = fit(a, agent_col);
+            line.push_str(&label);
+            for (ki, _k) in toolchains.iter().enumerate() {
+                line.push(' ');
+                let tok = statuses[ai][ki].as_deref().unwrap_or("FAIL");
+                let tokf = fit(tok, cell_col);
+                line.push_str(&color_token(false, &tokf));
+            }
+            eprintln!("{}", line);
+        }
+
+        // Verbose hints per agent with WARN/FAIL
+        if verbose {
+            let use_err2 = aifo_coder::color_enabled_stderr();
+            for (ai, a) in agents.iter().enumerate() {
+                let mut bad: Vec<String> = Vec::new();
+                for (ki, k) in toolchains.iter().enumerate() {
+                    match statuses[ai][ki].as_deref() {
+                        Some("PASS") => {}
+                        Some(_) | None => {
+                            let r = pm_diag
+                                .get(&(a.clone(), k.clone()))
+                                .and_then(|o| o.clone())
+                                .unwrap_or_else(|| "err".to_string());
+                            bad.push(format!("{}={}", k, r));
+                        }
+                    }
+                }
+                if !bad.is_empty() {
+                    let (aok, areason) = agent_diag
+                        .get(a)
+                        .cloned()
+                        .unwrap_or((false, None));
+                    let mut agent_part = format!("agent={}", if aok { "ok" } else { "fail" });
+                    if !aok {
+                        if let Some(r) = areason {
+                            if !r.is_empty() {
+                                agent_part.push_str(&format!("({})", r));
+                            }
+                        }
+                    }
+                    if bad.len() > 4 {
+                        bad.truncate(4);
+                        bad.push("...".to_string());
+                    }
+                    let msg = format!("{}: {}; pm {}", a, agent_part, bad.join(", "));
+                    aifo_coder::log_info_stderr(use_err2, &msg);
+                }
             }
         }
     }
