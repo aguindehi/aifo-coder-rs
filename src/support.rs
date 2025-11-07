@@ -176,13 +176,13 @@ fn color_token(use_color: bool, status: &str) -> String {
 }
 
 /// Repaint only the affected agent row using ANSI cursor movement when available.
-fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, _total_rows: usize) {
+fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     if use_ansi {
-        // Anchor is saved at the blank line above the first matrix row; row i is at offset (1 + i).
-        eprint!("\x1b8"); // restore saved cursor position (anchor at top-of-matrix blank)
-        eprint!("\x1b[{}B", row_idx + 1);
+        // Baseline is the line after the summary. Row i is at offset (total_rows + 2 - i) lines up.
+        let up = total_rows.saturating_add(2).saturating_sub(row_idx);
+        eprint!("\x1b[{}A", up);
         eprint!("\r{}\x1b[K", line);
-        eprint!("\x1b8"); // restore anchor again
+        eprint!("\x1b[{}B", up);
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -206,11 +206,10 @@ fn repaint_summary(
         pass_tok, pass, warn_tok, warn, fail_tok, fail
     );
     if use_ansi {
-        // Restore anchor at top-of-matrix blank, move down N rows + 2 (blank + summary), overwrite in-place, then restore anchor.
-        eprint!("\x1b8");
-        eprint!("\x1b[{}B", total_rows.saturating_add(2));
+        // Baseline is the line after the summary; summary line is 1 up from baseline.
+        eprint!("\x1b[1A");
         eprint!("\r{}\x1b[K", line);
-        eprint!("\x1b8");
+        eprint!("\x1b[1B");
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -437,11 +436,6 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // Empty line between column headers and the matrix
         eprintln!();
 
-        // Save a stable anchor at the top-of-matrix blank line (above first row)
-        if total_rows > 0 {
-            eprint!("\x1b7");
-            let _ = std::io::stderr().flush();
-        }
 
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
@@ -773,11 +767,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
         repaint_summary(pass, warn, fail, true, use_err, total_rows);
-        // Move cursor below the summary and add two blank lines so the shell prompt doesn't overwrite it.
-        eprint!("\x1b8");                   // restore anchor (top-of-matrix blank)
-        eprint!("\x1b[{}B", total_rows + 3); // move down: spacer + summary line + one extra line
-        eprintln!();                         // one empty line below summary
-        eprintln!();                         // second empty line below summary
+        // We are at the baseline (line after summary); add two blank lines.
+        eprintln!();
+        eprintln!();
         let _ = std::io::stderr().flush();
     } else {
         // Non-TTY/static: add a separating blank line and print a final colored summary line.
