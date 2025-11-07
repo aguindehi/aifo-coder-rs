@@ -386,7 +386,7 @@ fn shuffle_pairs(pairs: &mut [(usize, usize)], seed: u64) {
     }
 }
 
-//// PM command mapping for toolchain kinds (offline, deterministic)
+/// PM command mapping for toolchain kinds (offline, deterministic)
 fn pm_cmd_for(kind: &str) -> String {
     match kind {
         "rust" => "rustc --version".to_string(),
