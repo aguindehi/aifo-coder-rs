@@ -392,7 +392,7 @@ fn run_version_check(
         .arg("--entrypoint")
         .arg("sh")
         .arg(image)
-        .arg("-lc")
+        .arg("-c")
         .arg(cmd)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
