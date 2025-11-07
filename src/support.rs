@@ -85,7 +85,7 @@ fn terminal_width_or_default() -> usize {
 
 /// Compute layout columns; compress cells if too wide
 fn compute_layout(toolchains_len: usize, term_width: usize) -> (usize, usize, bool) {
-    let mut agent_col = 16usize;
+    let agent_col = 16usize;
     let mut cell_col = 6usize;
     // Minimal spacing: one leading space between columns
     let row_width = agent_col.saturating_add(1)
@@ -142,15 +142,10 @@ enum Event {
 }
 
 /// Map agent name to its CLI --version command basename.
-fn agent_cli_for(agent: &str) -> &'static str {
+fn agent_cli_for(agent: &str) -> String {
     match agent {
-        "aider" => "aider",
-        "crush" => "crush",
-        "codex" => "codex",
-        "openhands" => "openhands",
-        "opencode" => "opencode",
-        "plandex" => "plandex",
-        _ => agent,
+        "aider" | "crush" | "codex" | "openhands" | "opencode" | "plandex" => agent.to_string(),
+        _ => agent.to_string(),
     }
 }
 
@@ -178,6 +173,43 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     } else {
         eprintln!("{}", line);
     }
+}
+
+/// Render a single agent row given current statuses and spinner state (TTY-aware colors).
+fn render_row_line(
+    agents: &[String],
+    toolchains: &[String],
+    statuses: &[Vec<Option<String>>],
+    ai: usize,
+    spin_cell: Option<usize>,
+    agent_col: usize,
+    cell_col: usize,
+    frames: &[&str],
+    spinner_idx: usize,
+    use_err: bool,
+) -> String {
+    let mut line = String::new();
+    let label = fit(&agents[ai], agent_col);
+    line.push_str(&label);
+    for (ki, _k) in toolchains.iter().enumerate() {
+        line.push(' ');
+        match &statuses[ai][ki] {
+            Some(st) => {
+                let tok = fit(st, cell_col);
+                line.push_str(&color_token(use_err, &tok));
+            }
+            None => {
+                let frame = if Some(ki) == spin_cell {
+                    frames[spinner_idx % frames.len()]
+                } else {
+                    frames[0]
+                };
+                let tok = fit(frame, cell_col);
+                line.push_str(&aifo_coder::paint(use_err, "\x1b[90m", &tok));
+            }
+        }
+    }
+    line
 }
 
 /// Minimal deterministic RNG (xorshift64*) for seeded shuffle
@@ -442,31 +474,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
         kind_index.insert(k.clone(), i);
     }
 
-    // Row render helper
-    let render_row = |ai: usize, spin_cell: Option<usize>| -> String {
-        let mut line = String::new();
-        let label = fit(&agents[ai], agent_col);
-        line.push_str(&label);
-        for (ki, k) in toolchains.iter().enumerate() {
-            line.push(' ');
-            match &statuses[ai][ki] {
-                Some(st) => {
-                    let tok = fit(st, cell_col);
-                    line.push_str(&color_token(use_err, &tok));
-                }
-                None => {
-                    let frame = if Some(ki) == spin_cell {
-                        frames[spinner_idx % frames.len()]
-                    } else {
-                        frames[0]
-                    };
-                    let tok = fit(frame, cell_col);
-                    line.push_str(&aifo_coder::paint(use_err, "\x1b[90m", &tok));
-                }
-            }
-        }
-        line
-    };
+    // Row render helper moved to render_row_line() (module-level function)
 
     // Painter/consumer loop
     if animate {
@@ -482,7 +490,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     let ki = *kind_index.get(&kind).unwrap_or(&0);
                     statuses[ai][ki] = Some(status);
                     pending.remove(&(ai, ki));
-                    let line = render_row(ai, None);
+                    let line = render_row_line(
+                        &agents,
+                        &toolchains,
+                        &statuses,
+                        ai,
+                        None,
+                        agent_col,
+                        cell_col,
+                        &frames,
+                        spinner_idx,
+                        use_err,
+                    );
                     repaint_row(ai, &line, use_ansi, total_rows);
                     // Choose a new active pending cell at random (scattered updates)
                     if !pending.is_empty() {
@@ -499,7 +518,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     // Advance spinner on active cell and repaint only that row
                     if let Some((ai, ki)) = active {
                         spinner_idx = (spinner_idx + 1) % frames.len();
-                        let line = render_row(ai, Some(ki));
+                        let line = render_row_line(
+                            &agents,
+                            &toolchains,
+                            &statuses,
+                            ai,
+                            Some(ki),
+                            agent_col,
+                            cell_col,
+                            &frames,
+                            spinner_idx,
+                            use_err,
+                        );
                         repaint_row(ai, &line, use_ansi, total_rows);
                     }
                 }
