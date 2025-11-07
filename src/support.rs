@@ -455,11 +455,11 @@ pub fn run_support(verbose: bool) -> ExitCode {
         }
 
         // Save a stable anchor at the FIRST matrix row:
-        // We are currently on the last matrix row; move up (total_rows-1), save, then move back down.
+        // We are currently on the line after the last matrix row; move up total_rows, save, then move back down total_rows.
         if total_rows > 0 {
-            eprint!("\x1b[{}A", total_rows - 1);
+            eprint!("\x1b[{}A", total_rows);
             eprint!("\x1b[s");                  // anchor = first row
-            eprint!("\x1b[{}B", total_rows - 1); // return to last row for printing below
+            eprint!("\x1b[{}B", total_rows);    // return to line after last row for printing below
             let _ = std::io::stderr().flush();
         }
 
