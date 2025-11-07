@@ -179,17 +179,17 @@ fn color_token(use_color: bool, status: &str) -> String {
 fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, _total_rows: usize) {
     if use_ansi {
         // Anchor is saved at the blank line above the first matrix row; row i is at offset (1 + i).
-        eprint!("\x1b[u"); // restore saved cursor position (anchor at top-of-matrix blank)
+        eprint!("\x1b8"); // restore saved cursor position (anchor at top-of-matrix blank)
         eprint!("\x1b[{}B", row_idx + 1);
         eprint!("\r{}\x1b[K", line);
-        eprint!("\x1b[u"); // restore anchor again
+        eprint!("\x1b8"); // restore anchor again
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
     }
 }
 
-/// Repaint the summary line (anchor is saved at the summary line).
+/// Repaint the summary line (anchor is saved at the top-of-matrix blank line).
 fn repaint_summary(
     pass: usize,
     warn: usize,
@@ -207,10 +207,10 @@ fn repaint_summary(
     );
     if use_ansi {
         // Restore anchor at top-of-matrix blank, move down N rows + 2 (blank + summary), overwrite in-place, then restore anchor.
-        eprint!("\x1b[u");
+        eprint!("\x1b8");
         eprint!("\x1b[{}B", total_rows.saturating_add(2));
         eprint!("\r{}\x1b[K", line);
-        eprint!("\x1b[u");
+        eprint!("\x1b8");
         let _ = std::io::stderr().flush();
     } else {
         eprintln!("{}", line);
@@ -439,7 +439,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
 
         // Save a stable anchor at the top-of-matrix blank line (above first row)
         if total_rows > 0 {
-            eprint!("\x1b[s");
+            eprint!("\x1b7");
             let _ = std::io::stderr().flush();
         }
 
@@ -774,7 +774,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
         repaint_summary(pass, warn, fail, true, use_err, total_rows);
         // Move cursor below the summary and add two blank lines so the shell prompt doesn't overwrite it.
-        eprint!("\x1b[u");                   // restore anchor (first matrix row)
+        eprint!("\x1b8");                   // restore anchor (top-of-matrix blank)
         eprint!("\x1b[{}B", total_rows + 3); // move down: spacer + summary line + one extra line
         eprintln!();                         // one empty line below summary
         eprintln!();                         // second empty line below summary
