@@ -180,8 +180,8 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
     if use_ansi {
         // Restore saved anchor below the matrix, move up to the target row, repaint in-place,
         // then restore back to the anchor to keep the cursor stable.
-        // Distance from anchor to row_idx is (total_rows - 1 - row_idx) because anchor is one line below last row.
-        let up = total_rows.saturating_sub(1 + row_idx);
+        // Distance from anchor to row_idx is (total_rows - row_idx) because anchor is one line below the last row.
+        let up = total_rows.saturating_sub(row_idx);
         eprint!("\x1b[u"); // restore saved cursor position (anchor)
         eprint!("\x1b[{}A\r{}\x1b[K", up, line);
         eprint!("\x1b[u"); // restore anchor again
@@ -673,8 +673,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
         for (ai, a) in agents.iter().enumerate() {
             let mut line = String::new();
             let label_raw = fit(a, agent_col);
-            // Non-TTY path: keep labels plain (no color)
-            line.push_str(&label_raw);
+            // Non-TTY/static path: also paint row headers in bold blue for consistency
+            let label = aifo_coder::paint(use_err2, "\x1b[34;1m", &label_raw);
+            line.push_str(&label);
             for (ki, _k) in toolchains.iter().enumerate() {
                 line.push(' ');
                 let raw = statuses[ai][ki].as_deref().unwrap_or("FAIL");
@@ -689,7 +690,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     raw
                 };
                 let tokf = fit(disp, cell_col);
-                line.push_str(&color_token(false, &tokf));
+                // Use color when enabled, even in non-animated mode
+                line.push_str(&color_token(use_err2, &tokf));
             }
             eprintln!("{}", line);
         }
