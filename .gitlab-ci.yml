@@ -1,6 +1,6 @@
 stages:
-  - test
   - build
+  - test
   - release
 
 include:
@@ -42,39 +42,21 @@ build-rust-builder:
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
-  rules: *rules_build_image
-
-build-rust-builder-ci:
-  extends: container-build
-  stage: build
-  variables:
-    TARGET_NAME: "rust-builder"
-    IMAGE_PATH_EXTRA: "rust-builder"
-    IMAGE_TAG_CUSTOM: "ci"
-    IMAGE_TAG_CUSTOM_ONLY: true
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        - Dockerfile
-        - src/**/*
-        - toolchains/**/*
-        - .gitlab-ci.yml
-    - when: manual
-      allow_failure: true
-
-build-rust-builder-checkimg:
-  extends: container-build
-  stage: test
-  variables:
-    TARGET_NAME: "rust-builder"
-    IMAGE_PATH_EXTRA: "rust-builder"
-    IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
-    IMAGE_TAG_CUSTOM_ONLY: true
   rules:
     - if: $CI_COMMIT_TAG
-      when: never
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
+        IMAGE_TAG_CUSTOM_ONLY: "true"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
     - if: $CI_COMMIT_BRANCH
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+
+
 
 build:
   extends: container-build
@@ -132,7 +114,7 @@ check:
   stage: test
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
   needs:
-    - build-rust-builder-checkimg
+    - build-rust-builder
   tags:
     - qual-mcap-gcp
   variables:
