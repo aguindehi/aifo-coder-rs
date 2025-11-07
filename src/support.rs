@@ -185,13 +185,16 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
         eprintln!("{}", line);
     }
 }
- 
+
 /// Repaint the summary line below the matrix (uses saved cursor anchor).
 fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
     let fail_tok = color_token(use_color, "FAIL");
-    let line = format!("Summary: {}={} {}={} {}={}", pass_tok, pass, warn_tok, warn, fail_tok, fail);
+    let line = format!(
+        "Summary: {}={} {}={} {}={}",
+        pass_tok, pass, warn_tok, warn, fail_tok, fail
+    );
     if use_ansi {
         eprint!("\x1b[u"); // restore anchor
         eprint!("\x1b[2B\r{}\x1b[K", line); // move down one blank line and summary line, repaint
@@ -201,7 +204,7 @@ fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_co
         eprintln!("{}", line);
     }
 }
- 
+
 /// Render a single agent row given current statuses and spinner state (TTY-aware colors).
 #[allow(clippy::too_many_arguments)]
 fn render_row_line(
@@ -736,7 +739,10 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let pass_tok = color_token(use_err, "PASS");
     let warn_tok = color_token(use_err, "WARN");
     let fail_tok = color_token(use_err, "FAIL");
-    let summary = format!("Summary: {}={} {}={} {}={}", pass_tok, pass, warn_tok, warn, fail_tok, fail);
+    let summary = format!(
+        "Summary: {}={} {}={} {}={}",
+        pass_tok, pass, warn_tok, warn, fail_tok, fail
+    );
     aifo_coder::log_info_stderr(use_err, &summary);
     if verbose {
         let rp = aifo_coder::preferred_registry_prefix_quiet();
