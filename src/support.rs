@@ -149,7 +149,7 @@ fn fit(s: &str, width: usize) -> String {
     }
     out
 }
- 
+
 /// Capitalize a label for headers (TitleCase each hyphen-separated segment)
 fn capitalize_label(s: &str) -> String {
     if s.is_empty() {
@@ -284,13 +284,7 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
 }
 
 /// Repaint the summary line (relative to the baseline: one line above).
-fn repaint_summary(
-    pass: usize,
-    warn: usize,
-    fail: usize,
-    use_ansi: bool,
-    use_color: bool,
-) {
+fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
     let fail_tok = color_token(use_color, "FAIL");
@@ -502,7 +496,11 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let tty = atty::is(atty::Stream::Stderr);
     let animate_disabled = std::env::var("AIFO_SUPPORT_ANIMATE").ok().as_deref() == Some("0");
     let animate = tty && !animate_disabled;
-    let _cursor_guard = if animate { Some(CursorGuard::new(true)) } else { None };
+    let _cursor_guard = if animate {
+        Some(CursorGuard::new(true))
+    } else {
+        None
+    };
     let mut spinner_idx = 0usize;
     let term_width = terminal_width_or_default();
     let (agent_col, cell_col, compressed) = compute_layout(toolchains.len(), term_width);
@@ -531,7 +529,6 @@ pub fn run_support(verbose: bool) -> ExitCode {
         eprintln!("{}", header_line);
         // Empty line between column headers and the matrix
         eprintln!();
-
 
         // Initial rows: pending tokens in dim gray
         let pending_token0 = aifo_coder::paint(use_err, "\x1b[90m", &fit(frames[0], cell_col));
