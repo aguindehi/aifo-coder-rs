@@ -107,6 +107,9 @@ pub(crate) enum Agent {
     /// Run diagnostics to check environment and configuration
     Doctor,
 
+    /// Run support matrix for coder/toolchains
+    Support,
+
     /// Show effective image references (including flavor/registry)
     Images,
 
