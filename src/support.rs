@@ -257,9 +257,9 @@ fn agent_check_cmd(agent: &str) -> String {
 fn color_token(use_color: bool, status: &str) -> String {
     let key = status.trim();
     let code = match key {
-        "PASS" | "G" => "\x1b[32m",
-        "WARN" | "Y" => "\x1b[33m",
-        "FAIL" | "R" => "\x1b[31m",
+        "PASS" | "G" => "\x1b[1;32m",
+        "WARN" | "Y" => "\x1b[1;33m",
+        "FAIL" | "R" => "\x1b[1;31m",
         _ => "",
     };
     if code.is_empty() {
@@ -316,7 +316,7 @@ fn render_row_line(
     toolchains: &[String],
     statuses: &[Vec<Option<String>>],
     ai: usize,
-    spin_cell: Option<usize>,
+    _spin_cell: Option<usize>,
     agent_col: usize,
     cell_col: usize,
     compressed: bool,
@@ -347,11 +347,7 @@ fn render_row_line(
                 line.push_str(&color_token(use_err, &tok));
             }
             None => {
-                let frame = if Some(ki) == spin_cell {
-                    frames[spinner_idx % frames.len()]
-                } else {
-                    frames[0]
-                };
+                let frame = frames[spinner_idx % frames.len()];
                 let tok = fit(frame, cell_col);
                 line.push_str(&aifo_coder::paint(use_err, "\x1b[90m", &tok));
             }
@@ -584,14 +580,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
     }
     shuffle_pairs(worklist.as_mut_slice(), seed);
 
-    // Active pending set and cell
+    // Active pending set
     let mut pending: std::collections::HashSet<(usize, usize)> = worklist.iter().copied().collect();
-    let mut active: Option<(usize, usize)> = if pending.is_empty() {
-        None
-    } else {
-        // pick first after shuffle
-        Some(worklist[0])
-    };
 
     // Event channel
     let (tx, rx) = std::sync::mpsc::channel::<Event>();
@@ -696,37 +686,31 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     );
                     repaint_row(ai, &line, use_ansi, total_rows);
 
-                    // Choose a new active pending cell at random (scattered updates)
-                    if !pending.is_empty() {
-                        let idx = (seed ^ ((spinner_idx as u64) + 1)) as usize % pending.len();
-                        if let Some(&(pai, pki)) = pending.iter().nth(idx) {
-                            active = Some((pai, pki));
-                        }
-                    } else {
-                        active = None;
-                    }
+                    // No per-cell active selection; animate all pending rows each tick.
 
                     // Repaint summary after each completed cell
                     repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err);
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // Advance spinner on active cell and repaint only that row
-                    if let Some((ai, ki)) = active {
-                        spinner_idx = (spinner_idx + 1) % frames.len();
-                        let line = render_row_line(
-                            &agents,
-                            &toolchains,
-                            &statuses,
-                            ai,
-                            Some(ki),
-                            agent_col,
-                            cell_col,
-                            compressed,
-                            frames,
-                            spinner_idx,
-                            use_err,
-                        );
-                        repaint_row(ai, &line, use_ansi, total_rows);
+                    // Advance spinner and repaint all rows that still have pending cells
+                    spinner_idx = (spinner_idx + 1) % frames.len();
+                    for ai in 0..total_rows {
+                        if statuses[ai].iter().any(|c| c.is_none()) {
+                            let line = render_row_line(
+                                &agents,
+                                &toolchains,
+                                &statuses,
+                                ai,
+                                None,
+                                agent_col,
+                                cell_col,
+                                compressed,
+                                frames,
+                                spinner_idx,
+                                use_err,
+                            );
+                            repaint_row(ai, &line, use_ansi, total_rows);
+                        }
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
