@@ -200,11 +200,7 @@ fn test_support_matrix_smoke_non_tty() {
 #[test]
 fn test_support_matrix_is_fully_green() {
     // Allow opting out (e.g., inside toolchain containers or CI where Docker isn't usable)
-    if std::env::var("AIFO_SUPPORT_SKIP_GREEN")
-        .ok()
-        .as_deref()
-        == Some("1")
-    {
+    if std::env::var("AIFO_SUPPORT_SKIP_GREEN").ok().as_deref() == Some("1") {
         eprintln!("skipping: AIFO_SUPPORT_SKIP_GREEN=1");
         return;
     }
