@@ -40,7 +40,7 @@ CACHE_DIR ?= .buildx-cache
 NICENESS_CARGO_NEXTEST ?= -1
 
 # Nextest arguments
-ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
+ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
 
 # Help
 .PHONY: help banner
