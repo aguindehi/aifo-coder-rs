@@ -139,7 +139,8 @@ check:
   stage: test
   image: $RB_IMAGE
   needs:
-    - build-rust-builder
+    - job: build-rust-builder
+      optional: true
   tags:
     - qual-mcap-gcp
   variables:
