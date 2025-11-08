@@ -11,6 +11,12 @@ include:
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
 
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
 # Rules
 .rules_build_image: &rules_build_image
   - if: $CI_COMMIT_TAG
@@ -39,6 +45,14 @@ container-build:
 build-rust-builder:
   extends: container-build
   stage: build
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
+  timeout: 45m
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
@@ -137,6 +151,14 @@ build-launcher:
 
 check:
   stage: test
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
+  timeout: 30m
   image: $RB_IMAGE
   needs:
     - job: build-rust-builder
