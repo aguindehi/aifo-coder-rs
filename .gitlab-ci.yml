@@ -171,22 +171,16 @@ check:
     RUST_BACKTRACE: "1"
     AIFO_SUPPORT_ANIMATE: "0"
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
-    JUNIT_OUT: "build/junit.xml"
-    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet -E "!test(/^test_http_/) & !test(/^test_proxy_/)" --junit-report=$(JUNIT_OUT)'
+    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
     GIT_LFS_SKIP_SMUDGE: "1"
+    NICENESS_CARGO_NEXTEST: "0"
   cache:
     key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
     policy: pull-push
     paths:
       - .cargo
       - target
-  artifacts:
-    when: always
-    expire_in: 1 week
-    reports:
-      junit: build/junit.xml
-    paths:
-      - build/junit.xml
+  # No JUnit artifacts: nextest version in CI doesn't support JUnit export
   before_script:
     - rustc --version
     - cargo --version
