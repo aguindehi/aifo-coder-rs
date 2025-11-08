@@ -3,7 +3,7 @@
 
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn find_aifo_binary() -> String {
     if let Ok(p) = env::var("CARGO_BIN_EXE_aifo-coder") {
@@ -199,9 +199,35 @@ fn test_support_matrix_smoke_non_tty() {
 
 #[test]
 fn test_support_matrix_is_fully_green() {
-    // Skip if docker isn't available on this host
-    if aifo_coder::container_runtime_path().is_err() {
-        eprintln!("skipping: docker not found in PATH");
+    // Allow opting out (e.g., inside toolchain containers or CI where Docker isn't usable)
+    if std::env::var("AIFO_SUPPORT_SKIP_GREEN")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        eprintln!("skipping: AIFO_SUPPORT_SKIP_GREEN=1");
+        return;
+    }
+
+    // Skip if docker CLI isn't available on this host
+    let runtime = match aifo_coder::container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: docker not found in PATH");
+            return;
+        }
+    };
+
+    // Skip if Docker daemon isn't reachable (CLI present but no daemon)
+    let ok = Command::new(&runtime)
+        .arg("info")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: docker CLI present but daemon not reachable (docker info failed)");
         return;
     }
 
