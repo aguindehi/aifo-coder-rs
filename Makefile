@@ -927,7 +927,7 @@ build-shim:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "!test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
+	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "all() & !test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST)$$FILTER_SUPPORT $(ARGS); \
 	  else \
 	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
@@ -1090,7 +1090,7 @@ test:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "!test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
+	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "all() & !test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST)$$FILTER_SUPPORT $(ARGS); \
 	  else \
 	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
@@ -1099,7 +1099,7 @@ test:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "!test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
+	    FILTER_SUPPORT=""; if [ "$${AIFO_SUPPORT_SKIP_GREEN:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "all() & !test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST)$$FILTER_SUPPORT $(ARGS) || GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST)$$FILTER_SUPPORT $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
@@ -1116,7 +1116,7 @@ test:
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    FILTER_SUPPORT=""; if ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "!test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
+	    FILTER_SUPPORT=""; if ! command -v docker >/dev/null 2>&1; then FILTER_SUPPORT=' -E "all() & !test(/^test_support_matrix_is_fully_green$$/)"'; fi; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST)$$FILTER_SUPPORT $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
