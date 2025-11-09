@@ -75,6 +75,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
     /usr/local/cargo/bin/cargo build --release --bin aifo-shim; \
+    install -d -m 0755 /workspace/out; \
+    cp target/release/aifo-shim /workspace/out/aifo-shim; \
+    rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -89,7 +92,7 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
@@ -464,7 +467,7 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
