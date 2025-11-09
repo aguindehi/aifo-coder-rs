@@ -55,6 +55,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
