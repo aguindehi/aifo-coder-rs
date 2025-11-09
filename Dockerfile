@@ -84,6 +84,7 @@ WORKDIR /workspace
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+# hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -121,10 +122,8 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   'exec /bin/sh "$@"' \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
-# Create PATH symlinks to the shim
-# hadolint ignore=SC2026
-RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
@@ -456,6 +455,7 @@ WORKDIR /workspace
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
 COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+# hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -493,9 +493,8 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   'exec /bin/sh "$@"' \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
-# Create PATH symlinks to the shim
-RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
