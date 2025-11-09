@@ -13,6 +13,10 @@ variables:
 
 workflow:
   rules:
+    # Allow scheduled pipelines (e.g., nightly builder refresh)
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+
     # Prefer merge request pipelines for branches with MRs
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
@@ -67,6 +71,8 @@ build-rust-builder:
       - stuck_or_timeout_failure
   timeout: 45m
   resource_group: rust-builder
+  tags:
+    - qual-mcap-gcp
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
@@ -120,6 +126,8 @@ build:
   stage: build
   timeout: 45m
   resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
+  tags:
+    - qual-mcap-gcp
   retry:
     max: 2
     when:
@@ -139,6 +147,8 @@ build-toolchain:
   stage: build
   timeout: 45m
   resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
+  tags:
+    - qual-mcap-gcp
   retry:
     max: 2
     when:
@@ -162,6 +172,13 @@ build-toolchain:
 build-launcher:
   stage: build
   timeout: 45m
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - job: build-rust-builder
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_TAG
@@ -212,7 +229,10 @@ build-launcher:
     NICENESS_CARGO_NEXTEST: "0"
     AIFO_SUPPORT_SKIP_GREEN: "1"
   cache:
-    key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+    key:
+      files:
+        - Cargo.lock
+        - .cargo/config.toml
     policy: pull-push
     paths:
       - .cargo
@@ -260,6 +280,29 @@ test:
   script:
     - echo "Running test job…"
     - make test
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - Cargo.toml
+        - Cargo.lock
+        - build.rs
+        - src/**/*
+        - tests/**/*
+        - .config/nextest.toml
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - Cargo.toml
+        - Cargo.lock
+        - build.rs
+        - src/**/*
+        - tests/**/*
+        - .config/nextest.toml
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
 
 lint-dockerfiles:
   stage: test
@@ -270,10 +313,23 @@ lint-dockerfiles:
     - qual-mcap-gcp
   script:
     - echo "Linting Dockerfiles with hadolint (advisory)..."
-    - hadolint Dockerfile || true
-    - if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi
-    - if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi
-    - if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi
+    - |
+      FILES=""
+      [ -f Dockerfile ] && FILES="$FILES Dockerfile"
+      [ -f toolchains/rust/Dockerfile ] && FILES="$FILES toolchains/rust/Dockerfile"
+      [ -f toolchains/node/Dockerfile ] && FILES="$FILES toolchains/node/Dockerfile"
+      [ -f toolchains/cpp/Dockerfile ] && FILES="$FILES toolchains/cpp/Dockerfile"
+      if [ -n "$FILES" ]; then
+        hadolint --format gitlab_codeclimate $FILES > gl-code-quality-report.json || true
+      else
+        echo "No Dockerfiles found to lint."
+      fi
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
   rules:
     - if: $CI_COMMIT_TAG
       when: never
@@ -292,12 +348,19 @@ lint-dockerfiles:
 publish-release:
   stage: release
   timeout: 45m
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - job: build-launcher
       artifacts: true
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
-  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:latest
+  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.17.0
   script:
     - echo "Running the release job."
   artifacts:
