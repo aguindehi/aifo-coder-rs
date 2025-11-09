@@ -2,17 +2,16 @@
 
 ## Grades
 - Coverage: A
-  - Precedence test continues to validate prefix caching; coverage unchanged.
+  - Added tests for override precedence vs env-probe and quiet override path.
 - Correctness: A
-  - Test now aligns with preferred_registry_source semantics (reports probe source).
+  - Deterministic; per-file XDG_RUNTIME_DIR isolation; no external processes/network.
 - Maintainability: A
-  - Minimal targeted fix; preserves deterministic behavior.
+  - Small, focused tests; public API usage only.
 
 ## Summary
-preferred_registry_source intentionally reports "curl"/"tcp" when env-probe is set, even if the
-cached prefix originates from an earlier env override. The test was updated to assert that the
-prefix remains "zeta/" while source reflects the active env-probe ("tcp"), matching production
-behavior without modifications.
+New tests confirm that probe overrides take precedence over env-probe and keep
+preferred_registry_source as "unknown". Quiet override TcpFail path is covered and
+verified to avoid cache writes, further solidifying registry behavior coverage.
 
 # Source Code Scoring — 2025-11-09
 

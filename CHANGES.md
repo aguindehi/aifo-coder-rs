@@ -1,5 +1,12 @@
 2025-11-09
 
+Add tests: override wins over env-probe; quiet override tcp-fail
+
+- Add registry_override_vs_env_probe.rs (override beats env-probe; source unknown)
+- Add registry_quiet_override_tcp_fail.rs (quiet override tcp-fail → "" and no cache)
+
+2025-11-09
+
 Fix registry precedence test expectation
 
 - Update registry_env_override_wins.rs: expect source "tcp" after setting env probe

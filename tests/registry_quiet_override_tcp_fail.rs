@@ -1,0 +1,30 @@
+#[test]
+fn test_quiet_probe_override_tcp_fail_yields_empty_and_no_cache() {
+    use std::env::{remove_var, set_var};
+
+    // Unique runtime dir per test file
+    let td = tempfile::tempdir().expect("tmpdir");
+    set_var("XDG_RUNTIME_DIR", td.path());
+
+    // Clean state
+    aifo_coder::invalidate_registry_cache();
+    remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
+
+    // Quiet variant with override TcpFail should yield empty prefix
+    aifo_coder::registry_probe_set_override_for_tests(Some(
+        aifo_coder::RegistryProbeTestMode::TcpFail,
+    ));
+    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    assert_eq!(pref, "", "TcpFail override should yield empty prefix (quiet)");
+
+    let src = aifo_coder::preferred_registry_source();
+    assert_eq!(src, "unknown", "source should be unknown under override");
+
+    // Override path should not write cache
+    let cache_path = td.path().join("aifo-coder.regprefix");
+    assert!(!cache_path.exists(), "override should not write cache");
+
+    // Cleanup
+    aifo_coder::registry_probe_set_override_for_tests(None);
+}
