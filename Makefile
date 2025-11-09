@@ -292,6 +292,7 @@ help: banner
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
 	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
+	@echo "  cov-results ................. Show coverage-html in the browser"
 	@echo "  coverage-html ............... Generate HTML coverage via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo "  coverage-lcov ............... Generate lcov.info via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo ""
