@@ -39,6 +39,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Pre-install cargo-nextest to speed up tests inside this container
+# hadolint ignore=DL3059
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -172,6 +173,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
@@ -195,6 +197,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
