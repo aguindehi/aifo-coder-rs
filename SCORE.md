@@ -1,3 +1,15 @@
+# Source Code Scoring — 2025-11-09 (Final)
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Maintainability: A
+
+## Summary
+- Test run: 307 passed, 34 skipped.
+- Focus: registry.rs env/override/probe branches, cache write/remove, OnceCell behavior.
+- External process/network branches intentionally untested per constraints.
+
 # Source Code Scoring — 2025-11-09
 
 ## Grades

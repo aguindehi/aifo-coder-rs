@@ -1,5 +1,13 @@
 2025-11-09
 
+Finalize registry coverage tests; all passing
+
+- Confirmed suite green: 307 passed, 34 skipped
+- Registry coverage complete except external process/network paths by design
+- No production code changes required
+
+2025-11-09
+
 Add quiet tests for env-probe tcp-ok and override curl-ok
 
 - Add tests: registry_quiet_env_probe_tcp_ok.rs (tcp-ok → "repository.migros.net/" and source "tcp")
