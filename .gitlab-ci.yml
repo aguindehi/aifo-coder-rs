@@ -52,6 +52,8 @@ container-build:
       KANIKO_BUILD_OPTIONS=""
       # If TARGET_NAME or TARGET is provided, add --target attribute to build
       [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
+      # Use time-based snapshotting to reduce Kaniko memory usage
+      KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --snapshotMode=time"
   rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
