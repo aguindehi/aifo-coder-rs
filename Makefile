@@ -2157,11 +2157,13 @@ hadolint:
 	  hadolint Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi; \
+	  if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "hadolint not found; using hadolint/hadolint container ..."; \
 	  docker run --rm -i hadolint/hadolint < Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
+	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
 	else \
 	  echo "Error: hadolint not installed and docker unavailable."; \
 	  echo "Install hadolint: https://github.com/hadolint/hadolint#install"; \
