@@ -76,6 +76,7 @@ build-rust-builder:
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
+    KANIKO_CUSTOM_BUILD_ARGUMENTS: "--build-arg WITH_WIN=0 --snapshotMode=time"
   # Consolidated rules: tags -> :$CI_COMMIT_TAG, default-branch changes -> :ci, branches/MRs -> per-commit <$CI_COMMIT_REF_SLUG>:$CI_COMMIT_SHA
   rules:
     # Release tags: publish builder as :$CI_COMMIT_TAG

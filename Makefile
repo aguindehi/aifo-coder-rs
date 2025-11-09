@@ -397,6 +397,14 @@ OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+# Include Windows cross toolchain (mingw) automatically on Windows shells
+RUST_BUILDER_WITH_WIN ?= 0
+UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
+ifeq ($(OS),Windows_NT)
+  RUST_BUILDER_WITH_WIN := 1
+else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S)))
+  RUST_BUILDER_WITH_WIN := 1
+endif
 RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-bookworm
@@ -516,9 +524,9 @@ build-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: build-debug
@@ -1526,9 +1534,9 @@ rebuild-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim

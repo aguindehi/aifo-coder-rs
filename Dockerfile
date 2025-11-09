@@ -13,6 +13,7 @@ WORKDIR /workspace
 
 # --- Rust target builder for Linux, Windows & macOS ---
 FROM rust-base AS rust-builder
+ARG WITH_WIN=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
@@ -28,9 +29,12 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
-    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config git-lfs ca-certificates; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends pkg-config git-lfs ca-certificates; \
+    if [ "${WITH_WIN:-0}" = "1" ]; then \
+        apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
+        /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
+    fi; \
     rm -rf /var/lib/apt/lists/*; \
-    /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
     /usr/local/cargo/bin/rustup component add clippy rustfmt; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
