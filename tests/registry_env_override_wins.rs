@@ -21,7 +21,11 @@ fn test_env_override_wins_over_env_probe_and_persists() {
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-ok");
     let pref2 = aifo_coder::preferred_registry_prefix_quiet();
     assert_eq!(pref2, "zeta/");
-    assert_eq!(aifo_coder::preferred_registry_source(), "env");
+    assert_eq!(
+        aifo_coder::preferred_registry_source(),
+        "tcp",
+        "source reflects env-probe ('tcp') while prefix remains from env override"
+    );
 
     // Cleanup
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");

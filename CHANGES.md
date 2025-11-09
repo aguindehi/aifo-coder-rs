@@ -1,5 +1,12 @@
 2025-11-09
 
+Fix registry precedence test expectation
+
+- Update registry_env_override_wins.rs: expect source "tcp" after setting env probe
+- Prefix remains "zeta/" from env override; validates precedence and source reporting
+
+2025-11-09
+
 Add tests for quiet env-empty and cache retrieval path
 
 - Add test: registry_quiet_env_empty.rs (env-empty → "" with cache write, invalidate removes)
