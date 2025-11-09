@@ -1,3 +1,21 @@
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A-
+  - Added precedence test (env override wins) on top of existing registry coverage.
+- Correctness: A
+  - Deterministic; environment isolated per test file; no external processes/network.
+- Maintainability: A
+  - Small focused tests; public API usage only.
+
+## Summary
+The new test ensures OnceCell-cached env override is not superseded by later env-probe settings,
+reinforcing correctness of precedence rules and cache behavior.
+
+## Proposed Next Steps
+- Consider a separate test asserting that disk cache presence does not override an already
+  initialized in-process cache (covered implicitly; could be made explicit).
+
 # AIFO Coder Source Code Score — 2025-11-07
 
 Author: AIFO User <aifo@example.com>

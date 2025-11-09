@@ -1,3 +1,10 @@
+2025-11-09
+
+Fix tests to use exported enum and add precedence test
+
+- Fix tests: use exported RegistryProbeTestMode in override tests
+- Add test: env override wins over AIFO_CODER_TEST_REGISTRY_PROBE (cache precedence)
+
 2025-11-07 AIFO User <aifo@example.com>
 
 Add v3 support: fast randomized support matrix
