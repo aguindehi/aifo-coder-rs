@@ -11,7 +11,7 @@ fn test_registry_probe_override_tcp_ok() {
     aifo_coder::invalidate_registry_cache();
 
     aifo_coder::registry_probe_set_override_for_tests(Some(
-        aifo_coder::registry::RegistryProbeTestMode::TcpOk,
+        aifo_coder::RegistryProbeTestMode::TcpOk,
     ));
 
     let pref = aifo_coder::preferred_registry_prefix();
