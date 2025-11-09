@@ -1,5 +1,12 @@
 2025-11-09
 
+Add tests for quiet env-empty and cache retrieval path
+
+- Add test: registry_quiet_env_empty.rs (env-empty → "" with cache write, invalidate removes)
+- Add test: registry_cache_retrieval_path.rs (non-quiet returns cached value when env cleared)
+
+2025-11-09
+
 Add tests for override curl modes and env-probe unknown
 
 - Add tests: registry_override_curl_ok.rs, registry_override_curl_fail.rs

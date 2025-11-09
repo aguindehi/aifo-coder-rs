@@ -2,6 +2,21 @@
 
 ## Grades
 - Coverage: A
+  - Added quiet env-empty branch coverage and cache retrieval path in non-quiet variant.
+- Correctness: A
+  - Deterministic; isolated XDG_RUNTIME_DIR per file; no external processes/network.
+- Maintainability: A
+  - Small, focused tests using only public APIs.
+
+## Summary
+New tests cover the quiet env-empty normalization and explicitly exercise the cache retrieval
+path in preferred_registry_prefix when env and env-probe are cleared, further improving coverage
+of src/registry.rs without touching production code.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
   - Override CurlOk/CurlFail and env-probe unknown covered; invalidate no-file path verified.
 - Correctness: A
   - Deterministic; per-file XDG_RUNTIME_DIR isolation; no networking or external processes.
