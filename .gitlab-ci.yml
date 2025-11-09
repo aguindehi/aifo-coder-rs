@@ -119,6 +119,7 @@ build:
   extends: container-build
   stage: build
   timeout: 45m
+  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
   retry:
     max: 2
     when:
@@ -137,6 +138,7 @@ build-toolchain:
   extends: container-build
   stage: build
   timeout: 45m
+  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
   retry:
     max: 2
     when:
