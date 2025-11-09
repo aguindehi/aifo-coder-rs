@@ -1,6 +1,21 @@
 # Source Code Scoring — 2025-11-09
 
 ## Grades
+- Coverage: A
+  - Quiet env-probe branches covered; fallback source "unknown" covered.
+- Correctness: A
+  - Deterministic tests; per-file XDG_RUNTIME_DIR isolation; no external processes.
+- Maintainability: A
+  - Small focused additions; public APIs only; no new dependencies.
+
+## Summary
+New tests extend coverage of preferred_registry_prefix_quiet and the source fallback
+path without modifying production code. This further reduces uncovered lines in
+src/registry.rs while keeping tests deterministic.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
 - Coverage: A-
   - Added precedence test (env override wins) on top of existing registry coverage.
 - Correctness: A

@@ -1,5 +1,12 @@
 2025-11-09
 
+Add quiet env-probe tests and unknown-source coverage
+
+- Add tests: registry_quiet_env_probe_curl.rs and registry_quiet_env_probe_tcp_fail.rs
+- Add test: registry_source_unknown.rs covering source fallback
+
+2025-11-09
+
 Fix tests to use exported enum and add precedence test
 
 - Fix tests: use exported RegistryProbeTestMode in override tests
