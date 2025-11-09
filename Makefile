@@ -2470,3 +2470,7 @@ release-dmg-sign:
 	@echo "release-dmg-sign is only supported on macOS (Darwin) hosts." >&2; exit 1
 
 endif
+
+.PHONY: cov-results
+cov-results:
+	open build/coverage/html/index.html
