@@ -15,7 +15,10 @@ fn test_registry_env_probe_curl_fail_prefix_and_source() {
     assert_eq!(pref, "", "curl-fail should yield empty prefix");
 
     let src = aifo_coder::preferred_registry_source();
-    assert_eq!(src, "curl", "source should be 'curl' for curl-fail env probe");
+    assert_eq!(
+        src, "curl",
+        "source should be 'curl' for curl-fail env probe"
+    );
 
     // Env-probe branch returns immediately; cache file should not be written
     let cache_path = td.path().join("aifo-coder.regprefix");

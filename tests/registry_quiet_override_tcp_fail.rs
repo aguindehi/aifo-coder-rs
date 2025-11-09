@@ -16,7 +16,10 @@ fn test_quiet_probe_override_tcp_fail_yields_empty_and_no_cache() {
         aifo_coder::RegistryProbeTestMode::TcpFail,
     ));
     let pref = aifo_coder::preferred_registry_prefix_quiet();
-    assert_eq!(pref, "", "TcpFail override should yield empty prefix (quiet)");
+    assert_eq!(
+        pref, "",
+        "TcpFail override should yield empty prefix (quiet)"
+    );
 
     let src = aifo_coder::preferred_registry_source();
     assert_eq!(src, "unknown", "source should be unknown under override");
