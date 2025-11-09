@@ -225,7 +225,7 @@ check:
 
 lint-dockerfiles:
   stage: test
-  image: hadolint/hadolint:latest
+  image: hadolint/hadolint:2.12.0-debian
   interruptible: true
   timeout: 10m
   tags:
