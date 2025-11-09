@@ -96,8 +96,6 @@ build-rust-builder:
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
 
-
-
 build:
   extends: container-build
   stage: build
@@ -152,6 +150,8 @@ build-launcher:
   rules:
     - if: $CI_COMMIT_TAG
 
+
+# Run tests
 
 check:
   stage: test
