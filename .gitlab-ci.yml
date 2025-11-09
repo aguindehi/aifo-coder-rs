@@ -21,6 +21,22 @@ workflow:
 .rules_build_image: &rules_build_image
   - if: $CI_COMMIT_TAG
 
+rules_rb_image: &rules_rb_image
+  - if: $CI_COMMIT_TAG
+    when: never
+  # Merge requests: use per-commit builder image
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    variables:
+      RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+  # Non-default branches: use per-commit builder image
+  - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+    variables:
+      RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+  # Default branch: use stable 'ci' tag
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    variables:
+      RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+
 # Base job provided as cicd-component by the cloud team. Used as template and should not run on its own
 container-build:
   variables:
@@ -153,7 +169,7 @@ build-launcher:
 
 # Run tests
 
-check:
+.rust-ci-base:
   stage: test
   interruptible: true
   retry:
@@ -164,7 +180,7 @@ check:
       - stuck_or_timeout_failure
   timeout: 30m
   image: $RB_IMAGE
-  # Use optional needs so default-branch 'ci' builder can be change-skipped while check still runs.
+  # Use optional needs so default-branch 'ci' builder can be change-skipped while downstream jobs still run.
   needs:
     - job: build-rust-builder
       optional: true
@@ -184,6 +200,21 @@ check:
     paths:
       - .cargo
       - target
+  before_script:
+    - echo "Running CI job (base)…"
+    - rustc --version
+    - cargo --version
+    - cargo nextest --version || true
+  rules: *rules_rb_image
+
+lint:
+  extends: .rust-ci-base
+  script:
+    - echo "Running lint job…"
+    - make lint
+
+test:
+  extends: .rust-ci-base
   artifacts:
     when: always
     expire_in: 1 week
@@ -191,31 +222,9 @@ check:
       junit: target/nextest/ci/junit.xml
     paths:
       - target/nextest/ci/junit.xml
-  before_script:
-    - echo "Running the check job."
-    - rustc --version
-    - cargo --version
-    - cargo nextest --version || true
-    # clippy/rustfmt are preinstalled in the rust-builder image
-    # git-lfs is preinstalled in rust-builder image; no apt-get here
   script:
-    - echo "Running the check job."
-    - make check
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: never
-    # Merge requests: use per-commit builder image
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      variables:
-        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
-    # Non-default branches: use per-commit builder image
-    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
-      variables:
-        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
-    # Default branch: use stable 'ci' tag
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      variables:
-        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+    - echo "Running test job…"
+    - make test
 
 lint-dockerfiles:
   stage: test
