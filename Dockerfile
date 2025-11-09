@@ -34,7 +34,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
         /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
     fi; \
-    rm -rf /var/lib/apt/lists/*; \
+    apt-get clean; rm -rf /var/lib/apt/lists/*; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
     /usr/local/cargo/bin/rustup component add clippy rustfmt; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
