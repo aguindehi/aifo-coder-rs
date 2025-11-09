@@ -15,3 +15,10 @@ Add v4 spec: real installs for openhands/opencode/plandex
 - Detail OpenHands (uv tool install), OpenCode (npm global), Plandex (Go build) recipes.
 - Document CA handling, cleanup patterns, multi-arch, and reproducibility.
 - Outline Makefile targets, Dockerfile stage changes, tests (preview-only), and docs updates.
+2025-11-09
+
+Add tests for env-probe curl-fail and tcp-ok branches
+
+- Add tests: registry_probe_env_curl_fail_prefix.rs (curl-fail → "" and source "curl")
+- Add tests: registry_probe_env_tcp_ok_prefix.rs (tcp-ok → "repository.migros.net/" and source "tcp")
+- Both verify no cache write occurs for env-probe paths and use per-file XDG_RUNTIME_DIR

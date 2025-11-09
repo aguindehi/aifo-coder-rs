@@ -56,3 +56,28 @@ Grade summary:
 - The v3 support mode is implemented cleanly and aligns with the specification. Performance
   characteristics are strong and UX is polished. Minor enhancements around diagnostics and
   optional timeouts can be pursued next without risking regressions.
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A-
+  - Env override empty/non-empty covered; probe overrides TcpOk/TcpFail covered.
+  - Env-probe branches curl-ok/curl-fail/tcp-fail/tcp-ok now exercised.
+  - Cache write/remove verified; OnceCell cache persistence validated.
+- Correctness: A
+  - Deterministic tests; no networking or external processes invoked.
+  - Per-file XDG_RUNTIME_DIR isolation avoids global cache contamination.
+- Design: A-
+  - Scenarios split into separate integration files; minimal setup/teardown.
+- Maintainability: A
+  - Tests are small, focused, and rely on public APIs only.
+
+## Summary
+Recent additions expand coverage of src/registry.rs by testing env-probe branches
+and confirming cache behavior without touching production code. Tests use isolated
+temp runtime dirs and clean environment per file to avoid OnceCell contamination.
+
+## Proposed Next Steps
+- Add a test to assert that toggling AIFO_CODER_TEST_REGISTRY_PROBE mid-process
+  does not override a previously set env override (source remains "env").
+- Consider a test for XDG_RUNTIME_DIR empty handling if behavior changes away
+  from the current "/tmp" fallback (skipped here per constraints).
