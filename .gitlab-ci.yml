@@ -136,6 +136,7 @@ build-toolchain:
 
 build-launcher:
   stage: build
+  timeout: 45m
   needs:
     - job: build-rust-builder
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_TAG
@@ -222,10 +223,31 @@ check:
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
 
+lint-dockerfiles:
+  stage: test
+  image: hadolint/hadolint:latest
+  interruptible: true
+  timeout: 10m
+  tags:
+    - qual-mcap-gcp
+  script:
+    - echo "Linting Dockerfiles with hadolint (advisory)..."
+    - hadolint Dockerfile || true
+    - if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi
+    - if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi
+    - if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  allow_failure: true
+
 # Create release
 
 publish-release:
   stage: release
+  timeout: 45m
   needs:
     - job: build-launcher
       artifacts: true
