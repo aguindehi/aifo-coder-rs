@@ -1,5 +1,13 @@
 2025-11-09
 
+Add tests for override curl modes and env-probe unknown
+
+- Add tests: registry_override_curl_ok.rs, registry_override_curl_fail.rs
+- Add test: registry_env_probe_unknown.rs for unknown env probe value
+- Add test: registry_invalidate_no_file.rs ensures safe no-op when cache missing
+
+2025-11-09
+
 Add quiet env-probe tests and unknown-source coverage
 
 - Add tests: registry_quiet_env_probe_curl.rs and registry_quiet_env_probe_tcp_fail.rs

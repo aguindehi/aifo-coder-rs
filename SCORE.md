@@ -2,6 +2,22 @@
 
 ## Grades
 - Coverage: A
+  - Override CurlOk/CurlFail and env-probe unknown covered; invalidate no-file path verified.
+- Correctness: A
+  - Deterministic; per-file XDG_RUNTIME_DIR isolation; no networking or external processes.
+- Maintainability: A
+  - Small focused additions; public APIs only.
+
+## Summary
+The new tests complete coverage of test override modes for curl, exercise the default
+env-probe branch for unknown values, and confirm that cache invalidation is safe when
+no cache file exists. These are deterministic and further increase coverage in
+src/registry.rs without touching production code.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
   - Quiet env-probe branches covered; fallback source "unknown" covered.
 - Correctness: A
   - Deterministic tests; per-file XDG_RUNTIME_DIR isolation; no external processes.
