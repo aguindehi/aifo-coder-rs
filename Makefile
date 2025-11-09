@@ -274,6 +274,8 @@ help: banner
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
 	@echo ""
+	@echo "  hadolint .................... Run hadolint on all Dockerfiles"
+	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
 	@echo "  test-legacy ................. Alias for test-cargo"
@@ -1069,7 +1071,7 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint test
+check: lint hadolint test
 
 test:
 	@set -e; \
