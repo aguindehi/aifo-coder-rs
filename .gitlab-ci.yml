@@ -76,7 +76,6 @@ build-rust-builder:
   resource_group: rust-builder
   tags:
     - qual-mcap-gcp
-    - qual-shared-mem4g
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
