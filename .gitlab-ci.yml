@@ -13,9 +13,21 @@ variables:
 
 workflow:
   rules:
-    - if: $CI_COMMIT_TAG
+    # Prefer merge request pipelines for branches with MRs
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
+      when: always
+
+    # Suppress branch-push pipelines when an MR exists for the branch
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS
+      when: never
+
+    # Allow normal branch pushes when no MR exists
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: always
+
+    # Always allow tag pipelines
+    - if: $CI_COMMIT_TAG
+      when: always
 
 # Rules
 .rules_build_image: &rules_build_image
