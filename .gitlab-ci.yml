@@ -101,6 +101,7 @@ build-rust-builder:
 build:
   extends: container-build
   stage: build
+  timeout: 45m
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   rules: *rules_build_image
@@ -112,6 +113,7 @@ build:
 build-toolchain:
   extends: container-build
   stage: build
+  timeout: 45m
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   variables:
@@ -176,7 +178,7 @@ check:
     NICENESS_CARGO_NEXTEST: "0"
     AIFO_SUPPORT_SKIP_GREEN: "1"
   cache:
-    key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
+    key: "${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
     policy: pull-push
     paths:
       - .cargo
