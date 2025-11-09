@@ -15,6 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Base system dependencies (Debian/Bookworm)
 RUN set -eux; \
     apt-get update; \
+    # hadolint ignore=DL3008
     apt-get install -y --no-install-recommends \
       build-essential \
       pkg-config \

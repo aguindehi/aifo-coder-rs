@@ -123,11 +123,13 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
 # Create PATH symlinks to the shim
+# hadolint ignore=SC2026
 RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
+# hadolint ignore=SC2016,SC2145
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
@@ -306,6 +308,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
 ARG OPENHANDS_CONSTRAINT=""
+# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -497,6 +500,7 @@ RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
+# hadolint ignore=SC2016,SC2145
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
@@ -673,6 +677,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
 ARG OPENHANDS_CONSTRAINT=""
+# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
