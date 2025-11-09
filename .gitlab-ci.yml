@@ -56,6 +56,8 @@ build-rust-builder:
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
+  script:
+    - echo "Building rust-builder (Linux native) ..."
   # Consolidated rules: tags -> :$CI_COMMIT_TAG, default-branch changes -> :ci, branches/MRs -> per-commit <$CI_COMMIT_REF_SLUG>:$CI_COMMIT_SHA
   rules:
     # Release tags: publish builder as :$CI_COMMIT_TAG
@@ -104,6 +106,8 @@ build:
   timeout: 45m
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
+  script:
+    - echo "Building coding agents (Linux native) ..."
   rules: *rules_build_image
   parallel:
     matrix:
@@ -120,6 +124,8 @@ build-toolchain:
     IMAGE_PATH_EXTRA: "$FOLDER"
     IMAGE_PREFIX: "toolchain"
     DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
+  script:
+    - echo "Building toolchains (Linux native) ..."
   rules: *rules_build_image
   parallel:
     matrix:
@@ -194,12 +200,9 @@ check:
     - echo "Running the check job."
     - rustc --version
     - cargo --version
-    # clippy/rustfmt are preinstalled in the rust-builder image
-    - echo "Using preinstalled clippy/rustfmt in builder image"
-    # git-lfs is preinstalled in rust-builder image; no apt-get here
     - cargo nextest --version || true
-    # Probe clippy via rustup after installing components to avoid false errors
-    - if command -v rustup >/dev/null 2>&1; then rustup run stable cargo clippy --version || true; else cargo clippy --version || true; fi
+    # clippy/rustfmt are preinstalled in the rust-builder image
+    # git-lfs is preinstalled in rust-builder image; no apt-get here
   script:
     - echo "Running the check job."
     - make check
