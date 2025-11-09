@@ -284,29 +284,7 @@ test:
   script:
     - echo "Running test job…"
     - make test
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - Cargo.toml
-        - Cargo.lock
-        - build.rs
-        - src/**/*
-        - tests/**/*
-        - .config/nextest.toml
-      variables:
-        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
-    - if: $CI_COMMIT_BRANCH
-      changes:
-        - Cargo.toml
-        - Cargo.lock
-        - build.rs
-        - src/**/*
-        - tests/**/*
-        - .config/nextest.toml
-      variables:
-        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+  rules: *rb_image_rules
 
 lint-dockerfiles:
   stage: test
@@ -338,13 +316,12 @@ lint-dockerfiles:
     - if: $CI_COMMIT_TAG
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - Dockerfile
-        - toolchains/**/Dockerfile
+      when: on_success
     - if: $CI_COMMIT_BRANCH
       changes:
         - Dockerfile
         - toolchains/**/Dockerfile
+        - .gitlab-ci.yml
   allow_failure: true
 
 # Create release
