@@ -32,6 +32,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/lib/apt/lists/*; \
     /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
+    /usr/local/cargo/bin/rustup component add clippy rustfmt; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
