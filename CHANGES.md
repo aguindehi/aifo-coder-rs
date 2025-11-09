@@ -1,5 +1,13 @@
 2025-11-09
 
+Add quiet tests for env-probe tcp-ok and override curl-ok
+
+- Add tests: registry_quiet_env_probe_tcp_ok.rs (tcp-ok → "repository.migros.net/" and source "tcp")
+- Add tests: registry_quiet_override_curl_ok.rs (override CurlOk → "repository.migros.net/", source "unknown")
+- Both verify no cache write and use per-file XDG_RUNTIME_DIR
+
+2025-11-09
+
 Add tests: override wins over env-probe; quiet override tcp-fail
 
 - Add registry_override_vs_env_probe.rs (override beats env-probe; source unknown)

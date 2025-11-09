@@ -2,6 +2,20 @@
 
 ## Grades
 - Coverage: A
+  - Quiet env-probe tcp-ok and quiet override curl-ok paths covered; no new deps.
+- Correctness: A
+  - Deterministic; per-file XDG_RUNTIME_DIR; no external processes/network.
+- Maintainability: A
+  - Small, focused tests using only public APIs.
+
+## Summary
+Added quiet tests for env-probe tcp-ok and override curl-ok, completing coverage of quiet
+override/probe paths while keeping the suite deterministic and isolated.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
   - Added tests for override precedence vs env-probe and quiet override path.
 - Correctness: A
   - Deterministic; per-file XDG_RUNTIME_DIR isolation; no external processes/network.
