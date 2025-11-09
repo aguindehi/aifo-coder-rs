@@ -29,7 +29,10 @@ fn test_registry_env_value_normalizes_and_writes_cache() {
     // Verify cache file contains normalized value
     let cache_path: PathBuf = rt.join("aifo-coder.regprefix");
     let content = fs::read_to_string(&cache_path).expect("cache should exist");
-    assert_eq!(content, "example.com/", "cache should match normalized prefix");
+    assert_eq!(
+        content, "example.com/",
+        "cache should match normalized prefix"
+    );
 
     // Cleanup
     remove_var("AIFO_CODER_REGISTRY_PREFIX");
