@@ -291,6 +291,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
@@ -345,6 +346,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
