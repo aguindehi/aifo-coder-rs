@@ -1071,7 +1071,7 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint hadolint test
+check: lint test
 
 test:
 	@set -e; \
@@ -2167,9 +2167,8 @@ hadolint:
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
 	else \
-	  echo "Error: hadolint not installed and docker unavailable."; \
-	  echo "Install hadolint: https://github.com/hadolint/hadolint#install"; \
-	  exit 1; \
+	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
+	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
 	fi
 
 .PHONY: release-app release-dmg release-dmg-sign

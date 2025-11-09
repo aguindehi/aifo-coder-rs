@@ -24,14 +24,14 @@ fn main() {
                 .as_secs();
             format!("unix:{secs}")
         });
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_DATE={}", build_date);
+    println!("cargo:rustc-env=AIFO_SHIM_BUILD_DATE={build_date}");
 
     // Target triple and profile
     let target = std::env::var("TARGET").unwrap_or_else(|_| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_TARGET={}", target);
+    println!("cargo:rustc-env=AIFO_SHIM_BUILD_TARGET={target}");
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_PROFILE={}", profile);
+    println!("cargo:rustc-env=AIFO_SHIM_BUILD_PROFILE={profile}");
 
     // rustc version (best-effort)
     let rustc_ver = Command::new("rustc")
@@ -46,5 +46,5 @@ fn main() {
             }
         })
         .unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_RUSTC={}", rustc_ver);
+    println!("cargo:rustc-env=AIFO_SHIM_BUILD_RUSTC={rustc_ver}");
 }
