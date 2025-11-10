@@ -39,6 +39,7 @@ CACHE_DIR ?= .buildx-cache
 
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
+THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Help
 .PHONY: help banner
@@ -1213,7 +1214,7 @@ coverage-html:
 	  echo "coverage-html (sidecar)"; \
 	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
-	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
+	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  else \
 	    echo "warning: grcov not found in sidecar; skipping html"; \
 	  fi; \
@@ -1230,7 +1231,7 @@ coverage-html:
 	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-html (cargo)"; \
@@ -1245,7 +1246,7 @@ coverage-html:
 	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "coverage-html (docker $(RUST_BUILDER_IMAGE))"; \
@@ -1255,8 +1256,12 @@ coverage-html:
 	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
+	if [ -f build/coverage/html/index.html ]; then \
+	  tmp=build/coverage/html/index.html.tmp; \
+	  sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
+	fi; \
 	echo "Wrote build/coverage/html (if grcov ran)."
 
 coverage-lcov:
@@ -1277,7 +1282,7 @@ coverage-lcov:
 	  echo "coverage-lcov (sidecar)"; \
 	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
-	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
+	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  else echo "warning: grcov not found in sidecar; skipping lcov"; fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "coverage-lcov (rustup)"; \
@@ -1291,7 +1296,7 @@ coverage-lcov:
 	      exit 1; \
 	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-lcov (cargo)"; \
@@ -1305,7 +1310,7 @@ coverage-lcov:
 	      exit 1; \
 	    fi; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "coverage-lcov (docker $(RUST_BUILDER_IMAGE))"; \
@@ -1315,7 +1320,11 @@ coverage-lcov:
 	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
+<<<<<<< HEAD
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+=======
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+>>>>>>> b99b476 (fix: correct coverage HTML CSS path; enable grcov --threads)
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
 	echo "Wrote build/coverage/lcov.info (if grcov ran)."
 
