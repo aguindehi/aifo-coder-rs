@@ -1424,7 +1424,7 @@ coverage-html:
 	if command -v grcov >/dev/null 2>&1; then \
 	  grcov . --binary-path target -s . -t html --branch --ignore-not-existing \
 	    --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) \
-	    -o build/coverage/html; \
+	    -o build/coverage; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
@@ -1446,7 +1446,7 @@ coverage-html:
 	      GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; \
 	      grcov . --binary-path target -s . -t html --branch --ignore-not-existing \
 	        --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) \
-	        -o /workspace/build/coverage/html'; \
+	        -o /workspace/build/coverage'; \
 	else \
 	  echo "error: grcov not found and no docker fallback"; \
 	  exit 1; \
