@@ -8,6 +8,24 @@
 - Maintainability: A-
 
 ## Summary
+Added tests for env-empty exact override in quiet mode and override vs env-probe
+conflict precedence. Deterministic, isolated per file via XDG_RUNTIME_DIR, and
+using only public APIs without external IO.
+
+## Proposed Next Steps
+- Optionally add tests for disk cache precedence if a read path is introduced.
+- Consider small DRY helpers in tests to reduce repetition.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
 Added non-quiet env-probe tests for curl-ok, curl-fail, and tcp-fail paths,
 verifying prefixes, sources, and absence of cache writes. Tests use unique
 XDG_RUNTIME_DIR per file and only public APIs; no external processes/network.

@@ -7,6 +7,7 @@
 - registry_cache_persistence_in_process.rs → OnceCell persists after env removal.
 - Existing override tests (tcp/curl ok/fail) verify override early-return and no cache.
 - registry_quiet_env_empty.rs → quiet env-empty path; source "env-empty"; cache write.
+- registry_quiet_env_empty_exact.rs → quiet env-empty exact override; cache write.
 - registry_quiet_env_non_empty_normalization.rs → quiet env non-empty normalization.
 - registry_probe_env_tcp_ok_prefix.rs → env-probe tcp-ok; source "tcp"; no cache.
 - registry_env_probe_tcp_fail_prefix.rs → env-probe tcp-fail (non-quiet); source "tcp"; no cache.
@@ -23,7 +24,4 @@
 - registry_quiet_override_tcp_fail.rs → override TcpFail; source "unknown"; no cache.
 - registry_quiet_override_curl_ok.rs → override CurlOk; source "unknown"; no cache.
 - registry_quiet_override_curl_fail.rs → override CurlFail; source "unknown"; no cache.
-
-Each test uses a unique XDG_RUNTIME_DIR temp dir and only public APIs:
-preferred_registry_prefix[_quiet](), preferred_registry_source(),
-invalidate_registry_cache(), registry_probe_set_override_for_tests().
+- registry_override_vs_env_probe_conflict.rs → override wins when env-probe also set.

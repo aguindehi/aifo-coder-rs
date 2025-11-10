@@ -1,5 +1,13 @@
 2025-11-11
 
+Add more deterministic registry tests (env-empty exact, override vs probe)
+
+- tests/: add quiet env-empty exact override; source env-empty; cache write.
+- tests/: add override vs env-probe conflict; override wins; no cache; source unknown.
+- Update TEST_PLAN.md to include new scenarios.
+
+2025-11-11
+
 Add non-quiet env-probe tests for curl-ok/curl-fail/tcp-fail
 
 - tests/: add env-probe curl-ok/curl-fail/tcp-fail (non-quiet) paths; no cache writes.
