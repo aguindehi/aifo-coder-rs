@@ -1382,7 +1382,7 @@ coverage-html:
 	  rm -rf build/coverage/html || true; \
 	  mkdir -p build/coverage/html; \
 	  genhtml build/coverage/lcov.info \
-	    --ignore-errors inconsistent,corrupt \
+	    --ignore-errors inconsistent,corrupt,range \
 	    --output-directory build/coverage/html; \
 	  if [ -f build/coverage/html/index.html ]; then \
 	    tmp=build/coverage/html/index.html.tmp; \
