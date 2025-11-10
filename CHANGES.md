@@ -1,5 +1,12 @@
 2025-11-11
 
+Add quiet env-probe tcp-ok registry test
+
+- tests/: add registry_quiet_env_probe_tcp_ok.rs (tcp-ok → "repository.migros.net/", source "tcp").
+- Update TEST_PLAN.md to list quiet tcp-ok scenario; no cache writes for env-probe.
+
+2025-11-11
+
 Add precedence and nested normalization tests
 
 - tests/: quiet override vs env override (quiet prefers override; no cache).

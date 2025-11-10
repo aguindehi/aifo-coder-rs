@@ -8,6 +8,19 @@
 - Maintainability: A-
 
 ## Summary
+Added quiet env-probe tcp-ok test; deterministic and isolated via XDG_RUNTIME_DIR.
+Covers early-return path and source "tcp" reporting without writing cache.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
 Added precedence tests comparing quiet vs non-quiet behavior (override vs env override),
 and a nested path normalization test. All scenarios are deterministic, isolated via
 per-file XDG_RUNTIME_DIR, and rely only on public APIs.
