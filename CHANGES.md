@@ -1,5 +1,14 @@
 2025-11-11
 
+Add precedence and nested normalization tests
+
+- tests/: quiet override vs env override (quiet prefers override; no cache).
+- tests/: non-quiet env override vs override (env wins; cache written).
+- tests/: nested path normalization (acme/registry/// → acme/registry/).
+- Update TEST_PLAN.md to include new scenarios.
+
+2025-11-11
+
 Add more deterministic registry tests (env-empty exact, override vs probe)
 
 - tests/: add quiet env-empty exact override; source env-empty; cache write.

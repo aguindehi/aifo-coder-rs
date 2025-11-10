@@ -9,6 +9,9 @@
 - registry_quiet_env_empty.rs → quiet env-empty path; source "env-empty"; cache write.
 - registry_quiet_env_empty_exact.rs → quiet env-empty exact override; cache write.
 - registry_quiet_env_non_empty_normalization.rs → quiet env non-empty normalization.
+- registry_quiet_override_vs_env_override.rs → quiet: override wins over env override.
+- registry_env_override_vs_override_precedence.rs → non-quiet: env override wins over override.
+- registry_env_non_empty_nested_normalization.rs → nested path normalized to single '/'.
 - registry_probe_env_tcp_ok_prefix.rs → env-probe tcp-ok; source "tcp"; no cache.
 - registry_env_probe_tcp_fail_prefix.rs → env-probe tcp-fail (non-quiet); source "tcp"; no cache.
 - registry_quiet_env_probe_tcp_fail.rs → env-probe tcp-fail; source "tcp"; no cache.

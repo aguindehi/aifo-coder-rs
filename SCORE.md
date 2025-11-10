@@ -8,13 +8,13 @@
 - Maintainability: A-
 
 ## Summary
-Added tests for env-empty exact override in quiet mode and override vs env-probe
-conflict precedence. Deterministic, isolated per file via XDG_RUNTIME_DIR, and
-using only public APIs without external IO.
+Added precedence tests comparing quiet vs non-quiet behavior (override vs env override),
+and a nested path normalization test. All scenarios are deterministic, isolated via
+per-file XDG_RUNTIME_DIR, and rely only on public APIs.
 
 ## Proposed Next Steps
-- Optionally add tests for disk cache precedence if a read path is introduced.
-- Consider small DRY helpers in tests to reduce repetition.
+- Consider adding a test asserting quiet/non-quiet parity for env-probe branches.
+- Optionally add DRY setup helpers within tests (remain minimal and dependency-free).
 
 # Source Code Scoring — 2025-11-11
 
