@@ -1,5 +1,12 @@
 2025-11-11
 
+Add non-quiet env-probe tests for curl-ok/curl-fail/tcp-fail
+
+- tests/: add env-probe curl-ok/curl-fail/tcp-fail (non-quiet) paths; no cache writes.
+- Update TEST_PLAN.md to list new scenarios; unique XDG_RUNTIME_DIR per file.
+
+2025-11-11
+
 More deterministic registry tests (cache, spaces, unknown)
 
 - tests/: add cache persistence, trailing spaces normalization, and env-probe unknown.

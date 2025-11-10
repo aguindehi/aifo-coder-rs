@@ -9,7 +9,10 @@
 - registry_quiet_env_empty.rs → quiet env-empty path; source "env-empty"; cache write.
 - registry_quiet_env_non_empty_normalization.rs → quiet env non-empty normalization.
 - registry_probe_env_tcp_ok_prefix.rs → env-probe tcp-ok; source "tcp"; no cache.
+- registry_env_probe_tcp_fail_prefix.rs → env-probe tcp-fail (non-quiet); source "tcp"; no cache.
 - registry_quiet_env_probe_tcp_fail.rs → env-probe tcp-fail; source "tcp"; no cache.
+- registry_env_probe_curl_ok_prefix.rs → env-probe curl-ok (non-quiet); source "curl"; no cache.
+- registry_env_probe_curl_fail_prefix.rs → env-probe curl-fail (non-quiet); source "curl"; no cache.
 - registry_quiet_env_probe_curl_ok.rs → env-probe curl-ok; source "curl"; no cache.
 - registry_quiet_env_probe_curl_fail.rs → env-probe curl-fail; source "curl"; no cache.
 - registry_probe_env_unknown.rs → env-probe unknown; source "unknown"; no cache.

@@ -8,13 +8,13 @@
 - Maintainability: A-
 
 ## Summary
-Added tests for cache persistence in-process after env removal, trailing spaces
-normalization for env overrides, and non-quiet env-probe unknown path. All use
-unique XDG_RUNTIME_DIR and public APIs, with no external processes or networking.
+Added non-quiet env-probe tests for curl-ok, curl-fail, and tcp-fail paths,
+verifying prefixes, sources, and absence of cache writes. Tests use unique
+XDG_RUNTIME_DIR per file and only public APIs; no external processes/network.
 
 ## Proposed Next Steps
-- Consider a dedicated test for in-process cache precedence over disk cache on re-init.
-- Add compact helpers in tests to DRY common setup (optional).
+- Consider symmetry tests comparing quiet vs non-quiet outputs (prefix/source).
+- Optionally add DRY helpers within tests to reduce repetition.
 
 # Source Code Scoring — 2025-11-11
 
