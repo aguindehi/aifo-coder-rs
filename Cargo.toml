@@ -4,7 +4,9 @@ version = "0.6.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Host-side launcher for containerized coding agents (Codex, Crush, Aider, OpenHands, OpenCode, Plandex) using Docker; includes Fork mode with tmux/Windows Terminal orchestration, per-pane state mounts, and repo-scoped locking"
-repository = ""
+repository = "https://git.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs"
+keywords = ["docker", "cli", "rust", "toolchain", "coding"]
+categories = ["command-line-utilities", "development-tools"]
 default-run = "aifo-coder"
 build = "build.rs"
 

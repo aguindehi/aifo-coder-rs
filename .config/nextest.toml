@@ -1,0 +1,7 @@
+[profile.ci.junit]
+# Write JUnit report to target/nextest/ci/junit.xml
+path = "junit.xml"
+
+# Defaults (documented for clarity):
+# store-success-output = false
+# store-failure-output = true

@@ -13,6 +13,7 @@ WORKDIR /workspace
 
 # --- Rust target builder for Linux, Windows & macOS ---
 FROM rust-base AS rust-builder
+ARG WITH_WIN=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
@@ -28,16 +29,21 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
-    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 pkg-config ca-certificates; \
-    rm -rf /var/lib/apt/lists/*; \
-    /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends pkg-config git-lfs ca-certificates; \
+    if [ "${WITH_WIN:-0}" = "1" ]; then \
+        apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
+        /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
+    fi; \
+    apt-get clean; rm -rf /var/lib/apt/lists/*; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
+    /usr/local/cargo/bin/rustup component add clippy rustfmt; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
 # Pre-install cargo-nextest to speed up tests inside this container
+# hadolint ignore=DL3059
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -49,6 +55,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -68,6 +75,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
     /usr/local/cargo/bin/cargo build --release --bin aifo-shim; \
+    install -d -m 0755 /workspace/out; \
+    cp target/release/aifo-shim /workspace/out/aifo-shim; \
+    rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -82,7 +92,8 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+# hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -120,13 +131,13 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   'exec /bin/sh "$@"' \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
-# Create PATH symlinks to the shim
-RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
+# hadolint ignore=SC2016,SC2145
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
@@ -170,6 +181,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
@@ -193,6 +205,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
@@ -286,6 +299,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
@@ -305,6 +319,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
 ARG OPENHANDS_CONSTRAINT=""
+# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -339,6 +354,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
+# hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
@@ -451,7 +467,8 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/target/release/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+# hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -489,13 +506,13 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   'exec /bin/sh "$@"' \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash
-# Create PATH symlinks to the shim
-RUN for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
+# hadolint ignore=SC2016,SC2145
 RUN install -d -m 0755 /usr/local/bin \
  && printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
@@ -672,6 +689,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
 ARG OPENHANDS_CONSTRAINT=""
+# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \

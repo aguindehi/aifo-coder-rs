@@ -37,10 +37,10 @@ PUSH ?= 0
 CACHE_DIR ?= .buildx-cache
 
 # Nextest niceness
-NICENESS_CARGO_NEXTEST =? -1
+NICENESS_CARGO_NEXTEST ?= -1
 
 # Nextest arguments
-ARGS_NEXTEST ?= --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
+ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
 
 # Help
 .PHONY: help banner
@@ -274,6 +274,8 @@ help: banner
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
 	@echo ""
+	@echo "  hadolint .................... Run hadolint on all Dockerfiles"
+	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
 	@echo "  test-legacy ................. Alias for test-cargo"
@@ -290,6 +292,7 @@ help: banner
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
 	@echo ""
 	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
+	@echo "  cov-results ................. Show coverage-html in the browser"
 	@echo "  coverage-html ............... Generate HTML coverage via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo "  coverage-lcov ............... Generate lcov.info via nextest+grcov (rustup/cargo/docker fallback)"
 	@echo ""
@@ -395,6 +398,14 @@ OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+# Include Windows cross toolchain (mingw) automatically on Windows shells
+RUST_BUILDER_WITH_WIN ?= 0
+UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
+ifeq ($(OS),Windows_NT)
+  RUST_BUILDER_WITH_WIN := 1
+else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S)))
+  RUST_BUILDER_WITH_WIN := 1
+endif
 RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-bookworm
@@ -514,9 +525,9 @@ build-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: build-debug
@@ -990,7 +1001,7 @@ lint:
 	  cargo clippy --workspace --all-features -- -D warnings; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
-	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
+	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable) ..."; \
 	  rustup run stable cargo clippy --workspace --all-features -- -D warnings || cargo clippy --workspace --all-features -- -D warnings; \
@@ -1041,7 +1052,7 @@ lint-ultra:
 	  cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
-	  if [ -n "$$RUSTUP_HOME" ] && [ -w "$$RUSTUP_HOME" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
+	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
 	  rustup run stable cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing || cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
@@ -1095,7 +1106,10 @@ test:
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
-	  if rustup run stable cargo nextest -V >/dev/null 2>&1; then \
+	  if cargo nextest -V >/dev/null 2>&1; then \
+	    echo "Running cargo nextest ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	  elif rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS) || GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
@@ -1107,8 +1121,8 @@ test:
 	      -v "$$PWD/target:/workspace/target" \
 	      $(RUST_BUILDER_IMAGE) sh -lc 'nice -n $(NICENESS_CARGO_NEXTEST) cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
-	    echo "cargo-nextest not found locally and docker unavailable; falling back to 'cargo test' via rustup ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo test $(ARGS); \
+	    echo "cargo-nextest not available; falling back to cargo test ..."; \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
@@ -1521,9 +1535,9 @@ rebuild-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim
@@ -2157,15 +2171,16 @@ hadolint:
 	  hadolint Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi; \
+	  if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "hadolint not found; using hadolint/hadolint container ..."; \
 	  docker run --rm -i hadolint/hadolint < Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
+	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
 	else \
-	  echo "Error: hadolint not installed and docker unavailable."; \
-	  echo "Install hadolint: https://github.com/hadolint/hadolint#install"; \
-	  exit 1; \
+	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
+	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
 	fi
 
 .PHONY: release-app release-dmg release-dmg-sign
@@ -2456,3 +2471,7 @@ release-dmg-sign:
 	@echo "release-dmg-sign is only supported on macOS (Darwin) hosts." >&2; exit 1
 
 endif
+
+.PHONY: cov-results
+cov-results:
+	open build/coverage/html/index.html

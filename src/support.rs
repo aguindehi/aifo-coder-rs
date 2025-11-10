@@ -317,6 +317,7 @@ fn render_row_line(
     frames: &[&str],
     spinner_idx: usize,
     use_err: bool,
+    skip_green: bool,
 ) -> String {
     let mut line = String::new();
     let cap = capitalize_label(&agents[ai]);
@@ -327,18 +328,24 @@ fn render_row_line(
         line.push(' ');
         match &statuses[ai][ki] {
             Some(st) => {
-                let src = if compressed {
-                    match st.as_str() {
-                        "PASS" => "G",
-                        "WARN" => "Y",
-                        "FAIL" => "R",
-                        _ => st.as_str(),
-                    }
+                let is_pass = st == "PASS";
+                if skip_green && is_pass {
+                    let tok = fit("", cell_col);
+                    line.push_str(&tok);
                 } else {
-                    st.as_str()
-                };
-                let tok = fit(src, cell_col);
-                line.push_str(&color_token(use_err, &tok));
+                    let src = if compressed {
+                        match st.as_str() {
+                            "PASS" => "G",
+                            "WARN" => "Y",
+                            "FAIL" => "R",
+                            _ => st.as_str(),
+                        }
+                    } else {
+                        st.as_str()
+                    };
+                    let tok = fit(src, cell_col);
+                    line.push_str(&color_token(use_err, &tok));
+                }
             }
             None => {
                 let frame = frames[spinner_idx % frames.len()];
@@ -496,6 +503,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let tty = atty::is(atty::Stream::Stderr);
     let animate_disabled = std::env::var("AIFO_SUPPORT_ANIMATE").ok().as_deref() == Some("0");
     let animate = tty && !animate_disabled;
+    let skip_green = std::env::var("AIFO_SUPPORT_SKIP_GREEN").ok().as_deref() == Some("1");
     let _cursor_guard = if animate {
         Some(CursorGuard::new(true))
     } else {
@@ -680,6 +688,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         frames,
                         spinner_idx,
                         use_err,
+                        skip_green,
                     );
                     repaint_row(ai, &line, use_ansi, total_rows);
 
@@ -705,6 +714,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                                 frames,
                                 spinner_idx,
                                 use_err,
+                                skip_green,
                             );
                             repaint_row(ai, &line, use_ansi, total_rows);
                         }
@@ -788,7 +798,11 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 } else {
                     raw
                 };
-                let tokf = fit(disp, cell_col);
+                let tokf = if skip_green && raw == "PASS" {
+                    fit("", cell_col)
+                } else {
+                    fit(disp, cell_col)
+                };
                 // Use color when enabled, even in non-animated mode
                 line.push_str(&color_token(use_err2, &tokf));
             }

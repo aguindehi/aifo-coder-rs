@@ -46,7 +46,7 @@ fn collect_rows(
         } else {
             0
         };
-        let stale = (age_days as u64) >= list_stale_days;
+        let stale = age_days >= list_stale_days;
         rows.push((sid, panes, created_at, age_days, base_label, stale));
     }
     rows.sort_by_key(|r| r.2);

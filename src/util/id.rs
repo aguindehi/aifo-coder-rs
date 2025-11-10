@@ -8,7 +8,7 @@ pub fn create_session_id() -> String {
         .unwrap_or_else(|_| Duration::from_secs(0));
     let pid = std::process::id() as u128;
     let nanos = now.as_nanos();
-    let mix = nanos ^ (pid as u128);
+    let mix = nanos ^ pid;
     // base36 encode last 40 bits for brevity
     let mut v = (mix & 0xffffffffff) as u64;
     let mut s = String::new();

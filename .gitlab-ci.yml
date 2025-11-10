@@ -1,5 +1,6 @@
 stages:
   - build
+  - test
   - release
 
 include:
@@ -10,9 +11,32 @@ include:
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
 
+workflow:
+  rules:
+    # Allow scheduled pipelines (e.g., nightly builder refresh)
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+
+    # Prefer merge request pipelines for branches with MRs
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+
+    # Suppress branch-push pipelines when an MR exists for the branch
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS
+      when: never
+
+    # Allow normal branch pushes when no MR exists
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: always
+
+    # Always allow tag pipelines
+    - if: $CI_COMMIT_TAG
+      when: always
+
 # Rules
 .rules_build_image: &rules_build_image
   - if: $CI_COMMIT_TAG
+
 
 # Base job provided as cicd-component by the cloud team. Used as template and should not run on its own
 container-build:
@@ -25,9 +49,10 @@ container-build:
   before_script:
     - |
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
-      KANIKO_BUILD_OPTIONS=""
+      # Use time-based snapshotting to reduce Kaniko memory usage
+      KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
       # If TARGET_NAME or TARGET is provided, add --target attribute to build
-      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
+      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
   rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
@@ -38,14 +63,77 @@ container-build:
 build-rust-builder:
   extends: container-build
   stage: build
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
+  timeout: 45m
+  resource_group: rust-builder
+  tags:
+    - qual-mcap-gcp
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
-  rules: *rules_build_image
+    KANIKO_CUSTOM_BUILD_ARGUMENTS: "WITH_WIN=0"
+  # Consolidated rules: tags -> :$CI_COMMIT_TAG, default-branch changes -> :ci, branches/MRs -> per-commit <$CI_COMMIT_REF_SLUG>:$CI_COMMIT_SHA
+  rules:
+    # Release tags: publish builder as :$CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Merge requests: publish per-commit builder under <slug>:$CI_COMMIT_SHA
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Nightly/scheduled refresh of stable 'ci' tag on default branch
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Default branch: rebuild stable 'ci' tag only when relevant build inputs change
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - Dockerfile
+        - Cargo.toml
+        - build.rs
+        - .cargo/**/*
+        - rust-toolchain.toml
+        - src/**/*
+        - toolchains/**/*
+        - .gitlab-ci.yml
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Manual refresh of the 'ci' tag on default branch
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Other branches: publish per-commit builder under <slug>:$CI_COMMIT_SHA
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
 
 build:
   extends: container-build
   stage: build
+  timeout: 45m
+  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
+  tags:
+    - qual-mcap-gcp
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   rules: *rules_build_image
@@ -57,6 +145,16 @@ build:
 build-toolchain:
   extends: container-build
   stage: build
+  timeout: 45m
+  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
+  tags:
+    - qual-mcap-gcp
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - build-rust-builder  # Wait for first build to reuse layers
   variables:
@@ -73,6 +171,14 @@ build-toolchain:
 
 build-launcher:
   stage: build
+  timeout: 45m
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - job: build-rust-builder
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_TAG
@@ -95,16 +201,142 @@ build-launcher:
     - if: $CI_COMMIT_TAG
 
 
+# Run tests
+
+.rust-ci-base:
+  stage: test
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
+  timeout: 30m
+  image: $RB_IMAGE
+  # Use optional needs so default-branch 'ci' builder can be change-skipped while downstream jobs still run.
+  needs:
+    - job: build-rust-builder
+      optional: true
+  tags:
+    - qual-mcap-gcp
+  variables:
+    RUST_BACKTRACE: "1"
+    AIFO_SUPPORT_ANIMATE: "0"
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
+    GIT_LFS_SKIP_SMUDGE: "1"
+    NICENESS_CARGO_NEXTEST: "0"
+    AIFO_SUPPORT_SKIP_GREEN: "1"
+  cache:
+    key:
+      files:
+        - .cargo/config.toml
+    policy: pull-push
+    paths:
+      - .cargo
+      - target
+  before_script:
+    - echo "Running CI job (base)…"
+    - rustc --version
+    - cargo --version
+    - cargo nextest --version || true
+  rules: &rb_image_rules
+    - if: $CI_COMMIT_TAG
+      when: never
+    # Merge requests: use per-commit builder image
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+    # Non-default branches: use per-commit builder image
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+    # Default branch: use stable 'ci' tag
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+
+lint:
+  extends: .rust-ci-base
+  script:
+    - echo "Running lint job…"
+    - make lint
+
+test:
+  extends: .rust-ci-base
+  needs:
+    - job: build-rust-builder
+      optional: true
+    - lint
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit: target/nextest/ci/junit.xml
+    paths:
+      - target/nextest/ci/junit.xml
+  script:
+    - echo "Running test job…"
+    - make test
+  rules: *rb_image_rules
+
+lint-dockerfiles:
+  stage: test
+  image: repository.migros.net/hadolint/hadolint:2.12.0-debian
+  interruptible: true
+  timeout: 10m
+  tags:
+    - qual-mcap-gcp
+  script:
+    - echo "Linting Dockerfiles with hadolint (advisory)..."
+    - |
+      FILES=""
+      [ -f Dockerfile ] && FILES="$FILES Dockerfile"
+      [ -f toolchains/rust/Dockerfile ] && FILES="$FILES toolchains/rust/Dockerfile"
+      [ -f toolchains/node/Dockerfile ] && FILES="$FILES toolchains/node/Dockerfile"
+      [ -f toolchains/cpp/Dockerfile ] && FILES="$FILES toolchains/cpp/Dockerfile"
+      if [ -n "$FILES" ]; then
+        hadolint --format gitlab_codeclimate $FILES > gl-code-quality-report.json || true
+      else
+        echo "No Dockerfiles found to lint."
+      fi
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - Dockerfile
+        - toolchains/**/Dockerfile
+        - .gitlab-ci.yml
+  allow_failure: true
+
 # Create release
 
 publish-release:
   stage: release
+  timeout: 45m
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure
+      - stuck_or_timeout_failure
   needs:
     - job: build-launcher
       artifacts: true
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
-  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:latest
+  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.24.0
   script:
     - echo "Running the release job."
   artifacts:
