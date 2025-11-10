@@ -1,6 +1,23 @@
 # Source Code Scoring — 2025-11-11
 
 ## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added tests for env-probe curl-ok/curl-fail (quiet) and source "unknown"
+paths (override, pristine). Each uses unique XDG_RUNTIME_DIR and public APIs.
+No external processes or networking; scenarios isolated per file.
+
+## Proposed Next Steps
+- Add tests for quiet override modes asserting no cache writes across variants.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
 - Coverage: A-
 - Correctness: A
 - Determinism: A

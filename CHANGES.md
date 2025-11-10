@@ -1,5 +1,12 @@
 2025-11-11
 
+Expand deterministic registry tests (curl env-probe, source unknown)
+
+- tests/: add quiet env-probe curl-ok/curl-fail and source unknown tests.
+- Each test uses unique XDG_RUNTIME_DIR; public APIs only; no external IO.
+
+2025-11-11
+
 Add deterministic registry tests to increase coverage
 
 - tests/: add env-empty, env normalization, and cache invalidate tests.
