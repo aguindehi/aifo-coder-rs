@@ -1419,7 +1419,6 @@ coverage-html:
 	  echo "Wrote build/coverage/html from lcov.info via genhtml."; \
 	  exit 0; \
 	fi; \
-	# Default: Bulma-styled grcov HTML (accept a second parse)
 	rm -rf build/coverage/html || true; \
 	mkdir -p build/coverage/html; \
 	if command -v grcov >/dev/null 2>&1; then \
