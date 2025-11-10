@@ -1,5 +1,12 @@
 2025-11-11
 
+More deterministic registry tests (cache, spaces, unknown)
+
+- tests/: add cache persistence, trailing spaces normalization, and env-probe unknown.
+- Update TEST_PLAN.md to include new scenarios; no external IO added.
+
+2025-11-11
+
 Expand deterministic registry tests (curl env-probe, source unknown)
 
 - tests/: add quiet env-probe curl-ok/curl-fail and source unknown tests.
