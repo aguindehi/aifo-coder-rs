@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import re, json, os
+import re, json, os, argparse
 
 def parse_lcov(path):
     files = []
@@ -94,5 +94,14 @@ def llm_payload_from_lcov(lcov_path, repo_root, context_lines=40):
     return out
 
 # Usage:
-payload = llm_payload_from_lcov('build/coverage/lcov.info', repo_root='.')
-print(json.dumps(payload[:10], ensure_ascii=False)[:20000])
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='LCOV → AI payload preview')
+    parser.add_argument(
+        '--size',
+        type=int,
+        default=20000,
+        help='Max bytes to print from JSON preview (default: 20000)',
+    )
+    args = parser.parse_args()
+    payload = llm_payload_from_lcov('build/coverage/lcov.info', repo_root='.')
+    print(json.dumps(payload[:10], ensure_ascii=False)[:args.size])

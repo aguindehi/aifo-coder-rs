@@ -1,5 +1,12 @@
 2025-11-10
 
+Add CLI argument to control JSON preview size
+
+- scripts/cov2ai.py: add --size argument (default 20000) for print truncation.
+- Keeps default behavior; allows users to adjust preview bytes.
+
+2025-11-10
+
 Harden lcov parser to handle commas in function names
 
 - Update scripts/cov2ai.py to split FN/FNDA at the first comma only.

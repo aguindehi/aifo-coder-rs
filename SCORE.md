@@ -1,6 +1,24 @@
 # Source Code Scoring — 2025-11-10
 
 ## Grades
+- Correctness: A
+- Robustness: A-
+- Readability: A-
+- Performance: A
+- Testability: B-
+
+## Summary
+Added a --size CLI argument to scripts/cov2ai.py to control the maximum
+JSON preview bytes printed. Default remains 20000; behavior is backward
+compatible. Change is small, improves usability, and keeps code simple.
+
+## Proposed Next Steps
+- Expose lcov path and file count as optional CLI args for flexibility.
+- Add a smoke test that runs the script with various sizes to ensure stability.
+
+# Source Code Scoring — 2025-11-10
+
+## Grades
 - Correctness: A-
 - Robustness: B+
 - Readability: B
