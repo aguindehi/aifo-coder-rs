@@ -1,6 +1,25 @@
 # Source Code Scoring — 2025-11-11
 
 ## Grades
+- Coverage: A-
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added deterministic integration tests under tests/ targeting src/registry.rs:
+env-empty branch, env normalization, and cache write/remove. Each test uses a
+unique XDG_RUNTIME_DIR temp dir and avoids external processes and networking.
+Scenarios are isolated per file to prevent OnceCell cross-contamination.
+
+## Proposed Next Steps
+- Add tests for disk cache retrieval path when env is cleared mid-run.
+- Confirm quiet variant does not write cache for overrides across all modes.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
 - Correctness: A
 - Robustness: A-
 - Readability: A-

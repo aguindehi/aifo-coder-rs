@@ -1,5 +1,12 @@
 2025-11-11
 
+Add deterministic registry tests to increase coverage
+
+- tests/: add env-empty, env normalization, and cache invalidate tests.
+- Each test uses unique XDG_RUNTIME_DIR and only public APIs; no external IO.
+
+2025-11-11
+
 Print prompt before JSON unless --raw
 
 - scripts/cov2ai.py: add --raw flag; print prompts/TESTS.md before JSON by default.
