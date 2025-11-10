@@ -7,7 +7,7 @@ Date: 2025-11-10
 Executive summary
 - Objective: Produce macOS launcher binaries (aarch64-apple-darwin; optional x86_64) from Linux-only
   GitLab runners by using osxcross with an Apple SDK provided via CI secrets.
-- Approach: Add a dedicated Dockerfile stage macos-cross-builder that bundles osxcross; build it in
+- Approach: Add a dedicated Dockerfile stage macos-cross-rust-builder that bundles osxcross; build it in
   CI via Kaniko using an SDK injected into the build context; compile the Rust launcher inside this
   image; publish artifacts and attach them to releases alongside Linux binaries.
 - Security/license: The SDK is never committed or published; it is injected from a protected, masked
@@ -30,7 +30,7 @@ Risks, constraints, and mitigations
   applicable; set MACOSX_DEPLOYMENT_TARGET=11.0 to avoid newer symbol linkages.
 
 Design details
-- New Dockerfile stage macos-cross-builder
+- New Dockerfile stage macos-cross-rust-builder
   - Base: ${REGISTRY_PREFIX}rust:1-bookworm (same base lineage as rust-builder).
   - Packages: clang llvm make cmake patch xz-utils unzip curl git python3 file ca-certificates.
   - osxcross: git clone tpoechtrager/osxcross (optionally pin); UNATTENDED=1 osxcross/build.sh.
@@ -55,10 +55,10 @@ Design details
   - rustup targets: aarch64-apple-darwin (required); x86_64-apple-darwin (optional).
 
 - CI integration (.gitlab-ci.yml)
-  - build-macos-cross-builder: extends container-build; before_script decodes APPLE_SDK_BASE64 into
-    ci/osx/${OSX_SDK_FILENAME}; sets KANIKO_BUILD_OPTIONS += --target macos-cross-builder; publishes
-    image to $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-builder:$CI_COMMIT_TAG (or :ci).
-  - build-launcher-macos: uses RB_IMAGE=$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-builder:<tag>;
+  - build-macos-cross-rust-builder: extends container-build; before_script decodes APPLE_SDK_BASE64 into
+    ci/osx/${OSX_SDK_FILENAME}; sets KANIKO_BUILD_OPTIONS += --target macos-cross-rust-builder; publishes
+    image to $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG (or :ci).
+  - build-launcher-macos: uses RB_IMAGE=$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:<tag>;
     runs cargo build --release --target aarch64-apple-darwin; copies to dist/aifo-coder-macos-arm64;
     publishes as artifact.
   - publish-release: needs artifacts from build-launcher (Linux) and build-launcher-macos (macOS);
@@ -101,9 +101,9 @@ Phase 0 — prerequisites (CI setup)
   (or preferred SDK). Optionally create OSX_SDK_FILENAME (“MacOSX13.3.sdk.tar.xz”).
 - Restrict the macOS cross-image build job to tags and default-branch manual runs.
 
-Phase 1 — Dockerfile: macos-cross-builder stage (no BuildKit secrets)
+Phase 1 — Dockerfile: macos-cross-rust-builder stage (no BuildKit secrets)
 - Add a stage after rust-builder:
-  FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-builder
+  FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
   ENV DEBIAN_FRONTEND=noninteractive
   RUN apt-get update && apt-get install -y --no-install-recommends \
         clang llvm make cmake patch xz-utils unzip curl git python3 file ca-certificates \
@@ -140,8 +140,8 @@ Phase 1 — Dockerfile: macos-cross-builder stage (no BuildKit secrets)
 Phase 2 — CI: build macos cross image (Kaniko) and macOS launcher
 - Add job build-macos-cross-builder (extends container-build):
   variables:
-    TARGET_NAME: "macos-cross-builder"
-    IMAGE_PATH_EXTRA: "macos-cross-builder"
+    TARGET_NAME: "macos-cross-rust-builder"
+    IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
     OSX_SDK_FILENAME: "MacOSX13.3.sdk.tar.xz"
   before_script:
     - mkdir -p ci/osx
@@ -154,7 +154,7 @@ Phase 2 — CI: build macos cross image (Kaniko) and macOS launcher
       when: manual
 - Add job build-launcher-macos:
   needs: [ build-macos-cross-builder ]
-  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-builder:$CI_COMMIT_TAG
+  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
   script:
     - rustc --version; cargo --version
     - rustup target add aarch64-apple-darwin || true
@@ -174,11 +174,11 @@ Phase 2 — CI: build macos cross image (Kaniko) and macOS launcher
 
 Phase 3 — Makefile (developer convenience; optional for CI)
 - Add:
-  MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-builder:$(TAG)
+  MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
   OSX_SDK_FILENAME ?= MacOSX13.3.sdk.tar.xz
 - Targets:
-  build-macos-cross-builder:
-    - Uses $(DOCKER_BUILD) --target macos-cross-builder and tags $(MACOS_CROSS_IMAGE).
+  build-macos-cross-rust-builder:
+    - Uses $(DOCKER_BUILD) --target macos-cross-rust-builder and tags $(MACOS_CROSS_IMAGE).
   build-launcher-macos-cross:
     - docker run --rm -v "$(PWD):/workspace" -v "$(HOME)/.cargo/registry:/root/.cargo/registry"
       -v "$(HOME)/.cargo/git:/root/.cargo/git" -v "$(PWD)/target:/workspace/target"
