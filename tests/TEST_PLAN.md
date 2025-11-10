@@ -28,3 +28,5 @@
 - registry_quiet_override_curl_ok.rs → override CurlOk; source "unknown"; no cache.
 - registry_quiet_override_curl_fail.rs → override CurlFail; source "unknown"; no cache.
 - registry_override_vs_env_probe_conflict.rs → override wins when env-probe also set.
+- registry_env_override_change_runtime.rs → env override changed mid-run updates prefix/cache.
+- registry_env_override_trailing_slash_passthrough.rs → preserves "omega/" and caches.

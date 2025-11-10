@@ -1,5 +1,13 @@
 2025-11-11
 
+Add env override change and trailing-slash passthrough tests
+
+- tests/: add registry_env_override_change_runtime.rs (env change mid-run → updates prefix/cache).
+- tests/: add registry_env_override_trailing_slash_passthrough.rs (preserve "omega/" and cache).
+- Update TEST_PLAN.md with new scenarios; deterministic and isolated per file.
+
+2025-11-11
+
 Add quiet env-probe tcp-ok registry test
 
 - tests/: add registry_quiet_env_probe_tcp_ok.rs (tcp-ok → "repository.migros.net/", source "tcp").

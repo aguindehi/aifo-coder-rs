@@ -8,6 +8,24 @@
 - Maintainability: A-
 
 ## Summary
+Added tests for env override change mid-run (quiet/non-quiet interplay) and
+trailing-slash passthrough. Both are deterministic, isolated via per-file
+XDG_RUNTIME_DIR, and exercise env normalization and cache write behavior.
+
+## Proposed Next Steps
+- Optionally add a test for env override set to "/" to confirm normalization.
+- Consider DRY helpers within tests to reduce repetition (optional).
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
 Added quiet env-probe tcp-ok test; deterministic and isolated via XDG_RUNTIME_DIR.
 Covers early-return path and source "tcp" reporting without writing cache.
 
