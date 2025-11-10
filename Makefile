@@ -1238,6 +1238,7 @@ coverage-html:
 	@set -e; \
 	mkdir -p build/coverage; \
 	if [ -f build/coverage/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
+	  rm -rf build/coverage/html || true; \
 	  mkdir -p build/coverage/html; \
 	  genhtml build/coverage/lcov.info --output-directory build/coverage/html; \
 	  if [ -f build/coverage/html/index.html ]; then \
@@ -1259,6 +1260,8 @@ coverage-html:
 	       esac ;; \
 	  esac; \
 	  echo "genhtml not available; falling back to grcov -t html (second parse) ..."; \
+	  rm -rf build/coverage/html || true; \
+	  mkdir -p build/coverage/html; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  elif command -v docker >/dev/null 2>&1; then \
