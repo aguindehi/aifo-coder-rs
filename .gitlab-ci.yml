@@ -49,12 +49,10 @@ container-build:
   before_script:
     - |
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
-      KANIKO_BUILD_OPTIONS=""
-      # If TARGET_NAME or TARGET is provided, add --target attribute to build
-      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="--target ${TARGET_NAME:-$TARGET}"
       # Use time-based snapshotting to reduce Kaniko memory usage
-      KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --snapshotMode=time --use-new-run"
-      export KANIKO_BUILD_OPTIONS
+      KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
+      # If TARGET_NAME or TARGET is provided, add --target attribute to build
+      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
   rules: # Turn off component rules
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
@@ -102,7 +100,6 @@ build-rust-builder:
       changes:
         - Dockerfile
         - Cargo.toml
-        - Cargo.lock
         - build.rs
         - .cargo/**/*
         - rust-toolchain.toml
@@ -115,7 +112,6 @@ build-rust-builder:
     # Manual refresh of the 'ci' tag on default branch
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
-      allow_failure: true
       variables:
         IMAGE_TAG_CUSTOM: "ci"
         IMAGE_TAG_CUSTOM_ONLY: "true"
@@ -235,7 +231,6 @@ build-launcher:
   cache:
     key:
       files:
-        - Cargo.lock
         - .cargo/config.toml
     policy: pull-push
     paths:
@@ -288,7 +283,7 @@ test:
 
 lint-dockerfiles:
   stage: test
-  image: hadolint/hadolint:2.12.0-debian
+  image: repository.migros.net/hadolint/hadolint:2.12.0-debian
   interruptible: true
   timeout: 10m
   tags:
@@ -341,7 +336,7 @@ publish-release:
       artifacts: true
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
-  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.17.0
+  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.24.0
   script:
     - echo "Running the release job."
   artifacts:
