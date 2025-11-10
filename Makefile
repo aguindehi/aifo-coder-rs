@@ -1381,7 +1381,9 @@ coverage-html:
 	if [ -f build/coverage/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
 	  rm -rf build/coverage/html || true; \
 	  mkdir -p build/coverage/html; \
-	  genhtml build/coverage/lcov.info --output-directory build/coverage/html; \
+	  genhtml build/coverage/lcov.info \
+	    --ignore-errors inconsistent,corrupt \
+	    --output-directory build/coverage/html; \
 	  if [ -f build/coverage/html/index.html ]; then \
 	    tmp=build/coverage/html/index.html.tmp; \
 	    sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
