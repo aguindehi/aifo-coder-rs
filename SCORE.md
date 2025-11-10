@@ -1,3 +1,23 @@
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Correctness: A
+- Robustness: A-
+- Readability: A-
+- Performance: A
+- Testability: B
+
+## Summary
+scripts/cov2ai.py now prints a prompt from prompts/TESTS.md before the JSON
+preview, unless --raw is specified. This improves UX for interactive runs while
+retaining a raw mode for programmatic use. Implementation is simple, guarded by
+error handling if the prompt file is missing.
+
+## Proposed Next Steps
+- Add CLI options for prompt path and lcov path to increase flexibility.
+- Add a basic test invoking the script with and without --raw to ensure output
+  ordering and error handling remain stable.
+
 # Source Code Scoring — 2025-11-10
 
 ## Grades

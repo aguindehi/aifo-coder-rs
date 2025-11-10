@@ -1,3 +1,10 @@
+2025-11-11
+
+Print prompt before JSON unless --raw
+
+- scripts/cov2ai.py: add --raw flag; print prompts/TESTS.md before JSON by default.
+- Keeps existing behavior when --raw is used; default shows prompt then JSON.
+
 2025-11-10
 
 Add CLI argument to control JSON preview size

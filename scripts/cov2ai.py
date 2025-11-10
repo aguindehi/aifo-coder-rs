@@ -102,6 +102,17 @@ if __name__ == '__main__':
         default=20000,
         help='Max bytes to print from JSON preview (default: 20000)',
     )
+    parser.add_argument(
+        '--raw',
+        action='store_true',
+        help='Print raw JSON only without prompt header',
+    )
     args = parser.parse_args()
     payload = llm_payload_from_lcov('build/coverage/lcov.info', repo_root='.')
+    if not args.raw:
+        try:
+            with open('prompts/TESTS.md', 'r', encoding='utf-8') as pf:
+                print(pf.read())
+        except Exception as e:
+            print(f'# Warning: failed to read prompt: {e}')
     print(json.dumps(payload[:10], ensure_ascii=False)[:args.size])
