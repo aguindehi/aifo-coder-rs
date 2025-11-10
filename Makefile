@@ -40,11 +40,8 @@ CACHE_DIR ?= .buildx-cache
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-# Restrict grcov to Rust sources at repo root: build.rs, src/**, tests/** (and test/**)
-KEEP_ONLY_GRCOV ?= --keep-only '*/build.rs' --keep-only 'build.rs' \
-                   --keep-only '*/src/*'    --keep-only 'src/*' \
-                   --keep-only '*/tests/*'  --keep-only 'tests/*' \
-                   --keep-only '*/test/*'   --keep-only 'test/*'
+# Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
+KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
 
 # Help
 .PHONY: help banner
