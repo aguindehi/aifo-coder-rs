@@ -1,3 +1,22 @@
+# Source Code Scoring — 2025-11-10
+
+## Grades
+- Correctness: A-
+- Robustness: B+
+- Readability: B
+- Performance: A
+- Testability: C+
+
+## Summary
+The lcov parser now handles FN/FNDA names containing commas and DA records
+with optional checksums. This prevents crashes seen during coverage parsing
+while keeping the implementation efficient and simple.
+
+## Proposed Next Steps
+- Add unit tests for DA (with/without checksum) and FN/FNDA edge cases.
+- Track malformed records to aid diagnostics without aborting parsing.
+- Consider more defensive BRDA parsing for unusual field values.
+
 # Source Code Scoring — 2025-11-09 (Final)
 
 ## Grades

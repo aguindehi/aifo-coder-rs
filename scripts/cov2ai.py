@@ -14,14 +14,16 @@ def parse_lcov(path):
                 if cur: files.append(cur)
                 cur = {'file': line[3:], 'lines': {}, 'functions': {}, 'branches': []}
             elif line.startswith('DA:'):
-                ln, hits = line[3:].split(',')
+                parts = line[3:].split(',', 2)
+                ln, hits = parts[0], parts[1]
                 cur['lines'][int(ln)] = int(hits)
             elif line.startswith('FN:'):
-                parts = line[3:].split(',')
-                fn_line, fn_name = int(parts[0]), parts[1]
+                s = line[3:]
+                fn_line_str, fn_name = s.split(',', 1)
+                fn_line = int(fn_line_str)
                 cur.setdefault('fn_defs', {})[fn_name] = fn_line
             elif line.startswith('FNDA:'):
-                hits, fn_name = line[5:].split(',')
+                hits, fn_name = line[5:].split(',', 1)
                 cur['functions'][fn_name] = int(hits)
             elif line.startswith('BRDA:'):
                 l, b, br, hits = line[5:].split(',')

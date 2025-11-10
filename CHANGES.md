@@ -1,3 +1,11 @@
+2025-11-10
+
+Harden lcov parser to handle commas in function names
+
+- Update scripts/cov2ai.py to split FN/FNDA at the first comma only.
+- Accept optional DA checksum by allowing a third field; use first two parts.
+- Prevent crashes when function names include commas; improves resilience.
+
 2025-11-09
 
 Finalize registry coverage tests; all passing
