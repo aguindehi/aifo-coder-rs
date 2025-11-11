@@ -182,6 +182,8 @@ help: banner
 	@echo "  build-toolchain-cpp ......... Build the C-CPP toolchain sidecar image ($(TC_REPO_CPP):latest)"
 	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-macos-cross-rust-builder Build the macOS cross image (requires ci/osx/$${OSX_SDK_FILENAME})"
+	@echo "  build-launcher-macos-cross .. Build aifo-coder for macOS arm64 using cross image"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
 	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
@@ -401,6 +403,8 @@ OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
+OSX_SDK_FILENAME ?= MacOSX13.3.sdk.tar.xz
 # Include Windows cross toolchain (mingw) automatically on Windows shells
 RUST_BUILDER_WITH_WIN ?= 0
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
@@ -537,6 +541,49 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	fi
+
+.PHONY: build-macos-cross-rust-builder build-launcher-macos-cross
+build-macos-cross-rust-builder:
+	@set -e; \
+	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "Error: SDK file 'ci/osx/$(OSX_SDK_FILENAME)' not found. Decode it via ci/bin/decode-apple-sdk.sh or place it locally."; \
+	  exit 1; \
+	fi; \
+	$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	fi
+
+build-launcher-macos-cross:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Building macOS arm64 launcher inside $(MACOS_CROSS_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'rustup target add aarch64-apple-darwin || true; cargo build --release --target aarch64-apple-darwin'; \
+	BIN="target/aarch64-apple-darwin/release/aifo-coder"; \
+	if [ -x "$$BIN" ]; then \
+	  if command -v file >/dev/null 2>&1; then file "$$BIN" | sed -n "1p"; fi; \
+	  echo "Built $$BIN"; \
+	else \
+	  echo "Error: $$BIN not found or not executable"; \
+	  exit 2; \
 	fi
 
 .PHONY: build-debug
