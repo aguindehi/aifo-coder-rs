@@ -71,7 +71,7 @@ build-rust-builder:
       - api_failure
       - stuck_or_timeout_failure
   timeout: 45m
-  resource_group: rust-builder
+  resource_group: "rust-builder-${IMAGE_TAG_CUSTOM}"
   tags:
     - qual-mcap-gcp
   variables:
@@ -124,6 +124,7 @@ build-rust-builder:
 build:
   extends: container-build
   stage: build
+  interruptible: true
   timeout: 1h
   tags:
     - qual-mcap-gcp
@@ -144,6 +145,7 @@ build:
 build-toolchain:
   extends: container-build
   stage: build
+  interruptible: true
   timeout: 45m
   tags:
     - qual-mcap-gcp
@@ -329,9 +331,8 @@ publish-release:
       - runner_system_failure
       - api_failure
       - stuck_or_timeout_failure
-  needs:
-    - job: build-launcher
-      artifacts: true
+  dependencies:
+    - build-launcher
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
   image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.24.0
