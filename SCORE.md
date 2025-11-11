@@ -8,6 +8,28 @@
 - Maintainability: A-
 
 ## Summary
+Adjusted preferred_registry_source precedence: it now reports an already
+determined source (env/env-empty/curl/tcp) before considering the mere
+presence of a test override, while still prioritizing explicit env-probe
+reporting ("tcp"/"curl"). This fixes the failing precedence test without
+affecting other scenarios.
+
+## Proposed Next Steps
+- Add a test verifying source remains "env" when both env override and test
+  override are set, and no env-probe is present (covered by fixed test).
+- Consider a parity test ensuring env-probe reporting is consistent across
+  quiet and non-quiet variants.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
 Added tests for case-insensitive env-probe (TCP-OK/CURL-FAIL), env override '/'
 root prefix, and leading-space normalization. All deterministic, isolated via
 per-file XDG_RUNTIME_DIR, and using only public APIs without external IO.

@@ -1,5 +1,13 @@
 2025-11-11
 
+Fix preferred_registry_source precedence (env wins over override presence)
+
+- src/registry.rs: prefer previously determined source (env/env-empty/curl/tcp)
+  over mere presence of test override; keep env-probe reporting precedence.
+- Resolves failing test: non_quiet_env_override_precedence_over_override.
+
+2025-11-11
+
 Add registry tests: case-insensitive probe, '/' and leading spaces
 
 - tests/: add env-probe case-insensitive (TCP-OK and CURL-FAIL) quiet tests.
