@@ -641,8 +641,8 @@ publish-toolchain-rust:
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar $(RUST_CA_SECRET) .; \
-	    echo "Wrote dist/aifo-coder-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/$(TC_REPO_RUST)-$(RUST_TOOLCHAIN_TAG).oci.tar $(RUST_CA_SECRET) .; \
+	    echo "Wrote dist/$(TC_REPO_RUST)-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
@@ -679,8 +679,8 @@ publish-toolchain-cpp:
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-cpp-latest.oci.tar $(CA_SECRET) .; \
-	    echo "Wrote dist/aifo-coder-toolchain-cpp-latest.oci.tar"; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/$(TC_REPO_CPP)-latest.oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(TC_REPO_CPP)-latest.oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
@@ -700,8 +700,8 @@ publish-toolchain-node:
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar $(CA_SECRET) .; \
-	    echo "Wrote dist/aifo-coder-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar"; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile --output type=oci,dest=dist/$(TC_REPO_NODE)-$(NODE_TOOLCHAIN_TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(TC_REPO_NODE)-$(NODE_TOOLCHAIN_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
