@@ -18,7 +18,10 @@ fn env_probe_unknown_returns_empty_and_source_unknown_non_quiet() {
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "weird-mode");
 
     let pref = aifo_coder::preferred_registry_prefix();
-    assert_eq!(pref, "", "unknown env-probe should yield empty prefix (non-quiet)");
+    assert_eq!(
+        pref, "",
+        "unknown env-probe should yield empty prefix (non-quiet)"
+    );
 
     let src = aifo_coder::preferred_registry_source();
     assert_eq!(src, "unknown");

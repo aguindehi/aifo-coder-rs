@@ -20,7 +20,10 @@ fn env_override_trailing_slash_is_preserved_and_cached() {
 
     set_var("AIFO_CODER_REGISTRY_PREFIX", "omega/");
     let pref = aifo_coder::preferred_registry_prefix_quiet();
-    assert_eq!(pref, "omega/", "existing trailing slash should be preserved");
+    assert_eq!(
+        pref, "omega/",
+        "existing trailing slash should be preserved"
+    );
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 
     let cache = td.path().join("aifo-coder.regprefix");

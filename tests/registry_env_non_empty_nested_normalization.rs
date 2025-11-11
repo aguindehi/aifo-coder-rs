@@ -18,7 +18,10 @@ fn env_non_empty_nested_path_normalizes() {
 
     set_var("AIFO_CODER_REGISTRY_PREFIX", "acme/registry///");
     let pref = aifo_coder::preferred_registry_prefix();
-    assert_eq!(pref, "acme/registry/", "single trailing slash normalization");
+    assert_eq!(
+        pref, "acme/registry/",
+        "single trailing slash normalization"
+    );
 
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 

@@ -42,5 +42,8 @@ fn cache_persists_in_process_after_env_removed() {
         "disk cache must be removed by invalidate"
     );
     let pref3 = aifo_coder::preferred_registry_prefix_quiet();
-    assert_eq!(pref3, "alpha/", "in-process cache unaffected by disk removal");
+    assert_eq!(
+        pref3, "alpha/",
+        "in-process cache unaffected by disk removal"
+    );
 }
