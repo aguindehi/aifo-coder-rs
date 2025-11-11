@@ -1,5 +1,13 @@
 2025-11-11
 
+Add registry tests: case-insensitive probe, '/' and leading spaces
+
+- tests/: add env-probe case-insensitive (TCP-OK and CURL-FAIL) quiet tests.
+- tests/: add env override '/' and leading spaces normalization; cache verified.
+- Update TEST_PLAN.md; scenarios isolated per file; no external IO.
+
+2025-11-11
+
 Add env override change and trailing-slash passthrough tests
 
 - tests/: add registry_env_override_change_runtime.rs (env change mid-run → updates prefix/cache).

@@ -8,6 +8,24 @@
 - Maintainability: A-
 
 ## Summary
+Added tests for case-insensitive env-probe (TCP-OK/CURL-FAIL), env override '/'
+root prefix, and leading-space normalization. All deterministic, isolated via
+per-file XDG_RUNTIME_DIR, and using only public APIs without external IO.
+
+## Proposed Next Steps
+- Consider adding a quiet/non-quiet parity test for '/' override.
+- Optionally add mixed-case env-probe tests for tcp-fail/curl-ok symmetry.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
 Added tests for env override change mid-run (quiet/non-quiet interplay) and
 trailing-slash passthrough. Both are deterministic, isolated via per-file
 XDG_RUNTIME_DIR, and exercise env normalization and cache write behavior.

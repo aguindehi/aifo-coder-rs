@@ -30,3 +30,7 @@
 - registry_override_vs_env_probe_conflict.rs → override wins when env-probe also set.
 - registry_env_override_change_runtime.rs → env override changed mid-run updates prefix/cache.
 - registry_env_override_trailing_slash_passthrough.rs → preserves "omega/" and caches.
+- registry_env_probe_case_tcp_ok_upper.rs → env-probe TCP-OK (uppercase); source "tcp".
+- registry_env_probe_case_curl_fail_upper.rs → env-probe CURL-FAIL (uppercase); source "curl".
+- registry_env_override_leading_spaces.rs → trims leading spaces; caches normalized "gamma/".
+- registry_env_override_root_prefix.rs → env override "/" normalized to "/"; caches.
