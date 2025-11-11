@@ -28,7 +28,7 @@ Key v3 Clarifications vs v2
   - If $HOME/.cargo/registry exists: mount to /home/coder/.cargo/registry; else use aifo-cargo-registry volume.
   - If $HOME/.cargo/git exists: mount to /home/coder/.cargo/git; else use aifo-cargo-git volume.
   - On Windows hosts, named volumes are recommended by default; host cache mounts may be enabled when path semantics are safe.
-- Image selection defaults to aifo-rust-toolchain:<version|latest>; environment overrides supported; graceful fallback to official rust images with bootstrap.
+- Image selection defaults to aifo-coder-toolchain-rust:<version|latest>; environment overrides supported; graceful fallback to official rust images with bootstrap.
 - Optional mounts/env supported explicitly: host cargo config (read-only), SSH agent, sccache, proxy envs, fast linkers (lld/mold via RUSTFLAGS).
 - Fallback bootstrap precisely defined and idempotent for official rust images (cargo-nextest + clippy/rustfmt).
 - RUST_BACKTRACE defaults to 1 (best-effort) for better diagnostics.
@@ -49,7 +49,7 @@ Non-Goals
 - Shipping exhaustive cargo-* commands by default beyond a curated set.
 
 High-Level Design
-- Toolchain image: aifo-rust-toolchain:<tag>, based on official rust:<tag> images.
+- Toolchain image: aifo-coder-toolchain-rust:<tag>, based on official rust:<tag> images.
   - Preinstalled rustup components: clippy, rustfmt, rust-src, llvm-tools-preview.
   - Preinstalled cargo tools: cargo-nextest (pinned via --locked).
   - PATH includes /home/coder/.cargo/bin and /usr/local/cargo/bin; CARGO_HOME=/home/coder/.cargo.
@@ -65,7 +65,7 @@ High-Level Design
 - Fallback bootstrap (official images):
   - On first exec, install cargo-nextest (cargo install --locked) and rustup components clippy/rustfmt if missing; idempotent; terse by default, verbose logs on request.
 
-Image Specification (aifo-rust-toolchain)
+Image Specification (aifo-coder-toolchain-rust)
 Base
 - FROM ${REGISTRY_PREFIX}rust:<RUST_TAG> (bookworm/slim variants). Multi-arch: amd64 and arm64.
 
@@ -142,7 +142,7 @@ Image selection logic
   - AIFO_RUST_TOOLCHAIN_IMAGE: full image reference override (e.g., your registry mirror).
   - AIFO_RUST_TOOLCHAIN_VERSION: tag selector (e.g., 1.80, 1.80.1); default "latest".
 - Default:
-  - Use aifo-rust-toolchain:<version|latest>.
+  - Use aifo-coder-toolchain-rust:<version|latest>.
 - Fallback:
   - If our toolchain image is unavailable or AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1, use rust:<version>-slim (or rust:<major>-bookworm) and engage runtime fallback bootstrap.
 
@@ -154,7 +154,7 @@ Fallback bootstrap (when using official rust images)
 - Idempotent: does nothing when tools are present.
 - Error handling:
   - Network or install failure: non-zero exit with concise message; verbose mode prints full steps.
-  - Recommend switching to aifo-rust-toolchain to avoid on-the-fly installs.
+  - Recommend switching to aifo-coder-toolchain-rust to avoid on-the-fly installs.
 
 Operational knobs (environment variables)
 - AIFO_RUST_TOOLCHAIN_IMAGE
@@ -191,7 +191,7 @@ Phase 0 — Image creation
 
 Phase 1 — Makefile integration (build/publish)
 - Add targets:
-  - build-toolchain-rust: builds aifo-rust-toolchain:latest or :<version> when configured.
+  - build-toolchain-rust: builds aifo-coder-toolchain-rust:latest or :<version> when configured.
   - rebuild-toolchain-rust: same with --no-cache.
   - publish-toolchain-rust: buildx multi-arch and push if REGISTRY is set; otherwise produce an OCI archive in dist/.
 - Mirror patterns and behavior from existing publish-toolchain-cpp targets; honor REGISTRY_PREFIX probing and tagging behavior.
@@ -200,10 +200,10 @@ Phase 2 — Runtime image selection in code
 - In src/toolchain.rs:
   - default_toolchain_image("rust"):
     - If AIFO_RUST_TOOLCHAIN_IMAGE set: use it.
-    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-rust-toolchain:<version>.
-    - Else: aifo-rust-toolchain:latest.
+    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-coder-toolchain-rust:<version>.
+    - Else: aifo-coder-toolchain-rust:latest.
   - default_toolchain_image_for_version("rust", v):
-    - aifo-rust-toolchain:<v>.
+    - aifo-coder-toolchain-rust:<v>.
   - Provide graceful fallback to official rust images if our toolchain image is absent or AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1.
 
 Phase 3 — Mount strategy (writable caches) and env propagation
@@ -269,8 +269,8 @@ Phase 7 — Documentation
   - Troubleshooting for permissions (create host ~/.cargo/{registry,git} or set AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES=1).
 
 Phase 8 — Rollout
-- Build and publish aifo-rust-toolchain (latest + versioned tags).
-- Default code paths to prefer aifo-rust-toolchain and /home/coder/.cargo for CARGO_HOME.
+- Build and publish aifo-coder-toolchain-rust (latest + versioned tags).
+- Default code paths to prefer aifo-coder-toolchain-rust and /home/coder/.cargo for CARGO_HOME.
 - Retain fallback bootstrap for official images to avoid breaking existing deployments; monitor for regressions.
 
 Error Handling and Exit Codes
@@ -279,8 +279,8 @@ Error Handling and Exit Codes
 - Permission failures on cargo caches:
   - Prefer host cache mounts by default; instruct to create host ~/.cargo/{registry,git} or set AIFO_TOOLCHAIN_RUST_USE_DOCKER_VOLUMES=1.
 - Bootstrap failures:
-  - cargo-nextest install or rustup component add failures return non-zero; suggest using aifo-rust-toolchain for stability; verbose for details.
-- Network errors during bootstrap: surface cleanly; recommend using aifo-rust-toolchain to avoid on-the-fly installs.
+  - cargo-nextest install or rustup component add failures return non-zero; suggest using aifo-coder-toolchain-rust for stability; verbose for details.
+- Network errors during bootstrap: surface cleanly; recommend using aifo-coder-toolchain-rust to avoid on-the-fly installs.
 - Shim/protocol: unchanged (exit 86 reserved for shim-side errors).
 - Orchestrator not found: unchanged.
 
@@ -302,7 +302,7 @@ Acceptance Criteria
 
 Risks and Mitigations
 - Host cache path absent/unwritable: per-path fallback to named volumes.
-- Official rust image use: fallback bootstrap; encourage aifo-rust-toolchain for speed and reproducibility.
+- Official rust image use: fallback bootstrap; encourage aifo-coder-toolchain-rust for speed and reproducibility.
 - SSH agent/known_hosts complexity: keep opt-in; document clearly.
 - Disk usage growth: sccache opt-in and volume-based; document cleanup commands.
 

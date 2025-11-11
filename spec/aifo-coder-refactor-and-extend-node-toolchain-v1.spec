@@ -27,8 +27,8 @@ Constraints and conventions
 - Maintain existing Docker multi-stage patterns and shim approach.
 
 Design summary
-- New image: toolchains/node/Dockerfile building aifo-node-toolchain:<tag>.
-- images.rs: default Node image points to aifo-node-toolchain (with versioned selector).
+- New image: toolchains/node/Dockerfile building aifo-coder-toolchain-node:<tag>.
+- images.rs: default Node image points to aifo-coder-toolchain-node (with versioned selector).
 - sidecar.rs:
   - Mount a single named volume aifo-node-cache to /home/coder/.cache when caching is enabled.
   - Set env for XDG cache consumers and package managers:
@@ -81,8 +81,8 @@ Phase 1: Image selection and normalization
 - src/toolchain/images.rs:
   - Keep aliases: ts/typescript map to node.
   - Change Node defaults:
-    - DEFAULT_IMAGE_BY_KIND: ("node", "aifo-node-toolchain:latest")
-    - DEFAULT_IMAGE_FMT_BY_KIND: ("node", "aifo-node-toolchain:{version}")
+    - DEFAULT_IMAGE_BY_KIND: ("node", "aifo-coder-toolchain-node:latest")
+    - DEFAULT_IMAGE_FMT_BY_KIND: ("node", "aifo-coder-toolchain-node:{version}")
   - Preserve existing env-based overrides for rust; Add Node overrides later if needed.
 
 Phase 2: Shim expansion
@@ -139,7 +139,7 @@ Backwards compatibility
 - Existing behavior for rust/python/c-cpp/go unaffected.
 - Node:
   - Prior npm-only cache volume remains in purge for cleanup.
-  - Default image now aifo-node-toolchain; callers can still override image via existing mechanisms.
+  - Default image now aifo-coder-toolchain-node; callers can still override image via existing mechanisms.
 
 Security and trust
 - Deno installation is fetched over TLS with system CAs; enterprise CA support is consistent with
@@ -175,7 +175,7 @@ Rollout
 - Build images with/without registry prefix argument and verify via preview tests.
 
 Versioning
-- Map default_toolchain_image_for_version("node", v) to aifo-node-toolchain:{v}.
+- Map default_toolchain_image_for_version("node", v) to aifo-coder-toolchain-node:{v}.
 - Keep fallback for unknown kinds consistent: "node:20-bookworm-slim" as a safety default.
 
 End of spec

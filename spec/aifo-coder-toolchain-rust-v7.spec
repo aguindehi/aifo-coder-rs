@@ -25,7 +25,7 @@ Key v7 highlights and diffs vs v6
   - CARGO_HOME MUST be /home/coder/.cargo in rust sidecars (run and exec).
   - PATH MUST prepend $CARGO_HOME/bin and SHOULD retain /usr/local/cargo/bin as fallback.
 - Default images and selection:
-  - Default rust toolchain image MUST be aifo-rust-toolchain:<version|latest>. Official rust:<version>-slim/bookworm is a fallback only when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 or when our image is unavailable; fallback MUST engage a bootstrap wrapper.
+  - Default rust toolchain image MUST be aifo-coder-toolchain-rust:<version|latest>. Official rust:<version>-slim/bookworm is a fallback only when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 or when our image is unavailable; fallback MUST engage a bootstrap wrapper.
 - Cache strategy:
   - Host-preferred per-path for Linux/macOS: if $HOME/.cargo/registry exists mount to /home/coder/.cargo/registry; else aifo-cargo-registry named volume. Same for $HOME/.cargo/git -> /home/coder/.cargo/git or aifo-cargo-git.
   - Windows: default to named volumes; host cache mounts are opt‑in only when path semantics are verified safe (future extension).
@@ -42,7 +42,7 @@ Key v7 highlights and diffs vs v6
   - Existing repository preview and CLI tests are integrated; new toolchain_rust_* tests are added for v7 behaviors.
 
 High‑Level Design
-- Toolchain image: aifo-rust-toolchain:<tag>, derived from official rust:<tag> images.
+- Toolchain image: aifo-coder-toolchain-rust:<tag>, derived from official rust:<tag> images.
   - Preinstalled: rustup components clippy, rustfmt, rust-src, llvm-tools-preview; cargo-nextest via cargo install --locked.
   - PATH includes /home/coder/.cargo/bin (prepend) and keeps /usr/local/cargo/bin as fallback.
   - CARGO_HOME=/home/coder/.cargo.
@@ -66,7 +66,7 @@ High‑Level Design
   - No privileged mode; no Docker socket mounts.
   - AppArmor/seccomp/cgroupns behavior unchanged (apply AppArmor profile when available).
 
-Image Specification (aifo-rust-toolchain)
+Image Specification (aifo-coder-toolchain-rust)
 Base
 - FROM ${REGISTRY_PREFIX}rust:<RUST_TAG> (bookworm/slim variants). Multi‑arch: amd64 and arm64.
 
@@ -136,7 +136,7 @@ Other env inside sidecar (always):
 Environment variables (selection and precedence)
 - Image selection:
   - AIFO_RUST_TOOLCHAIN_IMAGE: full image ref override wins.
-  - AIFO_RUST_TOOLCHAIN_VERSION: tag for aifo-rust-toolchain, default latest.
+  - AIFO_RUST_TOOLCHAIN_VERSION: tag for aifo-coder-toolchain-rust, default latest.
   - AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1: force official rust:<version>-slim/bookworm and engage bootstrap wrapper.
 - Caches:
   - AIFO_TOOLCHAIN_NO_CACHE=1
@@ -157,7 +157,7 @@ Environment variables (selection and precedence)
 
 Phased Plan (Implementation and Tests)
 
-Phase 0 — Image creation (aifo-rust-toolchain)
+Phase 0 — Image creation (aifo-coder-toolchain-rust)
 Objective
 - Provide a first‑party rust toolchain image with mandatory components and tools, multi‑arch.
 
@@ -172,7 +172,7 @@ Implementation
 Tests
 - New (ignored by default):
   - tests/toolchain_rust_image_contents.rs
-    - docker run aifo-rust-toolchain:<tag> sh -lc 'rustup component list' and assert clippy, rustfmt, rust-src, llvm-tools-preview.
+    - docker run aifo-coder-toolchain-rust:<tag> sh -lc 'rustup component list' and assert clippy, rustfmt, rust-src, llvm-tools-preview.
     - cargo nextest -V succeeds.
     - PATH/CARGO_HOME env correct.
     - Basic system deps present (gcc, g++, make, pkg-config, cmake, ninja, clang, python3, ssl/zlib/sqlite/curl libs, git).
@@ -180,7 +180,7 @@ Tests
   - tests/toolchain_rust_image_ci_variant.rs (if CI variant exists)
     - sccache present; lld and/or mold present.
   - CI step:
-    - docker buildx imagetools inspect aifo-rust-toolchain:<tag> includes linux/amd64 and linux/arm64 manifests.
+    - docker buildx imagetools inspect aifo-coder-toolchain-rust:<tag> includes linux/amd64 and linux/arm64 manifests.
 
 Success Criteria
 - All required components/tools present; multi-arch published; envs configured.
@@ -199,7 +199,7 @@ Tests
   - tests/make_targets_rust_toolchain.rs
     - make -n help contains build/rebuild/publish rust targets.
   - tests/make_dry_run_rust_toolchain.rs
-    - make -n build-toolchain-rust includes docker build(x) with toolchains/rust/Dockerfile, tag aifo-rust-toolchain:latest (or version), and proper cache flags.
+    - make -n build-toolchain-rust includes docker build(x) with toolchains/rust/Dockerfile, tag aifo-coder-toolchain-rust:latest (or version), and proper cache flags.
   - tests/publish_dry_run_rust_toolchain.rs
     - make -n publish-toolchain-rust with PLATFORMS, PUSH=0 shows --platform and --output or --push decisions; REGISTRY normalization ensures trailing slash as needed.
 
@@ -208,15 +208,15 @@ Success Criteria
 
 Phase 2 — Runtime image selection in code
 Objective
-- Select aifo-rust-toolchain by default; support overrides; official fallback engages bootstrap.
+- Select aifo-coder-toolchain-rust by default; support overrides; official fallback engages bootstrap.
 
 Implementation
 - src/toolchain.rs:
   - default_toolchain_image("rust"):
     - If AIFO_RUST_TOOLCHAIN_IMAGE set: use it.
-    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-rust-toolchain:<version>.
-    - Else: aifo-rust-toolchain:latest.
-  - default_toolchain_image_for_version("rust", v): aifo-rust-toolchain:<v>.
+    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-coder-toolchain-rust:<version>.
+    - Else: aifo-coder-toolchain-rust:latest.
+  - default_toolchain_image_for_version("rust", v): aifo-coder-toolchain-rust:<v>.
   - Respect AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1: use official rust image and mark for bootstrap in exec.
 
 Tests
@@ -229,7 +229,7 @@ Tests
     - Assert mapping for default, versioned, explicit image, and official fallback marking.
 
 Success Criteria
-- Overrides honored; default image is aifo-rust-toolchain; official fallback marked for bootstrap.
+- Overrides honored; default image is aifo-coder-toolchain-rust; official fallback marked for bootstrap.
 
 Phase 3 — Mount strategy and env propagation
 Objective
@@ -297,7 +297,7 @@ Implementation
 Tests
 - New:
   - tests/toolchain_rust_bootstrap_wrapper_preview.rs (unit/integration)
-    - Exec preview shows bootstrap wrapper on official images; no wrapper on aifo-rust-toolchain
+    - Exec preview shows bootstrap wrapper on official images; no wrapper on aifo-coder-toolchain-rust
   - tests/toolchain_rust_bootstrap_exec.rs (ignored by default; E2E)
     - First exec installs nextest/clippy/rustfmt; second exec is idempotent; verbose flag prints expanded logs
   - tests/toolchain_rust_bootstrap_sccache_policy.rs (integration)
@@ -396,7 +396,7 @@ Tests
     - cargo clippy --all-targets --all-features -- -D warnings
     - cargo fmt -- --check
   - tests/default_image_regression.rs (unit)
-    - Ensures default code path prefers aifo-rust-toolchain and CARGO_HOME=/home/coder/.cargo in previews
+    - Ensures default code path prefers aifo-coder-toolchain-rust and CARGO_HOME=/home/coder/.cargo in previews
 
 Success Criteria
 - Smoke suite passes; defaults remain stable.
