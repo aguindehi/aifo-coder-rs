@@ -910,8 +910,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
         repaint_summary(pass, warn, fail, na, true, use_err);
-        // We are at the baseline (line after summary); add two blank lines.
-        eprintln!();
+        // We are at the baseline (line after summary); add one blank line.
         eprintln!();
         // Legend (TTY)
         let legend = format!(
