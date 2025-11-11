@@ -102,8 +102,8 @@ RUN git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross &&
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
-      ln -sf "$(ls aarch64-apple-darwin*-$$t | head -n1)" aarch64-apple-darwin-$$t || true; \
-      ln -sf "$(ls x86_64-apple-darwin*-$$t | head -n1)"  x86_64-apple-darwin-$$t  || true; \
+      ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
+      ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
     done
 # Environment for cargo cross-compilation to macOS arm64 (optional x86_64 commented)
 ENV PATH="/opt/osxcross/target/bin:${PATH}" \
