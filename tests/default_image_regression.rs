@@ -32,7 +32,7 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
     std::env::set_var("AIFO_RUST_TOOLCHAIN_IMAGE", "aifo-coder-toolchain-rust:dev");
     let img = aifo_coder::default_toolchain_image("rust");
     assert_eq!(
-        img, "aifo-toolchain-rust:dev",
+        img, "aifo-coder-toolchain-rust:dev",
         "explicit image override must be preferred"
     );
     // Clear override
