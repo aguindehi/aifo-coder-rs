@@ -43,7 +43,7 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
     if docker_has_image("aifo-coder-toolchain-rust:latest") {
         assert!(
             img2.starts_with("aifo-coder-toolchain-rust:"),
-            "expected default to prefer aifo-rust-toolchain:* when available; got {}",
+            "expected default to prefer aifo-coder-toolchain-rust:* when available; got {}",
             img2
         );
     } else {

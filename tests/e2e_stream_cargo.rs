@@ -153,7 +153,7 @@ fn test_e2e_stream_cargo_help_v2() {
         }
     };
 
-    // Force official rust image for the sidecar to avoid depending on aifo-rust-toolchain images.
+    // Force official rust image for the sidecar to avoid depending on aifo-coder-toolchain-rust images.
     std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
     // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
     let official = "rust:1.80-bookworm";
