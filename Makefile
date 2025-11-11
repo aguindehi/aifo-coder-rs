@@ -184,6 +184,7 @@ help: banner
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
 	@echo "  build-macos-cross-rust-builder Build the macOS cross image (requires ci/osx/$${OSX_SDK_FILENAME})"
 	@echo "  build-launcher-macos-cross .. Build aifo-coder for macOS arm64 using cross image"
+	@echo "  validate-macos-artifact ..... Validate macOS arm64 binary with file(1)"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
 	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
@@ -585,6 +586,27 @@ build-launcher-macos-cross:
 	  echo "Error: $$BIN not found or not executable"; \
 	  exit 2; \
 	fi
+
+.PHONY: validate-macos-artifact
+validate-macos-artifact:
+	@set -e; \
+	BIN1="dist/aifo-coder-macos-arm64"; \
+	BIN2="target/aarch64-apple-darwin/release/aifo-coder"; \
+	if [ -f "$$BIN1" ]; then BIN="$$BIN1"; \
+	elif [ -f "$$BIN2" ]; then BIN="$$BIN2"; \
+	else \
+	  echo "Error: macOS artifact not found at $$BIN1 or $$BIN2"; \
+	  exit 2; \
+	fi; \
+	if command -v file >/dev/null 2>&1; then \
+	  out="$$(file "$$BIN" | sed -n "1p")"; echo "$$out"; \
+	  echo "$$out" | grep -qi "Mach-O 64-bit arm64" || { \
+	    echo "Validation failed: not a Mach-O 64-bit arm64 binary."; exit 3; \
+	  }; \
+	else \
+	  echo "Warning: file(1) not available; skipping validation."; \
+	fi; \
+	echo "macOS artifact validation OK: $$BIN"
 
 .PHONY: build-debug
 build-debug:
