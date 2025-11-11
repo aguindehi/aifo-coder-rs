@@ -400,62 +400,62 @@ cargo test --test toolchain_live -- --ignored
 A quick reference of all Makefile targets.
 
 
-| Target                     | Category   | Description                                                                                   |
-|---------------------------|------------|-----------------------------------------------------------------------------------------------|
-| build                     | Build      | Build both slim and fat images (all agents)                                                   |
-| build-fat                 | Build      | Build all fat images (codex, crush, aider, openhands, opencode, plandex)                      |
-| build-codex               | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
-| build-crush               | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
-| build-aider               | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
-| build-slim                | Build      | Build all slim images (codex-slim, crush-slim, aider-slim, openhands-slim, opencode-slim, plandex-slim) |
-| build-codex-slim          | Build      | Build only the Codex slim image (`${IMAGE_PREFIX}-codex-slim:${TAG}`)                         |
-| build-crush-slim          | Build      | Build only the Crush slim image (`${IMAGE_PREFIX}-crush-slim:${TAG}`)                         |
-| build-aider-slim          | Build      | Build only the Aider slim image (`${IMAGE_PREFIX}-aider-slim:${TAG}`)                         |
-| rebuild                   | Rebuild    | Rebuild both slim and fat images without cache                                                |
-| rebuild-fat               | Rebuild    | Rebuild all fat images without cache                                                          |
-| rebuild-codex             | Rebuild    | Rebuild only Codex, no cache                                                                  |
-| rebuild-crush             | Rebuild    | Rebuild only Crush, no cache                                                                  |
-| rebuild-aider             | Rebuild    | Rebuild only Aider, no cache                                                                  |
-| rebuild-slim              | Rebuild    | Rebuild all slim images without cache                                                         |
-| rebuild-codex-slim        | Rebuild    | Rebuild only Codex slim, no cache                                                             |
-| rebuild-crush-slim        | Rebuild    | Rebuild only Crush slim, no cache                                                             |
-| rebuild-aider-slim        | Rebuild    | Rebuild only Aider slim, no cache                                                             |
-| rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
-| rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
-| build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
-| build-macos-cross-rust-builder | Build      | Build osxcross-based macOS cross image (requires ci/osx/<SDK>)                           |
-| build-launcher-macos-cross | Build      | Build macOS arm64 and x86_64 launchers using the macOS cross image                          |
-| build-launcher-macos-cross-arm64 | Build | Build macOS arm64 launcher using the macOS cross image                                      |
-| build-launcher-macos-cross-x86_64 | Build  | Build macOS x86_64 launcher using the macOS cross image                                    |
-| validate-macos-artifact   | Utility    | Validate macOS arm64 Mach-O via file(1)                                                      |
-| validate-macos-artifact-x86_64 | Utility | Validate macOS x86_64 Mach-O via file(1)                                                     |
-| release-for-target        | Release    | Build release archives into dist/ for targets in RELEASE_TARGETS or host default              |
-| release-for-mac           | Release    | Build release for the current host (calls release-for-target)                                 |
-| release-for-linux         | Release    | Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)                                |
-| release                   | Release    | Aggregate: build both mac (host) and Linux                                                    |
-| release-app               | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                       |
-| release-dmg               | Release    | Create a macOS .dmg from the .app (Darwin hosts only)                                        |
-| release-dmg-sign          | Release    | Sign the .app and .dmg (and notarize if configured); produces a signed DMG                   |
-| clean                     | Utility    | Remove built images (ignores errors if not present)                                           |
-| loc                       | Utility    | Count lines of code across key file types                                                     |
-| docker-images             | Utility    | Show the available images in the local Docker registry                                        |
-| docker-enter              | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
-| test                      | Utility    | Run the Rust test suite (cargo test)                                                          |
-| checksums                 | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                            |
-| sbom                      | Utility    | Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)                   |
-| gpg-disable-signing       | GPG        | Disable GPG commit signing for the current repo                                               |
-| gpg-enable-signing        | GPG        | Enable GPG commit signing for the current repo                                                |
-| gpg-show-config           | GPG        | Show effective GPG/Git signing configuration                                                  |
-| gpg-disable-signing-global| GPG        | Disable GPG commit signing globally                                                           |
-| gpg-unset-signing         | GPG        | Unset repo signing configuration                                                              |
-| git-show-signatures       | GPG        | Show commit signature status (git log %h %G? %s)                                              |
-| git-commit-no-sign        | GPG        | Make a commit without signing                                                                 |
-| git-amend-no-sign         | GPG        | Amend the last commit without signing                                                         |
-| git-commit-no-sign-all    | GPG        | Commit all staged changes without signing                                                     |
-| scrub-coauthors           | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)       |
-| apparmor                  | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)               |
-| apparmor-load-colima      | AppArmor   | Load the generated profile into the Colima VM (macOS)                                         |
-| apparmor-log-colima       | AppArmor   | Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log                  |
+| Target                              | Category   | Description                                                                                   |
+|-------------------------------------|------------|-----------------------------------------------------------------------------------------------|
+| build                               | Build      | Build both slim and fat images (all agents)                                                   |
+| build-fat                           | Build      | Build all fat images (codex, crush, aider, openhands, opencode, plandex)                      |
+| build-codex                         | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
+| build-crush                         | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
+| build-aider                         | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
+| build-slim                          | Build      | Build all slim images (codex-slim, crush-slim, aider-slim,<br> openhands-slim, opencode-slim, plandex-slim) |
+| build-codex-slim                    | Build      | Build only the Codex slim image (`${IMAGE_PREFIX}-codex-slim:${TAG}`)                         |
+| build-crush-slim                    | Build      | Build only the Crush slim image (`${IMAGE_PREFIX}-crush-slim:${TAG}`)                         |
+| build-aider-slim                    | Build      | Build only the Aider slim image (`${IMAGE_PREFIX}-aider-slim:${TAG}`)                         |
+| rebuild                             | Rebuild    | Rebuild both slim and fat images without cache                                                |
+| rebuild-fat                         | Rebuild    | Rebuild all fat images without cache                                                          |
+| rebuild-codex                       | Rebuild    | Rebuild only Codex, no cache                                                                  |
+| rebuild-crush                       | Rebuild    | Rebuild only Crush, no cache                                                                  |
+| rebuild-aider                       | Rebuild    | Rebuild only Aider, no cache                                                                  |
+| rebuild-slim                        | Rebuild    | Rebuild all slim images without cache                                                         |
+| rebuild-codex-slim                  | Rebuild    | Rebuild only Codex slim, no cache                                                             |
+| rebuild-crush-slim                  | Rebuild    | Rebuild only Crush slim, no cache                                                             |
+| rebuild-aider-slim                  | Rebuild    | Rebuild only Aider slim, no cache                                                             |
+| rebuild-existing                    | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
+| rebuild-existing-nocache            | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
+| build-launcher                      | Release    | Build the Rust host launcher (release build)                                                  |
+| build-macos-cross-rust-builder      | Build      | Build osxcross-based macOS cross image (requires ci/osx/<SDK>)                                |
+| build-launcher-macos-cross          | Build      | Build macOS arm64 and x86_64 launchers using the macOS cross image                            |
+| build-launcher-macos-cross-arm64    | Build      | Build macOS arm64 launcher using the macOS cross image                                        |
+| build-launcher-macos-cross-x86_64   | Build      | Build macOS x86_64 launcher using the macOS cross image                                       |
+| validate-macos-artifact             | Utility    | Validate macOS arm64 Mach-O via file(1)                                                       |
+| validate-macos-artifact-x86_64      | Utility    | Validate macOS x86_64 Mach-O via file(1)                                                      |
+| release-for-target                  | Release    | Build release archives into dist/ for targets in RELEASE_TARGETS or host default              |
+| release-for-mac                     | Release    | Build release for the current host (calls release-for-target)                                 |
+| release-for-linux                   | Release    | Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)                                |
+| release                             | Release    | Aggregate: build both mac (host) and Linux                                                    |
+| release-app                         | Release    | Build macOS .app bundle into dist/ (Darwin hosts only)                                        |
+| release-dmg                         | Release    | Create a macOS .dmg from the .app (Darwin hosts only)                                         |
+| release-dmg-sign                    | Release    | Sign the .app and .dmg (and notarize if configured); produces a signed DMG                    |
+| clean                               | Utility    | Remove built images (ignores errors if not present)                                           |
+| loc                                 | Utility    | Count lines of code across key file types                                                      |
+| docker-images                       | Utility    | Show the available images in the local Docker registry                                         |
+| docker-enter                        | Utility    | Enter a running container via docker exec with GPG runtime prepared                            |
+| test                                | Utility    | Run the Rust test suite (cargo test)                                                           |
+| checksums                           | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                             |
+| sbom                                | Utility    | Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)                    |
+| gpg-disable-signing                 | GPG        | Disable GPG commit signing for the current repo                                                |
+| gpg-enable-signing                  | GPG        | Enable GPG commit signing for the current repo                                                 |
+| gpg-show-config                     | GPG        | Show effective GPG/Git signing configuration                                                   |
+| gpg-disable-signing-global          | GPG        | Disable GPG commit signing globally                                                            |
+| gpg-unset-signing                   | GPG        | Unset repo signing configuration                                                               |
+| git-show-signatures                 | GPG        | Show commit signature status (git log %h %G? %s)                                               |
+| git-commit-no-sign                  | GPG        | Make a commit without signing                                                                  |
+| git-amend-no-sign                   | GPG        | Amend the last commit without signing                                                          |
+| git-commit-no-sign-all              | GPG        | Commit all staged changes without signing                                                      |
+| scrub-coauthors                     | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)        |
+| apparmor                            | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)                |
+| apparmor-load-colima                | AppArmor   | Load the generated profile into the Colima VM (macOS)                                          |
+| apparmor-log-colima                 | AppArmor   | Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log                   |
 
 Variables used by these targets:
 
