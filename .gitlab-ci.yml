@@ -279,9 +279,34 @@ build-launcher-macos:
     - mkdir -p dist
     - cp target/aarch64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-arm64
     - file dist/aifo-coder-macos-arm64 | grep -qi 'Mach-O 64-bit arm64' || { echo "not a Mach-O arm64"; exit 2; }
+    - command -v otool >/dev/null 2>&1 && otool -hv dist/aifo-coder-macos-arm64 || true
   artifacts:
     paths:
       - dist/aifo-coder-macos-arm64
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG
+
+build-launcher-macos-x86_64:
+  stage: build
+  timeout: 45m
+  interruptible: true
+  needs:
+    - build-macos-cross-rust-builder
+  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
+  tags:
+    - qual-mcap-gcp
+  script:
+    - rustc --version; cargo --version
+    - rustup target add x86_64-apple-darwin || true
+    - cargo build --release --target x86_64-apple-darwin
+    - mkdir -p dist
+    - cp target/x86_64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-x86_64
+    - file dist/aifo-coder-macos-x86_64 | grep -qi 'Mach-O 64-bit x86_64' || { echo "not a Mach-O x86_64"; exit 2; }
+    - command -v otool >/dev/null 2>&1 && otool -hv dist/aifo-coder-macos-x86_64 || true
+  artifacts:
+    paths:
+      - dist/aifo-coder-macos-x86_64
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG
@@ -510,6 +535,8 @@ publish-release:
       artifacts: true
     - job: build-launcher-macos
       artifacts: true
+    - job: build-launcher-macos-x86_64
+      artifacts: true
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
   image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:v0.24.0
@@ -531,6 +558,8 @@ publish-release:
         - name: aifo-coder
           url: $CI_JOB_URL/artifacts/download
         - name: aifo-coder-macos-arm64
+          url: $CI_JOB_URL/artifacts/download
+        - name: aifo-coder-macos-x86_64
           url: $CI_JOB_URL/artifacts/download
   rules:
     - if: $CI_COMMIT_TAG

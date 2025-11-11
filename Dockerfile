@@ -93,10 +93,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt
 # Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
 ARG OSX_SDK_FILENAME=MacOSX13.3.sdk.tar.xz
+ARG OSXCROSS_REF=
 # Copy SDK from build context (decoded in CI) into osxcross tarballs
 COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
 # Build osxcross unattended and install into /opt/osxcross
 RUN git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross && \
+    if [ -n "${OSXCROSS_REF}" ]; then \
+      cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
+    fi && \
     mv /tmp/${OSX_SDK_FILENAME} osxcross/tarballs/ && \
     UNATTENDED=1 osxcross/build.sh
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
@@ -113,14 +117,14 @@ ENV PATH="/opt/osxcross/target/bin:${PATH}" \
     AR_aarch64_apple_darwin=aarch64-apple-darwin-ar \
     RANLIB_aarch64_apple_darwin=aarch64-apple-darwin-ranlib \
     CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=oa64-clang
-# Optional x86_64:
-# ENV CC_x86_64_apple_darwin=o64-clang \
-#     CXX_x86_64_apple_darwin=o64-clang++ \
-#     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
-#     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
-#     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang
+# Enable optional x86_64 macOS cross-compilation as well
+ENV CC_x86_64_apple_darwin=o64-clang \
+    CXX_x86_64_apple_darwin=o64-clang++ \
+    AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
+    RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
+    CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang
 # Install Rust target inside the image (best-effort)
-RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true
+RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
