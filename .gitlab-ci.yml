@@ -339,6 +339,8 @@ build-launcher:
     expire_in: 1 week
     paths:
       - aifo-coder
+      - dist/aifo-coder-macos-arm64
+      - dist/aifo-coder-macos-x86_64
       - README.md
       - NOTICE
       - LICENSE
