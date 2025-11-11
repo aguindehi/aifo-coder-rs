@@ -49,6 +49,47 @@ Notes:
 - By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
 - The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
 
+## macOS cross-build (osxcross)
+
+You can build the macOS launcher on Linux CI using osxcross with an Apple SDK injected via masked CI
+secrets. This produces macOS artifacts without requiring a macOS host.
+
+- Overview:
+  - Cross image stage: macos-cross-rust-builder (Dockerfile).
+  - CI jobs: build-macos-cross-rust-builder (Kaniko), build-launcher-macos (arm64), optional build-launcher-macos-x86_64.
+  - Artifacts: dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64 (optional).
+  - Security: SDK is never committed or artifacted; it’s decoded from APPLE_SDK_BASE64 (masked + protected) only in CI.
+
+- Documentation:
+  - Prerequisites: docs/ci/macos-cross-prereqs.md
+  - Validation: docs/ci/macos-cross-validation.md
+
+- Local cross-build (developer convenience; Linux host):
+  - Place the Apple SDK tarball under ci/osx/MacOSX13.3.sdk.tar.xz (do not commit it).
+  - Build the cross image:
+    make build-macos-cross-rust-builder
+  - Build macOS arm64 launcher:
+    make build-launcher-macos-cross
+  - Validate with file(1):
+    make validate-macos-artifact
+  - Optional x86_64:
+    make build-launcher-macos-cross-x86_64
+    make validate-macos-artifact-x86_64
+
+- CI summary:
+  - build-macos-cross-rust-builder:
+    - Runs on tags; allowed on default-branch manual runs and schedules; tags image as :$CI_COMMIT_TAG or :ci.
+  - build-launcher-macos:
+    - Runs on tags; builds aarch64-apple-darwin and validates with file(1); best-effort otool -hv check.
+  - build-launcher-macos-x86_64 (optional):
+    - Runs on tags; builds x86_64-apple-darwin and validates with file(1); best-effort otool -hv check.
+  - publish-release:
+    - Attaches Linux and macOS artifacts; exposes links aifo-coder, aifo-coder-macos-arm64, aifo-coder-macos-x86_64.
+
+- Pinning osxcross (optional stability):
+  - Dockerfile supports build-arg OSXCROSS_REF to pin osxcross to a specific commit:
+    docker build --target macos-cross-rust-builder --build-arg OSXCROSS_REF=<commit> .
+
 ## CLI usage and arguments
 
 Synopsis:
@@ -380,6 +421,11 @@ A quick reference of all Makefile targets.
 | rebuild-existing          | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (using cache)                           |
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
+| build-macos-cross-rust-builder | Build      | Build osxcross-based macOS cross image (requires ci/osx/<SDK>)                           |
+| build-launcher-macos-cross | Build      | Build macOS arm64 launcher using the macOS cross image                                      |
+| build-launcher-macos-cross-x86_64 | Build  | Build macOS x86_64 launcher using the macOS cross image                                    |
+| validate-macos-artifact   | Utility    | Validate macOS arm64 Mach-O via file(1)                                                      |
+| validate-macos-artifact-x86_64 | Utility | Validate macOS x86_64 Mach-O via file(1)                                                     |
 | release-for-target        | Release    | Build release archives into dist/ for targets in RELEASE_TARGETS or host default              |
 | release-for-mac           | Release    | Build release for the current host (calls release-for-target)                                 |
 | release-for-linux         | Release    | Build Linux release (RELEASE_TARGETS=x86_64-unknown-linux-gnu)                                |
@@ -425,7 +471,7 @@ Variables used by these targets:
 
 ## Cross-compiling and Rust specifics
 
-This repository uses native rustup toolchains for all builds. No cross-rs containers or Cross.toml are used.
+This repository uses native rustup toolchains for host builds. Linux→macOS cross builds are supported via an osxcross-based Docker stage and CI. No cross-rs containers or Cross.toml are used.
 
 Recommended approach:
 - Use release-for-target to build and package binaries for the current host or selected targets:
