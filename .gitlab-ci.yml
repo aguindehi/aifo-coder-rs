@@ -125,7 +125,7 @@ build:
   extends: container-build
   stage: build
   interruptible: true
-  timeout: 1h
+  timeout: 1h 30m
   tags:
     - qual-mcap-gcp
   retry:
@@ -146,7 +146,7 @@ build-toolchain:
   extends: container-build
   stage: build
   interruptible: true
-  timeout: 1h
+  timeout: 1h 30m
   tags:
     - qual-mcap-gcp
   retry:
