@@ -83,6 +83,45 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
+# --- macOS cross Rust builder (osxcross; no secrets) ---
+FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
+ENV DEBIAN_FRONTEND=noninteractive
+# Minimal packages required to build osxcross and perform smoke checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      clang llvm make cmake patch xz-utils unzip curl git python3 file ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
+# Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
+ARG OSX_SDK_FILENAME=MacOSX13.3.sdk.tar.xz
+# Copy SDK from build context (decoded in CI) into osxcross tarballs
+COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
+# Build osxcross unattended and install into /opt/osxcross
+RUN git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross && \
+    mv /tmp/${OSX_SDK_FILENAME} osxcross/tarballs/ && \
+    UNATTENDED=1 osxcross/build.sh
+# Create stable tool aliases to avoid depending on Darwin minor suffixes
+RUN set -e; cd /opt/osxcross/target/bin; \
+    for t in ar ranlib strip; do \
+      ln -sf "$(ls aarch64-apple-darwin*-$$t | head -n1)" aarch64-apple-darwin-$$t || true; \
+      ln -sf "$(ls x86_64-apple-darwin*-$$t | head -n1)"  x86_64-apple-darwin-$$t  || true; \
+    done
+# Environment for cargo cross-compilation to macOS arm64 (optional x86_64 commented)
+ENV PATH="/opt/osxcross/target/bin:${PATH}" \
+    MACOSX_DEPLOYMENT_TARGET=11.0 \
+    CC_aarch64_apple_darwin=oa64-clang \
+    CXX_aarch64_apple_darwin=oa64-clang++ \
+    AR_aarch64_apple_darwin=aarch64-apple-darwin-ar \
+    RANLIB_aarch64_apple_darwin=aarch64-apple-darwin-ranlib \
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=oa64-clang
+# Optional x86_64:
+# ENV CC_x86_64_apple_darwin=o64-clang \
+#     CXX_x86_64_apple_darwin=o64-clang++ \
+#     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
+#     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
+#     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang
+# Install Rust target inside the image (best-effort)
+RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true
+
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
