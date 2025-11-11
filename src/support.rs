@@ -915,7 +915,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
         eprintln!();
         // Legend (TTY)
         let legend = format!(
-            "Legend: {} ok {} partial {} unavailable {} not-available (image missing)",
+            "Legend: {} ok, {} partial, {} unavailable, {} not-available (image missing)",
             color_token(use_err, "PASS"),
             color_token(use_err, "WARN"),
             color_token(use_err, "FAIL"),
@@ -937,7 +937,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
         aifo_coder::log_info_stderr(use_err, &summary);
         // Legend (non-TTY)
         let legend = format!(
-            "Legend: {} ok {} partial {} unavailable {} not-available (image missing)",
+            "Legend: {} ok, {} partial, {} unavailable, {} not-available (image missing)",
             pass_tok, warn_tok, fail_tok, na_tok
         );
         eprintln!("{}", legend);
