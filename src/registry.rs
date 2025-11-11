@@ -267,12 +267,18 @@ pub fn preferred_registry_prefix_quiet() -> String {
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
-    // If a test override is active, always report "unknown" as source.
+    // If a test override is active, prefer reporting "env" or "env-empty" if that was the
+    // actual resolution path; otherwise, keep source "unknown" under override.
     if REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
         .is_some()
     {
+        if let Some(src) = REGISTRY_PREFIX_SOURCE.get() {
+            if src == "env" || src == "env-empty" {
+                return src.clone();
+            }
+        }
         return "unknown".to_string();
     }
 
