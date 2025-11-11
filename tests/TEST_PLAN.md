@@ -1,4 +1,6 @@
 # Deterministic registry tests plan (2025-11-11)
+Status: all scenarios covered; tests passing (2025-11-11).
+Run: make check
 
 - registry_env_empty_cache.rs → env-empty branch, cache write/remove path.
 - registry_env_non_empty_normalization.rs → env non-empty normalization to single '/'.
