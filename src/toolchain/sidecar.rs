@@ -492,7 +492,7 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             .as_deref()
             == Some("1");
     if use_bootstrap {
-        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-rust-toolchain image with sccache' >&2; fi; exec \"$@\"";
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-toolchain-rust image with sccache' >&2; fi; exec \"$@\"";
         args.push("sh".to_string());
         args.push("-c".to_string());
         args.push(bootstrap.to_string());

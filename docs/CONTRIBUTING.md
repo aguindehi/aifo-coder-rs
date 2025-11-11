@@ -6,7 +6,7 @@ mounted, and a few execution environment details for each supported toolchain.
 Conventions and registry prefix
 - Images can be overridden via environment variables, following the pattern:
   - AIFO_<KIND>_TOOLCHAIN_IMAGE: full image reference (highest precedence)
-  - AIFO_<KIND>_TOOLCHAIN_VERSION: version tag (maps to aifo-<kind>-toolchain:{version})
+  - AIFO_<KIND>_TOOLCHAIN_VERSION: version tag (maps to aifo-toolchain-<kind>:{version})
 - A registry prefix can be provided at runtime via AIFO_CODER_REGISTRY_PREFIX and at build
   time via Docker ARG REGISTRY_PREFIX. The implementation normalizes a single trailing slash.
 
@@ -26,7 +26,7 @@ Node (includes TypeScript)
   - AIFO_NODE_TOOLCHAIN_IMAGE
   - AIFO_NODE_TOOLCHAIN_VERSION
 - Examples:
-  - AIFO_NODE_TOOLCHAIN_IMAGE=aifo-node-toolchain:latest
+  - AIFO_NODE_TOOLCHAIN_IMAGE=aifo-toolchain-node:latest
   - AIFO_NODE_TOOLCHAIN_VERSION=22
 
 Python
@@ -117,8 +117,8 @@ C/C++
 Image build notes
 - Each toolchain’s Dockerfile accepts ARG REGISTRY_PREFIX for base image selection.
 - Build Node (with/without registry prefix) for validation:
-  - docker build -f toolchains/node/Dockerfile -t aifo-node-toolchain:22 .
-  - docker build -f toolchains/node/Dockerfile -t aifo-node-toolchain:22 \
+  - docker build -f toolchains/node/Dockerfile -t aifo-toolchain-node:22 .
+  - docker build -f toolchains/node/Dockerfile -t aifo-toolchain-node:22 \
     --build-arg REGISTRY_PREFIX=repository.migros.net/
 - Similar patterns apply for other toolchains under toolchains/<kind>/Dockerfile.
 

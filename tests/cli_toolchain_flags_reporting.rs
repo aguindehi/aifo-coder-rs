@@ -48,7 +48,7 @@ fn test_cli_toolchain_flags_verbose_dry_run_reporting() {
         err
     );
     assert!(
-        err.contains("aifo-node-toolchain:20"),
+        err.contains("aifo-toolchain-node:20"),
         "expected node@20 default mapping present; stderr:\n{}",
         err
     );

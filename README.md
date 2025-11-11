@@ -67,7 +67,7 @@ Global flags:
 - -h, --help                      Show help
 - --toolchain <kind>              Attach toolchains (repeatable): rust, node, typescript, python, c-cpp, go
 - --toolchain-spec <kind@ver>     Attach toolchains with optional version (repeatable), e.g. rust@1.80, node@20, python@3.12
-- --toolchain-image <k=img>       Override toolchain image (repeatable), e.g. c-cpp=aifo-cpp-toolchain:latest
+- --toolchain-image <k=img>       Override toolchain image (repeatable), e.g. c-cpp=aifo-toolchain-cpp:latest
 - --no-toolchain-cache            Disable named cache volumes for toolchain sidecars
 - --toolchain-unix-socket         Linux: use unix:/// socket transport for the proxy
 - --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global

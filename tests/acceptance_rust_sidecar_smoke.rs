@@ -24,7 +24,7 @@ fn acceptance_rust_sidecar_smoke() {
     let image = env::var("AIFO_CODER_TEST_RUST_IMAGE")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "aifo-rust-toolchain:latest".to_string());
+        .unwrap_or_else(|| "aifo-toolchain-rust:latest".to_string());
 
     // Run a few basic commands inside the rust sidecar; ensure they succeed.
     // These are lighter than a full project test but catch image/runtime regressions.

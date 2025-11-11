@@ -29,7 +29,7 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
     std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
 
     // Case 1: explicit override must win
-    std::env::set_var("AIFO_RUST_TOOLCHAIN_IMAGE", "aifo-rust-toolchain:dev");
+    std::env::set_var("AIFO_RUST_TOOLCHAIN_IMAGE", "aifo-toolchain-rust:dev");
     let img = aifo_coder::default_toolchain_image("rust");
     assert_eq!(
         img, "aifo-rust-toolchain:dev",
@@ -40,15 +40,15 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
 
     // Case 2: with no overrides, if local aifo-rust-toolchain:latest is present (or docker unavailable), prefer it.
     let img2 = aifo_coder::default_toolchain_image("rust");
-    if docker_has_image("aifo-rust-toolchain:latest") {
+    if docker_has_image("aifo-toolchain-rust:latest") {
         assert!(
-            img2.starts_with("aifo-rust-toolchain:"),
+            img2.starts_with("aifo-toolchain-rust:"),
             "expected default to prefer aifo-rust-toolchain:* when available; got {}",
             img2
         );
     } else {
         eprintln!(
-            "skipping strict image assertion: aifo-rust-toolchain:latest not present locally"
+            "skipping strict image assertion: aifo-toolchain-rust:latest not present locally"
         );
     }
 
@@ -78,7 +78,7 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
         Some("aifo-net-x"),
         None,
         "rust",
-        "aifo-rust-toolchain:latest",
+        "aifo-toolchain-rust:latest",
         false,
         &pwd,
         None,

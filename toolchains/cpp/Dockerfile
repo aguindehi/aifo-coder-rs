@@ -1,5 +1,5 @@
 # c-cpp toolchain sidecar image for aifo-coder toolchains
-# Default tag: aifo-cpp-toolchain:latest
+# Default tag: aifo-toolchain-cpp:latest
 ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}debian:bookworm-slim
 

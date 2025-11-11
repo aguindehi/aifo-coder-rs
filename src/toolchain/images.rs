@@ -28,17 +28,17 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 
 /// Default images by normalized kind
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
-    ("rust", "aifo-rust-toolchain:latest"),
-    ("node", "aifo-node-toolchain:latest"),
+    ("rust", "aifo-toolchain-rust:latest"),
+    ("node", "aifo-toolchain-node:latest"),
     ("python", "python:3.12-slim"),
-    ("c-cpp", "aifo-cpp-toolchain:latest"),
+    ("c-cpp", "aifo-toolchain-cpp:latest"),
     ("go", "golang:1.22-bookworm"),
 ];
 
 /// Default image templates for kind@version (use {version} placeholder)
 const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
-    ("rust", "aifo-rust-toolchain:{version}"),
-    ("node", "aifo-node-toolchain:{version}"),
+    ("rust", "aifo-toolchain-rust:{version}"),
+    ("node", "aifo-toolchain-node:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
     // c-cpp has no versioned mapping; falls back to non-versioned default
@@ -93,7 +93,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
             let v = ver.trim();
             if !v.is_empty() {
-                return format!("aifo-rust-toolchain:{v}");
+                return format!("aifo-toolchain-rust:{v}");
             }
         }
         // fall through to default constant
@@ -109,7 +109,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         if let Ok(ver) = env::var("AIFO_NODE_TOOLCHAIN_VERSION") {
             let v = ver.trim();
             if !v.is_empty() {
-                return format!("aifo-node-toolchain:{v}");
+                return format!("aifo-toolchain-node:{v}");
             }
         }
     }

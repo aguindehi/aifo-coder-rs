@@ -9,7 +9,7 @@ fn test_image() -> String {
     std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "aifo-rust-toolchain:latest".to_string())
+        .unwrap_or_else(|| "aifo-toolchain-rust:latest".to_string())
 }
 
 fn run_in_container(image: &str, shell_cmd: &str) -> Option<std::process::Output> {
