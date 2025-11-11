@@ -410,6 +410,13 @@ RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-bookworm
 NODE_BASE_TAG ?= 22-bookworm-slim
+# Toolchain repos/images (centralized)
+TC_REPO_RUST ?= aifo-coder-toolchain-rust
+TC_REPO_NODE ?= aifo-coder-toolchain-node
+TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
+TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG)
+TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG)
+TC_IMAGE_CPP  ?= $(TC_REPO_CPP):latest
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
@@ -575,44 +582,44 @@ build-debug:
 .PHONY: build-toolchain-rust rebuild-toolchain-rust
 build-toolchain-rust:
 	@set -e; \
-	echo "Building aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) ..."; \
+	echo "Building $(TC_IMAGE_RUST) ..."; \
 	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; fi; \
 	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${RP}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-rust:
 	@set -e; \
-	echo "Rebuilding aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) (no cache) ..."; \
+	echo "Rebuilding $(TC_IMAGE_RUST) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) -t "$${RP}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${RP}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-node rebuild-toolchain-node
 build-toolchain-node:
 	@set -e; \
-	echo "Building aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) ..."; \
+	echo "Building $(TC_IMAGE_NODE) ..."; \
 	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${RP}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) $(CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-node:
 	@set -e; \
-	echo "Rebuilding aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) (no cache) ..."; \
+	echo "Rebuilding $(TC_IMAGE_NODE) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) -t "$${RP}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${RP}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) $(CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain
@@ -624,81 +631,81 @@ rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolcha
 .PHONY: publish-toolchain-rust
 publish-toolchain-rust:
 	@set -e; \
-	echo "Publishing aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	echo "Publishing $(TC_IMAGE_RUST) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t "$${REG}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" $(RUST_CA_SECRET) .; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar $(RUST_CA_SECRET) .; \
-	    echo "Wrote dist/aifo-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar $(RUST_CA_SECRET) .; \
+	    echo "Wrote dist/aifo-coder-toolchain-rust-$(RUST_TOOLCHAIN_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-toolchain-cpp:latest -t "$${RP}aifo-toolchain-cpp:latest" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${RP}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-toolchain-cpp:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
 	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-toolchain-cpp:latest -t "$${RP}aifo-toolchain-cpp:latest" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${RP}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-toolchain-cpp:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
 
 .PHONY: publish-toolchain-cpp
 publish-toolchain-cpp:
 	@set -e; \
-	echo "Publishing aifo-toolchain-cpp:latest with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	echo "Publishing $(TC_IMAGE_CPP) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t "$${REG}aifo-toolchain-cpp:latest" $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-toolchain-cpp-latest.oci.tar $(CA_SECRET) .; \
-	    echo "Wrote dist/aifo-toolchain-cpp-latest.oci.tar"; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-cpp-latest.oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/aifo-coder-toolchain-cpp-latest.oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t aifo-toolchain-cpp:latest $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
 
 .PHONY: publish-toolchain-node
 publish-toolchain-node:
 	@set -e; \
-	echo "Publishing aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
+	echo "Publishing $(TC_IMAGE_NODE) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t "$${REG}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" $(CA_SECRET) .; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t "$${REG}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile --output type=oci,dest=dist/aifo-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar $(CA_SECRET) .; \
-	    echo "Wrote dist/aifo-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar"; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile --output type=oci,dest=dist/aifo-coder-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/aifo-coder-toolchain-node-$(NODE_TOOLCHAIN_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) $(CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) $(CA_SECRET) .; \
 	fi
 
 # Publish agent images (full and slim). Tags both local and registry-prefixed refs when REGISTRY is set.
@@ -1630,17 +1637,17 @@ rebuild-existing-nocache:
 .PHONY: clean
 clean:
 	@set -e; \
-	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) aifo-toolchain-cpp:latest aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) aifo-cpp-toolchain:latest 2>/dev/null || true; \
+	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) aifo-coder-toolchain-rust:$(RUST_TOOLCHAIN_TAG) aifo-coder-toolchain-node:$(NODE_TOOLCHAIN_TAG) aifo-coder-toolchain-cpp:latest aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG) aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG) aifo-toolchain-cpp:latest aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG) aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG) aifo-cpp-toolchain:latest 2>/dev/null || true; \
 	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
 	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
 	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
 	RP="repository.migros.net/"; \
 	if [ -n "$$REG" ]; then \
-	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-toolchain-cpp:latest" "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
+	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}aifo-coder-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-coder-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-coder-toolchain-cpp:latest" "$${REG}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-toolchain-cpp:latest" "$${REG}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${REG}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${REG}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
 	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	if [ "$$RP" != "$$REG" ]; then \
-	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-toolchain-cpp:latest" "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
+	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}aifo-coder-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-coder-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-coder-toolchain-cpp:latest" "$${RP}aifo-toolchain-rust:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-toolchain-node:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-toolchain-cpp:latest" "$${RP}aifo-rust-toolchain:$(RUST_TOOLCHAIN_TAG)" "$${RP}aifo-node-toolchain:$(NODE_TOOLCHAIN_TAG)" "$${RP}aifo-cpp-toolchain:latest" 2>/dev/null || true; \
 	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \

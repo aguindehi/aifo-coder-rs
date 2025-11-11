@@ -9,7 +9,7 @@ fn test_rust_image_selection_default_and_official() {
     env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
     let img_default = aifo_coder::default_toolchain_image_for_version("rust", "1.80");
     assert_eq!(
-        img_default, "aifo-toolchain-rust:1.80",
+        img_default, "aifo-coder-toolchain-rust:1.80",
         "expected aifo rust toolchain image mapping by default"
     );
 
@@ -17,7 +17,7 @@ fn test_rust_image_selection_default_and_official() {
     env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
     let img_official = aifo_coder::default_toolchain_image_for_version("rust", "1.80");
     assert_eq!(
-        img_official, "aifo-toolchain-rust:1.80",
+        img_official, "aifo-coder-toolchain-rust:1.80",
         "default_toolchain_image_for_version ignores AIFO_RUST_TOOLCHAIN_USE_OFFICIAL; official fallback is handled elsewhere"
     );
 
