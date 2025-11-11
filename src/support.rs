@@ -270,10 +270,10 @@ fn agent_check_cmd(agent: &str) -> String {
 fn color_token(use_color: bool, status: &str) -> String {
     let key = status.trim();
     let code = match key {
-        "PASS" | "G" => "\x1b[1;32m",  // green
-        "WARN" | "Y" => "\x1b[1;33m",  // yellow
-        "FAIL" | "R" => "\x1b[1;31m",  // red
-        "NA" | "N" => "\x1b[90m",      // dim gray
+        "PASS" | "G" => "\x1b[1;32m", // green
+        "WARN" | "Y" => "\x1b[1;33m", // yellow
+        "FAIL" | "R" => "\x1b[1;31m", // red
+        "NA" | "N" => "\x1b[90m",     // dim gray
         _ => "",
     };
     if code.is_empty() {
@@ -735,7 +735,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     // No per-cell active selection; animate all pending rows each tick.
 
                     // Repaint summary after each completed cell
-                    repaint_summary(pass_count, warn_count, fail_count, na_count, use_ansi, use_err);
+                    repaint_summary(
+                        pass_count, warn_count, fail_count, na_count, use_ansi, use_err,
+                    );
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Advance spinner and repaint all rows that still have pending cells
