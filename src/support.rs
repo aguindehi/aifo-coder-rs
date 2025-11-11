@@ -171,6 +171,19 @@ fn capitalize_label(s: &str) -> String {
     out
 }
 
+fn image_present(rt: &std::path::Path, image: &str) -> bool {
+    use std::process::{Command, Stdio};
+    Command::new(rt)
+        .arg("image")
+        .arg("inspect")
+        .arg(image)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Spinner frames for pending cells
 fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
     if ascii {
@@ -257,9 +270,10 @@ fn agent_check_cmd(agent: &str) -> String {
 fn color_token(use_color: bool, status: &str) -> String {
     let key = status.trim();
     let code = match key {
-        "PASS" | "G" => "\x1b[1;32m",
-        "WARN" | "Y" => "\x1b[1;33m",
-        "FAIL" | "R" => "\x1b[1;31m",
+        "PASS" | "G" => "\x1b[1;32m", // green
+        "WARN" | "Y" => "\x1b[1;33m", // yellow
+        "FAIL" | "R" => "\x1b[1;31m", // red
+        "NA" | "N" => "\x1b[90m",     // dim gray
         _ => "",
     };
     if code.is_empty() {
@@ -284,13 +298,21 @@ fn repaint_row(row_idx: usize, line: &str, use_ansi: bool, total_rows: usize) {
 }
 
 /// Repaint the summary line (relative to the baseline: one line above).
-fn repaint_summary(pass: usize, warn: usize, fail: usize, use_ansi: bool, use_color: bool) {
+fn repaint_summary(
+    pass: usize,
+    warn: usize,
+    fail: usize,
+    na: usize,
+    use_ansi: bool,
+    use_color: bool,
+) {
     let pass_tok = color_token(use_color, "PASS");
     let warn_tok = color_token(use_color, "WARN");
     let fail_tok = color_token(use_color, "FAIL");
+    let na_tok = color_token(use_color, "NA");
     let line = format!(
-        "Summary: {}={} {}={} {}={}",
-        pass_tok, pass, warn_tok, warn, fail_tok, fail
+        "Summary: {}={} {}={} {}={} {}={}",
+        pass_tok, pass, warn_tok, warn, fail_tok, fail, na_tok, na
     );
     if use_ansi {
         // Baseline is the line after the summary; summary line is 1 up from baseline.
@@ -338,6 +360,7 @@ fn render_row_line(
                             "PASS" => "G",
                             "WARN" => "Y",
                             "FAIL" => "R",
+                            "NA" => "N",
                             _ => st.as_str(),
                         }
                     } else {
@@ -522,6 +545,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let mut pass_count: usize = 0;
     let mut warn_count: usize = 0;
     let mut fail_count: usize = 0;
+    let mut na_count: usize = 0;
 
     if animate {
         // Draw header + initial rows
@@ -561,9 +585,10 @@ pub fn run_support(verbose: bool) -> ExitCode {
         let pass_tok0 = color_token(use_err, "PASS");
         let warn_tok0 = color_token(use_err, "WARN");
         let fail_tok0 = color_token(use_err, "FAIL");
+        let na_tok0 = color_token(use_err, "NA");
         let init_summary = format!(
-            "Summary: {}={} {}={} {}={}",
-            pass_tok0, pass_count, warn_tok0, warn_count, fail_tok0, fail_count
+            "Summary: {}={} {}={} {}={} {}={}",
+            pass_tok0, pass_count, warn_tok0, warn_count, fail_tok0, fail_count, na_tok0, 0
         );
         eprintln!("{}", init_summary);
     }
@@ -602,9 +627,23 @@ pub fn run_support(verbose: bool) -> ExitCode {
         std::thread::spawn(move || {
             let mut agent_ok: Vec<Option<bool>> = vec![None; agents_cl.len()];
             for (ai, ki) in worklist.into_iter() {
+                let agent_img = &agent_imgs[ai];
+                let tc_img = &tc_imgs[ki];
+
+                // If either required image is missing locally, mark N/A and skip checks.
+                if !image_present(&rt, agent_img) || !image_present(&rt, tc_img) {
+                    let _ = tx_cl.send(Event::CellDone {
+                        agent: agents_cl[ai].clone(),
+                        kind: kinds_cl[ki].clone(),
+                        status: "NA".to_string(),
+                        reason: Some("not-present".to_string()),
+                    });
+                    continue;
+                }
+
                 if agent_ok[ai].is_none() {
                     let cmd = agent_check_cmd(&agents_cl[ai]);
-                    let res = run_version_check(&rt, &agent_imgs[ai], &cmd, no_pull);
+                    let res = run_version_check(&rt, agent_img, &cmd, no_pull);
                     let ok = res.is_ok();
                     agent_ok[ai] = Some(ok);
                     let _ = tx_cl.send(Event::AgentCached {
@@ -614,7 +653,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     });
                 }
                 let cmd = pm_cmd_for(&kinds_cl[ki]);
-                let pm_res = run_version_check(&rt, &tc_imgs[ki], &cmd, no_pull);
+                let pm_res = run_version_check(&rt, tc_img, &cmd, no_pull);
                 let pm_ok = pm_res.is_ok();
                 let aok = agent_ok[ai].unwrap_or(false);
                 let status = if aok && pm_ok {
@@ -673,6 +712,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         "PASS" => pass_count = pass_count.saturating_add(1),
                         "WARN" => warn_count = warn_count.saturating_add(1),
                         "FAIL" => fail_count = fail_count.saturating_add(1),
+                        "NA" => na_count = na_count.saturating_add(1),
                         _ => {}
                     }
 
@@ -695,7 +735,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
                     // No per-cell active selection; animate all pending rows each tick.
 
                     // Repaint summary after each completed cell
-                    repaint_summary(pass_count, warn_count, fail_count, use_ansi, use_err);
+                    repaint_summary(
+                        pass_count, warn_count, fail_count, na_count, use_ansi, use_err,
+                    );
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Advance spinner and repaint all rows that still have pending cells
@@ -793,6 +835,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         "PASS" => "G",
                         "WARN" => "Y",
                         "FAIL" => "R",
+                        "NA" => "N",
                         _ => raw,
                     }
                 } else {
@@ -851,12 +894,14 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let mut pass = 0usize;
     let mut warn = 0usize;
     let mut fail = 0usize;
+    let mut na = 0usize;
     for row in &statuses {
         for cell in row {
             match cell.as_deref() {
                 Some("PASS") => pass += 1,
                 Some("WARN") => warn += 1,
                 Some("FAIL") => fail += 1,
+                Some("NA") => na += 1,
                 _ => {}
             }
         }
@@ -864,10 +909,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
     let use_err = aifo_coder::color_enabled_stderr();
     if animate {
         // In TTY/animate mode, repaint the live summary line in-place (no extra lines).
-        repaint_summary(pass, warn, fail, true, use_err);
-        // We are at the baseline (line after summary); add two blank lines.
+        repaint_summary(pass, warn, fail, na, true, use_err);
+        // We are at the baseline (line after summary); add one blank line.
         eprintln!();
-        eprintln!();
+        // Legend (TTY)
+        let legend = format!(
+            "Legend: {} ok, {} partial, {} unavailable, {} not-available (image missing)",
+            color_token(use_err, "PASS"),
+            color_token(use_err, "WARN"),
+            color_token(use_err, "FAIL"),
+            color_token(use_err, "NA"),
+        );
+        eprintln!("{}", legend);
         let _ = std::io::stderr().flush();
     } else {
         // Non-TTY/static: add a separating blank line and print a final colored summary line.
@@ -875,11 +928,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
         let pass_tok = color_token(use_err, "PASS");
         let warn_tok = color_token(use_err, "WARN");
         let fail_tok = color_token(use_err, "FAIL");
+        let na_tok = color_token(use_err, "NA");
         let summary = format!(
-            "Summary: {}={} {}={} {}={}",
-            pass_tok, pass, warn_tok, warn, fail_tok, fail
+            "Summary: {}={} {}={} {}={} {}={}",
+            pass_tok, pass, warn_tok, warn, fail_tok, fail, na_tok, na
         );
         aifo_coder::log_info_stderr(use_err, &summary);
+        // Legend (non-TTY)
+        let legend = format!(
+            "Legend: {} ok, {} partial, {} unavailable, {} not-available (image missing)",
+            pass_tok, warn_tok, fail_tok, na_tok
+        );
+        eprintln!("{}", legend);
     }
     if verbose {
         let rp = aifo_coder::preferred_registry_prefix_quiet();

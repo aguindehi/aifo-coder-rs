@@ -24,7 +24,7 @@ fn acceptance_rust_sidecar_smoke() {
     let image = env::var("AIFO_CODER_TEST_RUST_IMAGE")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "aifo-rust-toolchain:latest".to_string());
+        .unwrap_or_else(|| "aifo-coder-toolchain-rust:latest".to_string());
 
     // Run a few basic commands inside the rust sidecar; ensure they succeed.
     // These are lighter than a full project test but catch image/runtime regressions.
@@ -63,7 +63,7 @@ fn toolchain_rust_acceptance_full_suite() {
     let image = env::var("AIFO_CODER_TEST_RUST_IMAGE")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "aifo-rust-toolchain:latest".to_string());
+        .unwrap_or_else(|| "aifo-coder-toolchain-rust:latest".to_string());
 
     // Allow more time in CI for the first run to build deps
     let old_to = env::var("AIFO_TOOLEEXEC_TIMEOUT_SECS").ok();

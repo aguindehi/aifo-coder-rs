@@ -42,7 +42,7 @@ This v4 spec upgrades the tool-exec protocol to support streaming (protocol v2, 
   - kind ∈ {rust, node, typescript, python, c, cpp, c-cpp, go}
   - version optional, e.g., rust@1.80, node@20, python@3.12, go@1.22
 - --toolchain-image <kind=image> (repeatable)
-  - Override default image, e.g., rust=aifo-rust-toolchain:1.80 or python=python:3.12-slim
+  - Override default image, e.g., rust=aifo-coder-toolchain-rust:1.80 or python=python:3.12-slim
 - --no-toolchain-cache
   - Disable named cache volumes; workspace still shared.
 - Optional: --toolchain-bootstrap <kind=mode>
@@ -102,10 +102,10 @@ This v4 spec upgrades the tool-exec protocol to support streaming (protocol v2, 
 7) Sidecar images and caching
 
 7.1 Defaults (overridable via --toolchain-image)
-- rust: aifo-rust-toolchain:<version|latest> (preferred); optionally official rust:<version>-bookworm when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 (bootstrap on exec).
+- rust: aifo-coder-toolchain-rust:<version|latest> (preferred); optionally official rust:<version>-bookworm when AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 (bootstrap on exec).
 - node/typescript: node:<ver>-bookworm-slim (default node:20-bookworm-slim)
 - python: python:<ver>-slim (default python:3.12-slim)
-- c-cpp: aifo-cpp-toolchain:latest (debian:bookworm-slim; build-essential clang cmake ninja pkg-config ccache; cc/c++ hardlinks)
+- c-cpp: aifo-coder-toolchain-cpp:latest (debian:bookworm-slim; build-essential clang cmake ninja pkg-config ccache; cc/c++ hardlinks)
 - go: golang:<ver>-bookworm (default golang:1.22-bookworm)
 
 7.2 Mounts and caches
@@ -244,7 +244,7 @@ This v4 spec upgrades the tool-exec protocol to support streaming (protocol v2, 
 13) Toolchain-specific details
 
 13.1 Rust
-- Preferred image: aifo-rust-toolchain:<version|latest>
+- Preferred image: aifo-coder-toolchain-rust:<version|latest>
 - Official fallback: rust:<version>-bookworm with bootstrap wrapper (install nextest and rustup components) on first exec
 - Caches: host-preferred mounts for $HOME/.cargo/{registry,git}; fallback to aifo-cargo-registry/git
 - Env: HOME=/home/coder; GNUPGHOME=/home/coder/.gnupg; CARGO_HOME=/home/coder/.cargo; RUST_BACKTRACE=1 if unset; CC=gcc; CXX=g++
@@ -263,7 +263,7 @@ This v4 spec upgrades the tool-exec protocol to support streaming (protocol v2, 
 - Virtualenv: if /workspace/.venv exists, set VIRTUAL_ENV and PATH for exec.
 
 13.4 C/C++
-- Image: aifo-cpp-toolchain:latest (debian:bookworm-slim) with build-essential, clang, cmake, ninja, pkg-config, ccache
+- Image: aifo-coder-toolchain-cpp:latest (debian:bookworm-slim) with build-essential, clang, cmake, ninja, pkg-config, ccache
 - Caches: aifo-ccache:/home/coder/.cache/ccache; export CCACHE_DIR
 - Ensure cc and c++ are present (hardlinks to gcc/g++)
 
@@ -368,8 +368,8 @@ This v4 spec upgrades the tool-exec protocol to support streaming (protocol v2, 
 - Shim:
   - Agent-embedded shim at /opt/aifo/bin with cc/c++ symlinks; v2 streaming using curl; unix socket support (--unix-socket)
 - Docker images:
-  - Rust toolchain (aifo-rust-toolchain) per v7; CA injection via BuildKit secret
-  - C/C++ toolchain (aifo-cpp-toolchain) with cc/c++ hardlinks
+  - Rust toolchain (aifo-coder-toolchain-rust) per v7; CA injection via BuildKit secret
+  - C/C++ toolchain (aifo-coder-toolchain-cpp) with cc/c++ hardlinks
   - Agent images: embed POSIX shim client; slim/fat variants with PATH including /opt/aifo/bin
 - Makefile:
   - Build/publish toolchains; pass RUST_TAG; corporate CA secret; registry detection and double-tag

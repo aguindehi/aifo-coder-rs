@@ -94,7 +94,7 @@ Enable aifo-coder to dynamically extend a running agent container with language/
 - rust: rust:<ver>-slim (default pinned baseline e.g., rust:1.80-slim)
 - node/typescript: node:<ver>-bookworm-slim (default node:20-bookworm-slim)
 - python: python:<ver>-slim (default python:3.12-slim)
-- c-cpp: aifo-cpp-toolchain:<tag> (FROM debian:bookworm-slim; packages: build-essential clang cmake ninja-build pkg-config ccache; optional gdb/valgrind)
+- c-cpp: aifo-coder-toolchain-cpp:<tag> (FROM debian:bookworm-slim; packages: build-essential clang cmake ninja-build pkg-config ccache; optional gdb/valgrind)
 - go: golang:<ver>-bookworm (default golang:1.22-bookworm)
 
 7.2 Mounts and caches
@@ -239,7 +239,7 @@ Enable aifo-coder to dynamically extend a running agent container with language/
 - Virtualenv: if /workspace/.venv exists, adjust env for exec.
 
 13.4 C/C++
-- Image: aifo-cpp-toolchain:latest (we publish) or override.
+- Image: aifo-coder-toolchain-cpp:latest (we publish) or override.
   - Based on debian:bookworm-slim with build-essential clang cmake ninja-build pkg-config ccache.
 - Volumes: ccache volume for faster rebuilds.
 - Tools: gcc, g++, clang, clang++, make, cmake, ninja, pkg-config
@@ -347,7 +347,7 @@ Enable aifo-coder to dynamically extend a running agent container with language/
   - Implement protocol client (URL/TOKEN; argv/env/cwd; stdio; exit code).
   - Build linux/amd64 and linux/arm64 artifacts.
 - Docker images:
-  - Add aifo-cpp-toolchain Dockerfile and publishing pipeline.
+  - Add aifo-coder-toolchain-cpp Dockerfile and publishing pipeline.
   - Optionally add agent image layer installing /opt/aifo/bin shim.
 - Tests:
   - Add integration tests gated on docker availability.

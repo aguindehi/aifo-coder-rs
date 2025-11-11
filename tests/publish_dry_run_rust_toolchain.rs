@@ -29,7 +29,7 @@ fn test_make_dry_run_publish_toolchain_rust_preview() {
         s
     );
     assert!(
-        s.contains("aifo-rust-toolchain:"),
+        s.contains("aifo-coder-toolchain-rust:"),
         "expected image tag in output, got:\n{}",
         s
     );

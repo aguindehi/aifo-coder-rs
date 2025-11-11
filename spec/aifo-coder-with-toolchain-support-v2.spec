@@ -28,7 +28,7 @@ sidecar.
 • Python: sidecar image python:-slim. Map python, python3, pip, pip3.
 • Caches: -v aifo-pip-cache:/home/coder/.cache/pip
 • Recommend project .venv under /workspace; shim can ensure it runs inside that venv when present.
-• C/C++: sidecar image aifo-cpp-toolchain: (our minimal Debian/Ubuntu with build-essential, clang, cmake, ninja, pkg-config, ccache).
+• C/C++: sidecar image aifo-coder-toolchain-cpp: (our minimal Debian/Ubuntu with build-essential, clang, cmake, ninja, pkg-config, ccache).
 • Map gcc, g++, clang, clang++, make, cmake, ninja, pkg-config.
 • Caches: optional -v aifo-ccache:/home/coder/.cache/ccache and set CCACHE_DIR, CC/CXX to ccache-wrapped compilers.
 • Go: sidecar image golang:-bookworm or -alpine (bookworm for glibc). Map go, gofmt.
@@ -59,7 +59,7 @@ CLI UX
 • Repeatable flag: --toolchain <kind[@ver]>
 • kinds: rust, node, typescript, python, c, cpp, c-cpp, go
 • versions optional: rust@1.80, node@20, python@3.12, go@1.22
-• Image override: --toolchain-image rust=rust:1.80-slim, cpp=aifo-cpp-toolchain:latest, etc.
+• Image override: --toolchain-image rust=rust:1.80-slim, cpp=aifo-coder-toolchain-cpp:latest, etc.
 • Optional: --no-toolchain-cache to skip named volumes; --toolchain-bootstrap typescript=global to preinstall TypeScript globally in the node sidecar.
 
 Runtime sequence (when toolchains requested)
@@ -106,7 +106,7 @@ Per-toolchain defaults and caches
 • Env defaults: PIP_CACHE_DIR=/home/coder/.cache/pip
 • Auto-activate /workspace/.venv if present
 • C/C++:
-• Image default: aifo-cpp-toolchain:latest we define (FROM debian:bookworm-slim; apt-get install -y build-essential clang cmake ninja-build pkg-config
+• Image default: aifo-coder-toolchain-cpp:latest we define (FROM debian:bookworm-slim; apt-get install -y build-essential clang cmake ninja-build pkg-config
                                                       ccache)
 • Env defaults: CCACHE_DIR=/home/coder/.cache/ccache, CC="ccache gcc", CXX="ccache g++" when ccache volume is attached
 • Go:
@@ -153,6 +153,6 @@ Rollout plan
 • Phase 1: Implement sidecars + explicit toolchain subcommand for validation
 • aifo-coder toolchain rust -- cargo build
 • Phase 2: Add shim + proxy for transparent PATH interception
-• Phase 3: Bake shim into agent images and add aifo-cpp-toolchain image target to the Dockerfile/Makefile
+• Phase 3: Bake shim into agent images and add aifo-coder-toolchain-cpp image target to the Dockerfile/Makefile
 
 If you want, I can start with Phase 1 for rust/node/python/go and add the c-cpp toolchain image, then wire up the shim and cross-OS proxy in Phase 2. Shall I proceed with these next steps?$

@@ -21,15 +21,15 @@ fn test_normalize_toolchain_kind_aliases() {
 fn test_default_toolchain_image_for_version_mapping() {
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("rust", "1.80"),
-        "aifo-rust-toolchain:1.80"
+        "aifo-coder-toolchain-rust:1.80"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("node", "20"),
-        "aifo-node-toolchain:20"
+        "aifo-coder-toolchain-node:20"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("typescript", "20"),
-        "aifo-node-toolchain:20"
+        "aifo-coder-toolchain-node:20"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("python", "3.12"),
@@ -42,6 +42,6 @@ fn test_default_toolchain_image_for_version_mapping() {
     // c-cpp does not support versions and stays at latest toolchain image
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("c-cpp", "any"),
-        "aifo-cpp-toolchain:latest"
+        "aifo-coder-toolchain-cpp:latest"
     );
 }

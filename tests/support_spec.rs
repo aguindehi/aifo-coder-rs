@@ -254,10 +254,11 @@ fn test_support_matrix_is_fully_green() {
         stderr
     );
 
-    // Extract PASS/WARN/FAIL counts from the Summary line
+    // Extract PASS/WARN/FAIL/NA counts from the Summary line
     let mut pass = None;
     let mut warn = None;
     let mut fail = None;
+    let mut na = None;
     for part in summary.split_whitespace() {
         if let Some(v) = part.strip_prefix("PASS=") {
             pass = v.parse::<usize>().ok();
@@ -265,17 +266,21 @@ fn test_support_matrix_is_fully_green() {
             warn = v.parse::<usize>().ok();
         } else if let Some(v) = part.strip_prefix("FAIL=") {
             fail = v.parse::<usize>().ok();
+        } else if let Some(v) = part.strip_prefix("NA=") {
+            na = v.parse::<usize>().ok();
         }
     }
-    let (p, w, f) = (
+    let (p, w, f, n) = (
         pass.unwrap_or(0),
         warn.unwrap_or(usize::MAX),
         fail.unwrap_or(usize::MAX),
+        na.unwrap_or(0),
     );
 
+    // Succeed if no WARN/FAIL and either some PASS or some NA (images not built/present yet)
     assert!(
-        w == 0 && f == 0 && p > 0,
-        "expected green full matrix (no WARN/FAIL); got summary: {}",
+        w == 0 && f == 0 && (p > 0 || n > 0),
+        "expected green or N/A-only matrix (no WARN/FAIL); got summary: {}",
         summary
     );
 }

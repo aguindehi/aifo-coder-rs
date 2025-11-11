@@ -124,7 +124,7 @@ fn test_proxy_smoke_c_cpp() {
         eprintln!("skipping: docker not found in PATH");
         return;
     }
-    let img = "aifo-cpp-toolchain:latest";
+    let img = "aifo-coder-toolchain-cpp:latest";
     if !image_present(img) {
         eprintln!("skipping: image {} not present locally", img);
         return;

@@ -28,13 +28,13 @@ Non-Goals
 - Shipping an exhaustive set of cargo subcommands in the base toolchain; only a curated minimal-but-useful set is included by default.
 
 High-Level Design
-- Image: aifo-rust-toolchain, built on top of official rust:<tag> images, with clippy/fmt/rust-src/llvm-tools components and cargo-nextest baked in.
+- Image: aifo-coder-toolchain-rust, built on top of official rust:<tag> images, with clippy/fmt/rust-src/llvm-tools components and cargo-nextest baked in.
 - Caches: Prefer mounting host $HOME/.cargo/registry and $HOME/.cargo/git into /usr/local/cargo/{registry,git}. Fallback to named volumes.
 - CARGO_HOME=/usr/local/cargo; PATH includes /usr/local/cargo/bin (in official images by default).
 - Runtime options via environment variables to control image selection, cache strategy, SSH agent forwarding, sccache, linkers, proxy behavior, etc.
 - Fallback bootstrap: If the official rust image (not our toolchain) is used, auto-install missing cargo-nextest/clippy at first invocation, caching under CARGO_HOME.
 
-Image Specification (aifo-rust-toolchain)
+Image Specification (aifo-coder-toolchain-rust)
 Base
 - FROM ${REGISTRY_PREFIX}rust:<RUST_TAG> (bookworm or slim variants). Multi-arch: amd64 and arm64.
 
@@ -102,7 +102,7 @@ Image selection logic
   - AIFO_RUST_TOOLCHAIN_IMAGE: full image reference override (e.g., your registry mirror).
   - AIFO_RUST_TOOLCHAIN_VERSION: tag to select (e.g., 1.80, 1.80.1); default "latest".
 - Default:
-  - Use aifo-rust-toolchain:<version or latest>.
+  - Use aifo-coder-toolchain-rust:<version or latest>.
 - Fallback:
   - If the toolchain image is unavailable or AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 is set, use rust:<version>-slim (or rust:<major>-bookworm) and apply runtime fallback bootstrap to install missing cargo-nextest/clippy.
 
@@ -147,7 +147,7 @@ Phase 0 — Image creation
 
 Phase 1 — Makefile integration (build/publish)
 - Add targets:
-  - build-toolchain-rust: builds aifo-rust-toolchain:latest (and optionally aifo-rust-toolchain:<version> when configured).
+  - build-toolchain-rust: builds aifo-coder-toolchain-rust:latest (and optionally aifo-coder-toolchain-rust:<version> when configured).
   - rebuild-toolchain-rust: same with --no-cache.
   - publish-toolchain-rust: buildx multi-arch and push if REGISTRY is set; otherwise produce an OCI archive in dist/.
 - Mirror structure and behavior from existing publish-toolchain-cpp targets.
@@ -156,10 +156,10 @@ Phase 2 — Runtime image selection in code
 - In src/toolchain.rs:
   - default_toolchain_image("rust"):
     - If AIFO_RUST_TOOLCHAIN_IMAGE set: use it.
-    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-rust-toolchain:<version>.
-    - Else: aifo-rust-toolchain:latest.
+    - Else if AIFO_RUST_TOOLCHAIN_VERSION set: aifo-coder-toolchain-rust:<version>.
+    - Else: aifo-coder-toolchain-rust:latest.
   - default_toolchain_image_for_version("rust", v):
-    - aifo-rust-toolchain:<v>.
+    - aifo-coder-toolchain-rust:<v>.
   - Provide graceful fallback to official rust images if our toolchain image is absent or AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1.
 
 Phase 3 — Mount strategy (writable caches) and env propagation
@@ -210,7 +210,7 @@ Phase 7 — Documentation
   - Troubleshooting section for permissions (ensure host $HOME/.cargo exists or force volumes).
 
 Phase 8 — Rollout
-- Build and publish aifo-rust-toolchain (latest + optional versioned tags).
+- Build and publish aifo-coder-toolchain-rust (latest + optional versioned tags).
 - Adjust defaults in code to prefer our toolchain image.
 - Monitor for regressions; retain fallback bootstrap for official images to avoid breaking existing deployments.
 
@@ -235,7 +235,7 @@ Acceptance Criteria
 
 Risks and Mitigations
 - Host cache mount absent: per-path fallback to volumes.
-- Official rust image use: engage fallback bootstrap; recommend switching to aifo-rust-toolchain.
+- Official rust image use: engage fallback bootstrap; recommend switching to aifo-coder-toolchain-rust.
 - SSH agent/known_hosts complexity: keep opt-in and documented.
 - Disk usage growth: sccache opt-in and volume-based; document cleanup commands.
 
