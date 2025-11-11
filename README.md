@@ -399,7 +399,6 @@ cargo test --test toolchain_live -- --ignored
 
 A quick reference of all Makefile targets.
 
-
 | Target                              | Category   | Description                                                                                   |
 |-------------------------------------|------------|-----------------------------------------------------------------------------------------------|
 | build                               | Build      | Build both slim and fat images (all agents)                                                   |
@@ -407,7 +406,10 @@ A quick reference of all Makefile targets.
 | build-codex                         | Build      | Build only the Codex image (`${IMAGE_PREFIX}-codex:${TAG}`)                                   |
 | build-crush                         | Build      | Build only the Crush image (`${IMAGE_PREFIX}-crush:${TAG}`)                                   |
 | build-aider                         | Build      | Build only the Aider image (`${IMAGE_PREFIX}-aider:${TAG}`)                                   |
-| build-slim                          | Build      | Build all slim images (codex-slim, crush-slim, aider-slim,<br> openhands-slim, opencode-slim, plandex-slim) |
+| build-openhands                     | Build      | Build only the Openhands image (`${IMAGE_PREFIX}-openhands:${TAG}`)                           |
+| build-opencode                      | Build      | Build only the Opencode image (`${IMAGE_PREFIX}-opencode:${TAG}`)                             |
+| build-plandex                       | Build      | Build only the Plandex image (`${IMAGE_PREFIX}-plandex:${TAG}`)                               |
+| build-slim                          | Build      | Build all slim images ([codex,crush,aider-slim,openhands,opencode,plandex]-slim)              |
 | build-codex-slim                    | Build      | Build only the Codex slim image (`${IMAGE_PREFIX}-codex-slim:${TAG}`)                         |
 | build-crush-slim                    | Build      | Build only the Crush slim image (`${IMAGE_PREFIX}-crush-slim:${TAG}`)                         |
 | build-aider-slim                    | Build      | Build only the Aider slim image (`${IMAGE_PREFIX}-aider-slim:${TAG}`)                         |
@@ -437,38 +439,40 @@ A quick reference of all Makefile targets.
 | release-dmg                         | Release    | Create a macOS .dmg from the .app (Darwin hosts only)                                         |
 | release-dmg-sign                    | Release    | Sign the .app and .dmg (and notarize if configured); produces a signed DMG                    |
 | clean                               | Utility    | Remove built images (ignores errors if not present)                                           |
-| loc                                 | Utility    | Count lines of code across key file types                                                      |
-| docker-images                       | Utility    | Show the available images in the local Docker registry                                         |
-| docker-enter                        | Utility    | Enter a running container via docker exec with GPG runtime prepared                            |
-| test                                | Utility    | Run the Rust test suite (cargo test)                                                           |
-| checksums                           | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                             |
+| loc                                 | Utility    | Count lines of code across key file types                                                     |
+| docker-images                       | Utility    | Show the available images in the local Docker registry                                        |
+| docker-enter                        | Utility    | Enter a running container via docker exec with GPG runtime prepared                           |
+| test                                | Utility    | Run the Rust test suite (cargo test)                                                          |
+| checksums                           | Utility    | Generate dist/SHA256SUMS.txt for current artifacts                                            |
 | sbom                                | Utility    | Generate CycloneDX SBOM into dist/SBOM.cdx.json (requires cargo-cyclonedx)                    |
-| gpg-disable-signing                 | GPG        | Disable GPG commit signing for the current repo                                                |
-| gpg-enable-signing                  | GPG        | Enable GPG commit signing for the current repo                                                 |
-| gpg-show-config                     | GPG        | Show effective GPG/Git signing configuration                                                   |
-| gpg-disable-signing-global          | GPG        | Disable GPG commit signing globally                                                            |
-| gpg-unset-signing                   | GPG        | Unset repo signing configuration                                                               |
-| git-show-signatures                 | GPG        | Show commit signature status (git log %h %G? %s)                                               |
-| git-commit-no-sign                  | GPG        | Make a commit without signing                                                                  |
-| git-amend-no-sign                   | GPG        | Amend the last commit without signing                                                          |
-| git-commit-no-sign-all              | GPG        | Commit all staged changes without signing                                                      |
-| scrub-coauthors                     | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)        |
-| apparmor                            | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)                |
-| apparmor-load-colima                | AppArmor   | Load the generated profile into the Colima VM (macOS)                                          |
-| apparmor-log-colima                 | AppArmor   | Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log                   |
+| gpg-disable-signing                 | GPG        | Disable GPG commit signing for the current repo                                               |
+| gpg-enable-signing                  | GPG        | Enable GPG commit signing for the current repo                                                |
+| gpg-show-config                     | GPG        | Show effective GPG/Git signing configuration                                                  |
+| gpg-disable-signing-global          | GPG        | Disable GPG commit signing globally                                                           |
+| gpg-unset-signing                   | GPG        | Unset repo signing configuration                                                              |
+| git-show-signatures                 | GPG        | Show commit signature status (git log %h %G? %s)                                              |
+| git-commit-no-sign                  | GPG        | Make a commit without signing                                                                 |
+| git-amend-no-sign                   | GPG        | Amend the last commit without signing                                                         |
+| git-commit-no-sign-all              | GPG        | Commit all staged changes without signing                                                     |
+| scrub-coauthors                     | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)       |
+| apparmor                            | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)               |
+| apparmor-load-colima                | AppArmor   | Load the generated profile into the Colima VM (macOS)                                         |
+| apparmor-log-colima                 | AppArmor   | Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log                  |
+|-------------------------------------|------------|-----------------------------------------------------------------------------------------------|
 
 Variables used by these targets:
 
-| Variable                | Default       | Purpose                                                 |
-|-------------------------|---------------|---------------------------------------------------------|
-| IMAGE_PREFIX            | aifo-coder    | Image name prefix for per‑agent images                  |
-| TAG                     | latest        | Tag for images                                          |
-| APPARMOR_PROFILE_NAME   | aifo-coder    | Rendered AppArmor profile name                          |
-| APP_NAME                | aifo-coder    | App bundle name used for macOS .app                     |
-| APP_BUNDLE_ID           | ch.migros.aifo-coder | macOS bundle identifier for the .app              |
-| DMG_NAME                | aifo-coder-<version> | DMG file base name (macOS)                         |
-| APP_ICON                | (none)        | Path to a .icns icon to include in the .app (optional)  |
-| KEEP_APT                | 0             | If 1, keep apt/procps in final images; 0 (default) drops them after install |
+| Variable                | Default              | Purpose                                                                     |
+|-------------------------|----------------------|-----------------------------------------------------------------------------|
+| IMAGE_PREFIX            | aifo-coder           | Image name prefix for per‑agent images                                      |
+| TAG                     | latest               | Tag for images                                                              |
+| APPARMOR_PROFILE_NAME   | aifo-coder           | Rendered AppArmor profile name                                              |
+| APP_NAME                | aifo-coder           | App bundle name used for macOS .app                                         |
+| APP_BUNDLE_ID           | ch.migros.aifo-coder | macOS bundle identifier for the .app                                        |
+| DMG_NAME                | aifo-coder-<version> | DMG file base name (macOS)                                                  |
+| APP_ICON                | (none)               | Path to a .icns icon to include in the .app (optional)                      |
+| KEEP_APT                | 0                    | If 1, keep apt/procps in final images; 0 (default) drops them after install |
+|-------------------------|----------------------|-----------------------------------------------------------------------------|
 
 ---
 
