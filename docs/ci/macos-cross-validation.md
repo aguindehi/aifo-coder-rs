@@ -11,7 +11,10 @@ Local validation (developer machine)
    make build-macos-cross-rust-builder
 
 3) Build the macOS launcher inside the cross image:
-   make build-launcher-macos-cross
+   - Both architectures:
+     make build-launcher-macos-cross
+   - Arm64 only:
+     make build-launcher-macos-cross-arm64
 
 4) Validate the resulting binary with file(1):
    make validate-macos-artifact

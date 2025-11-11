@@ -68,8 +68,10 @@ secrets. This produces macOS artifacts without requiring a macOS host.
   - Place the Apple SDK tarball under ci/osx/MacOSX13.3.sdk.tar.xz (do not commit it).
   - Build the cross image:
     make build-macos-cross-rust-builder
-  - Build macOS arm64 launcher:
+  - Build both macOS launchers:
     make build-launcher-macos-cross
+  - Or only arm64:
+    make build-launcher-macos-cross-arm64
   - Validate with file(1):
     make validate-macos-artifact
   - Optional x86_64:
@@ -422,7 +424,8 @@ A quick reference of all Makefile targets.
 | rebuild-existing-nocache  | Rebuild    | Rebuild any existing local images with `IMAGE_PREFIX` (no cache)                              |
 | build-launcher            | Release    | Build the Rust host launcher (release build)                                                  |
 | build-macos-cross-rust-builder | Build      | Build osxcross-based macOS cross image (requires ci/osx/<SDK>)                           |
-| build-launcher-macos-cross | Build      | Build macOS arm64 launcher using the macOS cross image                                      |
+| build-launcher-macos-cross | Build      | Build macOS arm64 and x86_64 launchers using the macOS cross image                          |
+| build-launcher-macos-cross-arm64 | Build | Build macOS arm64 launcher using the macOS cross image                                      |
 | build-launcher-macos-cross-x86_64 | Build  | Build macOS x86_64 launcher using the macOS cross image                                    |
 | validate-macos-artifact   | Utility    | Validate macOS arm64 Mach-O via file(1)                                                      |
 | validate-macos-artifact-x86_64 | Utility | Validate macOS x86_64 Mach-O via file(1)                                                     |

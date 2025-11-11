@@ -183,7 +183,8 @@ help: banner
 	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
 	@echo "  build-macos-cross-rust-builder Build the macOS cross image (requires ci/osx/$${OSX_SDK_FILENAME})"
-	@echo "  build-launcher-macos-cross .. Build aifo-coder for macOS arm64 using cross image"
+	@echo "  build-launcher-macos-cross .... Build aifo-coder for macOS arm64 and x86_64 using cross image"
+	@echo "  build-launcher-macos-cross-arm64 Build aifo-coder for macOS arm64 using cross image"
 	@echo "  build-launcher-macos-cross-x86_64 Build aifo-coder for macOS x86_64 using cross image"
 	@echo "  validate-macos-artifact ..... Validate macOS arm64 binary with file(1)"
 	@echo "  validate-macos-artifact-x86_64 Validate macOS x86_64 binary with file(1)"
@@ -546,7 +547,7 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
-.PHONY: build-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-x86_64
+.PHONY: build-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
 build-macos-cross-rust-builder:
 	@set -e; \
 	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
@@ -561,7 +562,7 @@ build-macos-cross-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
 	fi
 
-build-launcher-macos-cross:
+build-launcher-macos-cross-arm64:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
@@ -588,6 +589,9 @@ build-launcher-macos-cross:
 	  echo "Error: $$BIN not found or not executable"; \
 	  exit 2; \
 	fi
+
+# Aggregate: build both arm64 and x86_64
+build-launcher-macos-cross: build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
 
 build-launcher-macos-cross-x86_64:
 	@set -e; \
