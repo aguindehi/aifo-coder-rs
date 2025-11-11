@@ -124,8 +124,7 @@ build-rust-builder:
 build:
   extends: container-build
   stage: build
-  timeout: 45m
-  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
+  timeout: 1h
   tags:
     - qual-mcap-gcp
   retry:
@@ -146,7 +145,6 @@ build-toolchain:
   extends: container-build
   stage: build
   timeout: 45m
-  resource_group: "kaniko-build-${CI_COMMIT_REF_SLUG}"
   tags:
     - qual-mcap-gcp
   retry:
