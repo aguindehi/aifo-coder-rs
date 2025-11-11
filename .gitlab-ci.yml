@@ -250,8 +250,18 @@ build-macos-cross-rust-builder:
       [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
   rules:
     - if: $CI_COMMIT_TAG
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
 
 build-launcher-macos:
   stage: build
