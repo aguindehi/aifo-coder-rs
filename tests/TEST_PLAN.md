@@ -36,3 +36,5 @@
 - registry_env_probe_case_tcp_fail_upper.rs → env-probe TCP-FAIL (uppercase); source "tcp".
 - registry_env_override_leading_spaces.rs → trims leading spaces; caches normalized "gamma/".
 - registry_env_override_root_prefix.rs → env override "/" normalized to "/"; caches.
+- registry_quiet_env_override_root_prefix.rs → quiet env override "/" normalized to "/"; caches.
+- registry_quiet_env_probe_unknown.rs → env-probe unknown (quiet); source "unknown"; no cache.
