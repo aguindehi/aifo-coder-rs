@@ -70,7 +70,7 @@ build-rust-builder:
       - runner_system_failure
       - api_failure
       - stuck_or_timeout_failure
-  timeout: 45m
+  timeout: 1h
   resource_group: "rust-builder-${IMAGE_TAG_CUSTOM}"
   tags:
     - qual-mcap-gcp
@@ -146,7 +146,7 @@ build-toolchain:
   extends: container-build
   stage: build
   interruptible: true
-  timeout: 45m
+  timeout: 1h
   tags:
     - qual-mcap-gcp
   retry:
