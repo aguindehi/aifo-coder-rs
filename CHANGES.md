@@ -1,5 +1,12 @@
 2025-11-11
 
+Fix source precedence: override > env-probe > resolved source
+
+- src/registry.rs: report "unknown" when test override active; else prefer env-probe;
+  else use stored source. Makes override vs env-probe tests pass deterministically.
+
+2025-11-11
+
 Fix preferred_registry_source precedence (env wins over override presence)
 
 - src/registry.rs: prefer previously determined source (env/env-empty/curl/tcp)
