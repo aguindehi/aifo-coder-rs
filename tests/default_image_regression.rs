@@ -38,7 +38,7 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
     // Clear override
     std::env::remove_var("AIFO_RUST_TOOLCHAIN_IMAGE");
 
-    // Case 2: with no overrides, if local aifo-rust-toolchain:latest is present (or docker unavailable), prefer it.
+    // Case 2: with no overrides, if local aifo-coder-toolchain-rust:latest is present (or docker unavailable), prefer it.
     let img2 = aifo_coder::default_toolchain_image("rust");
     if docker_has_image("aifo-coder-toolchain-rust:latest") {
         assert!(
