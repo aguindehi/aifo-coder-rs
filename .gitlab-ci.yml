@@ -341,7 +341,7 @@ test:
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: never
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && !$CI_OPEN_MERGE_REQUESTS
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_OPEN_MERGE_REQUESTS == null
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
       when: on_success
