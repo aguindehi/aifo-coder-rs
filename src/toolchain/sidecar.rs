@@ -140,6 +140,7 @@ pub fn build_sidecar_run_preview(
     image: &str,
     no_cache: bool,
     pwd: &Path,
+    overrides: &[(String, String)],
     apparmor: Option<&str>,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec![
@@ -165,6 +166,16 @@ pub fn build_sidecar_run_preview(
         "rust" => {
             // Normative env for rust sidecar
             apply_rust_common_env(&mut args);
+            // If using the official rust image or forced-official mode, align CARGO_HOME/RUSTUP_HOME to image defaults.
+            if is_official_rust_image(image)
+                || std_env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
+            {
+                push_env(&mut args, "CARGO_HOME", "/usr/local/cargo");
+                push_env(&mut args, "RUSTUP_HOME", "/usr/local/rustup");
+            }
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
@@ -343,6 +354,12 @@ pub fn build_sidecar_run_preview(
     push_env(&mut args, "GNUPGHOME", "/home/coder/.gnupg");
     args.push("-w".to_string());
     args.push("/workspace".to_string());
+    // Apply test/CI-provided overrides (e.g., SSL_CERT_FILE, CURL_CA_BUNDLE, etc.)
+    for (k, v) in overrides {
+        if !k.trim().is_empty() && !v.trim().is_empty() {
+            push_env(&mut args, k, v);
+        }
+    }
 
     if let Some(profile) = apparmor {
         if docker_supports_apparmor() {
@@ -650,6 +667,7 @@ pub fn toolchain_run(
         &image,
         no_cache,
         &pwd,
+        &[],
         apparmor_profile.as_deref(),
     );
     let run_preview = shell_join(&run_preview_args);
@@ -834,6 +852,7 @@ pub fn toolchain_start_session(
             &image,
             no_cache,
             &pwd,
+            overrides,
             apparmor_profile.as_deref(),
         );
         if verbose {
