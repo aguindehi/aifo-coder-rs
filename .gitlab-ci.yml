@@ -72,8 +72,9 @@ cancel-branch-pipeline:
     # Expect a project-level token with API scope. If not set, job will no-op.
     GITLAB_API_TOKEN: "${GITLAB_API_TOKEN}"
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_PROJECT_ID == $CI_MERGE_REQUEST_SOURCE_PROJECT_ID
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_PROJECT_ID == $CI_MERGE_REQUEST_SOURCE_PROJECT_ID && $GITLAB_API_TOKEN
       when: on_success
+    - when: never
   script:
     - |
       set -euo pipefail
@@ -83,14 +84,11 @@ cancel-branch-pipeline:
       BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
       REF_ENC="$(printf '%s' "$BRANCH" | jq -sRr @uri)"
       LIST_URL="$CI_API_V4_URL/projects/$SRC_PROJECT_ID/pipelines?ref=$REF_ENC&sha=$CI_COMMIT_SHA&per_page=100"
-      if [ -n "${GITLAB_API_TOKEN:-}" ]; then
-        AUTH_HEADER="PRIVATE-TOKEN: $GITLAB_API_TOKEN"
-      elif [ -n "${CI_JOB_TOKEN:-}" ]; then
-        AUTH_HEADER="JOB-TOKEN: $CI_JOB_TOKEN"
-      else
-        echo "No API token found (GITLAB_API_TOKEN/CI_JOB_TOKEN); skipping cancel." && exit 0
+      if [ -z "${GITLAB_API_TOKEN:-}" ]; then
+        echo "GITLAB_API_TOKEN not available; skipping cancel to avoid unauthorized API calls." && exit 0
       fi
-      echo "Query: $LIST_URL"
+      AUTH_HEADER="PRIVATE-TOKEN: $GITLAB_API_TOKEN"
+      echo "Query: $LIST_URL (auth: PRIVATE-TOKEN)"
       STATUS="$(curl -sS -o resp.json -w '%{http_code}' -H "$AUTH_HEADER" "$LIST_URL" || echo 000)"
       case "$STATUS" in
         2*) : ;;
