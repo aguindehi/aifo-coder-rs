@@ -125,9 +125,9 @@ build:
   extends: container-build
   stage: build
   interruptible: true
-  timeout: 1h 30m
+  timeout: 2h
   tags:
-    - qual-mcap-gcp
+    - qual-mcap-gcp-mem4G
   retry:
     max: 2
     when:
