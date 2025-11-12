@@ -1,4 +1,5 @@
 stages:
+  - pre
   - build
   - test
   - release
@@ -58,6 +59,52 @@ container-build:
       when: never
 
 
+# Pre stage: cancel redundant branch pipeline when MR pipeline starts
+cancel-branch-pipeline:
+  stage: pre
+  image: alpine:3.20
+  interruptible: true
+  timeout: 5m
+  allow_failure: true
+  tags:
+    - qual-mcap-gcp
+  variables:
+    # Expect a project-level token with API scope. If not set, job will no-op.
+    GITLAB_API_TOKEN: "${GITLAB_API_TOKEN}"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_PROJECT_ID == $CI_MERGE_REQUEST_SOURCE_PROJECT_ID && $GITLAB_API_TOKEN
+      when: on_success
+    - when: never
+  script:
+    - |
+      set -euo pipefail
+      echo "Canceling redundant branch pipeline (if any) for ref=$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME sha=$CI_COMMIT_SHA…"
+      apk add --no-cache curl jq >/dev/null
+      SRC_PROJECT_ID="${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-$CI_PROJECT_ID}"
+      BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+      REF_ENC="$(printf '%s' "$BRANCH" | jq -sRr @uri)"
+      LIST_URL="$CI_API_V4_URL/projects/$SRC_PROJECT_ID/pipelines?ref=$REF_ENC&sha=$CI_COMMIT_SHA&per_page=100"
+      if [ -z "${GITLAB_API_TOKEN:-}" ]; then
+        echo "GITLAB_API_TOKEN not available; skipping cancel to avoid unauthorized API calls." && exit 0
+      fi
+      AUTH_HEADER="PRIVATE-TOKEN: $GITLAB_API_TOKEN"
+      echo "Query: $LIST_URL (auth: PRIVATE-TOKEN)"
+      STATUS="$(curl -sS -o resp.json -w '%{http_code}' -H "$AUTH_HEADER" "$LIST_URL" || echo 000)"
+      case "$STATUS" in
+        2*) : ;;
+        *) echo "Pipelines list failed with HTTP $STATUS; body:"; cat resp.json || true; exit 0 ;;
+      esac
+      jq -r --arg sha "$CI_COMMIT_SHA" --arg cur "$CI_PIPELINE_ID" '
+        if type=="array" then .[] else empty end
+        | select(.sha == $sha)
+        | select((.id|tostring) != $cur)
+        | select(.status=="running" or .status=="pending")
+        | .id
+      ' resp.json | while read -r pid; do
+        echo "Canceling pipeline $pid on branch $BRANCH (sha=$CI_COMMIT_SHA)…"
+        curl -sS -X POST -H "$AUTH_HEADER" "$CI_API_V4_URL/projects/$SRC_PROJECT_ID/pipelines/$pid/cancel" >/dev/null || true
+      done
+      echo "Cancel step complete."
 # Build images
 
 build-rust-builder:
