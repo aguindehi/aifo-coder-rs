@@ -301,6 +301,7 @@ help: banner
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
 	@echo "  check-e2e .................... Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
+	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo ""
