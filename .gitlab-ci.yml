@@ -389,7 +389,7 @@ publish-release:
     - build-launcher
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
-  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:0.24.0
+  image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:v0.24.0
   script:
     - echo "Running the release job."
   artifacts:
