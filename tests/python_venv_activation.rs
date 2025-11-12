@@ -4,7 +4,6 @@ use support::urlencode;
 #[ignore]
 #[test]
 fn test_python_venv_activation_path_precedence_tcp_v2() {
-    use std::fs;
     use std::io::Write;
 
     // Skip if docker isn't available on this host
