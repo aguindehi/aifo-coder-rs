@@ -1625,6 +1625,11 @@ fn handle_connection<S: Read + Write>(
                     e.raw_os_error()
                 ));
             }
+            // Canonical disconnect signal for acceptance tests and operator clarity.
+            log_disconnect();
+            if let Some(ac) = ctx.agent_container.as_deref() {
+                kill_agent_shell_in_agent_container(&ctx.runtime, ac, &exec_id, verbose);
+            }
         }
         return;
     }
