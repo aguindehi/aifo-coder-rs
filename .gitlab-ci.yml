@@ -334,6 +334,7 @@ test:
       - target/nextest/ci/junit.xml
   script:
     - echo "Running test job…"
+    - mkdir -p target/nextest/ci
     - make test
   rules: *rb_image_rules
 
@@ -351,7 +352,6 @@ test-e2e:
   script:
     - echo "Running extended E2E tests…"
     - mkdir -p target/nextest/ci
-    - cargo nextest --version || cargo install cargo-nextest --locked
     - make test
     - make test-acceptance-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-acceptance.xml"
     - make test-integration-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-integration.xml"
