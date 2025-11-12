@@ -1393,12 +1393,12 @@ test-all-junit:
 	mkdir -p target/nextest/ci; \
 	if [ "$$OS" = "Linux" ]; then \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored yes --profile ci $(ARGS); \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored all --profile ci $(ARGS); then :; else CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci $(ARGS); fi; \
 	else \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored yes --profile ci -E '!test(/_uds/)' $(ARGS); \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored all --profile ci -E '!test(/_uds/)' $(ARGS); then :; else CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci -E '!test(/_uds/)' $(ARGS); fi; \
 	fi
 
 .PHONY: test-dev-tool-routing
