@@ -132,7 +132,7 @@ pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_sidecar_run_preview(
+pub fn build_sidecar_run_preview_with_overrides(
     name: &str,
     network: Option<&str>,
     uidgid: Option<(u32, u32)>,
@@ -382,6 +382,29 @@ pub fn build_sidecar_run_preview(
     args.push("/bin/sleep".to_string());
     args.push("infinity".to_string());
     args
+}
+
+pub fn build_sidecar_run_preview(
+    name: &str,
+    network: Option<&str>,
+    uidgid: Option<(u32, u32)>,
+    kind: &str,
+    image: &str,
+    no_cache: bool,
+    pwd: &Path,
+    apparmor: Option<&str>,
+) -> Vec<String> {
+    build_sidecar_run_preview_with_overrides(
+        name,
+        network,
+        uidgid,
+        kind,
+        image,
+        no_cache,
+        pwd,
+        &[],
+        apparmor,
+    )
 }
 
 pub fn build_sidecar_exec_preview(
@@ -659,7 +682,7 @@ pub fn toolchain_run(
     let apparmor_profile = desired_apparmor_profile();
 
     // Build and optionally run sidecar
-    let run_preview_args = build_sidecar_run_preview(
+    let run_preview_args = build_sidecar_run_preview_with_overrides(
         &name,
         net_for_run.as_deref(),
         if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -844,7 +867,7 @@ pub fn toolchain_start_session(
         // Bootstrap marker held at session level via ToolchainSession guard
 
         let name = sidecar_container_name(kind.as_str(), &session_id);
-        let args = build_sidecar_run_preview(
+        let args = build_sidecar_run_preview_with_overrides(
             &name,
             net_for_run.as_deref(),
             if cfg!(unix) { Some((uid, gid)) } else { None },
