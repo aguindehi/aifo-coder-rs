@@ -14,7 +14,15 @@ fn test_tsc_local_resolution_tcp_v2() {
     }
 
     // Create temp workspace with a fake local ./node_modules/.bin/tsc that prints a marker
-    let td = tempfile::tempdir().expect("tmpdir");
+    let home_base = std::env::var("HOME")
+        .ok()
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let td = tempfile::Builder::new()
+        .prefix("aifo-tsc-")
+        .tempdir_in(&home_base)
+        .expect("tmpdir");
     let pwd = td.path().to_path_buf();
     let nm_bin = pwd.join("node_modules").join(".bin");
     fs::create_dir_all(&nm_bin).expect("mkdir -p node_modules/.bin");
@@ -70,6 +78,93 @@ fn test_tsc_local_resolution_tcp_v2() {
     // Minimal HTTP v2 client to run tool=tsc and read chunked body and trailers
     use std::io::{BufRead, BufReader, Read};
     use std::net::TcpStream;
+
+    // Preflight: ensure ./node_modules/.bin/tsc is visible inside the sidecar.
+    // Use node -e to set exit code 0 if the file exists; skip the test if not.
+    {
+        let mut pf_stream =
+            TcpStream::connect(("127.0.0.1", port)).expect("connect preflight failed");
+
+        let body_pf = format!(
+            "tool={}&cwd={}&arg=-e&arg={}",
+            urlencode("node"),
+            urlencode("."),
+            urlencode("process.exit(require('fs').existsSync('./node_modules/.bin/tsc')?0:1)")
+        );
+        let req_pf = format!(
+            "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 2\r\nTE: trailers\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            token,
+            body_pf.len(),
+            body_pf
+        );
+        use std::io::Write as _;
+        pf_stream
+            .write_all(req_pf.as_bytes())
+            .expect("write preflight failed");
+
+        // Read headers
+        let mut pf_reader = BufReader::new(pf_stream);
+        let mut pf_header = String::new();
+        loop {
+            let mut line = String::new();
+            let n = pf_reader
+                .read_line(&mut line)
+                .expect("preflight read header line");
+            if n == 0 {
+                break;
+            }
+            pf_header.push_str(&line);
+            if pf_header.ends_with("\r\n\r\n") || pf_header.ends_with("\n\n") {
+                break;
+            }
+            if pf_header.len() > 128 * 1024 {
+                break;
+            }
+        }
+        // Drain chunked body
+        loop {
+            let mut size_line = String::new();
+            if pf_reader.read_line(&mut size_line).unwrap_or(0) == 0 {
+                break;
+            }
+            let size_str = size_line.trim();
+            let size_only = size_str.split(';').next().unwrap_or(size_str);
+            let Ok(sz) = usize::from_str_radix(size_only, 16) else {
+                break;
+            };
+            if sz == 0 {
+                break;
+            }
+            let mut chunk = vec![0u8; sz];
+            let _ = pf_reader.read_exact(&mut chunk);
+            let mut crlf = [0u8; 2];
+            let _ = pf_reader.read_exact(&mut crlf);
+        }
+        // Read trailers; extract X-Exit-Code
+        let mut pf_code: i32 = 1;
+        loop {
+            let mut tline = String::new();
+            let n = pf_reader.read_line(&mut tline).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            let tl = tline.trim_end_matches(['\r', '\n']);
+            if tl.is_empty() {
+                break;
+            }
+            if let Some(v) = tl.strip_prefix("X-Exit-Code: ") {
+                pf_code = v.trim().parse::<i32>().unwrap_or(1);
+            }
+        }
+        if pf_code != 0 {
+            eprintln!("skipping: local ./node_modules/.bin/tsc not visible in sidecar (Docker file sharing).");
+            // Cleanup and early return
+            flag.store(false, std::sync::atomic::Ordering::SeqCst);
+            let _ = handle.join();
+            aifo_coder::toolchain_cleanup_session(&sid, true);
+            return;
+        }
+    }
 
     let mut stream =
         TcpStream::connect(("127.0.0.1", port)).expect("connect 127.0.0.1:<port> failed");
