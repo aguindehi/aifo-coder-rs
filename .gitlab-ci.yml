@@ -280,7 +280,6 @@ build-launcher:
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
     ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
     GIT_LFS_SKIP_SMUDGE: "1"
-    NICENESS_CARGO_NEXTEST: "0"
     AIFO_SUPPORT_SKIP_GREEN: "1"
   cache:
     key:
