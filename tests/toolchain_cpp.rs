@@ -32,10 +32,14 @@ fn test_toolchain_live_c_cpp_cmake_ok() {
     // Resolve the image to use: prefer CI/MR-provided toolchain image; else require local default.
     let runtime = aifo_coder::container_runtime_path().expect("runtime");
     let override_img = std::env::var("AIFO_CODER_TEST_CPP_IMAGE").ok();
-    if override_img.is_none()
-        && !docker_image_present(&runtime, "aifo-coder-toolchain-cpp:latest")
-    {
-        eprintln!("skipping: aifo-coder-toolchain-cpp:latest not present locally");
+    let chosen_img = override_img
+        .clone()
+        .unwrap_or_else(|| "aifo-coder-toolchain-cpp:latest".to_string());
+    if override_img.is_none() && !docker_image_present(&runtime, &chosen_img) {
+        eprintln!(
+            "skipping: {} not present locally (set AIFO_CODER_TEST_CPP_IMAGE to override)",
+            chosen_img
+        );
         return;
     }
     // Start a c-cpp sidecar and run cmake --version inside it.
@@ -43,7 +47,7 @@ fn test_toolchain_live_c_cpp_cmake_ok() {
     let res = aifo_coder::toolchain_run(
         "c-cpp",
         &args,
-        override_img.as_deref(),
+        Some(&chosen_img),
         false,
         false,
         false,
