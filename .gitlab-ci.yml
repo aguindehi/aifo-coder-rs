@@ -335,6 +335,48 @@ test:
     - make test
   rules: *rb_image_rules
 
+test-e2e:
+  extends: .rust-ci-base
+  stage: test
+  interruptible: true
+  timeout: 90m
+  tags:
+    - qual-mcap-gcp-mem4G
+  needs:
+    - job: build-rust-builder
+      optional: true
+    - lint
+  script:
+    - echo "Running extended E2E tests…"
+    - mkdir -p target/nextest/ci
+    - cargo nextest --version || cargo install cargo-nextest --locked
+    - make test
+    - make test-acceptance-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-acceptance.xml"
+    - make test-integration-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-integration.xml"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit:
+        - target/nextest/ci/junit.xml
+        - target/nextest/ci/junit-e2e-acceptance.xml
+        - target/nextest/ci/junit-e2e-integration.xml
+    paths:
+      - target/nextest/ci/junit.xml
+      - target/nextest/ci/junit-e2e-acceptance.xml
+      - target/nextest/ci/junit-e2e-integration.xml
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+      when: on_success
+
 lint-dockerfiles:
   stage: test
   image: repository.migros.net/hadolint/hadolint:2.12.0-debian
