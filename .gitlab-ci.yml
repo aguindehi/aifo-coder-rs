@@ -323,6 +323,8 @@ test:
     - job: build-rust-builder
       optional: true
     - lint
+  tags:
+    - qual-mcap-gcp
   artifacts:
     when: always
     expire_in: 1 week
@@ -341,7 +343,7 @@ test-e2e:
   interruptible: true
   timeout: 90m
   tags:
-    - qual-mcap-gcp-mem4G
+    - qual-mcap-gcp
   needs:
     - job: build-rust-builder
       optional: true
