@@ -12,6 +12,8 @@ include:
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
 
+# Workflow
+
 workflow:
   rules:
     # Allow scheduled pipelines (e.g., nightly builder refresh)
@@ -35,9 +37,9 @@ workflow:
       when: always
 
 # Rules
+
 .rules_build_image: &rules_build_image
   - if: $CI_COMMIT_TAG
-
 
 # Base job provided as cicd-component by the cloud team. Used as template and should not run on its own
 container-build:
@@ -58,8 +60,8 @@ container-build:
     - if: $CI_COMMIT_BRANCH == "never"
       when: never
 
-
 # Pre stage: cancel redundant branch pipeline when MR pipeline starts
+
 cancel-branch-pipeline:
   stage: pre
   image: alpine:3.20
@@ -105,6 +107,7 @@ cancel-branch-pipeline:
         curl -sS -X POST -H "$AUTH_HEADER" "$CI_API_V4_URL/projects/$SRC_PROJECT_ID/pipelines/$pid/cancel" >/dev/null || true
       done
       echo "Cancel step complete."
+
 # Build images
 
 build-rust-builder:
@@ -197,7 +200,7 @@ build-toolchain:
   interruptible: true
   timeout: 1h 30m
   tags:
-    - qual-mcap-gcp
+    - qual-mcap-gcp-mem4G
   retry:
     max: 2
     when:
