@@ -336,7 +336,15 @@ test:
     - echo "Running test job…"
     - mkdir -p target/nextest/ci
     - make test
-  rules: *rb_image_rules
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && !$CI_OPEN_MERGE_REQUESTS
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+      when: on_success
 
 test-e2e:
   extends: .rust-ci-base
