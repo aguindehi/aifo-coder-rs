@@ -1384,6 +1384,22 @@ check-e2e:
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
 
+.PHONY: test-all-junit
+test-all-junit:
+	@set -e; \
+	echo "Running all tests (unit + acceptance + integration) in a single nextest run with JUnit output ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	mkdir -p target/nextest/ci; \
+	if [ "$$OS" = "Linux" ]; then \
+	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored yes --profile ci $(ARGS); \
+	else \
+	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run --run-ignored yes --profile ci -E '!test(/_uds/)' $(ARGS); \
+	fi
+
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."

@@ -358,23 +358,16 @@ test-e2e:
       optional: true
     - lint
   script:
-    - echo "Running extended E2E tests…"
+    - echo "Running all tests (unit + acceptance + integration) in one nextest run…"
     - mkdir -p target/nextest/ci
-    - make test
-    - make test-acceptance-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-acceptance.xml"
-    - make test-integration-suite ARGS="--profile ci --junit target/nextest/ci/junit-e2e-integration.xml"
+    - make test-all-junit
   artifacts:
     when: always
     expire_in: 1 week
     reports:
-      junit:
-        - target/nextest/ci/junit.xml
-        - target/nextest/ci/junit-e2e-acceptance.xml
-        - target/nextest/ci/junit-e2e-integration.xml
+      junit: target/nextest/ci/junit.xml
     paths:
       - target/nextest/ci/junit.xml
-      - target/nextest/ci/junit-e2e-acceptance.xml
-      - target/nextest/ci/junit-e2e-integration.xml
   rules:
     - if: $CI_COMMIT_TAG
       when: never
