@@ -1392,11 +1392,11 @@ test-all-junit:
 	if [ "$$OS" = "Linux" ]; then \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci $(ARGS); \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast $(ARGS); \
 	else \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci -E '!test(/_uds/)' $(ARGS); \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS); \
 	fi
 
 .PHONY: test-dev-tool-routing

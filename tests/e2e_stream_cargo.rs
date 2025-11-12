@@ -153,18 +153,25 @@ fn test_e2e_stream_cargo_help_v2() {
         }
     };
 
-    // Force official rust image for the sidecar to avoid depending on aifo-coder-toolchain-rust images.
-    std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
-    // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
-    let official = "rust:1.80-bookworm";
-    if !docker_image_present(&runtime, official) {
-        eprintln!(
-            "skipping: {} not present locally (avoid pulling in tests)",
-            official
-        );
-        // Cleanup env
-        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
-        return;
+    // Prefer MR/default-branch toolchain image when provided by CI; otherwise fall back to official.
+    let have_mr_toolchain = std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if !have_mr_toolchain {
+        // Force official rust image for the sidecar to avoid depending on unpublished toolchain images.
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+        // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
+        let official = "rust:1.80-bookworm";
+        if !docker_image_present(&runtime, official) {
+            eprintln!(
+                "skipping: {} not present locally (avoid pulling in tests)",
+                official
+            );
+            // Cleanup env
+            std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+            return;
+        }
     }
 
     // Ensure we do not allocate a TTY for v2 streaming

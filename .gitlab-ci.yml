@@ -342,16 +342,19 @@ build-launcher:
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
         AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:$CI_COMMIT_SHA"
     # Non-default branches: use per-commit builder image
     - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
         AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:$CI_COMMIT_SHA"
     # Default branch: use stable 'ci' tag
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
         AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:ci"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:ci"
 
 lint:
   extends: .rust-ci-base
