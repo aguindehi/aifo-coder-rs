@@ -76,10 +76,13 @@ pub(crate) fn init_rust_named_volumes_if_needed(
         if run_args[i] == "-v" {
             let mnt = &run_args[i + 1];
             if mnt.starts_with("aifo-cargo-registry:")
-                && mnt.ends_with("/home/coder/.cargo/registry")
+                && (mnt.ends_with("/home/coder/.cargo/registry")
+                    || mnt.ends_with("/usr/local/cargo/registry"))
             {
                 need_registry = true;
-            } else if mnt.starts_with("aifo-cargo-git:") && mnt.ends_with("/home/coder/.cargo/git")
+            } else if mnt.starts_with("aifo-cargo-git:")
+                && (mnt.ends_with("/home/coder/.cargo/git")
+                    || mnt.ends_with("/usr/local/cargo/git"))
             {
                 need_git = true;
             }
