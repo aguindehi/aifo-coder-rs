@@ -419,6 +419,7 @@ pub fn build_sidecar_run_preview_with_overrides(
     args
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_sidecar_run_preview(
     name: &str,
     network: Option<&str>,
