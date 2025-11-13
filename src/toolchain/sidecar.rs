@@ -504,6 +504,28 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
                 // Use official image defaults to prevent rustup from trying to install a toolchain
                 push_env(&mut args, "CARGO_HOME", "/usr/local/cargo");
                 push_env(&mut args, "RUSTUP_HOME", "/usr/local/rustup");
+                // Prefer curl backend and corporate CA (mounted at run-time) during exec to avoid TLS stalls
+                push_env(&mut args, "RUSTUP_USE_CURL", "1");
+                push_env(
+                    &mut args,
+                    "SSL_CERT_FILE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "CURL_CA_BUNDLE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "CARGO_HTTP_CAINFO",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "REQUESTS_CA_BUNDLE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
             }
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
             apply_rust_linker_flags_if_set(&mut args);
@@ -571,7 +593,7 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             .as_deref()
             == Some("1");
     if use_bootstrap {
-        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || cargo install --root /home/coder/.cargo cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; exec \"$@\"";
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; cargo nextest -V >/dev/null 2>&1 || ( timeout 45s cargo install cargo-nextest --locked >/dev/null 2>&1 || timeout 45s cargo install --root /home/coder/.cargo cargo-nextest --locked >/dev/null 2>&1 ) || true; rustup component list 2>/dev/null | grep -q '^clippy ' || timeout 45s rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; exec \"$@\"";
         args.push("sh".to_string());
         args.push("-c".to_string());
         args.push(bootstrap.to_string());
