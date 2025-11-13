@@ -199,8 +199,14 @@ fn test_e2e_stream_cargo_help_v2() {
         let _ = std::fs::copy(&src, "corp-ca.crt");
         if std::path::Path::new("corp-ca.crt").exists() {
             ca_copied = true;
-            overrides.push(("SSL_CERT_FILE".to_string(), "/workspace/corp-ca.crt".to_string()));
-            overrides.push(("CURL_CA_BUNDLE".to_string(), "/workspace/corp-ca.crt".to_string()));
+            overrides.push((
+                "SSL_CERT_FILE".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
+            overrides.push((
+                "CURL_CA_BUNDLE".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
             overrides.push((
                 "REQUESTS_CA_BUNDLE".to_string(),
                 "/workspace/corp-ca.crt".to_string(),
