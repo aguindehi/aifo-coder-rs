@@ -2,6 +2,11 @@ mod support;
 
 #[test]
 fn test_http_endpoint_routing() {
+    // Skip if docker isn't available on this host
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
     // Start proxy
     let sid = format!("rt-{}", std::process::id());
     let (url, token, flag, handle) =

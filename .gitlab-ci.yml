@@ -316,6 +316,7 @@ build-launcher:
     ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
     GIT_LFS_SKIP_SMUDGE: "1"
     AIFO_SUPPORT_SKIP_GREEN: "1"
+    AIFO_CODER_TEST_DISABLE_DOCKER: "1"
   cache:
     key:
       files:

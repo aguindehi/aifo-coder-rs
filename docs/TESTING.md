@@ -69,6 +69,10 @@ Important environment toggles
   - NO_COLOR disables color unconditionally.
   - CLI flags override env; env override is honored when CLI did not set a mode.
 
+- AIFO_CODER_TEST_DISABLE_DOCKER=1
+  - Forces Docker detection to return NotFound and causes docker/E2E tests to self-skip.
+  - CI sets this to ensure unit/host-only tests run on builder images without a Docker daemon.
+
 How to run
 
 - Default (unit/fast):
