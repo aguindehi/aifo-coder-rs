@@ -36,8 +36,6 @@ PLATFORMS ?=
 PUSH ?= 0
 CACHE_DIR ?= .buildx-cache
 
-# Nextest niceness
-NICENESS_CARGO_NEXTEST ?= -1
 
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
@@ -301,6 +299,7 @@ help: banner
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
 	@echo "  check-e2e .................... Run all ignored-by-default tests (acceptance + integration suites)"
 	@echo ""
+	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo ""
@@ -945,7 +944,7 @@ build-shim:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  else \
 	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
@@ -1107,7 +1106,7 @@ test:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  else \
 	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
@@ -1115,10 +1114,10 @@ test:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  elif rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS) || GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1126,7 +1125,7 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'nice -n $(NICENESS_CARGO_NEXTEST) cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not available; falling back to cargo test ..."; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
@@ -1142,7 +1141,7 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
 	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
@@ -1212,7 +1211,7 @@ coverage-html:
 	COV_ENV='CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0'; \
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "coverage-html (sidecar)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  else \
@@ -1220,7 +1219,7 @@ coverage-html:
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "coverage-html (rustup)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  elif command -v docker >/dev/null 2>&1; then \
@@ -1235,7 +1234,7 @@ coverage-html:
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-html (cargo)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
 	  elif command -v docker >/dev/null 2>&1; then \
@@ -1256,7 +1255,7 @@ coverage-html:
 	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t html --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
 	echo "Wrote build/coverage/html (if grcov ran)."
 
@@ -1276,13 +1275,13 @@ coverage-lcov:
 	COV_ENV='CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$(PWD)/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0'; \
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "coverage-lcov (sidecar)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  else echo "warning: grcov not found in sidecar; skipping lcov"; fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "coverage-lcov (rustup)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  elif command -v docker >/dev/null 2>&1; then \
@@ -1296,7 +1295,7 @@ coverage-lcov:
 	  else echo "error: grcov not found and no docker fallback"; exit 1; fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "coverage-lcov (cargo)"; \
-	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+	  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info; \
 	  elif command -v docker >/dev/null 2>&1; then \
@@ -1316,7 +1315,7 @@ coverage-lcov:
 	  fi; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
 	    -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS); grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --ignore "/*" $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'; \
 	else echo "error: neither rustup/cargo nor docker found"; exit 1; fi; \
 	echo "Wrote build/coverage/lcov.info (if grcov ran)."
 
@@ -1383,6 +1382,32 @@ check-e2e:
 	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
+
+.PHONY: test-all-junit
+test-all-junit:
+	@set -e; \
+	echo "Running all tests (unit + acceptance + integration) in a single nextest run with JUnit output ..."; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	mkdir -p target/nextest/ci; \
+	if [ "$$OS" = "Linux" ]; then \
+	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/divert/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
+	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/divert/null 2>&1; then \
+	    FEX='!test(/^accept_/) & !test(/^test_proxy_/) & !test(/^toolchain_/) & !test(/^test_tsc_/) & !test(/^test_http_/)' ; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
+	  else \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast $(ARGS); \
+	  fi; \
+	else \
+	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
+	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then \
+	    FEX='!test(/^accept_/) & !test(/^test_proxy_/) & !test(/^toolchain_/) & !test(/^test_tsc_/) & !test(/^test_http_/)' ; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
+	  else \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS); \
+	  fi; \
+	fi
 
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:

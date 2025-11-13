@@ -153,18 +153,25 @@ fn test_e2e_stream_cargo_help_v2() {
         }
     };
 
-    // Force official rust image for the sidecar to avoid depending on aifo-coder-toolchain-rust images.
-    std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
-    // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
-    let official = "rust:1.80-bookworm";
-    if !docker_image_present(&runtime, official) {
-        eprintln!(
-            "skipping: {} not present locally (avoid pulling in tests)",
-            official
-        );
-        // Cleanup env
-        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
-        return;
+    // Prefer MR/default-branch toolchain image when provided by CI; otherwise fall back to official.
+    let have_mr_toolchain = std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if !have_mr_toolchain {
+        // Force official rust image for the sidecar to avoid depending on unpublished toolchain images.
+        std::env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+        // Default version used by code is 1.80; ensure it's present locally to avoid pulling in tests.
+        let official = "rust:1.80-bookworm";
+        if !docker_image_present(&runtime, official) {
+            eprintln!(
+                "skipping: {} not present locally (avoid pulling in tests)",
+                official
+            );
+            // Cleanup env
+            std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+            return;
+        }
     }
 
     // Ensure we do not allocate a TTY for v2 streaming
@@ -172,7 +179,53 @@ fn test_e2e_stream_cargo_help_v2() {
 
     // Start sidecar(s) and proxy
     let kinds = vec!["rust".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+
+    // Prefer corporate CA inside the sidecar to allow rustup/curl TLS in restricted environments.
+    // Source: AIFO_TEST_CORP_CA or $HOME/.certificates/MigrosRootCA2.crt
+    let corp_ca_src = std::env::var("AIFO_TEST_CORP_CA")
+        .ok()
+        .filter(|p| std::path::Path::new(p).exists())
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|h| format!("{}/.certificates/MigrosRootCA2.crt", h))
+                .filter(|p| std::path::Path::new(p).exists())
+        });
+
+    let mut overrides: Vec<(String, String)> = Vec::new();
+    let mut ca_copied = false;
+    if let Some(src) = corp_ca_src {
+        // Copy CA into workspace so the sidecar can use it at /workspace/corp-ca.crt
+        let _ = std::fs::copy(&src, "corp-ca.crt");
+        if std::path::Path::new("corp-ca.crt").exists() {
+            ca_copied = true;
+            overrides.push((
+                "SSL_CERT_FILE".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
+            overrides.push((
+                "CURL_CA_BUNDLE".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
+            overrides.push((
+                "REQUESTS_CA_BUNDLE".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
+            overrides.push((
+                "CARGO_HTTP_CAINFO".to_string(),
+                "/workspace/corp-ca.crt".to_string(),
+            ));
+            overrides.push(("RUSTUP_USE_CURL".to_string(), "1".to_string()));
+            // Align with official rust image defaults to avoid triggering fresh installs
+            overrides.push(("CARGO_HOME".to_string(), "/usr/local/cargo".to_string()));
+            overrides.push(("RUSTUP_HOME".to_string(), "/usr/local/rustup".to_string()));
+        }
+    } else if !have_mr_toolchain {
+        eprintln!("skipping: corporate CA not found and no MR toolchain image provided; rustup may require TLS");
+        std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+        return;
+    }
+
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("start session");
     let (url, token, flag, handle) =
@@ -246,6 +299,9 @@ fn test_e2e_stream_cargo_help_v2() {
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
     aifo_coder::toolchain_cleanup_session(&sid, true);
+    if ca_copied {
+        let _ = std::fs::remove_file("corp-ca.crt");
+    }
 
     // Restore env
     std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");

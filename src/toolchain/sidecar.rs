@@ -132,7 +132,7 @@ pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_sidecar_run_preview(
+pub fn build_sidecar_run_preview_with_overrides(
     name: &str,
     network: Option<&str>,
     uidgid: Option<(u32, u32)>,
@@ -140,6 +140,7 @@ pub fn build_sidecar_run_preview(
     image: &str,
     no_cache: bool,
     pwd: &Path,
+    overrides: &[(String, String)],
     apparmor: Option<&str>,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec![
@@ -165,6 +166,16 @@ pub fn build_sidecar_run_preview(
         "rust" => {
             // Normative env for rust sidecar
             apply_rust_common_env(&mut args);
+            // If using the official rust image or forced-official mode, align CARGO_HOME/RUSTUP_HOME to image defaults.
+            if is_official_rust_image(image)
+                || std_env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
+            {
+                push_env(&mut args, "CARGO_HOME", "/usr/local/cargo");
+                push_env(&mut args, "RUSTUP_HOME", "/usr/local/rustup");
+            }
             // Cargo cache mounts
             if !no_cache {
                 let force_named = cfg!(windows)
@@ -344,6 +355,47 @@ pub fn build_sidecar_run_preview(
     args.push("-w".to_string());
     args.push("/workspace".to_string());
 
+    // Corporate CA bridging: detect host CA at AIFO_TEST_CORP_CA or $HOME/.certificates/MigrosRootCA2.crt
+    {
+        let mut host_ca: Option<PathBuf> = std_env::var("AIFO_TEST_CORP_CA")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        if host_ca.is_none() {
+            let hd_opt = std_env::var("HOME")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(PathBuf::from)
+                .or_else(home::home_dir);
+            if let Some(hd) = hd_opt {
+                let p = hd.join(".certificates").join("MigrosRootCA2.crt");
+                if p.exists() {
+                    host_ca = Some(p);
+                }
+            }
+        }
+        if let Some(h) = host_ca {
+            let target = "/etc/ssl/certs/aifo-corp-ca.crt";
+            // Mount the CA into the container and set conventional TLS envs
+            push_mount(&mut args, &format!("{}:{}:ro", h.display(), target));
+            push_env(&mut args, "SSL_CERT_FILE", target);
+            push_env(&mut args, "CURL_CA_BUNDLE", target);
+            push_env(&mut args, "CARGO_HTTP_CAINFO", target);
+            push_env(&mut args, "REQUESTS_CA_BUNDLE", target);
+            if kind == "rust" {
+                push_env(&mut args, "RUSTUP_USE_CURL", "1");
+            }
+        }
+    }
+
+    // Apply test/CI-provided overrides (e.g., SSL_CERT_FILE, CURL_CA_BUNDLE, etc.)
+    for (k, v) in overrides {
+        if !k.trim().is_empty() && !v.trim().is_empty() {
+            push_env(&mut args, k, v);
+        }
+    }
+
     if let Some(profile) = apparmor {
         if docker_supports_apparmor() {
             args.push("--security-opt".to_string());
@@ -365,6 +417,30 @@ pub fn build_sidecar_run_preview(
     args.push("/bin/sleep".to_string());
     args.push("infinity".to_string());
     args
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_sidecar_run_preview(
+    name: &str,
+    network: Option<&str>,
+    uidgid: Option<(u32, u32)>,
+    kind: &str,
+    image: &str,
+    no_cache: bool,
+    pwd: &Path,
+    apparmor: Option<&str>,
+) -> Vec<String> {
+    build_sidecar_run_preview_with_overrides(
+        name,
+        network,
+        uidgid,
+        kind,
+        image,
+        no_cache,
+        pwd,
+        &[],
+        apparmor,
+    )
 }
 
 pub fn build_sidecar_exec_preview(
@@ -414,16 +490,42 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
     match kind {
         "rust" => {
             apply_rust_common_env(&mut args);
-            // When bootstrapping official rust images, ensure $CARGO_HOME/bin is on PATH at exec time.
+            // When bootstrapping official rust images, ensure official defaults to avoid rustup installs.
             if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
                 .ok()
                 .as_deref()
                 == Some("1")
             {
+                // PATH must expose both user and system cargo bins
                 push_env(
                     &mut args,
                     "PATH",
                     "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                );
+                // Use official image defaults to prevent rustup from trying to install a toolchain
+                push_env(&mut args, "CARGO_HOME", "/usr/local/cargo");
+                push_env(&mut args, "RUSTUP_HOME", "/usr/local/rustup");
+                // Prefer curl backend and corporate CA (mounted at run-time) during exec to avoid TLS stalls
+                push_env(&mut args, "RUSTUP_USE_CURL", "1");
+                push_env(
+                    &mut args,
+                    "SSL_CERT_FILE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "CURL_CA_BUNDLE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "CARGO_HTTP_CAINFO",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
+                );
+                push_env(
+                    &mut args,
+                    "REQUESTS_CA_BUNDLE",
+                    "/etc/ssl/certs/aifo-corp-ca.crt",
                 );
             }
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
@@ -492,7 +594,20 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             .as_deref()
             == Some("1");
     if use_bootstrap {
-        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked >/dev/null 2>&1 || true; rustup component list 2>/dev/null | grep -q '^clippy ' || rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; exec \"$@\"";
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; \
+mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; \
+T=\"${AIFO_RUST_BOOTSTRAP_TIMEOUT:-180}\"; \
+NEEDS_NEXTEST=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && [ \"$2\" = \"nextest\" ]; then NEEDS_NEXTEST=1; fi; \
+if [ \"$NEEDS_NEXTEST\" = \"1\" ]; then \
+  cargo nextest -V >/dev/null 2>&1 \
+  || env CARGO_HOME=/home/coder/.cargo timeout \"$T\" cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+  cargo nextest -V >/dev/null 2>&1 \
+  || timeout \"$T\" cargo install --root /usr/local/cargo cargo-nextest --locked >/dev/null 2>&1 || true; \
+fi; \
+NEEDS_CLIPPY=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && { [ \"$2\" = \"clippy\" ] || [ \"$2\" = \"fmt\" ] || [ \"$2\" = \"fix\" ]; }; then NEEDS_CLIPPY=1; fi; \
+if [ \"$NEEDS_CLIPPY\" = \"1\" ]; then timeout \"$T\" rustup component add clippy rustfmt >/dev/null 2>&1 || true; fi; \
+if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; \
+exec \"$@\"";
         args.push("sh".to_string());
         args.push("-c".to_string());
         args.push(bootstrap.to_string());
@@ -642,7 +757,7 @@ pub fn toolchain_run(
     let apparmor_profile = desired_apparmor_profile();
 
     // Build and optionally run sidecar
-    let run_preview_args = build_sidecar_run_preview(
+    let run_preview_args = build_sidecar_run_preview_with_overrides(
         &name,
         net_for_run.as_deref(),
         if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -650,6 +765,7 @@ pub fn toolchain_run(
         &image,
         no_cache,
         &pwd,
+        &[],
         apparmor_profile.as_deref(),
     );
     let run_preview = shell_join(&run_preview_args);
@@ -826,7 +942,7 @@ pub fn toolchain_start_session(
         // Bootstrap marker held at session level via ToolchainSession guard
 
         let name = sidecar_container_name(kind.as_str(), &session_id);
-        let args = build_sidecar_run_preview(
+        let args = build_sidecar_run_preview_with_overrides(
             &name,
             net_for_run.as_deref(),
             if cfg!(unix) { Some((uid, gid)) } else { None },
@@ -834,6 +950,7 @@ pub fn toolchain_start_session(
             &image,
             no_cache,
             &pwd,
+            overrides,
             apparmor_profile.as_deref(),
         );
         if verbose {

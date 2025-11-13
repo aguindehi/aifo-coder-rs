@@ -213,9 +213,44 @@ build-toolchain:
     - build-rust-builder  # Wait for first build to reuse layers
   variables:
     IMAGE_PATH_EXTRA: "$FOLDER"
-    IMAGE_PREFIX: "toolchain"
+    IMAGE_PREFIX: "coder-toolchain"
     DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
-  rules: *rules_build_image
+  rules:
+    # Release tags: publish toolchain as :$CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Merge requests: publish per-commit toolchain under <slug>:$CI_COMMIT_SHA
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Nightly/scheduled refresh of stable 'ci' tag on default branch
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Default branch: rebuild stable 'ci' tag only when relevant build inputs change
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - Dockerfile
+        - Cargo.toml
+        - build.rs
+        - .cargo/**/*
+        - rust-toolchain.toml
+        - src/**/*
+        - toolchains/**/*
+        - .gitlab-ci.yml
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    # Manual refresh of the 'ci' tag on default branch
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      variables:
+        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM_ONLY: "true"
   parallel:
     matrix:
       - FOLDER: [ "rust", "node", "cpp" ]
@@ -280,8 +315,8 @@ build-launcher:
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
     ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
     GIT_LFS_SKIP_SMUDGE: "1"
-    NICENESS_CARGO_NEXTEST: "0"
     AIFO_SUPPORT_SKIP_GREEN: "1"
+    AIFO_CODER_TEST_DISABLE_DOCKER: "1"
   cache:
     key:
       files:
@@ -302,14 +337,20 @@ build-launcher:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:$CI_COMMIT_SHA"
     # Non-default branches: use per-commit builder image
     - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:$CI_COMMIT_SHA"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:$CI_COMMIT_SHA"
     # Default branch: use stable 'ci' tag
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       variables:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+        AIFO_CODER_TEST_CPP_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-cpp:ci"
+        AIFO_CODER_TEST_RUST_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-toolchain-rust:ci"
 
 lint:
   extends: .rust-ci-base
@@ -323,6 +364,8 @@ test:
     - job: build-rust-builder
       optional: true
     - lint
+  tags:
+    - qual-mcap-gcp
   artifacts:
     when: always
     expire_in: 1 week
@@ -332,8 +375,51 @@ test:
       - target/nextest/ci/junit.xml
   script:
     - echo "Running test job…"
+    - mkdir -p target/nextest/ci
     - make test
-  rules: *rb_image_rules
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_OPEN_MERGE_REQUESTS == null
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+      when: on_success
+
+test-e2e:
+  extends: .rust-ci-base
+  stage: test
+  interruptible: true
+  timeout: 90m
+  tags:
+    - qual-mcap-gcp
+  needs:
+    - job: build-rust-builder
+      optional: true
+    - lint
+  script:
+    - echo "Running all tests (unit + acceptance + integration) in one nextest run…"
+    - mkdir -p target/nextest/ci
+    - make test-all-junit
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit: target/nextest/ci/junit.xml
+    paths:
+      - target/nextest/ci/junit.xml
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
+      when: on_success
 
 lint-dockerfiles:
   stage: test

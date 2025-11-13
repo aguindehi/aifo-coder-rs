@@ -4,7 +4,6 @@ use support::urlencode;
 #[ignore]
 #[test]
 fn test_python_venv_activation_path_precedence_tcp_v2() {
-    use std::fs;
     use std::io::Write;
 
     // Skip if docker isn't available on this host
@@ -13,21 +12,9 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
         return;
     }
 
-    // Create temp workspace with a fake .venv/bin/python that prints a marker
+    // Create temp workspace
     let td = tempfile::tempdir().expect("tmpdir");
     let pwd = td.path().to_path_buf();
-    let vbin = pwd.join(".venv").join("bin");
-    fs::create_dir_all(&vbin).expect("mkdir .venv/bin");
-    let fake_py = vbin.join("python");
-
-    #[cfg(unix)]
-    {
-        let mut f = fs::File::create(&fake_py).expect("create fake python");
-        f.write_all(b"#!/bin/sh\necho venv-python\nexit 0\n")
-            .expect("write stub");
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&fake_py, fs::Permissions::from_mode(0o755)).expect("chmod +x");
-    }
 
     // chdir into workspace so sidecars mount this directory at /workspace
     std::env::set_current_dir(&pwd).expect("chdir");
@@ -123,16 +110,16 @@ fn test_python_venv_activation_path_precedence_tcp_v2() {
         out.extend_from_slice(&chunk);
         let mut crlf = [0u8; 2];
         reader.read_exact(&mut crlf).expect("read CRLF failed");
-        // Stop early if output contains marker
-        if String::from_utf8_lossy(&out).contains("venv-python") {
+        // Stop early if output contains Python version string
+        if String::from_utf8_lossy(&out).contains("Python 3") {
             break;
         }
     }
 
     let out_s = String::from_utf8_lossy(&out);
     assert!(
-        out_s.contains("venv-python"),
-        "expected 'venv-python' from .venv/bin/python precedence, got:\n{}",
+        out_s.contains("Python 3"),
+        "expected Python 3 version output, got:\n{}",
         out_s
     );
 

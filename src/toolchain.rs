@@ -31,7 +31,8 @@ mod notifications;
 
 mod sidecar;
 pub use sidecar::{
-    build_sidecar_exec_preview, build_sidecar_run_preview, toolchain_bootstrap_typescript_global,
+    build_sidecar_exec_preview, build_sidecar_run_preview,
+    build_sidecar_run_preview_with_overrides, toolchain_bootstrap_typescript_global,
     toolchain_cleanup_session, toolchain_purge_caches, toolchain_purge_volume_names, toolchain_run,
     toolchain_start_session, BootstrapGuard,
 };

@@ -20,6 +20,7 @@ RUN set -eux; \
       git \
       procps \
       unzip; \
+    apt-mark manual ca-certificates curl git unzip >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/*
 
 # Home, caches and PATH defaults
@@ -111,6 +112,8 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
   fi
+# Verify critical tools still present after optional cleanup (fail fast if missing)
+RUN command -v curl >/dev/null && git --version >/dev/null
 
 # Sleep by default; proxy will docker exec into this container
 CMD ["sleep", "infinity"]
