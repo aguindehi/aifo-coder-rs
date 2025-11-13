@@ -8,7 +8,7 @@ ARG KEEP_APT
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Base developer toolchain for C/C++
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config ccache procps ca-certificates git; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config ccache procps ca-certificates git; apt-mark manual cmake cmake-data ninja-build build-essential clang pkg-config ccache git ca-certificates >/dev/null 2>&1 || true; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 # Enterprise CA is injected via BuildKit secret only during RUN steps; not persisted in the final image
 # Verify cmake is installed for tests and fail fast otherwise
 RUN cmake --version >/dev/null
@@ -34,6 +34,8 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
   apt-get clean; \
   rm -rf /var/lib/apt/lists/*; \
 fi
+# Verify cmake still present after optional cleanup (fail fast if missing)
+RUN test -x /usr/bin/cmake && /usr/bin/cmake --version >/dev/null
 
 # Sleep by default; the toolexec proxy will docker exec into this container
 CMD ["sleep", "infinity"]
