@@ -423,7 +423,16 @@ fn build_exec_args_with_wrapper(
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
     let inner = shell_join(&user_slice);
     let script = format!(
-        "set -e; export PATH=\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; eid=\"${{AIFO_EXEC_ID:-}}\"; if [ -z \"$eid\" ]; then exec {inner} 2>&1; fi; d=\"${{HOME:-/home/coder}}/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" || true; }}; ( setsid sh -lc \"export PATH=\\\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:\\$PATH\\\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; exec {inner} 2>&1\" ) & pg=$!; printf \"%s\\n\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; wait \"$pg\"; rm -rf \"$d\" || true",
+        "set -e; export PATH=\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
+         if [ -f /workspace/corp-ca.crt ]; then export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
+         elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; fi; \
+         eid=\"${{AIFO_EXEC_ID:-}}\"; if [ -z \"$eid\" ]; then exec {inner} 2>&1; fi; \
+         d=\"${{HOME:-/home/coder}}/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" || true; }}; \
+         ( setsid sh -lc \"export PATH=\\\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:\\$PATH\\\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
+           if [ -f /workspace/corp-ca.crt ]; then export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
+           elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; fi; \
+           exec {inner} 2>&1\" ) & pg=$!; \
+         printf \"%s\\n\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; wait \"$pg\"; rm -rf \"$d\" || true",
         inner = inner
     );
     spawn_args.push("sh".to_string());

@@ -354,6 +354,41 @@ pub fn build_sidecar_run_preview_with_overrides(
     push_env(&mut args, "GNUPGHOME", "/home/coder/.gnupg");
     args.push("-w".to_string());
     args.push("/workspace".to_string());
+
+    // Corporate CA bridging: detect host CA at AIFO_TEST_CORP_CA or $HOME/.certificates/MigrosRootCA2.crt
+    {
+        let mut host_ca: Option<PathBuf> = std_env::var("AIFO_TEST_CORP_CA")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        if host_ca.is_none() {
+            let hd_opt = std_env::var("HOME")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(PathBuf::from)
+                .or_else(home::home_dir);
+            if let Some(hd) = hd_opt {
+                let p = hd.join(".certificates").join("MigrosRootCA2.crt");
+                if p.exists() {
+                    host_ca = Some(p);
+                }
+            }
+        }
+        if let Some(h) = host_ca {
+            let target = "/etc/ssl/certs/aifo-corp-ca.crt";
+            // Mount the CA into the container and set conventional TLS envs
+            push_mount(&mut args, &format!("{}:{}:ro", h.display(), target));
+            push_env(&mut args, "SSL_CERT_FILE", target);
+            push_env(&mut args, "CURL_CA_BUNDLE", target);
+            push_env(&mut args, "CARGO_HTTP_CAINFO", target);
+            push_env(&mut args, "REQUESTS_CA_BUNDLE", target);
+            if kind == "rust" {
+                push_env(&mut args, "RUSTUP_USE_CURL", "1");
+            }
+        }
+    }
+
     // Apply test/CI-provided overrides (e.g., SSL_CERT_FILE, CURL_CA_BUNDLE, etc.)
     for (k, v) in overrides {
         if !k.trim().is_empty() && !v.trim().is_empty() {
@@ -454,17 +489,21 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
     match kind {
         "rust" => {
             apply_rust_common_env(&mut args);
-            // When bootstrapping official rust images, ensure $CARGO_HOME/bin is on PATH at exec time.
+            // When bootstrapping official rust images, ensure official defaults to avoid rustup installs.
             if std::env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP")
                 .ok()
                 .as_deref()
                 == Some("1")
             {
+                // PATH must expose both user and system cargo bins
                 push_env(
                     &mut args,
                     "PATH",
                     "/home/coder/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
                 );
+                // Use official image defaults to prevent rustup from trying to install a toolchain
+                push_env(&mut args, "CARGO_HOME", "/usr/local/cargo");
+                push_env(&mut args, "RUSTUP_HOME", "/usr/local/rustup");
             }
             // Optional: fast linkers via RUSTFLAGS (lld/mold)
             apply_rust_linker_flags_if_set(&mut args);
