@@ -36,6 +36,7 @@ RUN set -eux; \
       procps \
       tzdata \
       locales; \
+    apt-mark manual build-essential pkg-config cmake ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs docker.io ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/*
 
 # Configure a default git identity and enable LFS filters system-wide for tests
@@ -88,6 +89,9 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
   fi
+
+# Verify cmake still present after optional cleanup (fail fast if missing)
+RUN cmake --version >/dev/null
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
