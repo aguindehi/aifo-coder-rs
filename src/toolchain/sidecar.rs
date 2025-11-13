@@ -593,7 +593,20 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             .as_deref()
             == Some("1");
     if use_bootstrap {
-        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; cargo nextest -V >/dev/null 2>&1 || ( timeout 45s cargo install cargo-nextest --locked >/dev/null 2>&1 || timeout 45s cargo install --root /home/coder/.cargo cargo-nextest --locked >/dev/null 2>&1 ) || true; rustup component list 2>/dev/null | grep -q '^clippy ' || timeout 45s rustup component add clippy rustfmt >/dev/null 2>&1 || true; if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; exec \"$@\"";
+        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; \
+mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; \
+T=\"${AIFO_RUST_BOOTSTRAP_TIMEOUT:-180}\"; \
+NEEDS_NEXTEST=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && [ \"$2\" = \"nextest\" ]; then NEEDS_NEXTEST=1; fi; \
+if [ \"$NEEDS_NEXTEST\" = \"1\" ]; then \
+  cargo nextest -V >/dev/null 2>&1 \
+  || env CARGO_HOME=/home/coder/.cargo timeout \"$T\" cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
+  cargo nextest -V >/dev/null 2>&1 \
+  || timeout \"$T\" cargo install --root /usr/local/cargo cargo-nextest --locked >/dev/null 2>&1 || true; \
+fi; \
+NEEDS_CLIPPY=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && { [ \"$2\" = \"clippy\" ] || [ \"$2\" = \"fmt\" ] || [ \"$2\" = \"fix\" ]; }; then NEEDS_CLIPPY=1; fi; \
+if [ \"$NEEDS_CLIPPY\" = \"1\" ]; then timeout \"$T\" rustup component add clippy rustfmt >/dev/null 2>&1 || true; fi; \
+if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; \
+exec \"$@\"";
         args.push("sh".to_string());
         args.push("-c".to_string());
         args.push(bootstrap.to_string());
