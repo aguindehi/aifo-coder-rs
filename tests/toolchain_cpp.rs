@@ -44,14 +44,7 @@ fn test_toolchain_live_c_cpp_cmake_ok() {
     }
     // Start a c-cpp sidecar and run cmake --version inside it.
     let args = vec!["cmake".to_string(), "--version".to_string()];
-    let res = aifo_coder::toolchain_run(
-        "c-cpp",
-        &args,
-        Some(&chosen_img),
-        false,
-        false,
-        false,
-    );
+    let res = aifo_coder::toolchain_run("c-cpp", &args, Some(&chosen_img), false, false, false);
     assert!(res.is_ok(), "toolchain_run returned error: {:?}", res.err());
     assert_eq!(res.unwrap(), 0);
 }
