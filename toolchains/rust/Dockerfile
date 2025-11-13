@@ -36,7 +36,7 @@ RUN set -eux; \
       procps \
       tzdata \
       locales; \
-    apt-mark manual build-essential pkg-config cmake ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs docker.io ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
+    apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs docker.io ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/*
 
 # Configure a default git identity and enable LFS filters system-wide for tests
