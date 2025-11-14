@@ -267,13 +267,22 @@ pub fn preferred_registry_prefix_quiet() -> String {
 
 /// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
 pub fn preferred_registry_source() -> String {
+    // If a test override is active, prefer reporting "env" or "env-empty" if that was the
+    // actual resolution path; otherwise, keep source "unknown" under override.
     if REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
         .is_some()
     {
+        if let Some(src) = REGISTRY_PREFIX_SOURCE.get() {
+            if src == "env" || src == "env-empty" {
+                return src.clone();
+            }
+        }
         return "unknown".to_string();
     }
+
+    // If env-probe is explicitly set, report that source next.
     if let Ok(mode) = std::env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
         let ml = mode.to_ascii_lowercase();
         return match ml.as_str() {
@@ -282,8 +291,11 @@ pub fn preferred_registry_source() -> String {
             _ => "unknown".to_string(),
         };
     }
-    REGISTRY_PREFIX_SOURCE
-        .get()
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string())
+
+    // Otherwise, prefer the previously determined resolution source (env/env-empty/curl/tcp).
+    if let Some(src) = REGISTRY_PREFIX_SOURCE.get() {
+        return src.clone();
+    }
+
+    "unknown".to_string()
 }

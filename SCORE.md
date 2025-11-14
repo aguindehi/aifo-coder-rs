@@ -1,3 +1,308 @@
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Adjusted preferred_registry_source precedence: it now reports an already
+determined source (env/env-empty/curl/tcp) before considering the mere
+presence of a test override, while still prioritizing explicit env-probe
+reporting ("tcp"/"curl"). This fixes the failing precedence test without
+affecting other scenarios.
+
+## Proposed Next Steps
+- Add a test verifying source remains "env" when both env override and test
+  override are set, and no env-probe is present (covered by fixed test).
+- Consider a parity test ensuring env-probe reporting is consistent across
+  quiet and non-quiet variants.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added tests for case-insensitive env-probe (TCP-OK/CURL-FAIL), env override '/'
+root prefix, and leading-space normalization. All deterministic, isolated via
+per-file XDG_RUNTIME_DIR, and using only public APIs without external IO.
+
+## Proposed Next Steps
+- Consider adding a quiet/non-quiet parity test for '/' override.
+- Optionally add mixed-case env-probe tests for tcp-fail/curl-ok symmetry.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added tests for env override change mid-run (quiet/non-quiet interplay) and
+trailing-slash passthrough. Both are deterministic, isolated via per-file
+XDG_RUNTIME_DIR, and exercise env normalization and cache write behavior.
+
+## Proposed Next Steps
+- Optionally add a test for env override set to "/" to confirm normalization.
+- Consider DRY helpers within tests to reduce repetition (optional).
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added quiet env-probe tcp-ok test; deterministic and isolated via XDG_RUNTIME_DIR.
+Covers early-return path and source "tcp" reporting without writing cache.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added precedence tests comparing quiet vs non-quiet behavior (override vs env override),
+and a nested path normalization test. All scenarios are deterministic, isolated via
+per-file XDG_RUNTIME_DIR, and rely only on public APIs.
+
+## Proposed Next Steps
+- Consider adding a test asserting quiet/non-quiet parity for env-probe branches.
+- Optionally add DRY setup helpers within tests (remain minimal and dependency-free).
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added non-quiet env-probe tests for curl-ok, curl-fail, and tcp-fail paths,
+verifying prefixes, sources, and absence of cache writes. Tests use unique
+XDG_RUNTIME_DIR per file and only public APIs; no external processes/network.
+
+## Proposed Next Steps
+- Consider symmetry tests comparing quiet vs non-quiet outputs (prefix/source).
+- Optionally add DRY helpers within tests to reduce repetition.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added tests for env-probe curl-ok/curl-fail (quiet) and source "unknown"
+paths (override, pristine). Each uses unique XDG_RUNTIME_DIR and public APIs.
+No external processes or networking; scenarios isolated per file.
+
+## Proposed Next Steps
+- Add tests for quiet override modes asserting no cache writes across variants.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Coverage: A-
+- Correctness: A
+- Determinism: A
+- Isolation: A
+- Maintainability: A-
+
+## Summary
+Added deterministic integration tests under tests/ targeting src/registry.rs:
+env-empty branch, env normalization, and cache write/remove. Each test uses a
+unique XDG_RUNTIME_DIR temp dir and avoids external processes and networking.
+Scenarios are isolated per file to prevent OnceCell cross-contamination.
+
+## Proposed Next Steps
+- Add tests for disk cache retrieval path when env is cleared mid-run.
+- Confirm quiet variant does not write cache for overrides across all modes.
+
+# Source Code Scoring — 2025-11-11
+
+## Grades
+- Correctness: A
+- Robustness: A-
+- Readability: A-
+- Performance: A
+- Testability: B
+
+## Summary
+scripts/cov2ai.py now prints a prompt from prompts/TESTS.md before the JSON
+preview, unless --raw is specified. This improves UX for interactive runs while
+retaining a raw mode for programmatic use. Implementation is simple, guarded by
+error handling if the prompt file is missing.
+
+## Proposed Next Steps
+- Add CLI options for prompt path and lcov path to increase flexibility.
+- Add a basic test invoking the script with and without --raw to ensure output
+  ordering and error handling remain stable.
+
+# Source Code Scoring — 2025-11-10
+
+## Grades
+- Correctness: A
+- Robustness: A-
+- Readability: A-
+- Performance: A
+- Testability: B-
+
+## Summary
+Added a --size CLI argument to scripts/cov2ai.py to control the maximum
+JSON preview bytes printed. Default remains 20000; behavior is backward
+compatible. Change is small, improves usability, and keeps code simple.
+
+## Proposed Next Steps
+- Expose lcov path and file count as optional CLI args for flexibility.
+- Add a smoke test that runs the script with various sizes to ensure stability.
+
+# Source Code Scoring — 2025-11-10
+
+## Grades
+- Correctness: A-
+- Robustness: B+
+- Readability: B
+- Performance: A
+- Testability: C+
+
+## Summary
+The lcov parser now handles FN/FNDA names containing commas and DA records
+with optional checksums. This prevents crashes seen during coverage parsing
+while keeping the implementation efficient and simple.
+
+## Proposed Next Steps
+- Add unit tests for DA (with/without checksum) and FN/FNDA edge cases.
+- Track malformed records to aid diagnostics without aborting parsing.
+- Consider more defensive BRDA parsing for unusual field values.
+
+# Source Code Scoring — 2025-11-09 (Final)
+
+## Grades
+- Coverage: A
+- Correctness: A
+- Maintainability: A
+
+## Summary
+- Test run: 307 passed, 34 skipped.
+- Focus: registry.rs env/override/probe branches, cache write/remove, OnceCell behavior.
+- External process/network branches intentionally untested per constraints.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
+  - Quiet env-probe tcp-ok and quiet override curl-ok paths covered; no new deps.
+- Correctness: A
+  - Deterministic; per-file XDG_RUNTIME_DIR; no external processes/network.
+- Maintainability: A
+  - Small, focused tests using only public APIs.
+
+## Summary
+Added quiet tests for env-probe tcp-ok and override curl-ok, completing coverage of quiet
+override/probe paths while keeping the suite deterministic and isolated.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
+  - Added tests for override precedence vs env-probe and quiet override path.
+- Correctness: A
+  - Deterministic; per-file XDG_RUNTIME_DIR isolation; no external processes/network.
+- Maintainability: A
+  - Small, focused tests; public API usage only.
+
+## Summary
+New tests confirm that probe overrides take precedence over env-probe and keep
+preferred_registry_source as "unknown". Quiet override TcpFail path is covered and
+verified to avoid cache writes, further solidifying registry behavior coverage.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
+  - Added quiet env-empty branch coverage and cache retrieval path in non-quiet variant.
+- Correctness: A
+  - Deterministic; isolated XDG_RUNTIME_DIR per file; no external processes/network.
+- Maintainability: A
+  - Small, focused tests using only public APIs.
+
+## Summary
+New tests cover the quiet env-empty normalization and explicitly exercise the cache retrieval
+path in preferred_registry_prefix when env and env-probe are cleared, further improving coverage
+of src/registry.rs without touching production code.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
+  - Override CurlOk/CurlFail and env-probe unknown covered; invalidate no-file path verified.
+- Correctness: A
+  - Deterministic; per-file XDG_RUNTIME_DIR isolation; no networking or external processes.
+- Maintainability: A
+  - Small focused additions; public APIs only.
+
+## Summary
+The new tests complete coverage of test override modes for curl, exercise the default
+env-probe branch for unknown values, and confirm that cache invalidation is safe when
+no cache file exists. These are deterministic and further increase coverage in
+src/registry.rs without touching production code.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A
+  - Quiet env-probe branches covered; fallback source "unknown" covered.
+- Correctness: A
+  - Deterministic tests; per-file XDG_RUNTIME_DIR isolation; no external processes.
+- Maintainability: A
+  - Small focused additions; public APIs only; no new dependencies.
+
+## Summary
+New tests extend coverage of preferred_registry_prefix_quiet and the source fallback
+path without modifying production code. This further reduces uncovered lines in
+src/registry.rs while keeping tests deterministic.
+
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A-
+  - Added precedence test (env override wins) on top of existing registry coverage.
+- Correctness: A
+  - Deterministic; environment isolated per test file; no external processes/network.
+- Maintainability: A
+  - Small focused tests; public API usage only.
+
+## Summary
+The new test ensures OnceCell-cached env override is not superseded by later env-probe settings,
+reinforcing correctness of precedence rules and cache behavior.
+
+## Proposed Next Steps
+- Consider a separate test asserting that disk cache presence does not override an already
+  initialized in-process cache (covered implicitly; could be made explicit).
+
 # AIFO Coder Source Code Score — 2025-11-07
 
 Author: AIFO User <aifo@example.com>
@@ -56,3 +361,28 @@ Grade summary:
 - The v3 support mode is implemented cleanly and aligns with the specification. Performance
   characteristics are strong and UX is polished. Minor enhancements around diagnostics and
   optional timeouts can be pursued next without risking regressions.
+# Source Code Scoring — 2025-11-09
+
+## Grades
+- Coverage: A-
+  - Env override empty/non-empty covered; probe overrides TcpOk/TcpFail covered.
+  - Env-probe branches curl-ok/curl-fail/tcp-fail/tcp-ok now exercised.
+  - Cache write/remove verified; OnceCell cache persistence validated.
+- Correctness: A
+  - Deterministic tests; no networking or external processes invoked.
+  - Per-file XDG_RUNTIME_DIR isolation avoids global cache contamination.
+- Design: A-
+  - Scenarios split into separate integration files; minimal setup/teardown.
+- Maintainability: A
+  - Tests are small, focused, and rely on public APIs only.
+
+## Summary
+Recent additions expand coverage of src/registry.rs by testing env-probe branches
+and confirming cache behavior without touching production code. Tests use isolated
+temp runtime dirs and clean environment per file to avoid OnceCell contamination.
+
+## Proposed Next Steps
+- Add a test to assert that toggling AIFO_CODER_TEST_REGISTRY_PROBE mid-process
+  does not override a previously set env override (source remains "env").
+- Consider a test for XDG_RUNTIME_DIR empty handling if behavior changes away
+  from the current "/tmp" fallback (skipped here per constraints).

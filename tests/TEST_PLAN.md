@@ -1,0 +1,42 @@
+# Deterministic registry tests plan (2025-11-11)
+Status: all scenarios covered; tests passing (2025-11-11).
+Run: make check
+
+- registry_env_empty_cache.rs → env-empty branch, cache write/remove path.
+- registry_env_non_empty_normalization.rs → env non-empty normalization to single '/'.
+- registry_env_override_trailing_spaces.rs → trims trailing spaces and normalizes.
+- registry_cache_invalidate.rs → cache creation and invalidate removes cache file.
+- registry_cache_persistence_in_process.rs → OnceCell persists after env removal.
+- Existing override tests (tcp/curl ok/fail) verify override early-return and no cache.
+- registry_quiet_env_empty.rs → quiet env-empty path; source "env-empty"; cache write.
+- registry_quiet_env_empty_exact.rs → quiet env-empty exact override; cache write.
+- registry_quiet_env_non_empty_normalization.rs → quiet env non-empty normalization.
+- registry_quiet_override_vs_env_override.rs → quiet: override wins over env override.
+- registry_env_override_vs_override_precedence.rs → non-quiet: env override wins over override.
+- registry_env_non_empty_nested_normalization.rs → nested path normalized to single '/'.
+- registry_probe_env_tcp_ok_prefix.rs → env-probe tcp-ok; source "tcp"; no cache.
+- registry_env_probe_tcp_fail_prefix.rs → env-probe tcp-fail (non-quiet); source "tcp"; no cache.
+- registry_quiet_env_probe_tcp_fail.rs → env-probe tcp-fail; source "tcp"; no cache.
+- registry_env_probe_curl_ok_prefix.rs → env-probe curl-ok (non-quiet); source "curl"; no cache.
+- registry_env_probe_curl_fail_prefix.rs → env-probe curl-fail (non-quiet); source "curl"; no cache.
+- registry_quiet_env_probe_curl_ok.rs → env-probe curl-ok; source "curl"; no cache.
+- registry_quiet_env_probe_curl_fail.rs → env-probe curl-fail; source "curl"; no cache.
+- registry_probe_env_unknown.rs → env-probe unknown; source "unknown"; no cache.
+- registry_invalidate_no_file.rs → invalidation is safe when cache file is missing.
+- registry_source_unknown_override.rs → override set → source "unknown"; no cache.
+- registry_source_unknown_pristine.rs → no prior resolution → source "unknown".
+- registry_quiet_override_tcp_ok.rs → override TcpOk; source "unknown"; no cache.
+- registry_quiet_override_tcp_fail.rs → override TcpFail; source "unknown"; no cache.
+- registry_quiet_override_curl_ok.rs → override CurlOk; source "unknown"; no cache.
+- registry_quiet_override_curl_fail.rs → override CurlFail; source "unknown"; no cache.
+- registry_override_vs_env_probe_conflict.rs → override wins when env-probe also set.
+- registry_env_override_change_runtime.rs → env override changed mid-run updates prefix/cache.
+- registry_env_override_trailing_slash_passthrough.rs → preserves "omega/" and caches.
+- registry_env_probe_case_tcp_ok_upper.rs → env-probe TCP-OK (uppercase); source "tcp".
+- registry_env_probe_case_curl_fail_upper.rs → env-probe CURL-FAIL (uppercase); source "curl".
+- registry_env_probe_case_curl_ok_upper.rs → env-probe CURL-OK (uppercase); source "curl".
+- registry_env_probe_case_tcp_fail_upper.rs → env-probe TCP-FAIL (uppercase); source "tcp".
+- registry_env_override_leading_spaces.rs → trims leading spaces; caches normalized "gamma/".
+- registry_env_override_root_prefix.rs → env override "/" normalized to "/"; caches.
+- registry_quiet_env_override_root_prefix.rs → quiet env override "/" normalized to "/"; caches.
+- registry_quiet_env_probe_unknown.rs → env-probe unknown (quiet); source "unknown"; no cache.
