@@ -2598,9 +2598,3 @@ endif
 .PHONY: cov-results
 cov-results:
 	open build/coverage/html/index.html
-I need to edit this file to:
-- Replace REG_SETUP_* macros to use AIFO_CODER_INTERNAL_REGISTRY_PREFIX (IR).
-- Ensure all build/rebuild targets pass --build-arg REGISTRY_PREFIX="$RP" (MR) and tag locally plus IR (when set). Remove any MR tagging.
-- Update publish-* targets to push only to IR when REGISTRY (or IR env) is set; never push to MR/Docker Hub.
-
-Please add this file to the chat.
