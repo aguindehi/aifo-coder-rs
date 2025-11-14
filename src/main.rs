@@ -273,11 +273,17 @@ fn print_verbose_run_info(
 
         aifo_coder::log_info_stderr(
             use_err,
-            &format!("aifo-coder: internal registry: {} (source: internal:{})", ir_display, ir_src),
+            &format!(
+                "aifo-coder: internal registry: {} (source: internal:{})",
+                ir_display, ir_src
+            ),
         );
         aifo_coder::log_info_stderr(
             use_err,
-            &format!("aifo-coder: mirror registry: {} (source: mirror:{})", mr_display, mr_src),
+            &format!(
+                "aifo-coder: mirror registry: {} (source: mirror:{})",
+                mr_display, mr_src
+            ),
         );
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image));
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));

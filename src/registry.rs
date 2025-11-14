@@ -85,7 +85,6 @@ pub fn invalidate_registry_cache() {
     }
 }
 
-
 /// Mirror registry (quiet): probe via curl then TCP; cache OnceCell + on-disk.
 pub fn preferred_mirror_registry_prefix_quiet() -> String {
     if let Some(mode) = *REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock") {
@@ -157,7 +156,6 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
     v
 }
 
-
 /// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
 pub fn preferred_mirror_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
@@ -190,7 +188,6 @@ pub fn preferred_mirror_registry_source() -> String {
 
     "unknown".to_string()
 }
-
 
 /// Internal registry (env-only; no probe, no disk cache)
 pub fn preferred_internal_registry_prefix_quiet() -> String {

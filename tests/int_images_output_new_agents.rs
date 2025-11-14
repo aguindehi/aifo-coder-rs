@@ -73,7 +73,10 @@ fn int_images_respects_registry_env_override() {
     };
     // Force deterministic internal prefix and full flavor
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "full");
-    std::env::set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "registry.intern.migros.net////");
+    std::env::set_var(
+        "AIFO_CODER_INTERNAL_REGISTRY_PREFIX",
+        "registry.intern.migros.net////",
+    );
 
     let out = Command::new(&exe)
         .args(["images", "--color=never"])
