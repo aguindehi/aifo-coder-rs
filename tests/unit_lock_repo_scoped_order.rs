@@ -11,12 +11,7 @@ fn unit_candidate_lock_paths_repo_scoped() {
 
     // Initialize a git repo
     let _ = std::fs::create_dir_all(td.path().join(".git"));
-    // Prefer actual git init if available (more realistic)
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+    // Avoid spawning external processes in unit tests; .git directory created above.
 
     // Resolve repo root (should be Some for initialized repo)
     let root = aifo_coder::repo_root().unwrap_or_else(|| td.path().to_path_buf());

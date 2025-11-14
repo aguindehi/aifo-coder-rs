@@ -21,7 +21,6 @@ fn int_toolchain_dry_run_c_cpp_ok() {
     assert_eq!(res.unwrap(), 0);
 }
 
-#[ignore]
 #[test]
 fn int_toolchain_live_c_cpp_cmake_ok() {
     // Skip if docker isn't available on this host
