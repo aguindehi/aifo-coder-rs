@@ -459,7 +459,7 @@ define MIRROR_CHECK_LAX
   fi
 endef
 
-define REG_SETUP_COMMON
+define INTERNAL_REG_SETUP
   REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
   if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi
 endef
@@ -586,7 +586,7 @@ build-toolchain-rust:
 	@set -e; \
 	echo "Building $(TC_IMAGE_RUST) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$RP" ]; then echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; fi; \
 	if [ -n "$$REG" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
@@ -598,7 +598,7 @@ rebuild-toolchain-rust:
 	@set -e; \
 	echo "Rebuilding $(TC_IMAGE_RUST) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
@@ -610,7 +610,7 @@ build-toolchain-node:
 	@set -e; \
 	echo "Building $(TC_IMAGE_NODE) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${REG}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
@@ -621,7 +621,7 @@ rebuild-toolchain-node:
 	@set -e; \
 	echo "Rebuilding $(TC_IMAGE_NODE) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${REG}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
@@ -638,7 +638,7 @@ rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolcha
 publish-toolchain-rust:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_RUST) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
@@ -658,7 +658,7 @@ publish-toolchain-rust:
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
@@ -667,7 +667,7 @@ build-toolchain-cpp:
 
 rebuild-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
@@ -678,7 +678,7 @@ rebuild-toolchain-cpp:
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_CPP) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
@@ -699,7 +699,7 @@ publish-toolchain-cpp:
 publish-toolchain-node:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_NODE) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \

@@ -14,7 +14,7 @@ TAG="${TAG:-latest}"
 RP=""
 echo "Checking reachability of https://repository.migros.net ..."
 if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then
-  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."
+  echo "repository.migros.net reachable via HTTPS; using mirror registry prefix for base image pulls."
   RP="repository.migros.net/"
 else
   echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."
