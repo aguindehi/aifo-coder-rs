@@ -63,6 +63,20 @@ fn write_registry_cache_disk(s: &str) {
     }
 }
 
+/// Attempt to read the mirror registry prefix from on-disk cache and normalize it.
+/// Normalization: return "" for empty/whitespace; otherwise ensure a single trailing '/'.
+fn read_mirror_cache_disk_normalized() -> Option<String> {
+    let raw = registry_cache_path().and_then(|p| fs::read_to_string(p).ok())?;
+    let t = raw.trim();
+    if t.is_empty() {
+        Some(String::new())
+    } else {
+        let mut s = t.trim_end_matches('/').to_string();
+        s.push('/');
+        Some(s)
+    }
+}
+
 /// Public helper to invalidate the on-disk registry cache before probing.
 /// Does not affect the in-process OnceCell cache for this run.
 pub fn invalidate_registry_cache() {
@@ -98,6 +112,12 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
     }
     if let Some(v) = MIRROR_REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
+    }
+    // Try on-disk cache first to avoid probe flapping across short-lived runs
+    if let Some(s) = read_mirror_cache_disk_normalized() {
+        let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(s.clone());
+        // Do not set MIRROR_REGISTRY_SOURCE here; keep it "unknown" for disk-seeded values
+        return s;
     }
 
     if which("curl").is_ok() {
