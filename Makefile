@@ -1378,38 +1378,35 @@ coverage-html:
 	$(FIX_INDEX_CSS); \
 	echo "Wrote build/coverage/html (grcov HTML)"
 
-.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
+.PHONY: test-proxy-smoke test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
-	@echo "Running proxy smoke test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored
+	@echo "Running proxy TCP streaming smoke (ignored by default) ..."
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
-test-toolchain-live:
-	@echo "Running live toolchain tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_live -- --ignored
 
 test-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test shim_embed -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_shim_embed -- --ignored
 
 test-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
 	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_unix_socket -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_unix_socket -- --ignored; \
 	else \
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored; \
 	fi
 
 test-proxy-errors:
-	@echo "Running proxy error semantics tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_error_semantics -- --ignored
+	@echo "Running proxy error semantics tests ..."
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_proxy_error_semantics
 
 .PHONY: test-proxy-tcp
 test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
 .PHONY: test-acceptance-suite test-integration-suite check-e2e
 
@@ -1466,16 +1463,12 @@ test-all-junit:
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test dev_tool_routing -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_dev_tool_routing_make_tcp_v2 -- --ignored
 
-.PHONY: test-tsc-resolution
-test-tsc-resolution:
-	@echo "Running TypeScript local tsc resolution test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test tsc_resolution -- --ignored
 
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_cpp
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
