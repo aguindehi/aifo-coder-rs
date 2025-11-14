@@ -44,7 +44,25 @@ fn e2e_proxy_v2_backpressure_emits_drop_warning_and_counter() {
 
     // Start a toolchain session with a node sidecar
     let kinds = vec!["node".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    // Ensure Docker daemon reachable and node image present locally to avoid pulls
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let node_image = support::default_node_test_image();
+    if !support::docker_image_present(&runtime.as_path(), &node_image) {
+        eprintln!("skipping: node image '{}' not present locally", node_image);
+        return;
+    }
+    let overrides: Vec<(String, String)> = vec![("node".to_string(), node_image)];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, false)
         .expect("toolchain_start_session");
     // Force proxy to use the container's default user (avoid odd host UID/GID failures)
