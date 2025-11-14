@@ -39,7 +39,6 @@ fn image_present(image: &str) -> bool {
         .map(|s| s.success())
         .unwrap_or(false)
 }
-
 #[ignore]
 #[test]
 fn toolchain_rust_components_and_tools_present() {
@@ -96,7 +95,6 @@ fn toolchain_rust_components_and_tools_present() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
-
 #[ignore]
 #[test]
 fn toolchain_rust_env_and_deps_present() {
