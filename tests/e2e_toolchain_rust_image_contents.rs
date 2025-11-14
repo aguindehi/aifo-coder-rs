@@ -4,7 +4,7 @@ use std::process::Command;
 fn docker_path() -> Option<std::path::PathBuf> {
     aifo_coder::container_runtime_path().ok()
 }
-fn e2e_image() -> String {
+fn test_image() -> String {
     std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
         .ok()
         .filter(|s| !s.trim().is_empty())
