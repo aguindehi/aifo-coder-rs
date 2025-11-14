@@ -2274,6 +2274,10 @@ lint-tests-naming:
 	@echo "Running test naming lint (Phase 6 — optional enforcement) ..."
 	@sh scripts/lint-test-naming.sh --strict
 
+.PHONY: fix-tests-naming
+fix-tests-naming:
+	@sh scripts/fix-test-names.sh
+
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
