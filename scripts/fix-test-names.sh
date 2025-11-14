@@ -109,7 +109,7 @@ rename_file_to_lane() {
         e2e_*.rs) cur="e2e" ;;
       esac
       if [ "$cur" = "$lane" ]; then
-        echo "keep: $f (lane=$lane)"
+        echo "keep: $f (lane=$lane)" >&2
         echo "$f"
         return 0
       fi
@@ -126,7 +126,7 @@ rename_file_to_lane() {
     return 0
   fi
 
-  echo "mv: $f -> $new"
+  echo "mv: $f -> $new" >&2
   if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git mv -f "$f" "$new" 2>/dev/null || mv -f "$f" "$new"
   else
