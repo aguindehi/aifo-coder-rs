@@ -4,7 +4,6 @@ use std::sync::Mutex;
 static REG_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 fn clear_env_overrides() {
-    std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }
 

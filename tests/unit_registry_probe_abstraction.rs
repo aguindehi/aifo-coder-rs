@@ -7,7 +7,6 @@ static GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 fn unit_test_registry_probe_override_modes() {
     let _g = GUARD.lock().unwrap();
     // Clear env to avoid interference
-    std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 
     // curl-ok

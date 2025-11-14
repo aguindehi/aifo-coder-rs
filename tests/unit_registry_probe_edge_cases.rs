@@ -7,7 +7,6 @@ static GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 fn unit_test_registry_probe_without_curl_does_not_panic() {
     let _g = GUARD.lock().unwrap();
     // Clear overrides and force PATH to empty so curl is not found
-    std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
     let old_path = std::env::var("PATH").ok();
     std::env::set_var("PATH", "");
@@ -28,7 +27,6 @@ fn unit_test_registry_probe_without_curl_does_not_panic() {
 #[test]
 fn unit_test_registry_probe_unknown_mode_reports_unknown_source() {
     let _g = GUARD.lock().unwrap();
-    std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "unknown");
     let _ = aifo_coder::preferred_mirror_registry_prefix_quiet();
     let src = aifo_coder::preferred_mirror_registry_source();
