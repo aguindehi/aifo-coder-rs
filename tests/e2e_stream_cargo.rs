@@ -143,7 +143,7 @@ fn decode_chunked(data: Vec<u8>) -> (Vec<u8>, Option<i32>) {
 
 #[ignore]
 #[test]
-fn test_e2e_stream_cargo_help_v2() {
+fn e2e_stream_cargo_help_v2() {
     // Skip if docker isn't available
     let runtime = match aifo_coder::container_runtime_path() {
         Ok(p) => p,
