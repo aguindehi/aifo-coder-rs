@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use which::which;
 
- // Mirror registry: in-process cache and source
+// Mirror registry: in-process cache and source
 static MIRROR_REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 static MIRROR_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
 // Internal registry (env-only): in-process cache and source
