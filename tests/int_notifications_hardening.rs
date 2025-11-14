@@ -15,7 +15,7 @@ mod notifications_hardening_tests {
     }
 
     #[test]
-fn int_notifications_canonicalization_symlink_basename_allowlist() {
+    fn int_notifications_canonicalization_symlink_basename_allowlist() {
         let td = tempdir().expect("tmpdir");
         let dir = td.path();
 
@@ -60,7 +60,7 @@ fn int_notifications_canonicalization_symlink_basename_allowlist() {
     }
 
     #[test]
-fn int_notifications_trim_env_and_allowlist() {
+    fn int_notifications_trim_env_and_allowlist() {
         let td = tempdir().expect("tmpdir");
         let dir = td.path();
 
