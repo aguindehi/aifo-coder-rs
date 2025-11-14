@@ -1,6 +1,6 @@
 #[ignore]
 #[test]
-fn accept_phase4_wrappers_auto_exit_present() {
+fn e2e_wrappers_auto_exit_present() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

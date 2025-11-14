@@ -4,7 +4,7 @@ use std::path::Path;
 /// Documentation smoke test for Rust toolchain docs.
 /// This test is lenient: it skips when docs/TOOLCHAINS.md is missing.
 #[test]
-fn doc_smoke_toolchains_rust() {
+fn unit_doc_smoke_toolchains_rust() {
     let p = Path::new("docs/TOOLCHAINS.md");
     if !p.exists() {
         eprintln!("skipping: docs/TOOLCHAINS.md not found");

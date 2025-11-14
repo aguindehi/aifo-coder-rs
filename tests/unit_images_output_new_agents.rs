@@ -12,7 +12,7 @@ fn find_bin() -> Option<String> {
 }
 
 #[test]
-fn images_lists_all_agents_with_slim_flavor() {
+fn int_images_lists_all_agents_with_slim_flavor() {
     let exe = match find_bin() {
         Some(p) => p,
         None => {
@@ -62,7 +62,7 @@ fn images_lists_all_agents_with_slim_flavor() {
 }
 
 #[test]
-fn images_respects_registry_env_override() {
+fn int_images_respects_registry_env_override() {
     let exe = match find_bin() {
         Some(p) => p,
         None => {

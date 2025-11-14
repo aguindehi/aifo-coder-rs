@@ -6,7 +6,7 @@ use std::time::Duration;
 mod support;
 #[ignore]
 #[test]
-fn accept_phase4_stream_large_output_node() {
+fn e2e_proxy_stream_large_output_node() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

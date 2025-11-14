@@ -10,10 +10,6 @@ fn unit_hashed_lock_path_diff_for_two_repos() {
     // repo A
     let repo_a = ws.join("repo-a");
     std::fs::create_dir_all(&repo_a).unwrap();
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(&repo_a)
-        .status();
     std::env::set_current_dir(&repo_a).unwrap();
     let paths_a = aifo_coder::candidate_lock_paths();
     assert!(
@@ -25,10 +21,6 @@ fn unit_hashed_lock_path_diff_for_two_repos() {
     // repo B
     let repo_b = ws.join("repo-b");
     std::fs::create_dir_all(&repo_b).unwrap();
-    let _ = std::process::Command::new("git")
-        .arg("init")
-        .current_dir(&repo_b)
-        .status();
     std::env::set_current_dir(&repo_b).unwrap();
     let paths_b = aifo_coder::candidate_lock_paths();
     assert!(

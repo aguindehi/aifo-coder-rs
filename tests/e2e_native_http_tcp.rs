@@ -6,7 +6,7 @@ use std::time::Duration;
 mod support;
 #[ignore]
 #[test]
-fn accept_phase4_native_http_tcp_exec_rust_version() {
+fn e2e_native_http_tcp_exec_rust_version() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

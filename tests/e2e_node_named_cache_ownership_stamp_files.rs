@@ -2,7 +2,7 @@ mod support;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn node_named_cache_ownership_stamp_files() {
+fn e2e_node_named_cache_ownership_stamp_files() {
     // Skip if docker isn't available on this host
     let rt = match aifo_coder::container_runtime_path() {
         Ok(p) => p,

@@ -5,7 +5,7 @@ use std::time::Duration;
 mod support;
 #[ignore]
 #[test]
-fn accept_phase4_disconnect_triggers_proxy_log() {
+fn e2e_proxy_client_disconnect_triggers_proxy_log() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

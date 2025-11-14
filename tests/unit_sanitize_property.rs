@@ -1,5 +1,5 @@
 #[test]
-fn fork_sanitize_base_label_property_like() {
+fn unit_fork_sanitize_base_label_property_like() {
     // Deterministic set of mixed strings
     let long = "a".repeat(200);
     let cases: Vec<&str> = vec![

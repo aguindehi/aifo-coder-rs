@@ -41,7 +41,7 @@ fn image_present(image: &str) -> bool {
 }
 #[ignore]
 #[test]
-fn toolchain_rust_components_and_tools_present() {
+fn e2e_toolchain_rust_components_and_tools_present() {
     let Some(_) = docker_path() else {
         return;
     };
@@ -97,7 +97,7 @@ fn toolchain_rust_components_and_tools_present() {
 }
 #[ignore]
 #[test]
-fn toolchain_rust_env_and_deps_present() {
+fn e2e_toolchain_rust_env_and_deps_present() {
     let Some(_) = docker_path() else {
         return;
     };
