@@ -21,8 +21,26 @@ fn e2e_python_venv_activation_path_precedence_tcp_v2() {
 
     // Start python sidecar and proxy
     std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
+    // Ensure Docker daemon reachable and python image present locally (avoid pulls)
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let py_image = support::default_python_test_image();
+    if !support::docker_image_present(&runtime.as_path(), &py_image) {
+        eprintln!("skipping: python image '{}' not present locally", py_image);
+        return;
+    }
     let kinds = vec!["python".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let overrides: Vec<(String, String)> = vec![("python".to_string(), py_image)];
     let no_cache = true;
     let verbose = true;
 
