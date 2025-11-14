@@ -68,9 +68,9 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
         mr_display
     };
 
-    eprintln!("  flavor:            {}", flavor_val);
+    eprintln!("  flavor: {}", flavor_val);
     eprintln!("  internal registry: {}", ir_val);
-    eprintln!("  mirror registry:   {}", mr_val);
+    eprintln!("  mirror registry: {}", mr_val);
     eprintln!();
 
     // Effective image references

@@ -166,7 +166,7 @@ pub fn preferred_registry_prefix_quiet() -> String {
     preferred_mirror_registry_prefix_quiet()
 }
 
-//// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
+/// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
 pub fn preferred_mirror_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
         .lock()
