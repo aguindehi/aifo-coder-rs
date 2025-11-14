@@ -77,7 +77,7 @@ check_function_prefixes() {
 # Unit files must not spawn external processes
 check_unit_no_spawns() {
   f="$1"
-  grep -nE 'std::process::Command|[^A-Za-z_]Command::new\(' "$f" || true
+  grep -nE 'std::process::Command|[^A-Za-z_]Command::new\(|container_runtime_path\(' "$f" || true
 }
 
 echo "== Test naming lint (optional enforcement) =="
@@ -119,7 +119,7 @@ for f in $(list_test_files); do
     us="$(check_unit_no_spawns "$f")"
     if [ -n "$us" ]; then
       unit_spawn_violations=$((unit_spawn_violations+1))
-      echo "UNIT-SPAWN: $f uses external process spawning (not allowed in unit tests):"
+      echo "UNIT-SPAWN: $f uses external process spawning or docker runtime detection (not allowed in unit tests):"
       echo "$us" | sed 's/^/  /'
       echo "           hint: reclassify to int_*.rs or remove process spawning"
     fi

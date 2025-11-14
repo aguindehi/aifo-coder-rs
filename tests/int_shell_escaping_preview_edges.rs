@@ -1,0 +1,24 @@
+use aifo_coder as aifo;
+
+/// Ensure docker preview string includes properly escaped agent args.
+#[test]
+fn int_preview_shell_escaping_args() {
+    // Skip if docker isn't available on this host
+    if aifo::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+    let args = vec!["arg with space".to_string(), "O'Reilly".to_string()];
+    let image = "alpine:3.20";
+    let (_cmd, preview) =
+        aifo::build_docker_cmd("crush", &args, image, None).expect("build_docker_cmd failed");
+    assert!(
+        preview.contains("'arg with space'"),
+        "preview missing escaped space: {preview}"
+    );
+    // Inside the single-quoted sh -lc script, a literal single-quote is represented by: '"'"'
+    assert!(
+        preview.contains("'\"'\"'"),
+        "preview missing escaped single quote sequence ('\"'\"'): {preview}"
+    );
+}
