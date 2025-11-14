@@ -30,8 +30,26 @@ fn e2e_streaming_spawn_fail_plain_500() {
     }
 
     // Start python sidecar so container_exists would normally succeed
+    // Ensure Docker daemon reachable and image present locally to avoid pulls
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let py_image = support::default_python_test_image();
+    if !support::docker_image_present(&runtime.as_path(), &py_image) {
+        eprintln!("skipping: python image '{}' not present locally", py_image);
+        return;
+    }
     let kinds = vec!["python".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let overrides: Vec<(String, String)> = vec![("python".to_string(), py_image)];
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, false, true)
         .expect("failed to start sidecar session");
 
