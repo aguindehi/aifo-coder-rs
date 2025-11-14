@@ -729,7 +729,7 @@ Launcher control variables (read by the Rust launcher):
 | AIFO_CODER_CONTAINER_NAME | If set, assigns the container name                            |
 | AIFO_CODER_HOSTNAME       | If set, assigns the container hostname                        |
 | AIFO_CODER_APPARMOR_PROFILE | Override AppArmor profile; defaults: docker-default on Docker-in-VM (macOS/Windows), aifo-coder on native Linux |
-| AIFO_CODER_REGISTRY_PREFIX | If set, prepended to image refs (e.g., `repository.migros.net/`). If unset, the launcher tests reachability of `repository.migros.net` and uses it when available; set to empty to force Docker Hub |
+| AIFO_CODER_INTERNAL_REGISTRY_PREFIX | If set (non-empty), prepend this prefix to our images at runtime; normalized to a single trailing “/”. Empty/unset means no prefix. |
 | AIFO_CODER_IMAGE_FLAVOR     | Optional: set to `slim` to select `-slim` image variants instead of default full images |
 
 ---
