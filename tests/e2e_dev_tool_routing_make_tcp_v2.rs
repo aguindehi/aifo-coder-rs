@@ -162,9 +162,23 @@ fn e2e_dev_tool_routing_make_rust_only_tcp_v2() {
 #[ignore]
 #[test]
 fn e2e_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
-    // Skip if docker isn't available on this host
-    if aifo_coder::container_runtime_path().is_err() {
-        eprintln!("skipping: docker not found in PATH");
+    // Skip if docker CLI is missing or daemon is unreachable
+    let runtime = match aifo_coder::container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: docker not found in PATH");
+            return;
+        }
+    };
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
         return;
     }
 
