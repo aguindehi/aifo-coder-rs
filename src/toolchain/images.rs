@@ -118,7 +118,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         .to_string();
     // Prepend internal registry for our toolchain images when set; upstream defaults remain unprefixed.
     if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
-        let ir = aifo_coder::preferred_internal_registry_prefix_quiet();
+        let ir = crate::preferred_internal_registry_prefix_quiet();
         if !ir.is_empty() {
             return format!("{ir}{base}");
         }
@@ -132,7 +132,7 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
     if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
         let base = fmt.replace("{version}", version);
         if base.starts_with("aifo-coder-toolchain-") {
-            let ir = aifo_coder::preferred_internal_registry_prefix_quiet();
+            let ir = crate::preferred_internal_registry_prefix_quiet();
             if !ir.is_empty() {
                 return format!("{ir}{base}");
             }
