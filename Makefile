@@ -120,7 +120,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-	$(call title_ul,Install paths (for 'make install'):)
+		$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -307,7 +307,7 @@ help: banner
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo ""
-	$(call title,AppArmor (security) profile:)
+		$(call title,AppArmor (security) profile:)
 	@echo
 	@echo "  apparmor .................... Generate build/apparmor/$${APPARMOR_PROFILE_NAME} from template"
 	@echo ""
