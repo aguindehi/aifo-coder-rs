@@ -299,7 +299,10 @@ help: banner
 	$(call title,Test suites:)
 	@echo ""
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
-	@echo "  check-e2e .................... Run all ignored-by-default tests (acceptance + integration suites)"
+	@echo "  check-unit .................. Run unit tests (uni suite)
+	@echo "  check-int ................... Run integration tests (integration suite)
+	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance suites)"
+	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
 	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
@@ -984,7 +987,7 @@ build-shim-with-builder:
 	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
-.PHONY: lint check test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
+.PHONY: lint check check-unit test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
 
 lint:
 	@set -e; \
@@ -1089,6 +1092,8 @@ lint-ultra:
 	fi
 
 check: lint test
+
+check-unit: test
 
 test:
 	@set -e; \
@@ -1354,7 +1359,7 @@ test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
-.PHONY: test-acceptance-suite test-integration-suite check-e2e
+.PHONY: test-acceptance-suite test-integration-suite check-int check-e2e check-all
 
 test-acceptance-suite:
 	@set -e; \
@@ -1376,7 +1381,16 @@ test-integration-suite:
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 -E "$$EXPR" $(ARGS)
 
 check-e2e:
-	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
+	@echo "Running ignored-by-default e2e (acceptance) suite ..."
+	$(MAKE) test-acceptance-suite
+
+check-int:
+	@echo "Running ignored-by-default integration suite ..."
+	$(MAKE) test-integration-suite
+
+check-all:
+	@echo "Running full ignored-by-default E2E suite (unit + integration + e2e) ..."
+	$(MAKE) test
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
 
