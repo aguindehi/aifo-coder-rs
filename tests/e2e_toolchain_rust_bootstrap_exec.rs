@@ -9,10 +9,10 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
         return;
     }
 
-    // Force official rust image and ensure bootstrap engages
+    // Prefer AIFO Rust toolchain image and ensure bootstrap engages
     let old_use_official = env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok();
     let old_bootstrap = env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
-    env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+    // Do not force official image; keep only bootstrap enabled (idempotent on AIFO image)
     env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
 
     // Ensure Docker daemon reachable and official image present locally (avoid pulls)
@@ -38,9 +38,10 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
         }
         return;
     }
-    let official = "rust:1.80-bookworm";
+    let rust_image = std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
+        .unwrap_or_else(|_| "aifo-coder-toolchain-rust:latest".to_string());
     let present = std::process::Command::new(&runtime)
-        .args(["image", "inspect", official])
+        .args(["image", "inspect", &rust_image])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -49,7 +50,7 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     if !present {
         eprintln!(
             "skipping: {} not present locally (avoid pulling in tests)",
-            official
+            rust_image
         );
         if let Some(v) = old_use_official {
             env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
@@ -68,7 +69,7 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     let code1 = aifo_coder::toolchain_run(
         "rust",
         &["cargo".to_string(), "nextest".to_string(), "-V".to_string()],
-        None,  // no image override
+        Some(&rust_image),  // use prebuilt AIFO rust toolchain image with nextest
         false, // no_cache = false (allow default mounts)
         false, // verbose
         false, // dry_run
@@ -83,7 +84,7 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     let code2 = aifo_coder::toolchain_run(
         "rust",
         &["cargo".to_string(), "nextest".to_string(), "-V".to_string()],
-        None,
+        Some(&rust_image),
         false,
         false,
         false,
