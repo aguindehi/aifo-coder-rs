@@ -54,9 +54,9 @@ check_function_prefixes() {
     BEGIN { in_test=0; }
     {
       if ($0 ~ /\#[[:space:]]*\[[[:space:]]*test[[:space:]]*\]/) { in_test=1; next; }
-      if (in_test && $0 ~ /^[[:space:]]*fn[[:space:]]+[A-Za-z0-9_]+\s*\(/) {
+      if (in_test && $0 ~ /^[[:space:]]*fn[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/) {
         name=""
-        if (match($0, /^[[:space:]]*fn[[:space:]]+([A-Za-z0-9_]+)\s*\(/, m)) {
+        if (match($0, /^[[:space:]]*fn[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*\(/, m)) {
           name=m[1]
           if (index(name, pfx) != 1) {
             printf("NAMING: %s:%d: #[test] function '%s' should begin with '%s'\n", file, NR, name, pfx)
