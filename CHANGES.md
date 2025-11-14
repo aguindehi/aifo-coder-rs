@@ -1,3 +1,13 @@
+2025-11-14
+
+Phase 5: dual registries docs/tests and remove deprecated API
+
+- Remove deprecated single-registry APIs (preferred_registry_*); use mirror/internal APIs.
+- Ignore AIFO_CODER_REGISTRY_PREFIX everywhere; runtime uses AIFO_CODER_INTERNAL_REGISTRY_PREFIX.
+- CLI diagnostics now show internal and mirror registries independently.
+- Update docs (README, CONTRIBUTING, INSTALL) and man page to IR/MR terminology.
+- Tests migrated to mirror/internal APIs; disk cache renamed to aifo-coder.mirrorprefix.
+
 2025-11-11
 
 Fix source precedence: override > env-probe > resolved source
