@@ -31,8 +31,14 @@ fn int_test_cli_images_respects_registry_env_value() {
     );
     // The CLI prints the mirror registry without trailing slash
     assert!(
-        all.contains("registry: repository.migros.net"),
-        "expected registry line to reflect mirror probe, got:\n{}",
+        all.contains("mirror registry: repository.migros.net"),
+        "expected mirror registry line to reflect mirror probe, got:\n{}",
+        all
+    );
+    // Internal registry should be (none) when not set
+    assert!(
+        all.contains("internal registry: (none)"),
+        "expected internal registry to be (none), got:\n{}",
         all
     );
 
@@ -65,8 +71,13 @@ fn int_test_cli_images_respects_registry_env_empty() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        all.contains("registry: Docker Hub"),
-        "expected 'Docker Hub' when mirror probe fails, got:\n{}",
+        all.contains("mirror registry: (none)"),
+        "expected '(none)' when mirror probe fails, got:\n{}",
+        all
+    );
+    assert!(
+        all.contains("internal registry: (none)"),
+        "expected internal registry to be (none), got:\n{}",
         all
     );
 

@@ -14,8 +14,8 @@ fn unit_test_registry_probe_override_modes() {
     aifo_coder::registry_probe_set_override_for_tests(Some(
         aifo_coder::RegistryProbeTestMode::CurlOk,
     ));
-    let rp = aifo_coder::preferred_registry_prefix_quiet();
-    let src = aifo_coder::preferred_registry_source();
+    let rp = aifo_coder::preferred_mirror_registry_prefix_quiet();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(
         rp, "repository.migros.net/",
         "override curl-ok should force internal registry"

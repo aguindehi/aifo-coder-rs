@@ -22,8 +22,13 @@ fn int_test_cli_doctor_prints_registry_and_security_options_when_docker_present(
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("docker registry:"),
-        "expected 'docker registry:' line in doctor output; stderr:\n{}",
+        err.contains("internal registry:"),
+        "expected 'internal registry:' line in doctor output; stderr:\n{}",
+        err
+    );
+    assert!(
+        err.contains("mirror registry:"),
+        "expected 'mirror registry:' line in doctor output; stderr:\n{}",
         err
     );
     assert!(

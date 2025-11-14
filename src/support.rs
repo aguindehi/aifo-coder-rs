@@ -942,13 +942,20 @@ pub fn run_support(verbose: bool) -> ExitCode {
         eprintln!("{}", legend);
     }
     if verbose {
-        let rp = aifo_coder::preferred_registry_prefix_quiet();
-        let reg_display = if rp.is_empty() {
-            "Docker Hub".to_string()
+        let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+        let ir_display = if irp.is_empty() {
+            "(none)".to_string()
         } else {
-            rp.trim_end_matches('/').to_string()
+            irp.trim_end_matches('/').to_string()
         };
-        aifo_coder::log_info_stderr(use_err, &format!("registry: {}", reg_display));
+        let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
+        let mr_display = if mrp.is_empty() {
+            "(none)".to_string()
+        } else {
+            mrp.trim_end_matches('/').to_string()
+        };
+        aifo_coder::log_info_stderr(use_err, &format!("internal registry: {}", ir_display));
+        aifo_coder::log_info_stderr(use_err, &format!("mirror registry: {}", mr_display));
     }
 
     ExitCode::from(0)

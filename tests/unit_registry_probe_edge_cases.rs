@@ -11,7 +11,7 @@ fn unit_test_registry_probe_without_curl_does_not_panic() {
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
     let old_path = std::env::var("PATH").ok();
     std::env::set_var("PATH", "");
-    let rp = aifo_coder::preferred_registry_prefix_quiet();
+    let rp = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert!(
         rp.is_empty() || rp == "repository.migros.net/",
         "expected either empty or internal registry, got: {}",

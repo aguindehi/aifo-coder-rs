@@ -239,15 +239,21 @@ pub fn run_doctor(verbose: bool) {
         }
     }
 
-    // Registry (quiet probe; no intermediate logs)
-    let rp = aifo_coder::preferred_registry_prefix_quiet();
-    let reg_display = if rp.is_empty() {
-        "Docker Hub".to_string()
+    // Registries (quiet MR probe; IR from env only)
+    let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+    let ir_display = if irp.is_empty() {
+        "(none)".to_string()
     } else {
-        rp.trim_end_matches('/').to_string()
+        irp.trim_end_matches('/').to_string()
     };
-    eprintln!("  docker registry: {}", reg_display);
-    // (registry source suppressed)
+    let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
+    let mr_display = if mrp.is_empty() {
+        "(none)".to_string()
+    } else {
+        mrp.trim_end_matches('/').to_string()
+    };
+    eprintln!("  internal registry: {}", ir_display);
+    eprintln!("  mirror registry: {}", mr_display);
     eprintln!();
 
     // Print stale fork sessions notice during doctor runs (Phase 6)

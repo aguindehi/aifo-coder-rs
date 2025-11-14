@@ -71,9 +71,9 @@ fn int_images_respects_registry_env_override() {
             return;
         }
     };
-    // Force deterministic mirror prefix and full flavor
+    // Force deterministic internal prefix and full flavor
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "full");
-    std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
+    std::env::set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "registry.intern.migros.net////");
 
     let out = Command::new(&exe)
         .args(["images", "--color=never"])
@@ -100,8 +100,8 @@ fn int_images_respects_registry_env_override() {
             .unwrap_or("");
         let img = line.split_whitespace().nth(1).unwrap_or("");
         assert!(
-            img.starts_with("repository.migros.net/"),
-            "expected mirror registry prefix repository.migros.net/ in '{}'",
+            img.starts_with("registry.intern.migros.net/"),
+            "expected internal registry prefix registry.intern.migros.net/ in '{}'",
             img
         );
         assert!(
@@ -115,5 +115,5 @@ fn int_images_respects_registry_env_override() {
             img
         );
     }
-    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
+    std::env::remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }
