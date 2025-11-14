@@ -1414,12 +1414,12 @@ test-proxy-tcp:
 
 test-acceptance-suite:
 	@set -e; \
-	echo "Running acceptance test suite (ignored by default) via cargo nextest ..."; \
+	echo "Running acceptance test suite (ignored by default; transitional filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^accept_/)' ; \
+	  EXPR='test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)' ; \
 	else \
-	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
+	  EXPR='(test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)

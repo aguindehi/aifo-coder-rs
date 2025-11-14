@@ -93,6 +93,31 @@ Coverage
 - lcov.info:
   - make coverage-lcov
 
+Naming conventions
+
+- Files under tests/:
+  - unit_*.rs for Unit lane (dockerless, no external processes).
+  - int_*.rs for Integration lane (may spawn CLI; self-skip when prerequisites missing).
+  - e2e_*.rs for E2E lane (#[ignore] by default).
+- Test function names:
+  - unit_* in unit_*.rs
+  - int_* in int_*.rs
+  - e2e_* in e2e_*.rs
+- Helpers under tests/support and tests/common are exempt from lane filename/function prefix rules.
+
+Filters (transitional → target)
+
+- Transitional filters (used by Makefile/CI during migration):
+  - Integration:
+    - -E 'test(/^int_/)|test(/^test_(proxy_|http_|cli_|toolchain_|notify_|notifications_|preview_|fork_|support_|default_image_regression|session_cleanup|color_precedence|python_venv_activation|dev_tool_routing)/)'
+  - Acceptance/E2E:
+    - -E 'test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)'
+    - Non-Linux builders should append “& !test(/_uds/)” to skip UDS-only tests.
+- Target-state filters (after file/function renames):
+  - Integration: -E 'test(/^int_/)'
+  - Acceptance/E2E: -E 'test(/^e2e_/)' with --run-ignored ignored-only
+  - Unit lane: default “make check” runs all non-ignored tests (dockerless).
+
 Notes
 
 - Tests skip cleanly when Docker is unavailable or images are not present. This avoids
