@@ -160,6 +160,31 @@ fn test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
         return;
     }
 
+    // Transitional self-skip to keep unit lane dockerless and avoid false failures
+    if std::env::var("AIFO_CODER_TEST_DISABLE_DOCKER")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        eprintln!("skipping: AIFO_CODER_TEST_DISABLE_DOCKER=1");
+        return;
+    }
+    if aifo_coder::container_runtime_path().is_err() {
+        eprintln!("skipping: docker not found in PATH");
+        return;
+    }
+    if !std::process::Command::new("docker")
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+
     // Isolate HOME and global gitconfig
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
