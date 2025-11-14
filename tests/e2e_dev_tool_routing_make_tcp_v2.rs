@@ -13,9 +13,29 @@ fn e2e_dev_tool_routing_make_rust_only_tcp_v2() {
     // Force TCP (disable unix mode)
     std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
 
+    // Ensure Docker daemon reachable and rust image present locally
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let rust_image = std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
+        .unwrap_or_else(|_| "aifo-coder-toolchain-rust:latest".to_string());
+    if !support::docker_image_present(&runtime.as_path(), &rust_image) {
+        eprintln!("skipping: rust image '{}' not present locally", rust_image);
+        return;
+    }
+
     // Start only rust sidecar
     let kinds = vec!["rust".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let overrides: Vec<(String, String)> = vec![("rust".to_string(), rust_image)];
     let no_cache = false;
     let verbose = true;
 
