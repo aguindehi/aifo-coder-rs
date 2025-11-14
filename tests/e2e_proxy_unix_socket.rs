@@ -16,7 +16,34 @@ fn e2e_proxy_unix_socket_rust_and_node() {
 
     // Start sidecars for rust and node and the proxy
     let kinds = vec!["rust".to_string(), "node".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    // Ensure Docker daemon is reachable and required images are present locally (avoid pulls)
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let rust_image = std::env::var("AIFO_CODER_TEST_RUST_IMAGE")
+        .unwrap_or_else(|_| "aifo-coder-toolchain-rust:latest".to_string());
+    if !support::docker_image_present(&runtime.as_path(), &rust_image) {
+        eprintln!("skipping: rust image '{}' not present locally", rust_image);
+        return;
+    }
+    let node_image = support::default_node_test_image();
+    if !support::docker_image_present(&runtime.as_path(), &node_image) {
+        eprintln!("skipping: node image '{}' not present locally", node_image);
+        return;
+    }
+    let overrides: Vec<(String, String)> = vec![
+        ("rust".to_string(), rust_image),
+        ("node".to_string(), node_image),
+    ];
     let no_cache = false;
     let verbose = true;
 
