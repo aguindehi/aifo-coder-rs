@@ -1,6 +1,6 @@
 # AIFO-Coder Test Naming Convention v4
 Date: 2025-11-14
-Status: Proposed
+Status: Adopted — Phase 0 landed (inventory added)
 
 Purpose
 
