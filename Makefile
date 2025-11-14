@@ -274,6 +274,7 @@ help: banner
 	@echo ""
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
+	@echo "  lint-tests-naming ........... Lint test files for lane prefixes and conventions (optional)"
 	@echo ""
 	@echo "  hadolint .................... Run hadolint on all Dockerfiles"
 	@echo ""
@@ -2267,6 +2268,11 @@ hadolint:
 	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
 	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
 	fi
+
+.PHONY: lint-tests-naming
+lint-tests-naming:
+	@echo "Running test naming lint (Phase 6 — optional enforcement) ..."
+	@sh scripts/lint-test-naming.sh --strict
 
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
