@@ -68,6 +68,24 @@ fn int_error_semantics_tcp_v1_and_v2() {
     {
         std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
         // Start rust sidecar (to pass routing), then proxy
+        let runtime = match aifo_coder::container_runtime_path() {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("skipping: docker not found in PATH");
+                return;
+            }
+        };
+        let ok = std::process::Command::new(&runtime)
+            .arg("ps")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !ok {
+            eprintln!("skipping: Docker daemon not reachable");
+            return;
+        }
         let kinds = vec!["rust".to_string()];
         let overrides: Vec<(String, String)> = Vec::new();
         let no_cache = false;
