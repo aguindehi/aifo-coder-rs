@@ -11,30 +11,22 @@ fn unit_hashed_lock_path_diff_for_two_repos() {
     let repo_a = ws.join("repo-a");
     std::fs::create_dir_all(&repo_a).unwrap();
     std::env::set_current_dir(&repo_a).unwrap();
-    let paths_a = aifo_coder::candidate_lock_paths();
-    assert!(
-        paths_a.len() >= 2,
-        "expected at least two candidates for repo A"
-    );
-    let hashed_a = paths_a[1].clone();
 
     // repo B
     let repo_b = ws.join("repo-b");
     std::fs::create_dir_all(&repo_b).unwrap();
     std::env::set_current_dir(&repo_b).unwrap();
-    let paths_b = aifo_coder::candidate_lock_paths();
-    assert!(
-        paths_b.len() >= 2,
-        "expected at least two candidates for repo B"
-    );
-    let hashed_b = paths_b[1].clone();
+
+    // Compute normalized repo keys and ensure hashes differ (independent of git CLI)
+    let key_a = aifo_coder::normalized_repo_key_for_hash(&repo_a);
+    let key_b = aifo_coder::normalized_repo_key_for_hash(&repo_b);
+    let hash_a = aifo_coder::hash_repo_key_hex(&key_a);
+    let hash_b = aifo_coder::hash_repo_key_hex(&key_b);
 
     assert_ne!(
-        hashed_a,
-        hashed_b,
-        "hashed runtime lock path should differ across repos: A={} B={}",
-        hashed_a.display(),
-        hashed_b.display()
+        hash_a, hash_b,
+        "hashed repo keys should differ across repos: A={} B={}",
+        hash_a, hash_b
     );
 
     // restore env/cwd
