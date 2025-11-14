@@ -59,7 +59,7 @@ check_function_prefixes() {
         if (match($0, /^[[:space:]]*fn[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*\(/, m)) {
           name=m[1]
           if (index(name, pfx) != 1) {
-            printf("NAMING: %s:%d: #[test] function '%s' should begin with '%s'\n", file, NR, name, pfx)
+            print "NAMING: " file ":" NR ": #[test] function " name " should begin with " pfx
           }
         }
         in_test=0
