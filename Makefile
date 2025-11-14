@@ -1274,58 +1274,6 @@ coverage-data:
 
 cov: coverage-data coverage-lcov coverage-html
 
-coverage-html:
-	@set -e; \
-	mkdir -p build/coverage; \
-	if [ -f build/coverage/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
-	  rm -rf build/coverage/html || true; \
-	  mkdir -p build/coverage/html; \
-	  genhtml build/coverage/lcov.info --output-directory build/coverage/html; \
-	  if [ -f build/coverage/html/index.html ]; then \
-	    tmp=build/coverage/html/index.html.tmp; \
-	    sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
-	  fi; \
-	  echo "Wrote build/coverage/html from lcov.info via genhtml."; \
-	  exit 0; \
-	fi; \
-	if [ -f build/coverage/lcov.info ]; then \
-	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
-	  case "$$OS" in \
-	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
-	    *) case "$$ARCH" in \
-	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
-	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
-	         *) DOCKER_PLATFORM_ARGS="" ;; \
-	       esac ;; \
-	  esac; \
-	  echo "genhtml not available; falling back to grcov -t html (second parse) ..."; \
-	  rm -rf build/coverage/html || true; \
-	  mkdir -p build/coverage/html; \
-	  if command -v grcov >/dev/null 2>&1; then \
-	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
-	  elif command -v docker >/dev/null 2>&1; then \
-	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
-	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
-	      exit 1; \
-	    fi; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
-	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
-	  else \
-	    echo "error: grcov not found and no docker fallback"; \
-	    exit 1; \
-	  fi; \
-	  if [ -f build/coverage/html/index.html ]; then \
-	    tmp=build/coverage/html/index.html.tmp; \
-	    sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
-	  fi; \
-	  echo "Wrote build/coverage/html (fallback grcov)."; \
-	  exit 0; \
-	fi; \
-	echo "error: build/coverage/lcov.info not found; run 'make coverage-lcov' or 'make cov' first."; \
-	exit 1
-
 coverage-lcov:
 	@set -e; \
 	mkdir -p build/coverage; \
@@ -2265,10 +2213,6 @@ lint-tests-naming:
 	@echo "Running test naming lint (Phase 6 — optional enforcement) ..."
 	@sh scripts/lint-test-naming.sh --strict
 
-.PHONY: fix-tests-naming
-fix-tests-naming:
-	@sh scripts/fix-test-names.sh
-
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
@@ -2561,7 +2505,3 @@ endif
 .PHONY: cov-results
 cov-results:
 	open build/coverage/html/index.html
-
-.PHONY: fix-e2e-ignores
-fix-e2e-ignores:
-	@sh scripts/fix-dedup-ignore.sh
