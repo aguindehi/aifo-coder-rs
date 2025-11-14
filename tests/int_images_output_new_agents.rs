@@ -20,9 +20,9 @@ fn int_images_lists_all_agents_with_slim_flavor() {
             return;
         }
     };
-    // Force deterministic output: slim flavor and no registry prefix
+    // Force deterministic output: slim flavor and no mirror prefix
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim");
-    std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "");
+    std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
     let out = Command::new(&exe)
         .args(["images", "--color=never"])
@@ -59,6 +59,7 @@ fn int_images_lists_all_agents_with_slim_flavor() {
             img
         );
     }
+    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }
 
 #[test]
@@ -70,9 +71,9 @@ fn int_images_respects_registry_env_override() {
             return;
         }
     };
-    // Force deterministic registry prefix and full flavor
+    // Force deterministic mirror prefix and full flavor
     std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "full");
-    std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "example.com////");
+    std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
 
     let out = Command::new(&exe)
         .args(["images", "--color=never"])
@@ -99,8 +100,8 @@ fn int_images_respects_registry_env_override() {
             .unwrap_or("");
         let img = line.split_whitespace().nth(1).unwrap_or("");
         assert!(
-            img.starts_with("example.com/"),
-            "expected registry prefix example.com/ in '{}'",
+            img.starts_with("repository.migros.net/"),
+            "expected mirror registry prefix repository.migros.net/ in '{}'",
             img
         );
         assert!(
@@ -114,4 +115,5 @@ fn int_images_respects_registry_env_override() {
             img
         );
     }
+    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }

@@ -11,10 +11,12 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use which::which;
 
-// Cache for preferred registry prefix resolution within a single process run.
-static REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
-// Record how the registry prefix was determined this run.
-static REGISTRY_PREFIX_SOURCE: OnceCell<String> = OnceCell::new();
+ // Mirror registry: in-process cache and source
+static MIRROR_REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
+static MIRROR_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
+// Internal registry (env-only): in-process cache and source
+static INTERNAL_REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
+static INTERNAL_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
 
 #[derive(Clone, Copy)]
 pub enum RegistryProbeTestMode {
@@ -52,7 +54,7 @@ fn registry_cache_path() -> Option<PathBuf> {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
-    Some(base.join("aifo-coder.regprefix"))
+    Some(base.join("aifo-coder.mirrorprefix"))
 }
 
 fn write_registry_cache_disk(s: &str) {
@@ -69,41 +71,13 @@ pub fn invalidate_registry_cache() {
     }
 }
 
-/// Determine the preferred registry prefix for image references.
-/// Precedence:
-/// 1) If AIFO_CODER_REGISTRY_PREFIX is set:
-///    - empty string forces Docker Hub (no prefix)
-///    - non-empty is normalized to end with a single '/' and used as-is
-/// 2) Otherwise, if repository.migros.net:443 is reachable, use "repository.migros.net/"
-/// 3) Fallback: empty string (Docker Hub)
 pub fn preferred_registry_prefix() -> String {
-    let use_err = crate::color_enabled_stderr();
-    // Env override always takes precedence within the current process
-    if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
-        let trimmed = pref.trim();
-        if trimmed.is_empty() {
-            crate::log_info_stderr(use_err, "aifo-coder: AIFO_CODER_REGISTRY_PREFIX override set to empty; using Docker Hub (no registry prefix).");
-            let v = String::new();
-            let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-            let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
-            write_registry_cache_disk(&v);
-            return v;
-        }
-        let mut s = trimmed.trim_end_matches('/').to_string();
-        s.push('/');
-        crate::log_info_stderr(
-            use_err,
-            &format!(
-                "aifo-coder: Using AIFO_CODER_REGISTRY_PREFIX override: '{}'",
-                s
-            ),
-        );
-        let v = s;
-        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-        let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
-        write_registry_cache_disk(&v);
-        return v;
-    }
+    // Deprecated single-registry API: alias to mirror registry (quiet)
+    preferred_mirror_registry_prefix_quiet()
+}
+
+/// Mirror registry (quiet): probe via curl then TCP; cache OnceCell + on-disk.
+pub fn preferred_mirror_registry_prefix_quiet() -> String {
     if let Some(mode) = *REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock") {
         return match mode {
             RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
@@ -112,7 +86,6 @@ pub fn preferred_registry_prefix() -> String {
             RegistryProbeTestMode::TcpFail => String::new(),
         };
     }
-
     if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
         let ml = mode.to_ascii_lowercase();
         return match ml.as_str() {
@@ -123,12 +96,11 @@ pub fn preferred_registry_prefix() -> String {
             _ => String::new(),
         };
     }
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
+    if let Some(v) = MIRROR_REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
     }
 
     if which("curl").is_ok() {
-        crate::log_info_stderr(use_err, "aifo-coder: checking https://repository.migros.net/v2/ availability with: curl --connect-timeout 1 --max-time 2 -sSI ...");
         let status = Command::new("curl")
             .args([
                 "--connect-timeout",
@@ -143,132 +115,39 @@ pub fn preferred_registry_prefix() -> String {
             .status();
         if let Ok(st) = status {
             if st.success() {
-                crate::log_info_stderr(use_err, "aifo-coder: repository.migros.net reachable; using registry prefix 'repository.migros.net/'.");
                 let v = "repository.migros.net/".to_string();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
                 write_registry_cache_disk(&v);
                 return v;
             } else {
-                crate::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable (curl non-zero exit); using Docker Hub (no prefix).");
                 let v = String::new();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
+                let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
                 write_registry_cache_disk(&v);
                 return v;
             }
-        } else {
-            crate::log_warn_stderr(
-                use_err,
-                "aifo-coder: curl invocation failed; falling back to TCP reachability check.",
-            );
         }
-    } else {
-        crate::log_warn_stderr(
-            use_err,
-            "aifo-coder: curl not found; falling back to TCP reachability check.",
-        );
     }
 
     let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
-        crate::log_info_stderr(use_err, "aifo-coder: repository.migros.net appears reachable via TCP; using registry prefix 'repository.migros.net/'.");
         "repository.migros.net/".to_string()
     } else {
-        crate::log_warn_stderr(use_err, "aifo-coder: repository.migros.net not reachable via TCP; using Docker Hub (no prefix).");
         String::new()
     };
-    let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-    let _ = REGISTRY_PREFIX_SOURCE.set("tcp".to_string());
+    let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
+    let _ = MIRROR_REGISTRY_SOURCE.set("tcp".to_string());
     write_registry_cache_disk(&v);
     v
 }
 
-/// Quiet variant for preferred registry prefix resolution without emitting any logs.
+/// Deprecated single-registry API: alias to mirror registry (quiet)
 pub fn preferred_registry_prefix_quiet() -> String {
-    if let Some(mode) = *REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock") {
-        return match mode {
-            RegistryProbeTestMode::CurlOk => "repository.migros.net/".to_string(),
-            RegistryProbeTestMode::CurlFail => String::new(),
-            RegistryProbeTestMode::TcpOk => "repository.migros.net/".to_string(),
-            RegistryProbeTestMode::TcpFail => String::new(),
-        };
-    }
-    if let Ok(pref) = env::var("AIFO_CODER_REGISTRY_PREFIX") {
-        let trimmed = pref.trim();
-        if trimmed.is_empty() {
-            let v = String::new();
-            let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-            let _ = REGISTRY_PREFIX_SOURCE.set("env-empty".to_string());
-            write_registry_cache_disk(&v);
-            return v;
-        }
-        let mut s = trimmed.trim_end_matches('/').to_string();
-        s.push('/');
-        let v = s;
-        let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-        let _ = REGISTRY_PREFIX_SOURCE.set("env".to_string());
-        write_registry_cache_disk(&v);
-        return v;
-    }
-    if let Ok(mode) = env::var("AIFO_CODER_TEST_REGISTRY_PROBE") {
-        let ml = mode.to_ascii_lowercase();
-        return match ml.as_str() {
-            "curl-ok" => "repository.migros.net/".to_string(),
-            "curl-fail" => String::new(),
-            "tcp-ok" => "repository.migros.net/".to_string(),
-            "tcp-fail" => String::new(),
-            _ => String::new(),
-        };
-    }
-    if let Some(v) = REGISTRY_PREFIX_CACHE.get() {
-        return v.clone();
-    }
-
-    if which("curl").is_ok() {
-        let status = Command::new("curl")
-            .args([
-                "--connect-timeout",
-                "1",
-                "--max-time",
-                "2",
-                "-sSI",
-                "https://repository.migros.net/v2/",
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if let Ok(st) = status {
-            if st.success() {
-                let v = "repository.migros.net/".to_string();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
-                return v;
-            } else {
-                let v = String::new();
-                let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = REGISTRY_PREFIX_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
-                return v;
-            }
-        }
-    }
-
-    let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
-        "repository.migros.net/".to_string()
-    } else {
-        String::new()
-    };
-    let _ = REGISTRY_PREFIX_CACHE.set(v.clone());
-    let _ = REGISTRY_PREFIX_SOURCE.set("tcp".to_string());
-    write_registry_cache_disk(&v);
-    v
+    preferred_mirror_registry_prefix_quiet()
 }
 
-/// Return how the registry prefix was determined in this process (env, disk, curl, tcp, unknown).
-pub fn preferred_registry_source() -> String {
-    // If a test override is active, prefer reporting "env" or "env-empty" if that was the
-    // actual resolution path; otherwise, keep source "unknown" under override.
+//// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
+pub fn preferred_mirror_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
         .lock()
         .expect("probe override lock")
@@ -298,4 +177,47 @@ pub fn preferred_registry_source() -> String {
     }
 
     "unknown".to_string()
+}
+
+/// Deprecated single-registry API: alias to mirror registry source
+pub fn preferred_registry_source() -> String {
+    preferred_mirror_registry_source()
+}
+
+/// Internal registry (env-only; no probe, no disk cache)
+pub fn preferred_internal_registry_prefix_quiet() -> String {
+    if let Some(v) = INTERNAL_REGISTRY_PREFIX_CACHE.get() {
+        return v.clone();
+    }
+    match env::var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX") {
+        Ok(val) => {
+            let trimmed = val.trim();
+            if trimmed.is_empty() {
+                let v = String::new();
+                let _ = INTERNAL_REGISTRY_PREFIX_CACHE.set(v.clone());
+                let _ = INTERNAL_REGISTRY_SOURCE.set("env-empty".to_string());
+                v
+            } else {
+                let mut s = trimmed.trim_end_matches('/').to_string();
+                s.push('/');
+                let _ = INTERNAL_REGISTRY_PREFIX_CACHE.set(s.clone());
+                let _ = INTERNAL_REGISTRY_SOURCE.set("env".to_string());
+                s
+            }
+        }
+        Err(_) => {
+            let v = String::new();
+            let _ = INTERNAL_REGISTRY_PREFIX_CACHE.set(v.clone());
+            let _ = INTERNAL_REGISTRY_SOURCE.set("unset".to_string());
+            v
+        }
+    }
+}
+
+/// Internal registry source: "env" | "env-empty" | "unset"
+pub fn preferred_internal_registry_source() -> String {
+    INTERNAL_REGISTRY_SOURCE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| "unset".to_string())
 }
