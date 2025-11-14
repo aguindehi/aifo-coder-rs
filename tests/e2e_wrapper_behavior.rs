@@ -50,7 +50,6 @@ exit /B 0
 }
 #[ignore]
 #[test]
-#[ignore]
 fn e2e_wrapper_prefers_system_binary() {
     // Create a temporary directory to host our sysbin stub
     let td = tempfile::tempdir().expect("tmpdir");
@@ -84,7 +83,6 @@ fn e2e_wrapper_prefers_system_binary() {
 }
 #[ignore]
 #[test]
-#[ignore]
 fn e2e_wrapper_fallback_to_local_binary_or_build() {
     // Ensure no system-installed 'aifo-coder' takes precedence
     let old_path = env::var("PATH").unwrap_or_default();

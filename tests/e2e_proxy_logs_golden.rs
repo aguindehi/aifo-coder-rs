@@ -6,7 +6,6 @@ use std::time::Duration;
 mod support;
 #[ignore]
 #[test]
-#[ignore]
 fn accept_phase4_logs_golden_verbose_substrings() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {

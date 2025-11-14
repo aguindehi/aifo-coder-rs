@@ -23,7 +23,6 @@ fn connect(url: &str) -> (TcpStream, String, u16, String) {
 }
 #[ignore]
 #[test]
-#[ignore]
 fn e2e_proxy_handles_large_payload_notifications_cmd() {
     let sid = "unit-test-session";
     let (url, token, flag, handle) =
