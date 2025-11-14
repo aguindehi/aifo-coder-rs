@@ -1,0 +1,28 @@
+model_provider = "azure"
+profile = "gpt-5"
+approval_policy = "untrusted"
+sandbox_mode = "workspace-write"
+
+[model_providers.azure]
+name = "Azure"
+base_url = "https://mgb-aifo-proxy.service.migros.cloud/aoai/openai"
+env_key = "AIFO_API_KEY"  # Name of the environment variable
+query_params = { api-version = "2025-04-01-preview" }
+wire_api = "responses"
+
+[profiles.gpt-5]
+model_provider = "azure"
+model = "gpt-5"
+model_context_window = 270000
+model_max_output_tokens = 128000
+model_verbosity = "low"
+
+[profiles.high]
+model_provider = "azure"
+model = "gpt-5"
+model_reasoning_effort = "high"
+model_context_window = 270000
+model_max_output_tokens = 128000
+
+[features]
+web_search_request = true

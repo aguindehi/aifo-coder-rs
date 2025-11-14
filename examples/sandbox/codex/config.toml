@@ -6,7 +6,7 @@ approval_policy = "on-request"
 # Azure Provider
 
 [model_providers.azure]
-name = "Azure"
+name = "Azure Sandbox"
 
 # AIFO Sandbox Settings
 
@@ -34,6 +34,9 @@ model_reasoning_effort = "medium"
 model_provider = "azure"
 model = "mgb-aifo-model-gpt-5-codex"
 model_reasoning_effort = "medium"
+model_context_window = 400000
+model_max_output_tokens = 128000
+model_verbosity = "low"
 
 [profiles.gpt-5-low]
 model_provider = "azure"
