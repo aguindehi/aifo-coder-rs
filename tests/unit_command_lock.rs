@@ -1,7 +1,6 @@
 use aifo_coder as aifo;
 use std::io;
 
-
 #[test]
 fn unit_acquire_lock_at_exclusive_and_release() {
     let mut p = std::env::temp_dir();

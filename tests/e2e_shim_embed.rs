@@ -48,7 +48,6 @@ fn e2e_embedded_shim_presence_in_agent_image() {
         Err(e) => panic!("failed to run docker: {}", e),
     }
 }
-
 #[ignore]
 #[test]
 fn e2e_embedded_shims_present_across_agent_images() {

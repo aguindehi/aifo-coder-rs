@@ -140,7 +140,6 @@ fn decode_chunked(data: Vec<u8>) -> (Vec<u8>, Option<i32>) {
     }
     (body, exit_code)
 }
-
 #[ignore]
 #[test]
 fn e2e_stream_cargo_help_v2() {

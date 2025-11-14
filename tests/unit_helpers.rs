@@ -1,0 +1,59 @@
+use aifo_coder as aifo;
+use std::fs;
+use std::path::PathBuf;
+
+#[test]
+fn unit_test_shell_escape_simple() {
+    assert_eq!(aifo::shell_escape("abc-123_./:@"), "abc-123_./:@");
+}
+
+#[test]
+fn unit_test_shell_escape_with_spaces_and_quotes() {
+    assert_eq!(aifo::shell_escape("a b c"), "'a b c'");
+    assert_eq!(aifo::shell_escape("O'Reilly"), "'O'\"'\"'Reilly'");
+}
+
+#[test]
+fn unit_test_shell_join() {
+    let args = vec!["a".to_string(), "b c".to_string(), "d".to_string()];
+    assert_eq!(aifo::shell_join(&args), "a 'b c' d");
+}
+
+#[test]
+fn unit_test_path_pair() {
+    let host = PathBuf::from("/tmp");
+    let os = aifo::path_pair(&host, "/container");
+    assert_eq!(os.to_string_lossy(), "/tmp:/container");
+}
+
+#[test]
+fn unit_test_ensure_file_exists_creates() {
+    let mut p = std::env::temp_dir();
+    p.push(format!("aifo-coder-test-{}", std::process::id()));
+    p.push("nested");
+    let _ = fs::remove_dir_all(p.parent().unwrap()); // best-effort cleanup
+    let _ = aifo::ensure_file_exists(&p); // should create parent and file
+    assert!(p.exists());
+    // cleanup
+    let _ = fs::remove_file(&p);
+    let _ = fs::remove_dir_all(p.parent().unwrap());
+}
+
+#[test]
+fn unit_test_candidate_lock_paths_contains_tmp() {
+    let paths = aifo::candidate_lock_paths();
+    assert!(paths
+        .iter()
+        .any(|pp| pp == &PathBuf::from("/tmp/aifo-coder.lock")));
+}
+
+#[test]
+fn unit_test_desired_apparmor_profile_option() {
+    // This is a smoke test that adapts to environment capabilities.
+    let prof = aifo::desired_apparmor_profile();
+    if aifo::docker_supports_apparmor() {
+        assert!(prof.is_some());
+    } else {
+        assert!(prof.is_none());
+    }
+}

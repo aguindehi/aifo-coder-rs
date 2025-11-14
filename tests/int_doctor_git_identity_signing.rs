@@ -61,7 +61,7 @@ fn run_doctor_capture(verbose: bool) -> String {
 }
 
 #[test]
-fn int_doctor_identity_precedence_and_signing_repo_over_global() {
+fn int_test_doctor_identity_precedence_and_signing_repo_over_global() {
     if !git_available() {
         eprintln!("skipping: git not found in PATH");
         return;
@@ -154,7 +154,7 @@ fn int_doctor_identity_precedence_and_signing_repo_over_global() {
 }
 
 #[test]
-fn int_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
+fn int_test_doctor_verbose_tips_when_desired_off_but_repo_enables_signing() {
     if !git_available() {
         eprintln!("skipping: git not found in PATH");
         return;

@@ -8,4 +8,3 @@ fn unit_shell_escape_edges() {
     assert_eq!(aifo::shell_escape("a b"), "'a b'");
     assert_eq!(aifo::shell_escape("O'Reilly"), "'O'\"'\"'Reilly'");
 }
-
