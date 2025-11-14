@@ -1,8 +1,9 @@
 use std::env;
 
+#[ignore]
 #[test]
 #[ignore] // E2E: runs real docker flows; opt-in CI lane only
-fn test_bootstrap_exec_installs_nextest_and_is_idempotent() {
+fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

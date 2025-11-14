@@ -4,7 +4,7 @@ use support::urlencode;
 #[cfg(target_os = "linux")]
 #[ignore]
 #[test]
-fn test_proxy_unix_socket_rust_and_node() {
+fn e2e_proxy_unix_socket_rust_and_node() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

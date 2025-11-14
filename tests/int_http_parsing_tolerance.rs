@@ -1,7 +1,7 @@
 mod support;
 
 #[test]
-fn test_http_parsing_tolerates_lf_only_terminator() {
+fn int_http_parsing_tolerates_lf_only_terminator() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

@@ -36,7 +36,7 @@ fn send_raw(host: &str, port: u16, req: &str) -> String {
 }
 
 #[test]
-fn test_proxy_concurrency_mixed_requests() {
+fn int_proxy_concurrency_mixed_requests() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

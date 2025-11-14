@@ -1,5 +1,5 @@
 #[test]
-fn test_toolchain_dry_run_rust_ok() {
+fn int_toolchain_dry_run_rust_ok() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -12,7 +12,7 @@ fn test_toolchain_dry_run_rust_ok() {
 }
 
 #[test]
-fn test_toolchain_dry_run_no_cache_node_ok() {
+fn int_toolchain_dry_run_no_cache_node_ok() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

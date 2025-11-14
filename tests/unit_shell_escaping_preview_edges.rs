@@ -2,7 +2,7 @@ use aifo_coder as aifo;
 
 /// Extra shell escaping edge cases beyond helpers.rs
 #[test]
-fn test_shell_escape_edges() {
+fn unit_shell_escape_edges() {
     assert_eq!(aifo::shell_escape(""), "''");
     assert_eq!(aifo::shell_escape("abc-123_./:@"), "abc-123_./:@");
     assert_eq!(aifo::shell_escape("a b"), "'a b'");
@@ -11,7 +11,7 @@ fn test_shell_escape_edges() {
 
 /// Ensure docker preview string includes properly escaped agent args.
 #[test]
-fn test_preview_shell_escaping_args() {
+fn unit_preview_shell_escaping_args() {
     // Skip if docker isn't available on this host
     if aifo::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

@@ -1,7 +1,7 @@
 mod support;
 
 #[test]
-fn test_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
+fn int_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
     // Need docker present to start proxy, no sidecars required
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found");

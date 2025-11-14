@@ -1,7 +1,7 @@
 use std::env;
 
 #[test]
-fn test_bootstrap_sccache_policy_warning_in_preview() {
+fn int_bootstrap_sccache_policy_warning_in_preview() {
     // Skip if docker isn't available on this host (align with other preview tests)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

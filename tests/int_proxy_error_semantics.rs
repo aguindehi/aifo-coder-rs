@@ -2,7 +2,7 @@ mod support;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_error_semantics_tcp_v1_and_v2() {
+fn int_error_semantics_tcp_v1_and_v2() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

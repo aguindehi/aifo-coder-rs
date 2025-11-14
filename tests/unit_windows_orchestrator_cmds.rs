@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 #[test]
-fn test_ps_inner_contains_set_location_and_env() {
+fn unit_ps_inner_contains_set_location_and_env() {
     let agent = "aider";
     let sid = "sid123";
     let i = 2usize;
@@ -43,7 +43,7 @@ fn test_ps_inner_contains_set_location_and_env() {
 }
 
 #[test]
-fn test_bash_inner_format_and_exports() {
+fn unit_bash_inner_format_and_exports() {
     let agent = "aider";
     let sid = "sidX";
     let i = 1usize;
@@ -83,7 +83,7 @@ fn test_bash_inner_format_and_exports() {
 }
 
 #[test]
-fn test_wt_orient_for_layout_mapping() {
+fn unit_wt_orient_for_layout_mapping() {
     // even-h -> -H, even-v -> -V
     assert_eq!(aifo_coder::wt_orient_for_layout("even-h", 1), "-H");
     assert_eq!(aifo_coder::wt_orient_for_layout("even-v", 1), "-V");
@@ -93,7 +93,7 @@ fn test_wt_orient_for_layout_mapping() {
 }
 
 #[test]
-fn test_wt_build_new_tab_args_contains_d_flag() {
+fn unit_wt_build_new_tab_args_contains_d_flag() {
     let ps = PathBuf::from(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
     let dir = PathBuf::from(r"C:\Work\repo\fork\pane-1");
     let inner = "echo hi";
@@ -119,7 +119,7 @@ fn test_wt_build_new_tab_args_contains_d_flag() {
 }
 
 #[test]
-fn test_wt_build_split_args_contains_orient_and_d() {
+fn unit_wt_build_split_args_contains_orient_and_d() {
     let ps = PathBuf::from(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
     let dir = PathBuf::from(r"C:\Work\repo\fork\pane-2");
     let inner = "echo bye";

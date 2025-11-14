@@ -1,5 +1,5 @@
 #[test]
-fn test_route_tool_to_sidecar_mapping() {
+fn unit_route_tool_to_sidecar_mapping() {
     assert_eq!(aifo_coder::route_tool_to_sidecar("cargo"), "rust");
     assert_eq!(aifo_coder::route_tool_to_sidecar("rustc"), "rust");
 

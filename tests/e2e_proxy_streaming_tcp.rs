@@ -3,7 +3,7 @@ use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_proxy_tcp_streaming_rust_and_node() {
+fn e2e_proxy_tcp_streaming_rust_and_node() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

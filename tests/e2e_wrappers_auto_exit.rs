@@ -1,3 +1,4 @@
+#[ignore]
 #[test]
 #[ignore]
 fn accept_phase4_wrappers_auto_exit_present() {

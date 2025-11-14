@@ -1,5 +1,5 @@
 #[test]
-fn test_proxy_notify_say_noauth_tcp() {
+fn int_proxy_notify_say_noauth_tcp() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

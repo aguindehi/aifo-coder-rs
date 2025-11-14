@@ -1,7 +1,7 @@
 use std::env;
 
 #[test]
-fn test_rust_mounts_host_present_preferred() {
+fn int_rust_mounts_host_present_preferred() {
     // Skip if docker isn't available on this host (align with other preview tests)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -57,7 +57,7 @@ fn test_rust_mounts_host_present_preferred() {
 }
 
 #[test]
-fn test_rust_mounts_fallback_to_named_volumes_when_missing() {
+fn int_rust_mounts_fallback_to_named_volumes_when_missing() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;
@@ -104,7 +104,7 @@ fn test_rust_mounts_fallback_to_named_volumes_when_missing() {
 }
 
 #[test]
-fn test_rust_no_cache_removes_mounts() {
+fn int_rust_no_cache_removes_mounts() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;
@@ -137,7 +137,7 @@ fn test_rust_no_cache_removes_mounts() {
 }
 
 #[test]
-fn test_rust_force_named_volumes_env() {
+fn int_rust_force_named_volumes_env() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;
@@ -191,7 +191,7 @@ fn test_rust_force_named_volumes_env() {
 
 #[test]
 #[cfg(windows)]
-fn test_rust_windows_defaults_to_named_volumes() {
+fn int_rust_windows_defaults_to_named_volumes() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;

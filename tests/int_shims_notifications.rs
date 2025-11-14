@@ -1,5 +1,5 @@
 #[test]
-fn test_say_shim_missing_env_exit86() {
+fn int_say_shim_missing_env_exit86() {
     let tmp = tempfile::tempdir().expect("tmpdir");
     aifo_coder::toolchain_write_shims(tmp.path()).expect("write shims");
     let shim = tmp.path().join("say");

@@ -5,6 +5,7 @@ use std::net::TcpStream;
 use std::time::Duration;
 mod support;
 
+#[ignore]
 #[test]
 #[ignore]
 fn accept_phase4_native_http_tcp_exec_rust_version() {

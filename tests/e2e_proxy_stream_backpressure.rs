@@ -31,9 +31,10 @@ fn urlencode_component(s: &str) -> String {
     out
 }
 
+#[ignore]
 #[test]
 #[ignore]
-fn test_proxy_v2_backpressure_emits_drop_warning_and_counter() {
+fn e2e_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     // Skip if docker isn't available on this host
     let _runtime = match aifo_coder::container_runtime_path() {
         Ok(p) => p,

@@ -22,7 +22,7 @@ mod support;
 ///   cargo test --test proxy_streaming_spawn_fail_plain_500 -- --ignored --nocapture
 #[ignore]
 #[test]
-fn test_streaming_spawn_fail_plain_500() {
+fn e2e_streaming_spawn_fail_plain_500() {
     // Skip if docker isn't available on this host (for sidecar start)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

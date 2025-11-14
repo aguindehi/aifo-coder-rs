@@ -1,7 +1,7 @@
 mod support;
 
 #[test]
-fn test_get_exec_yields_405() {
+fn int_get_exec_yields_405() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -34,7 +34,7 @@ fn test_get_exec_yields_405() {
 }
 
 #[test]
-fn test_unknown_path_yields_404() {
+fn int_unknown_path_yields_404() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

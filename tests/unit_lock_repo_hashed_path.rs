@@ -1,6 +1,6 @@
 #[cfg(not(windows))]
 #[test]
-fn test_hashed_lock_path_diff_for_two_repos() {
+fn unit_hashed_lock_path_diff_for_two_repos() {
     // Create two separate repos and ensure their hashed XDG lock paths differ
     let td = tempfile::tempdir().expect("tmpdir");
     let ws = td.path().to_path_buf();

@@ -1,7 +1,7 @@
 mod common;
 
 #[test]
-fn test_rust_run_and_exec_include_user_flags_and_path_env() {
+fn int_rust_run_and_exec_include_user_flags_and_path_env() {
     // For consistency with other tests, skip if docker isn't available
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

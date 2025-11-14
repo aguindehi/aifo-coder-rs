@@ -1,6 +1,6 @@
 #[cfg(unix)]
 #[test]
-fn test_notifications_handle_request_with_stub_say() {
+fn int_notifications_handle_request_with_stub_say() {
     use std::fs::{self, File};
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;

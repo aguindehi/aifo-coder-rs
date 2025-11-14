@@ -9,7 +9,7 @@ fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
 }
 
 #[test]
-fn test_toolchain_dry_run_c_cpp_ok() {
+fn int_toolchain_dry_run_c_cpp_ok() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -23,7 +23,7 @@ fn test_toolchain_dry_run_c_cpp_ok() {
 
 #[ignore]
 #[test]
-fn test_toolchain_live_c_cpp_cmake_ok() {
+fn int_toolchain_live_c_cpp_cmake_ok() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

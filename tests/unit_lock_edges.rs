@@ -2,7 +2,7 @@ use aifo_coder as aifo;
 use std::{thread, time::Duration};
 
 #[test]
-fn test_concurrent_locking_threaded() {
+fn unit_concurrent_locking_threaded() {
     let mut p = std::env::temp_dir();
     p.push(format!(
         "aifo-coder-lock-{}-{}",

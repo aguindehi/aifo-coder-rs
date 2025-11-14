@@ -1,5 +1,5 @@
 #[test]
-fn test_toolchain_cleanup_removes_containers_and_network() {
+fn int_toolchain_cleanup_removes_containers_and_network() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

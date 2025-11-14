@@ -1,5 +1,5 @@
 #[test]
-fn test_candidate_lock_paths_repo_scoped() {
+fn unit_candidate_lock_paths_repo_scoped() {
     // Create a temporary git repository and ensure repo-scoped lock paths are preferred
     let td = tempfile::tempdir().expect("tmpdir");
     let old_cwd = std::env::current_dir().expect("cwd");

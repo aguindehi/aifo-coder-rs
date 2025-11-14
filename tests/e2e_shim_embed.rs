@@ -1,6 +1,6 @@
 #[ignore]
 #[test]
-fn test_embedded_shim_presence_in_agent_image() {
+fn e2e_embedded_shim_presence_in_agent_image() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -49,8 +49,9 @@ fn test_embedded_shim_presence_in_agent_image() {
     }
 }
 
+#[ignore]
 #[test]
-fn test_embedded_shims_present_across_agent_images() {
+fn e2e_embedded_shims_present_across_agent_images() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

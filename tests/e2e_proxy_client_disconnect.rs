@@ -4,6 +4,7 @@ use std::net::TcpStream;
 use std::time::Duration;
 mod support;
 
+#[ignore]
 #[test]
 #[ignore]
 fn accept_phase4_disconnect_triggers_proxy_log() {

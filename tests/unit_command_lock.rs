@@ -2,7 +2,7 @@ use aifo_coder as aifo;
 use std::io;
 
 #[test]
-fn test_build_docker_cmd_preview_contains() {
+fn unit_build_docker_cmd_preview_contains() {
     // Skip if docker isn't available on this host
     if aifo::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -30,7 +30,7 @@ fn test_build_docker_cmd_preview_contains() {
 }
 
 #[test]
-fn test_acquire_lock_at_exclusive_and_release() {
+fn unit_acquire_lock_at_exclusive_and_release() {
     let mut p = std::env::temp_dir();
     p.push(format!(
         "aifo-coder-lock-{}-{}",

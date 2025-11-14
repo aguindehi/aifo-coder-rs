@@ -10,7 +10,7 @@ fn write_cfg(tmp_home: &std::path::Path, content: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn test_parse_notifications_inline_array() {
+fn int_parse_notifications_inline_array() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
@@ -56,7 +56,7 @@ fn test_parse_notifications_inline_array() {
 }
 
 #[test]
-fn test_parse_notifications_nested_array_lines() {
+fn int_parse_notifications_nested_array_lines() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
@@ -107,7 +107,7 @@ fn test_parse_notifications_nested_array_lines() {
 }
 
 #[test]
-fn test_parse_notifications_block_scalar() {
+fn int_parse_notifications_block_scalar() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
@@ -158,7 +158,7 @@ fn test_parse_notifications_block_scalar() {
 }
 
 #[test]
-fn test_parse_notifications_single_line_string() {
+fn int_parse_notifications_single_line_string() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
@@ -209,7 +209,7 @@ fn test_parse_notifications_single_line_string() {
 }
 
 #[test]
-fn test_notifications_args_mismatch_error() {
+fn int_notifications_args_mismatch_error() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
@@ -257,7 +257,7 @@ fn test_notifications_args_mismatch_error() {
 }
 
 #[test]
-fn test_notifications_config_rejects_non_say() {
+fn int_notifications_config_rejects_non_say() {
     let _g = NOTIF_ENV_GUARD.lock().unwrap();
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();

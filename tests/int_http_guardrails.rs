@@ -1,7 +1,7 @@
 mod support;
 
 #[test]
-fn test_http_excessive_headers_yields_431() {
+fn int_http_excessive_headers_yields_431() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -51,7 +51,7 @@ fn test_http_excessive_headers_yields_431() {
 }
 
 #[test]
-fn test_http_content_length_mismatch_yields_400() {
+fn int_http_content_length_mismatch_yields_400() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

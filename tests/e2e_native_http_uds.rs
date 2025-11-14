@@ -5,6 +5,7 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 mod support;
 
+#[ignore]
 #[test]
 #[ignore]
 fn accept_phase4_native_http_uds_exec_rust_version() {

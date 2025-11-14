@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
-fn test_proxy_tsc_prefers_local_compiler() {
+fn int_proxy_tsc_prefers_local_compiler() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

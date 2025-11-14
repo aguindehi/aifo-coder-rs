@@ -44,7 +44,7 @@ fn find_aifo_binary() -> String {
 /// Integration: docker missing should return nonzero and print a clear error line.
 /// Forces container_runtime_path() to fail via AIFO_CODER_TEST_DISABLE_DOCKER=1.
 #[test]
-fn test_support_docker_missing_integration() {
+fn int_support_docker_missing_integration() {
     // Resolve compiled binary path provided by cargo
     let bin = find_aifo_binary();
     let mut cmd = Command::new(bin);
@@ -72,7 +72,7 @@ fn test_support_docker_missing_integration() {
 
 /// Deterministic shuffle: same seed should produce identical order.
 #[test]
-fn test_support_shuffle_is_deterministic() {
+fn int_support_shuffle_is_deterministic() {
     // Local copy of xorshift64* and Fisher–Yates used by support.rs
     #[derive(Clone)]
     struct XorShift64 {
@@ -123,7 +123,7 @@ fn test_support_shuffle_is_deterministic() {
 
 /// Agent check caching: only one agent --version per agent across all toolchains.
 #[test]
-fn test_agent_check_once_per_agent() {
+fn int_agent_check_once_per_agent() {
     // Simulate worker caching behavior with 3 agents × 2 toolchains
     let agents = vec![
         "aider".to_string(),
@@ -163,7 +163,7 @@ fn test_agent_check_once_per_agent() {
 
 /// Smoke: with docker present, run a tiny non-TTY support and assert tokens appear.
 #[test]
-fn test_support_matrix_smoke_non_tty() {
+fn int_support_matrix_smoke_non_tty() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -198,7 +198,7 @@ fn test_support_matrix_smoke_non_tty() {
 }
 
 #[test]
-fn test_support_matrix_is_fully_green() {
+fn int_support_matrix_is_fully_green() {
     // Allow opting out (e.g., inside toolchain containers or CI where Docker isn't usable)
     if std::env::var("AIFO_SUPPORT_SKIP_GREEN").ok().as_deref() == Some("1") {
         eprintln!("skipping: AIFO_SUPPORT_SKIP_GREEN=1");

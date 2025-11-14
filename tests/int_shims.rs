@@ -1,5 +1,5 @@
 #[test]
-fn test_toolchain_write_shims_creates_files() {
+fn int_toolchain_write_shims_creates_files() {
     let tmp = tempfile::tempdir().expect("tmpdir");
     aifo_coder::toolchain_write_shims(tmp.path()).expect("write shims");
 
@@ -16,7 +16,7 @@ fn test_toolchain_write_shims_creates_files() {
 
 #[cfg(unix)]
 #[test]
-fn test_aifo_shim_exec_without_env_exits_86() {
+fn int_aifo_shim_exec_without_env_exits_86() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;

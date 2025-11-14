@@ -35,7 +35,7 @@ fn connect_and_roundtrip(url: &str, req: &str) -> String {
 }
 
 #[test]
-fn test_proxy_missing_auth_is_401() {
+fn int_proxy_missing_auth_is_401() {
     if aifo_coder::container_runtime_path().is_err() {
         // proxy can run without docker, but we test with or without; no skip
     }
@@ -58,7 +58,7 @@ fn test_proxy_missing_auth_is_401() {
 }
 
 #[test]
-fn test_proxy_header_case_and_bad_proto_yields_426() {
+fn int_proxy_header_case_and_bad_proto_yields_426() {
     let sid = "unit-test-session";
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");

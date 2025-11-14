@@ -1,5 +1,5 @@
 #[test]
-fn test_notify_unix_socket_say_ok_linux_only() {
+fn int_notify_unix_socket_say_ok_linux_only() {
     // Linux only (UDS transport)
     if !cfg!(target_os = "linux") {
         eprintln!("skipping: unix socket transport not supported on this OS");

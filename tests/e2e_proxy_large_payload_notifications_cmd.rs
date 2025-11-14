@@ -22,9 +22,10 @@ fn connect(url: &str) -> (TcpStream, String, u16, String) {
     (stream, host.to_string(), port, path)
 }
 
+#[ignore]
 #[test]
 #[ignore]
-fn test_proxy_handles_large_payload_notifications_cmd() {
+fn e2e_proxy_handles_large_payload_notifications_cmd() {
     let sid = "unit-test-session";
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");

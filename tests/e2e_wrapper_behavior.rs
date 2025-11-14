@@ -49,9 +49,10 @@ exit /B 0
     stub_path
 }
 
+#[ignore]
 #[test]
 #[ignore]
-fn test_wrapper_prefers_system_binary() {
+fn e2e_wrapper_prefers_system_binary() {
     // Create a temporary directory to host our sysbin stub
     let td = tempfile::tempdir().expect("tmpdir");
     let stub_dir = td.path().to_path_buf();
@@ -83,9 +84,10 @@ fn test_wrapper_prefers_system_binary() {
     );
 }
 
+#[ignore]
 #[test]
 #[ignore]
-fn test_wrapper_fallback_to_local_binary_or_build() {
+fn e2e_wrapper_fallback_to_local_binary_or_build() {
     // Ensure no system-installed 'aifo-coder' takes precedence
     let old_path = env::var("PATH").unwrap_or_default();
     let new_path = old_path; // do not prepend any stub; rely on wrapper fallback

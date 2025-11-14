@@ -1,7 +1,7 @@
 use std::fs;
 
 #[test]
-fn test_parse_rejects_non_absolute_exec() {
+fn int_parse_rejects_non_absolute_exec() {
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
     let old_home = std::env::var("HOME").ok();
@@ -35,7 +35,7 @@ fn test_parse_rejects_non_absolute_exec() {
 }
 
 #[test]
-fn test_placeholder_must_be_trailing() {
+fn int_placeholder_must_be_trailing() {
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().to_path_buf();
     let old_home = std::env::var("HOME").ok();
@@ -87,7 +87,7 @@ fn test_placeholder_must_be_trailing() {
 }
 
 #[test]
-fn test_allowlist_env_extension_notify_send() {
+fn int_allowlist_env_extension_notify_send() {
     // Setup config with absolute stub notify-send and allowlist env extending defaults
     let td = tempfile::tempdir().expect("tmpdir");
     let dir = td.path();
@@ -132,7 +132,7 @@ fn test_allowlist_env_extension_notify_send() {
 }
 
 #[test]
-fn test_max_args_truncation_with_placeholder() {
+fn int_max_args_truncation_with_placeholder() {
     // Config with trailing {args} and MAX_ARGS=2; provide 3 args and expect truncation to 2.
     let td = tempfile::tempdir().expect("tmpdir");
     let dir = td.path();

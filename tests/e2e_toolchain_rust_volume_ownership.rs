@@ -1,8 +1,9 @@
 use std::process::Command;
 
+#[ignore]
 #[test]
 #[ignore] // E2E: touches real docker volumes and containers
-fn test_rust_named_volume_ownership_init_creates_stamp_files() {
+fn e2e_rust_named_volume_ownership_init_creates_stamp_files() {
     // Skip if docker isn't available on this host
     let runtime = match aifo_coder::container_runtime_path() {
         Ok(p) => p,

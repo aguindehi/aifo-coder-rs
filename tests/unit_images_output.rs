@@ -1,5 +1,5 @@
 #[test]
-fn test_images_effective_includes_all_agents() {
+fn unit_images_effective_includes_all_agents() {
     // Compose expected refs using environment and preferred registry prefix
     let prefix =
         std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
@@ -58,7 +58,7 @@ fn test_images_effective_includes_all_agents() {
 }
 
 #[test]
-fn test_images_effective_respects_flavor_env() {
+fn unit_images_effective_respects_flavor_env() {
     // Save and restore env var
     let old = std::env::var("AIFO_CODER_IMAGE_FLAVOR").ok();
 

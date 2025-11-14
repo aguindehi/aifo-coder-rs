@@ -3,7 +3,7 @@ use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_dev_tool_routing_make_rust_only_tcp_v2() {
+fn e2e_dev_tool_routing_make_rust_only_tcp_v2() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -161,7 +161,7 @@ fn test_dev_tool_routing_make_rust_only_tcp_v2() {
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
+fn e2e_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -305,7 +305,7 @@ fn test_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust() {
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_dev_tool_routing_make_cpp_only_tcp_v2() {
+fn e2e_dev_tool_routing_make_cpp_only_tcp_v2() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

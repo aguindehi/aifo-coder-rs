@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 #[test]
-fn test_proxy_missing_or_wrong_proto_header() {
+fn int_proxy_missing_or_wrong_proto_header() {
     // Skip if docker isn't available on this host
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

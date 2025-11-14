@@ -19,7 +19,7 @@ fn docker_has_image(img: &str) -> bool {
 }
 
 #[test]
-fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
+fn int_rust_default_image_prefers_aifo_when_available_or_overridden() {
     // Save and clear env overrides first
     let old_img = std::env::var("AIFO_RUST_TOOLCHAIN_IMAGE").ok();
     let old_ver = std::env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
@@ -65,7 +65,7 @@ fn test_rust_default_image_prefers_aifo_when_available_or_overridden() {
 }
 
 #[test]
-fn test_rust_default_previews_use_normative_cargo_home_and_path() {
+fn int_rust_default_previews_use_normative_cargo_home_and_path() {
     // Skip if docker isn't available on this host (align with other preview tests)
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
@@ -116,7 +116,7 @@ fn test_rust_default_previews_use_normative_cargo_home_and_path() {
 }
 
 #[test]
-fn test_rust_official_fallback_env_forces_official_image() {
+fn int_rust_official_fallback_env_forces_official_image() {
     // Save and clear conflicting env overrides
     let old_img = std::env::var("AIFO_RUST_TOOLCHAIN_IMAGE").ok();
     let old_ver = std::env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();

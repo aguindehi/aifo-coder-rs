@@ -14,7 +14,7 @@ fn ensure_minimal_session(repo: &std::path::Path, sid: &str) {
 }
 
 #[test]
-fn test_color_env_always_applies_when_no_cli_flag() {
+fn int_color_env_always_applies_when_no_cli_flag() {
     if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
@@ -45,7 +45,7 @@ fn test_color_env_always_applies_when_no_cli_flag() {
 }
 
 #[test]
-fn test_no_color_env_disables_even_with_cli_always() {
+fn int_no_color_env_disables_even_with_cli_always() {
     if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
@@ -76,7 +76,7 @@ fn test_no_color_env_disables_even_with_cli_always() {
 }
 
 #[test]
-fn test_cli_overrides_env_when_no_no_color() {
+fn int_cli_overrides_env_when_no_no_color() {
     if !support::have_git() {
         eprintln!("skipping: git not found in PATH");
         return;

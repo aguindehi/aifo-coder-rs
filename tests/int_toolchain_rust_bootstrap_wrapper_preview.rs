@@ -1,7 +1,7 @@
 use std::env;
 
 #[test]
-fn test_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
+fn int_bootstrap_wrapper_present_on_official_images_and_absent_on_aifo() {
     // For consistency with other tests, skip if docker isn't available
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");

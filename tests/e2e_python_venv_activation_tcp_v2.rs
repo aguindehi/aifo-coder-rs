@@ -3,7 +3,7 @@ use support::urlencode;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[ignore]
 #[test]
-fn test_python_venv_activation_path_precedence_tcp_v2() {
+fn e2e_python_venv_activation_path_precedence_tcp_v2() {
     use std::io::Write;
 
     // Skip if docker isn't available on this host

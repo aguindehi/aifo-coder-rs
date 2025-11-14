@@ -7,7 +7,7 @@ fn contains_rustflags(preview: &str, needle: &str) -> bool {
 }
 
 #[test]
-fn test_rust_linker_rustflags_lld_and_mold() {
+fn int_rust_linker_rustflags_lld_and_mold() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;

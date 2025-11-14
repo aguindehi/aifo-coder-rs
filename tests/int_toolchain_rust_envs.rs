@@ -3,7 +3,7 @@ use std::env;
 mod common;
 
 #[test]
-fn test_rust_envs_in_run_and_exec_previews() {
+fn int_rust_envs_in_run_and_exec_previews() {
     if aifo_coder::container_runtime_path().is_err() {
         eprintln!("skipping: docker not found in PATH");
         return;
