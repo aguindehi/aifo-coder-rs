@@ -1426,15 +1426,10 @@ test-acceptance-suite:
 
 test-integration-suite:
 	@set -e; \
-	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
+	echo "Running integration test suite (transitional filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/) | test(/^test_e2e_stream_cargo_/)' ; \
-	else \
-	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_e2e_stream_cargo_/)' ; \
-	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
-	@$(MAKE) test-toolchain-rust-e2e
+	EXPR='test(/^int_/)|test(/^test_(proxy_|http_|cli_|toolchain_|notify_|notifications_|preview_|fork_|support_|default_image_regression|session_cleanup|color_precedence|python_venv_activation|dev_tool_routing)/)'; \
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 -E "$$EXPR" $(ARGS)
 
 check-e2e:
 	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
