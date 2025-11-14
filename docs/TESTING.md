@@ -104,6 +104,8 @@ Naming conventions
   - int_* in int_*.rs
   - e2e_* in e2e_*.rs
 - Helpers under tests/support and tests/common are exempt from lane filename/function prefix rules.
+- preview_* tests are Integration (int_preview_*): they depend on docker CLI path/env discovery.
+- notifications_* and shims_* tests are Integration: they spawn local processes/shims.
 
 Filters (transitional → target)
 
