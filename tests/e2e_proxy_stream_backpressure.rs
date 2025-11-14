@@ -3,6 +3,7 @@
 Acceptance test (ignored by default): simulate client stall to trigger v2 backpressure.
 Ensures a single drop warning line is emitted and a verbose dropped counter appears.
 */
+mod support;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
