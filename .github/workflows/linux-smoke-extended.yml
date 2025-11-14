@@ -43,6 +43,15 @@ jobs:
       - name: Build required images (codex, crush, aider) - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then DOCKER_BUILDKIT=1 make build-codex-slim build-crush-slim build-aider-slim; else DOCKER_BUILDKIT=1 make build-codex build-crush build-aider; fi
 
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run integration tests (target-state filters)
+        run: cargo nextest run -E 'test(/^int_/)' --profile ci --no-fail-fast
+
+      - name: Run E2E tests (target-state filters)
+        run: cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_/)' --profile ci --no-fail-fast
+
       - name: Run codex --version via launcher - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder codex --version; else ./aifo-coder codex --version; fi
 

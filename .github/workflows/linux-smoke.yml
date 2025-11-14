@@ -34,6 +34,12 @@ jobs:
       - name: Build launcher (release)
         run: cargo build --release
 
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run integration tests (target-state filters)
+        run: cargo nextest run -E 'test(/^int_/)' --profile ci --no-fail-fast
+
       - name: Docker info
         run: docker info
 
