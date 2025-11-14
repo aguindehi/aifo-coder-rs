@@ -13,6 +13,42 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     let old_use_official = env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok();
     env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
 
+    // Ensure Docker daemon reachable and official image present locally (avoid pulls)
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        if let Some(v) = old_use_official {
+            env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
+        } else {
+            env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+        }
+        return;
+    }
+    let official = "rust:1.80-bookworm";
+    let present = std::process::Command::new(&runtime)
+        .args(["image", "inspect", official])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !present {
+        eprintln!("skipping: {} not present locally (avoid pulling in tests)", official);
+        if let Some(v) = old_use_official {
+            env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
+        } else {
+            env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+        }
+        return;
+    }
+
     // First run: cargo nextest -V should succeed; bootstrap will install if missing
     let code1 = aifo_coder::toolchain_run(
         "rust",
