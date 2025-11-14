@@ -121,3 +121,4 @@ Notes
   unexpected pulls and keeps CI deterministic across lanes.
 - Image defaults and helper usage have been consolidated across the suite to reduce drift
   and flakiness. Prefer tests/support helpers for URL→port parsing and raw HTTP/TCP sends.
+- To normalize any duplicate #[ignore] attributes in E2E tests, run: make fix-e2e-ignores

@@ -2560,3 +2560,7 @@ endif
 .PHONY: cov-results
 cov-results:
 	open build/coverage/html/index.html
+
+.PHONY: fix-e2e-ignores
+fix-e2e-ignores:
+	@sh scripts/fix-dedup-ignore.sh
