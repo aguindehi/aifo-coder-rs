@@ -88,9 +88,9 @@ Subcommands:
 - fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]  Clean fork sessions safely
 
 Tips:
-- Registry selection is automatic (prefers repository.migros.net when reachable, otherwise Docker Hub). Override via AIFO_CODER_REGISTRY_PREFIX; set empty to force Docker Hub.
+- Two registries: mirror registry (MR) is used only for Dockerfile base pulls (build-time) via REGISTRY_PREFIX; internal registry (IR) is used for tagging/push and runtime image prefixing via AIFO_CODER_INTERNAL_REGISTRY_PREFIX or REGISTRY in Makefile/scripts. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
 - To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
-- Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR, and AIFO_CODER_REGISTRY_PREFIX.
+- Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR. For runtime registry prefixing of our images, use AIFO_CODER_INTERNAL_REGISTRY_PREFIX.
 - Fallback: if images are not yet published, use --image to provide an explicit image ref.
 
 Examples (dry-run previews):
@@ -672,8 +672,8 @@ When you run `aifo-coder ...` it will:
    - AppArmor (optional): adds `--security-opt apparmor=<profile>` if supported by Docker
    - Per‑agent image selection:
      - Defaults to `AIFO_CODER_IMAGE` if set; otherwise `IMAGE_PREFIX-<agent>:TAG` (e.g., `aifo-coder-codex:latest`)
-     - Registry auto-selection: tries `repository.migros.net/` first; if reachable, images are referenced as `repository.migros.net/IMAGE_PREFIX-<agent>:TAG`; otherwise no registry prefix is used and Docker Hub is assumed
-     - Override the registry choice by setting `AIFO_CODER_REGISTRY_PREFIX` (set to empty to force Docker Hub)
+     - Runtime prefixing for our images: when `AIFO_CODER_INTERNAL_REGISTRY_PREFIX` is non-empty, it is prepended to our agent images (aifo-coder-*). Official upstream defaults (e.g., python/golang/rust) remain unprefixed at runtime.
+     - Build-time base pulls use a mirror registry (MR) via Docker `--build-arg REGISTRY_PREFIX=...` set by Makefile/CI; the launcher does not use MR at runtime.
 4. Execute the agent and return its exit code.
 
 ---

@@ -85,10 +85,6 @@ pub fn invalidate_registry_cache() {
     }
 }
 
-pub fn preferred_registry_prefix() -> String {
-    // Deprecated single-registry API: alias to mirror registry (quiet)
-    preferred_mirror_registry_prefix_quiet()
-}
 
 /// Mirror registry (quiet): probe via curl then TCP; cache OnceCell + on-disk.
 pub fn preferred_mirror_registry_prefix_quiet() -> String {
@@ -161,10 +157,6 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
     v
 }
 
-/// Deprecated single-registry API: alias to mirror registry (quiet)
-pub fn preferred_registry_prefix_quiet() -> String {
-    preferred_mirror_registry_prefix_quiet()
-}
 
 /// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
 pub fn preferred_mirror_registry_source() -> String {
@@ -199,10 +191,6 @@ pub fn preferred_mirror_registry_source() -> String {
     "unknown".to_string()
 }
 
-/// Deprecated single-registry API: alias to mirror registry source
-pub fn preferred_registry_source() -> String {
-    preferred_mirror_registry_source()
-}
 
 /// Internal registry (env-only; no probe, no disk cache)
 pub fn preferred_internal_registry_prefix_quiet() -> String {

@@ -19,6 +19,7 @@ aifo-coder --help
 ```
 
 Notes:
+- Two registries: mirror registry (MR) is used only for Dockerfile base pulls via REGISTRY_PREFIX (set by Makefile/CI); internal registry (IR) is used for tagging/push and runtime image prefixing via REGISTRY or AIFO_CODER_INTERNAL_REGISTRY_PREFIX. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
 - To build only full (fat) images: make build-fat
 - To build only slim images: make build-slim
 - The wrapper script aifo-coder will try to build the Rust launcher with cargo; if cargo is missing, it can build using Docker.

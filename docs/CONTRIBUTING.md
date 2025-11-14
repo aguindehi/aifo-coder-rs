@@ -3,12 +3,12 @@
 This document summarizes how to override toolchain images, how caches are laid out and
 mounted, and a few execution environment details for each supported toolchain.
 
-Conventions and registry prefix
+Conventions and registries (IR vs MR)
 - Images can be overridden via environment variables, following the pattern:
   - AIFO_<KIND>_TOOLCHAIN_IMAGE: full image reference (highest precedence)
   - AIFO_<KIND>_TOOLCHAIN_VERSION: version tag (maps to aifo-coder-toolchain-<kind>:{version})
-- A registry prefix can be provided at runtime via AIFO_CODER_REGISTRY_PREFIX and at build
-  time via Docker ARG REGISTRY_PREFIX. The implementation normalizes a single trailing slash.
+- Internal registry (IR) at runtime via AIFO_CODER_INTERNAL_REGISTRY_PREFIX: when non-empty, it is normalized to a single trailing “/” and prepended to our aifo-coder-* images. Empty/unset yields no prefix.
+- Mirror registry (MR) at build time via Docker ARG REGISTRY_PREFIX: used only for base image pulls by Makefile/scripts/CI. The runtime launcher does not use MR.
 
 Toolchain image overrides
 

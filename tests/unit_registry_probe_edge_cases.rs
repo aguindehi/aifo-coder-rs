@@ -30,8 +30,8 @@ fn unit_test_registry_probe_unknown_mode_reports_unknown_source() {
     let _g = GUARD.lock().unwrap();
     std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "unknown");
-    let _ = aifo_coder::preferred_registry_prefix_quiet();
-    let src = aifo_coder::preferred_registry_source();
+    let _ = aifo_coder::preferred_mirror_registry_prefix_quiet();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(
         src, "unknown",
         "expected source=unknown for unknown probe mode"

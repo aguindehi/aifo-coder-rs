@@ -28,7 +28,7 @@ fn unit_test_registry_probe_override_modes() {
     aifo_coder::registry_probe_set_override_for_tests(Some(
         aifo_coder::RegistryProbeTestMode::TcpFail,
     ));
-    let rp2 = aifo_coder::preferred_registry_prefix_quiet();
+    let rp2 = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(rp2, "", "override tcp-fail should force Docker Hub (empty)");
 
     // Clear override
