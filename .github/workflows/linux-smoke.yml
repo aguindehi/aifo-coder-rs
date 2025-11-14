@@ -37,8 +37,8 @@ jobs:
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
 
-      - name: Run integration tests (target-state filters)
-        run: cargo nextest run -E 'test(/^int_/)' --profile ci --no-fail-fast
+      - name: Run integration tests (via Makefile)
+        run: make test-integration-suite
 
       - name: Docker info
         run: docker info

@@ -401,11 +401,10 @@ test-e2e:
       optional: true
     - lint
   script:
-    - echo "Running integration tests (target-state filters) via nextest ..."
-    - cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked
-    - cargo nextest run -E 'test(/^int_/)' --profile ci --no-fail-fast
-    - echo "Running E2E tests (target-state filters) via nextest ..."
-    - cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_/)' --profile ci --no-fail-fast
+    - echo "Running integration tests (via Makefile) ..."
+    - make test-integration-suite
+    - echo "Running E2E tests (via Makefile) ..."
+    - make test-acceptance-suite
   artifacts:
     when: always
     expire_in: 1 week
