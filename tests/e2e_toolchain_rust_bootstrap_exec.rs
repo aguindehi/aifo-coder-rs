@@ -11,7 +11,9 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
 
     // Force official rust image and ensure bootstrap engages
     let old_use_official = env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok();
+    let old_bootstrap = env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok();
     env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", "1");
+    env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", "1");
 
     // Ensure Docker daemon reachable and official image present locally (avoid pulls)
     let runtime = aifo_coder::container_runtime_path().expect("runtime");
@@ -28,6 +30,11 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
             env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
         } else {
             env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+        }
+        if let Some(v) = old_bootstrap {
+            env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", v);
+        } else {
+            env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
         }
         return;
     }
@@ -48,6 +55,11 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
             env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
         } else {
             env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+        }
+        if let Some(v) = old_bootstrap {
+            env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", v);
+        } else {
+            env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
         }
         return;
     }
@@ -87,5 +99,10 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
         env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
     } else {
         env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
+    }
+    if let Some(v) = old_bootstrap {
+        env::set_var("AIFO_RUST_OFFICIAL_BOOTSTRAP", v);
+    } else {
+        env::remove_var("AIFO_RUST_OFFICIAL_BOOTSTRAP");
     }
 }
