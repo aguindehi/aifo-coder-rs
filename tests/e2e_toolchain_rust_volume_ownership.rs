@@ -11,6 +11,31 @@ fn e2e_rust_named_volume_ownership_init_creates_stamp_files() {
             return;
         }
     };
+    // Ensure Docker daemon is reachable
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    // Require the official image locally to avoid pulling
+    let official = "rust:1.80-slim";
+    let present = std::process::Command::new(&runtime)
+        .args(["image", "inspect", official])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !present {
+        eprintln!("skipping: {} not present locally (avoid pulling in tests)", official);
+        return;
+    }
 
     // Best-effort: remove volumes first to ensure a clean slate (ignore errors)
     let _ = Command::new(&runtime)
