@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 mod support;
-
 #[ignore]
 #[test]
 #[ignore]

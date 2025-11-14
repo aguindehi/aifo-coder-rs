@@ -30,7 +30,6 @@ fn urlencode_component(s: &str) -> String {
     }
     out
 }
-
 #[ignore]
 #[test]
 #[ignore]

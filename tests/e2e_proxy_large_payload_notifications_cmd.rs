@@ -21,7 +21,6 @@ fn connect(url: &str) -> (TcpStream, String, u16, String) {
     let stream = TcpStream::connect((connect_host.as_str(), port)).expect("connect failed");
     (stream, host.to_string(), port, path)
 }
-
 #[ignore]
 #[test]
 #[ignore]

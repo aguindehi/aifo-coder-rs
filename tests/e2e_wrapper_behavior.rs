@@ -48,7 +48,6 @@ exit /B 0
     }
     stub_path
 }
-
 #[ignore]
 #[test]
 #[ignore]
@@ -83,7 +82,6 @@ fn e2e_wrapper_prefers_system_binary() {
         stdout
     );
 }
-
 #[ignore]
 #[test]
 #[ignore]

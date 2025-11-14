@@ -1,5 +1,4 @@
 use std::process::Command;
-
 #[ignore]
 #[test]
 #[ignore] // E2E: touches real docker volumes and containers
