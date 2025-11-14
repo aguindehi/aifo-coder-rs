@@ -109,13 +109,7 @@ Naming conventions
 
 Filters (transitional → target)
 
-- Transitional filters (used by Makefile/CI during migration):
-  - Integration:
-    - -E 'test(/^int_/)|test(/^test_(proxy_|http_|cli_|toolchain_|notify_|notifications_|preview_|fork_|support_|default_image_regression|session_cleanup|color_precedence|python_venv_activation|dev_tool_routing)/)'
-  - Acceptance/E2E:
-    - -E 'test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)'
-    - Non-Linux builders should append “& !test(/_uds/)” to skip UDS-only tests.
-    - Transitional guard: when the Docker CLI is present but the daemon is unreachable, the Makefile appends “& !test(/dev_tool_routing/)” to the acceptance filter to avoid false failures from dev-tool routing E2E tests. This guard will be removed after Phase 3 once all affected tests self-skip reliably.
+- Transitional filters: removed (Phase 5 complete).
 - Target-state filters (after file/function renames):
   - Integration: -E 'test(/^int_/)'
   - Acceptance/E2E: -E 'test(/^e2e_/)' with --run-ignored ignored-only

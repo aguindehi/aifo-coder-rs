@@ -1,6 +1,6 @@
 # AIFO-Coder Test Naming Convention v4
 Date: 2025-11-14
-Status: Adopted — Phase 4 complete (CI aligned to target-state filters)
+Status: Adopted — Phase 5 complete (aliases dropped; docs and Makefile cleaned)
 
 Purpose
 
