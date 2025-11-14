@@ -722,7 +722,7 @@ publish-toolchain-node:
 publish-codex:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
@@ -739,7 +739,7 @@ publish-codex:
 publish-codex-slim:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
@@ -756,7 +756,7 @@ publish-codex-slim:
 publish-crush:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
@@ -773,7 +773,7 @@ publish-crush:
 publish-crush-slim:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
@@ -790,7 +790,7 @@ publish-crush-slim:
 publish-aider:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
@@ -807,7 +807,7 @@ publish-aider:
 publish-aider-slim:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
@@ -824,7 +824,7 @@ publish-aider-slim:
 publish-openhands:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
@@ -841,7 +841,7 @@ publish-openhands:
 publish-openhands-slim:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
@@ -858,7 +858,7 @@ publish-openhands-slim:
 publish-opencode:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
@@ -875,7 +875,7 @@ publish-opencode:
 publish-opencode-slim:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
@@ -892,7 +892,7 @@ publish-opencode-slim:
 publish-plandex:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
@@ -909,7 +909,7 @@ publish-plandex:
 publish-plandex-slim:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
