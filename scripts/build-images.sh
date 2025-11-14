@@ -52,3 +52,9 @@ for t in ${targets}; do
 done
 
 echo "Done."
+I need to edit this file to:
+- Keep mirror reachability detection for --build-arg REGISTRY_PREFIX="$RP".
+- Add INTERNAL_REG detection from REGISTRY or AIFO_CODER_INTERNAL_REGISTRY_PREFIX, normalize trailing slash.
+- Tag images locally and, if INTERNAL_REG is non-empty, also tag "$INTERNAL_REG$img". Remove MR tagging.
+
+Please add this file to the chat.
