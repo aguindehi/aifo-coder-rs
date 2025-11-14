@@ -329,9 +329,29 @@ fn e2e_dev_tool_routing_make_cpp_only_tcp_v2() {
     // Force TCP (disable unix mode)
     std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");
 
+    // Ensure Docker daemon reachable and c-cpp image present locally
+    let runtime = aifo_coder::container_runtime_path().expect("runtime");
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+    let cpp_image = std::env::var("AIFO_CODER_TEST_CPP_IMAGE")
+        .unwrap_or_else(|_| "aifo-coder-toolchain-cpp:latest".to_string());
+    if !support::docker_image_present(&runtime.as_path(), &cpp_image) {
+        eprintln!("skipping: c-cpp image '{}' not present locally", cpp_image);
+        return;
+    }
+
     // Start only c-cpp sidecar
     let kinds = vec!["c-cpp".to_string()];
-    let overrides: Vec<(String, String)> = Vec::new();
+    let overrides: Vec<(String, String)> = vec![("c-cpp".to_string(), cpp_image)];
     let no_cache = false;
     let verbose = true;
 
