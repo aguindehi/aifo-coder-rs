@@ -33,7 +33,10 @@ fn e2e_rust_named_volume_ownership_init_creates_stamp_files() {
         .map(|s| s.success())
         .unwrap_or(false);
     if !present {
-        eprintln!("skipping: {} not present locally (avoid pulling in tests)", official);
+        eprintln!(
+            "skipping: {} not present locally (avoid pulling in tests)",
+            official
+        );
         return;
     }
 

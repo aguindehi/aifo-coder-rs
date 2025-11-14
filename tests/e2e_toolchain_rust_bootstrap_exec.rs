@@ -40,7 +40,10 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
         .map(|s| s.success())
         .unwrap_or(false);
     if !present {
-        eprintln!("skipping: {} not present locally (avoid pulling in tests)", official);
+        eprintln!(
+            "skipping: {} not present locally (avoid pulling in tests)",
+            official
+        );
         if let Some(v) = old_use_official {
             env::set_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL", v);
         } else {
