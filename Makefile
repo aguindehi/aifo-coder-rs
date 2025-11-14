@@ -1422,6 +1422,11 @@ test-acceptance-suite:
 	  EXPR='(test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
+	# Transitional guard: if Docker CLI exists but daemon is unreachable, exclude dev_tool_routing E2E tests \
+	if command -v docker >/dev/null 2>&1 && ! docker ps >/dev/null 2>&1; then \
+	  echo "Docker daemon not reachable; excluding dev_tool_routing E2E tests"; \
+	  EXPR="($$EXPR) & !test(/dev_tool_routing/)"; \
+	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
