@@ -478,7 +478,7 @@ build-coder: build-slim build-fat build-rust-builder
 
 build-codex:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -487,7 +487,7 @@ build-codex:
 
 build-crush:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -496,7 +496,7 @@ build-crush:
 
 build-aider:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -505,7 +505,7 @@ build-aider:
 
 build-openhands:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -514,7 +514,7 @@ build-openhands:
 
 build-opencode:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -523,7 +523,7 @@ build-opencode:
 
 build-plandex:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -532,7 +532,7 @@ build-plandex:
 
 build-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
@@ -565,7 +565,7 @@ build-debug:
 	  echo "Error: docker buildx is not available; please install/enable buildx." >&2; \
 	  exit 1; \
 	fi; \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
