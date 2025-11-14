@@ -1414,26 +1414,21 @@ test-proxy-tcp:
 
 test-acceptance-suite:
 	@set -e; \
-	echo "Running acceptance test suite (ignored by default; transitional filters) via cargo nextest ..."; \
+	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)' ; \
+	  EXPR='test(/^e2e_/)' ; \
 	else \
-	  EXPR='(test(/^e2e_/)|test(/^accept_/)|test(/^test_(proxy_streaming_|e2e_|wrapper_behavior|shim_embed|node_named_cache_ownership_stamp_files|toolchain_rust_volume_ownership|python_venv_activation|dev_tool_routing|proxy_unix_socket)/)) & !test(/_uds/)' ; \
+	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
-	fi; \
-	# Transitional guard: if Docker CLI exists but daemon is unreachable, exclude dev_tool_routing E2E tests \
-	if command -v docker >/dev/null 2>&1 && ! docker ps >/dev/null 2>&1; then \
-	  echo "Docker daemon not reachable; excluding dev_tool_routing E2E tests"; \
-	  EXPR="($$EXPR) & !test(/dev_tool_routing/)"; \
 	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
 	@set -e; \
-	echo "Running integration test suite (transitional filters) via cargo nextest ..."; \
+	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	EXPR='test(/^int_/)|test(/^test_(proxy_|http_|cli_|toolchain_|notify_|notifications_|preview_|fork_|support_|default_image_regression|session_cleanup|color_precedence|python_venv_activation|dev_tool_routing)/)'; \
+	EXPR='test(/^int_/)' ; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 -E "$$EXPR" $(ARGS)
 
 check-e2e:
