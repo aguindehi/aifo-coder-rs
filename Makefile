@@ -725,9 +725,15 @@ publish-codex:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex --output type=oci,dest=dist/$(IMAGE_PREFIX)-codex-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-codex-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-codex-slim:
@@ -736,9 +742,15 @@ publish-codex-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-codex-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-codex-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-crush:
@@ -747,9 +759,15 @@ publish-crush:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush --output type=oci,dest=dist/$(IMAGE_PREFIX)-crush-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-crush-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-crush-slim:
@@ -758,9 +776,15 @@ publish-crush-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-crush-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-crush-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-aider:
@@ -769,9 +793,15 @@ publish-aider:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-aider-slim:
@@ -780,9 +810,15 @@ publish-aider-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-openhands:
@@ -791,9 +827,15 @@ publish-openhands:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands --output type=oci,dest=dist/$(IMAGE_PREFIX)-openhands-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-openhands-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-openhands-slim:
@@ -802,9 +844,15 @@ publish-openhands-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-openhands-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-openhands-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-opencode:
@@ -813,9 +861,15 @@ publish-opencode:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode --output type=oci,dest=dist/$(IMAGE_PREFIX)-opencode-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-opencode-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-opencode-slim:
@@ -824,9 +878,15 @@ publish-opencode-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-opencode-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-opencode-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-plandex:
@@ -835,9 +895,15 @@ publish-plandex:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex --output type=oci,dest=dist/$(IMAGE_PREFIX)-plandex-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-plandex-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-plandex-slim:
@@ -846,9 +912,15 @@ publish-plandex-slim:
 	$(REG_SETUP_COMMON); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-plandex-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-plandex-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 .PHONY: publish
