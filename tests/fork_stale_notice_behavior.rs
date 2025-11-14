@@ -9,7 +9,7 @@ fn init_repo(dir: &PathBuf) {
 }
 
 #[test]
-fn test_stale_notice_suppressed_during_maintenance() {
+fn int_stale_notice_suppressed_during_maintenance() {
     if !have_git() {
         eprintln!("skipping: git not found in PATH");
         return;
@@ -63,7 +63,7 @@ fn test_stale_notice_suppressed_during_maintenance() {
 }
 
 #[test]
-fn test_stale_notice_printed_for_doctor() {
+fn int_stale_notice_printed_for_doctor() {
     if !have_git() {
         eprintln!("skipping: git not found in PATH");
         return;

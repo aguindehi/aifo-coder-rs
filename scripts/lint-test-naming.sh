@@ -53,11 +53,17 @@ check_function_prefixes() {
   awk -v pfx="$expected" -v file="$f" '
     BEGIN { in_test=0; }
     {
-      if ($0 ~ /\#[[:space:]]*\[[[:space:]]*test[[:space:]]*\]/) { in_test=1; next; }
-      if (in_test && $0 ~ /^[[:space:]]*fn[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\(/) {
-        name=""
-        if (match($0, /^[[:space:]]*fn[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*\(/, m)) {
-          name=m[1]
+      # detect #[test]
+      if ($0 ~ /#[[:space:]]*\[[[:space:]]*test[[:space:]]*\]/) { in_test=1; next; }
+
+      # next non-attribute line that declares fn <name>(...)
+      if (in_test && $0 ~ /^[[:space:]]*fn[[:space:]]+[A-Za-z0-9_]/) {
+        line=$0
+        # strip leading spaces + "fn " prefix
+        sub(/^[[:space:]]*fn[[:space:]]+/, "", line)
+        # extract identifier up to first non-identifier char
+        if (match(line, /^[A-Za-z0-9_]+/)) {
+          name = substr(line, RSTART, RLENGTH)
           if (index(name, pfx) != 1) {
             print "NAMING: " file ":" NR ": #[test] function " name " should begin with " pfx
           }
