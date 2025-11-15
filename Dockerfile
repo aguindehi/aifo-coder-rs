@@ -93,7 +93,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt
 # Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
 ARG OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
-ARG OSXCROSS_REF=
+ARG OSXCROSS_REF
 # Optional: pass the exact versioned tarball name (e.g., MacOSX13.3.sdk.tar.xz) for osxcross
 ARG OSXCROSS_SDK_TARBALL
 # Copy SDK from build context (decoded in CI) into osxcross tarballs
