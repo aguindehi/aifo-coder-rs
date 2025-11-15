@@ -18,14 +18,14 @@ fn unit_override_wins_over_env_probe_conflict() {
     ));
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "repository.migros.net/", "override must win");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "unknown", "source should be unknown under override");
 
     // No cache write for override path
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache.exists(), "override path must not write cache");
 
     // Cleanup
