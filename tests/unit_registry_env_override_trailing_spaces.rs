@@ -28,9 +28,10 @@ fn unit_env_override_trailing_spaces_normalizes_and_writes_cache() {
         "source must be 'env' for non-empty override"
     );
 
-    // Cache should contain normalized value
-    let cache = td.path().join("aifo-coder.regprefix");
-    assert!(cache.exists(), "cache file must exist");
-    let content = fs::read_to_string(&cache).expect("read cache");
-    assert_eq!(content, "beta/");
+    // Internal registry has no on-disk cache
+    let cache = td.path().join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache.exists(),
+        "internal registry does not use on-disk cache"
+    );
 }
