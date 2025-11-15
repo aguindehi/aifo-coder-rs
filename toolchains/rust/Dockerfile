@@ -88,7 +88,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   fi
 
 # Verify cmake still present after optional cleanup; if missing, re-install and mark manual, then verify
@@ -97,7 +97,7 @@ RUN set -eux; \
       apt-get update; \
       apt-get install -y --no-install-recommends cmake cmake-data; \
       apt-mark manual cmake cmake-data >/dev/null 2>&1 || true; \
-      rm -rf /var/lib/apt/lists/*; \
+      rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     fi; \
     cmake --version >/dev/null
 
