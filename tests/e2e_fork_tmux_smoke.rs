@@ -2,8 +2,9 @@ use std::process::Command;
 mod support;
 
 #[cfg(unix)]
+#[ignore]
 #[test]
-fn test_e2e_fork_tmux_smoke_opt_in() {
+fn e2e_e2e_fork_tmux_smoke_opt_in() {
     // Only run when explicitly requested and prerequisites are present
     if std::env::var("AIFO_CODER_E2E").ok().as_deref() != Some("1") {
         eprintln!("skipping: AIFO_CODER_E2E!=1");

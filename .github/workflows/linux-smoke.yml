@@ -34,6 +34,12 @@ jobs:
       - name: Build launcher (release)
         run: cargo build --release
 
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run integration tests (via Makefile)
+        run: make test-integration-suite
+
       - name: Docker info
         run: docker info
 

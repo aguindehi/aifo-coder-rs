@@ -313,7 +313,7 @@ build-launcher:
     RUST_BACKTRACE: "1"
     AIFO_SUPPORT_ANIMATE: "0"
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
-    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E "!test(/^test_http_/) & !test(/^test_proxy_/)"'
+    ARGS_NEXTEST: '--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci'
     GIT_LFS_SKIP_SMUDGE: "1"
     AIFO_SUPPORT_SKIP_GREEN: "1"
     AIFO_CODER_TEST_DISABLE_DOCKER: "1"
@@ -394,14 +394,17 @@ test-e2e:
   timeout: 90m
   tags:
     - qual-mcap-gcp
+  variables:
+    AIFO_CODER_TEST_DISABLE_DOCKER: "0"
   needs:
     - job: build-rust-builder
       optional: true
     - lint
   script:
-    - echo "Running all tests (unit + acceptance + integration) in one nextest run…"
-    - mkdir -p target/nextest/ci
-    - make test-all-junit
+    - echo "Running integration tests (via Makefile) ..."
+    - make test-integration-suite
+    - echo "Running E2E tests (via Makefile) ..."
+    - make test-acceptance-suite
   artifacts:
     when: always
     expire_in: 1 week

@@ -93,9 +93,32 @@ Coverage
 - lcov.info:
   - make coverage-lcov
 
+Naming conventions
+
+- Files under tests/:
+  - unit_*.rs for Unit lane (dockerless, no external processes).
+  - int_*.rs for Integration lane (may spawn CLI; self-skip when prerequisites missing).
+  - e2e_*.rs for E2E lane (#[ignore] by default).
+- Test function names:
+  - unit_* in unit_*.rs
+  - int_* in int_*.rs
+  - e2e_* in e2e_*.rs
+- Helpers under tests/support and tests/common are exempt from lane filename/function prefix rules.
+- preview_* tests are Integration (int_preview_*): they depend on docker CLI path/env discovery.
+- notifications_* and shims_* tests are Integration: they spawn local processes/shims.
+
+Filters (transitional → target)
+
+- Transitional filters: removed (Phase 5 complete).
+- Target-state filters (after file/function renames):
+  - Integration: -E 'test(/^int_/)'
+  - Acceptance/E2E: -E 'test(/^e2e_/)' with --run-ignored ignored-only
+  - Unit lane: default “make check” runs all non-ignored tests (dockerless).
+
 Notes
 
 - Tests skip cleanly when Docker is unavailable or images are not present. This avoids
   unexpected pulls and keeps CI deterministic across lanes.
 - Image defaults and helper usage have been consolidated across the suite to reduce drift
   and flakiness. Prefer tests/support helpers for URL→port parsing and raw HTTP/TCP sends.
+- To normalize any duplicate #[ignore] attributes in E2E tests, run: make fix-e2e-ignores

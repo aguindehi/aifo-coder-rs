@@ -274,6 +274,7 @@ help: banner
 	@echo ""
 	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
 	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
+	@echo "  lint-tests-naming ........... Lint test files for lane prefixes and conventions (optional)"
 	@echo ""
 	@echo "  hadolint .................... Run hadolint on all Dockerfiles"
 	@echo ""
@@ -281,13 +282,11 @@ help: banner
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
 	@echo "  test-legacy ................. Alias for test-cargo"
 	@echo "  test-proxy-smoke ............ Run proxy smoke test (ignored by default)"
-	@echo "  test-toolchain-live ......... Run live toolchain tests (ignored by default)"
 	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
 	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
-	@echo "  test-proxy-errors ........... Run proxy error semantics tests (ignored by default)"
+	@echo "  test-proxy-errors ........... Run proxy error semantics tests (integration)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
-	@echo "  test-tsc-resolution ......... Run TypeScript local tsc resolution test (ignored by default)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
@@ -300,7 +299,10 @@ help: banner
 	$(call title,Test suites:)
 	@echo ""
 	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
-	@echo "  check-e2e .................... Run all ignored-by-default tests (acceptance + integration suites)"
+	@echo "  check-unit .................. Run unit tests (uni suite)
+	@echo "  check-int ................... Run integration tests (integration suite)
+	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance suites)"
+	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
 	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
@@ -985,7 +987,7 @@ build-shim-with-builder:
 	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
-.PHONY: lint check test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
+.PHONY: lint check check-unit test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
 
 lint:
 	@set -e; \
@@ -1090,6 +1092,8 @@ lint-ultra:
 	fi
 
 check: lint test
+
+check-unit: test
 
 test:
 	@set -e; \
@@ -1275,58 +1279,6 @@ coverage-data:
 
 cov: coverage-data coverage-lcov coverage-html
 
-coverage-html:
-	@set -e; \
-	mkdir -p build/coverage; \
-	if [ -f build/coverage/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
-	  rm -rf build/coverage/html || true; \
-	  mkdir -p build/coverage/html; \
-	  genhtml build/coverage/lcov.info --output-directory build/coverage/html; \
-	  if [ -f build/coverage/html/index.html ]; then \
-	    tmp=build/coverage/html/index.html.tmp; \
-	    sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
-	  fi; \
-	  echo "Wrote build/coverage/html from lcov.info via genhtml."; \
-	  exit 0; \
-	fi; \
-	if [ -f build/coverage/lcov.info ]; then \
-	  OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	  ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
-	  case "$$OS" in \
-	    MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
-	    *) case "$$ARCH" in \
-	         x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
-	         aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
-	         *) DOCKER_PLATFORM_ARGS="" ;; \
-	       esac ;; \
-	  esac; \
-	  echo "genhtml not available; falling back to grcov -t html (second parse) ..."; \
-	  rm -rf build/coverage/html || true; \
-	  mkdir -p build/coverage/html; \
-	  if command -v grcov >/dev/null 2>&1; then \
-	    grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/html; \
-	  elif command -v docker >/dev/null 2>&1; then \
-	    if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
-	      echo "Error: $(RUST_BUILDER_IMAGE) not present locally. Hint: make build-rust-builder"; \
-	      exit 1; \
-	    fi; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
-	      -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/html'; \
-	  else \
-	    echo "error: grcov not found and no docker fallback"; \
-	    exit 1; \
-	  fi; \
-	  if [ -f build/coverage/html/index.html ]; then \
-	    tmp=build/coverage/html/index.html.tmp; \
-	    sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
-	  fi; \
-	  echo "Wrote build/coverage/html (fallback grcov)."; \
-	  exit 0; \
-	fi; \
-	echo "error: build/coverage/lcov.info not found; run 'make coverage-lcov' or 'make cov' first."; \
-	exit 1
-
 coverage-lcov:
 	@set -e; \
 	mkdir -p build/coverage; \
@@ -1377,67 +1329,68 @@ coverage-html:
 	$(FIX_INDEX_CSS); \
 	echo "Wrote build/coverage/html (grcov HTML)"
 
-.PHONY: test-proxy-smoke test-toolchain-live test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
+.PHONY: test-proxy-smoke test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
-	@echo "Running proxy smoke test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored
+	@echo "Running proxy TCP streaming smoke (ignored by default) ..."
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
-test-toolchain-live:
-	@echo "Running live toolchain tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_live -- --ignored
 
 test-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test shim_embed -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_shim_embed -- --ignored
 
 test-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
 	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_unix_socket -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_unix_socket -- --ignored; \
 	else \
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_smoke -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored; \
 	fi
 
 test-proxy-errors:
-	@echo "Running proxy error semantics tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_error_semantics -- --ignored
+	@echo "Running proxy error semantics tests ..."
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_proxy_error_semantics
 
 .PHONY: test-proxy-tcp
 test-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
-.PHONY: test-acceptance-suite test-integration-suite check-e2e
+.PHONY: test-acceptance-suite test-integration-suite check-int check-e2e check-all
 
 test-acceptance-suite:
 	@set -e; \
-	echo "Running acceptance test suite (ignored by default) via cargo nextest ..."; \
+	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^accept_/)' ; \
+	  EXPR='test(/^e2e_/)' ; \
 	else \
-	  EXPR='test(/^accept_/) & !test(/_uds/)' ; \
+	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
 	@set -e; \
-	echo "Running integration/E2E test suite (ignored by default) via cargo nextest ..."; \
+	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^test_proxy_/) | test(/^test_unix_socket_url_/) | test(/^test_dev_tool_routing_/) | test(/^test_tsc_/) | test(/^test_embedded_shim_/) | test(/^test_e2e_stream_cargo_/)' ; \
-	else \
-	  EXPR='test(/^test_proxy_/) | test(/^test_dev_tool_routing_/) | test(/^test_e2e_stream_cargo_/)' ; \
-	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
-	@$(MAKE) test-toolchain-rust-e2e
+	EXPR='test(/^int_/)' ; \
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
 
 check-e2e:
-	@echo "Running full ignored-by-default E2E suite (acceptance + integration) ..."
+	@echo "Running ignored-by-default e2e (acceptance) suite ..."
+	$(MAKE) test-acceptance-suite
+
+check-int:
+	@echo "Running ignored-by-default integration suite ..."
+	$(MAKE) test-integration-suite
+
+check-all:
+	@echo "Running full ignored-by-default E2E suite (unit + integration + e2e) ..."
+	$(MAKE) test
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
 
@@ -1451,7 +1404,7 @@ test-all-junit:
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/divert/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
 	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/divert/null 2>&1; then \
-	    FEX='!test(/^accept_/) & !test(/^test_proxy_/) & !test(/^toolchain_/) & !test(/^test_tsc_/) & !test(/^test_http_/)' ; \
+	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
 	  else \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast $(ARGS); \
@@ -1460,7 +1413,7 @@ test-all-junit:
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
 	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then \
-	    FEX='!test(/^accept_/) & !test(/^test_proxy_/) & !test(/^toolchain_/) & !test(/^test_tsc_/) & !test(/^test_http_/)' ; \
+	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
 	  else \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS); \
@@ -1470,16 +1423,12 @@ test-all-junit:
 .PHONY: test-dev-tool-routing
 test-dev-tool-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test dev_tool_routing -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_dev_tool_routing_make_tcp_v2 -- --ignored
 
-.PHONY: test-tsc-resolution
-test-tsc-resolution:
-	@echo "Running TypeScript local tsc resolution test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test tsc_resolution -- --ignored
 
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test toolchain_cpp
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
@@ -1487,11 +1436,11 @@ test-toolchain-rust:
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
 	  echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
 	  else \
 	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
 	  fi; \
@@ -1512,7 +1461,7 @@ test-toolchain-rust:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS)"; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -1523,11 +1472,11 @@ test-toolchain-rust-e2e:
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
 	  echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
 	  else \
 	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
 	  fi; \
@@ -1548,7 +1497,7 @@ test-toolchain-rust-e2e:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --run-ignored ignored-only -E 'test(/^toolchain_rust_/)' $(ARGS)"; \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)"; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -2272,6 +2221,11 @@ hadolint:
 	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
 	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
 	fi
+
+.PHONY: lint-tests-naming
+lint-tests-naming:
+	@echo "Running test naming lint (Phase 6 — optional enforcement) ..."
+	@sh scripts/lint-test-naming.sh --strict
 
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
