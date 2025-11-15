@@ -1,7 +1,7 @@
 #[test]
 fn unit_test_registry_quiet_env_empty_writes_cache_and_invalidate_removes() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
     use std::path::PathBuf;
 
     // Unique runtime dir per test file
