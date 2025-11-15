@@ -130,7 +130,9 @@ RUN set -e; cd /opt/osxcross/target/bin; \
     done
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
-ENV PATH="/opt/osxcross/target/bin:/usr/local/cargo/bin:${PATH}" \
+ENV RUSTUP_HOME="/usr/local/rustup" \
+    CARGO_HOME="/usr/local/cargo" \
+    PATH="/opt/osxcross/target/bin:/usr/local/cargo/bin:/usr/local/rustup/bin:${PATH}" \
     MACOSX_DEPLOYMENT_TARGET=11.0 \
     CC_aarch64_apple_darwin=oa64-clang \
     CXX_aarch64_apple_darwin=oa64-clang++ \
