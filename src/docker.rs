@@ -335,7 +335,11 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             let src = host_home.join(fname);
             ensure_file_exists(&src).ok();
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!("{}:/home/coder/{}:ro", src.display(), fname)));
+            volume_flags.push(OsString::from(format!(
+                "{}:/home/coder/{}:ro",
+                src.display(),
+                fname
+            )));
         }
     }
 
@@ -343,7 +347,10 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     let gitconfig = host_home.join(".gitconfig");
     ensure_file_exists(&gitconfig).ok();
     volume_flags.push(OsString::from("-v"));
-    volume_flags.push(OsString::from(format!("{}:/home/coder/.gitconfig:ro", gitconfig.display())));
+    volume_flags.push(OsString::from(format!(
+        "{}:/home/coder/.gitconfig:ro",
+        gitconfig.display()
+    )));
 
     // Timezone files (optional)
     for (host_path, container_path) in [
