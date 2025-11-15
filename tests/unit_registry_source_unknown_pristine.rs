@@ -1,6 +1,6 @@
 /*
 Targets in src/registry.rs:
-- preferred_registry_source: "unknown" with no prior resolution or envs.
+- preferred_mirror_registry_source: "unknown" with no prior resolution or envs.
 Note: We avoid calling prefix resolution to keep OnceCell unset.
 */
 #[test]
