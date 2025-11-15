@@ -9,9 +9,8 @@ fn int_test_cli_images_respects_registry_env_value() {
     let _g = REG_ENV_GUARD.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
 
-    // Save and set env
-    let old = std::env::var("AIFO_CODER_REGISTRY_PREFIX").ok();
-    std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "example.com/");
+    // Force mirror probe to succeed via curl-ok
+    std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
 
     let out = Command::new(bin)
         .arg("images")
@@ -30,19 +29,20 @@ fn int_test_cli_images_respects_registry_env_value() {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    // The CLI prints the registry without trailing slash
+    // The CLI prints the mirror registry without trailing slash
     assert!(
-        all.contains("registry: example.com"),
-        "expected registry line to reflect env override, got:\n{}",
+        all.contains("mirror registry: repository.migros.net"),
+        "expected mirror registry line to reflect mirror probe, got:\n{}",
+        all
+    );
+    // Internal registry should be (none) when not set
+    assert!(
+        all.contains("internal registry: (none)"),
+        "expected internal registry to be (none), got:\n{}",
         all
     );
 
-    // Restore
-    if let Some(v) = old {
-        std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", v);
-    } else {
-        std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
-    }
+    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }
 
 #[test]
@@ -50,9 +50,8 @@ fn int_test_cli_images_respects_registry_env_empty() {
     let _g = REG_ENV_GUARD.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_aifo-coder");
 
-    // Save and set env to empty → Docker Hub
-    let old = std::env::var("AIFO_CODER_REGISTRY_PREFIX").ok();
-    std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", "");
+    // Force mirror probe to fail → Docker Hub
+    std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
     let out = Command::new(bin)
         .arg("images")
@@ -72,15 +71,15 @@ fn int_test_cli_images_respects_registry_env_empty() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        all.contains("registry: Docker Hub"),
-        "expected 'Docker Hub' when registry env is empty, got:\n{}",
+        all.contains("mirror registry: (none)"),
+        "expected '(none)' when mirror probe fails, got:\n{}",
+        all
+    );
+    assert!(
+        all.contains("internal registry: (none)"),
+        "expected internal registry to be (none), got:\n{}",
         all
     );
 
-    // Restore
-    if let Some(v) = old {
-        std::env::set_var("AIFO_CODER_REGISTRY_PREFIX", v);
-    } else {
-        std::env::remove_var("AIFO_CODER_REGISTRY_PREFIX");
-    }
+    std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 }

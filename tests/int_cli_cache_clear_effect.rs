@@ -9,7 +9,7 @@ fn int_test_cache_clear_removes_registry_file_with_xdg_runtime_dir() {
     let old = std::env::var("XDG_RUNTIME_DIR").ok();
     std::env::set_var("XDG_RUNTIME_DIR", &base);
 
-    let cache = base.join("aifo-coder.regprefix");
+    let cache = base.join("aifo-coder.mirrorprefix");
     fs::write(&cache, "example.com/").expect("write cache file");
     assert!(cache.exists(), "precondition: cache file must exist");
 

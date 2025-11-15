@@ -3,7 +3,7 @@
 //! Rules
 //! - Environment overrides take precedence: AIFO_CODER_IMAGE, AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR.
 //! - Flavor slim/full is expressed via "-slim" suffix and affects defaults only.
-//! - Registry prefix comes from preferred_registry_prefix[_quiet] and is normalized to "<host>/".
+//! - Internal registry prefix comes from preferred_internal_registry_prefix[_quiet]; when non-empty, prepend it to our images.
 //!
 //! These functions do not pull images or perform network I/O; they only compose strings.
 
@@ -23,7 +23,7 @@ pub(crate) fn default_image_for(agent: &str) -> String {
         _ => "",
     };
     let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_registry_prefix();
+    let registry = aifo_coder::preferred_internal_registry_prefix_quiet();
     if registry.is_empty() {
         image_name
     } else {
@@ -45,7 +45,7 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
         _ => "",
     };
     let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_registry_prefix_quiet();
+    let registry = aifo_coder::preferred_internal_registry_prefix_quiet();
     if registry.is_empty() {
         image_name
     } else {

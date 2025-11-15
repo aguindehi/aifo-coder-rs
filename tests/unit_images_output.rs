@@ -14,7 +14,7 @@ fn unit_images_effective_includes_all_agents() {
     } else {
         ""
     };
-    let reg = aifo_coder::preferred_registry_prefix_quiet();
+    let reg = aifo_coder::preferred_internal_registry_prefix_quiet();
     let agents = vec![
         "aider",
         "codex",
@@ -68,7 +68,7 @@ fn unit_images_effective_respects_flavor_env() {
     let prefix =
         std::env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
     let tag = std::env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
-    let reg = aifo_coder::preferred_registry_prefix_quiet();
+    let reg = aifo_coder::preferred_internal_registry_prefix_quiet();
     let agents = vec![
         "aider",
         "codex",

@@ -21,14 +21,14 @@ fn unit_quiet_override_tcp_ok_returns_prefix_and_no_cache() {
         aifo_coder::RegistryProbeTestMode::TcpOk,
     ));
 
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "repository.migros.net/");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "unknown");
 
     // Should not write cache
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache.exists(), "override path must not write cache");
 
     // Cleanup

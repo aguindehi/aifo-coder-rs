@@ -10,13 +10,13 @@ fn unit_test_registry_env_probe_tcp_fail_prefix_and_source() {
     aifo_coder::invalidate_registry_cache();
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "tcp");
 
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists());
 
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");

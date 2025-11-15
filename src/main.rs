@@ -254,19 +254,35 @@ fn print_verbose_run_info(
                 apparmor_opt.unwrap_or("(disabled)")
             ),
         );
-        // Show chosen registry and source for transparency
-        let rp = aifo_coder::preferred_registry_prefix_quiet();
-        let reg_display = if rp.is_empty() {
-            "Docker Hub".to_string()
+        // Show internal and mirror registries independently (quiet MR probe; IR from env only)
+        let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+        let ir_display = if irp.is_empty() {
+            "(none)".to_string()
         } else {
-            rp.trim_end_matches('/').to_string()
+            irp.trim_end_matches('/').to_string()
         };
-        let reg_src = aifo_coder::preferred_registry_source();
+        let ir_src = aifo_coder::preferred_internal_registry_source();
+
+        let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
+        let mr_display = if mrp.is_empty() {
+            "(none)".to_string()
+        } else {
+            mrp.trim_end_matches('/').to_string()
+        };
+        let mr_src = aifo_coder::preferred_mirror_registry_source();
+
         aifo_coder::log_info_stderr(
             use_err,
             &format!(
-                "aifo-coder: registry: {} (source: {})",
-                reg_display, reg_src
+                "aifo-coder: internal registry: {} (source: internal:{})",
+                ir_display, ir_src
+            ),
+        );
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: mirror registry: {} (source: mirror:{})",
+                mr_display, mr_src
             ),
         );
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image));

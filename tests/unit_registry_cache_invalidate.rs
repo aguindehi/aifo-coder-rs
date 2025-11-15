@@ -12,13 +12,12 @@ mod tests {
         let td = tempdir().expect("tmpdir");
         set_var("XDG_RUNTIME_DIR", td.path());
 
-        // Force a cache write via env-empty (empty string override)
-        set_var("AIFO_CODER_REGISTRY_PREFIX", "");
+        // Seed the mirror cache file explicitly (IR has no disk cache; env-probe does not write)
         remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
         aifo_coder::registry_probe_set_override_for_tests(None);
 
-        let _ = aifo_coder::preferred_registry_prefix();
-        let cache = td.path().join("aifo-coder.regprefix");
+        let cache = td.path().join("aifo-coder.mirrorprefix");
+        std::fs::write(&cache, "").expect("seed cache file");
         assert!(cache.exists(), "cache should be created");
 
         // Invalidate and ensure removal
@@ -26,6 +25,6 @@ mod tests {
         assert!(!cache.exists(), "invalidate must remove cache file");
 
         // Cleanup
-        remove_var("AIFO_CODER_REGISTRY_PREFIX");
+        remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
     }
 }

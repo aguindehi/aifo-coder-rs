@@ -120,7 +120,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-	$(call title_ul,Install paths (for 'make install'):)
+		$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -298,16 +298,16 @@ help: banner
 	$(call title,Test suites:)
 	@echo ""
 	@echo "  check ....................... Run 'lint', 'lint-docker', 'lint-tests-naming' then 'test' (lint and unit test suites)"
-	@echo "  check-unit .................. Run unit tests (uni suite)"
-	@echo "  check-int ................... Run integration tests (integration suite)"
-	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance suites)"
+	@echo "  check-unit .................. Run unit tests (unit test suite)"
+	@echo "  check-int ................... Run integration tests (integration test suite)"
+	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance test suite)"
 	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
 	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
 	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
 	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo ""
-	$(call title,AppArmor (security) profile:)
+		$(call title,AppArmor (security) profile:)
 	@echo
 	@echo "  apparmor .................... Generate build/apparmor/$${APPARMOR_PROFILE_NAME} from template"
 	@echo ""
@@ -459,15 +459,14 @@ define MIRROR_CHECK_LAX
   fi
 endef
 
-define REG_SETUP_COMMON
-  REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+define INTERNAL_REG_SETUP
+  REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
   if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi
 endef
 
 define REG_SETUP_WITH_FALLBACK
-  REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
-  if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-  if [ -z "$$REG" ] && [ -n "$$RP" ]; then REG="$$RP"; fi
+  REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
+  if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi
 endef
 
 .PHONY: build build-coder build-fat build-codex build-crush build-aider build-openhands build-opencode build-plandex build-rust-builder build-launcher
@@ -479,7 +478,7 @@ build-coder: build-slim build-fat build-rust-builder
 
 build-codex:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -488,7 +487,7 @@ build-codex:
 
 build-crush:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -497,7 +496,7 @@ build-crush:
 
 build-aider:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -506,7 +505,7 @@ build-aider:
 
 build-openhands:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -515,7 +514,7 @@ build-openhands:
 
 build-opencode:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -524,7 +523,7 @@ build-opencode:
 
 build-plandex:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
@@ -533,7 +532,7 @@ build-plandex:
 
 build-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
@@ -566,7 +565,7 @@ build-debug:
 	  echo "Error: docker buildx is not available; please install/enable buildx." >&2; \
 	  exit 1; \
 	fi; \
-	$(REG_SETUP_WITH_FALLBACK); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
@@ -587,9 +586,10 @@ build-toolchain-rust:
 	@set -e; \
 	echo "Building $(TC_IMAGE_RUST) ..."; \
 	$(MIRROR_CHECK_STRICT); \
+	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$RP" ]; then echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; fi; \
-	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${RP}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
+	if [ -n "$$REG" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
@@ -598,8 +598,9 @@ rebuild-toolchain-rust:
 	@set -e; \
 	echo "Rebuilding $(TC_IMAGE_RUST) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${RP}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
+	$(INTERNAL_REG_SETUP); \
+	if [ -n "$$REG" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
@@ -609,8 +610,9 @@ build-toolchain-node:
 	@set -e; \
 	echo "Building $(TC_IMAGE_NODE) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${RP}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
+	$(INTERNAL_REG_SETUP); \
+	if [ -n "$$REG" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${REG}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) $(CA_SECRET) .; \
 	fi
@@ -619,8 +621,9 @@ rebuild-toolchain-node:
 	@set -e; \
 	echo "Rebuilding $(TC_IMAGE_NODE) (no cache) ..."; \
 	$(MIRROR_CHECK_STRICT); \
-	if [ -n "$$RP" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${RP}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
+	$(INTERNAL_REG_SETUP); \
+	if [ -n "$$REG" ]; then \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) -t "$${REG}$(TC_IMAGE_NODE)" $(CA_SECRET) .; \
 	else \
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/node/Dockerfile -t $(TC_IMAGE_NODE) $(CA_SECRET) .; \
 	fi
@@ -635,7 +638,7 @@ rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolcha
 publish-toolchain-rust:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_RUST) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
@@ -655,16 +658,18 @@ publish-toolchain-rust:
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 build-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
-	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${RP}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
+	$(INTERNAL_REG_SETUP); \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-cpp:
 	@$(MIRROR_CHECK_STRICT); \
-	if [ -n "$$RP" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${RP}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
+	$(INTERNAL_REG_SETUP); \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
 	else \
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
@@ -673,7 +678,7 @@ rebuild-toolchain-cpp:
 publish-toolchain-cpp:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_CPP) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
@@ -694,7 +699,7 @@ publish-toolchain-cpp:
 publish-toolchain-node:
 	@set -e; \
 	echo "Publishing $(TC_IMAGE_NODE) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
@@ -717,133 +722,205 @@ publish-toolchain-node:
 publish-codex:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t "$${REG}$(CODEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex --output type=oci,dest=dist/$(IMAGE_PREFIX)-codex-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-codex-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex -t $(CODEX_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-codex-slim:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t "$${REG}$(CODEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-codex-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-codex-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target codex-slim -t $(CODEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-crush:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush --output type=oci,dest=dist/$(IMAGE_PREFIX)-crush-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-crush-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-crush-slim:
 	@set -e; \
 	echo "Publishing $(CRUSH_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t "$${REG}$(CRUSH_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-crush-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-crush-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush-slim -t $(CRUSH_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-aider:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-aider-slim:
 	@set -e; \
 	echo "Publishing $(AIDER_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-openhands:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands --output type=oci,dest=dist/$(IMAGE_PREFIX)-openhands-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-openhands-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-openhands-slim:
 	@set -e; \
 	echo "Publishing $(OPENHANDS_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t "$${REG}$(OPENHANDS_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-openhands-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-openhands-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target openhands-slim -t $(OPENHANDS_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-opencode:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode --output type=oci,dest=dist/$(IMAGE_PREFIX)-opencode-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-opencode-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-opencode-slim:
 	@set -e; \
 	echo "Publishing $(OPENCODE_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t "$${REG}$(OPENCODE_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-opencode-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-opencode-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target opencode-slim -t $(OPENCODE_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-plandex:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex --output type=oci,dest=dist/$(IMAGE_PREFIX)-plandex-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-plandex-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 publish-plandex-slim:
 	@set -e; \
 	echo "Publishing $(PLANDEX_IMAGE_SLIM) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
-	$(REG_SETUP_COMMON); \
+	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t "$${REG}$(PLANDEX_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  if [ "$(PUSH)" = "1" ]; then \
+	    mkdir -p dist; \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-plandex-slim-$(TAG).oci.tar $(CA_SECRET) .; \
+	    echo "Wrote dist/$(IMAGE_PREFIX)-plandex-slim-$(TAG).oci.tar"; \
+	  else \
+	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target plandex-slim -t $(PLANDEX_IMAGE_SLIM) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 .PHONY: publish
@@ -1670,7 +1747,7 @@ clean:
 	@set -e; \
 	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) $(TC_IMAGE_RUST) $(TC_IMAGE_NODE) $(TC_IMAGE_CPP) 2>/dev/null || true; \
 	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
-	REG="$${REGISTRY:-$${AIFO_CODER_REGISTRY_PREFIX}}"; \
+	REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
 	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
 	RP="repository.migros.net/"; \
 	if [ -n "$$REG" ]; then \

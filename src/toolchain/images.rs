@@ -113,16 +113,31 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
     }
-    default_image_for_kind_const(&k)
+    let base = default_image_for_kind_const(&k)
         .unwrap_or("node:22-bookworm-slim")
-        .to_string()
+        .to_string();
+    // Prepend internal registry for our toolchain images when set; upstream defaults remain unprefixed.
+    if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
+        let ir = crate::preferred_internal_registry_prefix_quiet();
+        if !ir.is_empty() {
+            return format!("{ir}{base}");
+        }
+    }
+    base
 }
 
 /// Compute default image from kind@version (best-effort).
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     let k = normalize_toolchain_kind(kind);
     if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
-        return fmt.replace("{version}", version);
+        let base = fmt.replace("{version}", version);
+        if base.starts_with("aifo-coder-toolchain-") {
+            let ir = crate::preferred_internal_registry_prefix_quiet();
+            if !ir.is_empty() {
+                return format!("{ir}{base}");
+            }
+        }
+        return base;
     }
     // No version mapping for this kind; fall back to non-versioned default
     default_toolchain_image(&k)

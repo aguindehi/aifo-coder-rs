@@ -19,13 +19,13 @@ fn unit_quiet_override_precedence_over_env_override() {
         aifo_coder::RegistryProbeTestMode::TcpFail,
     ));
 
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "override TcpFail wins over env override in quiet");
 
-    assert_eq!(aifo_coder::preferred_registry_source(), "unknown");
+    assert_eq!(aifo_coder::preferred_mirror_registry_source(), "unknown");
 
     // No cache write on override path
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache.exists(), "override path must not write cache");
 
     // Cleanup

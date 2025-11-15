@@ -8,7 +8,7 @@ Targets in src/registry.rs:
 #[test]
 fn unit_env_override_change_updates_prefix_and_cache() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());
@@ -20,22 +20,28 @@ fn unit_env_override_change_updates_prefix_and_cache() {
     remove_var("AIFO_CODER_REGISTRY_PREFIX");
 
     // Initial env override
-    set_var("AIFO_CODER_REGISTRY_PREFIX", "first///");
-    let p1 = aifo_coder::preferred_registry_prefix();
+    set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "first///");
+    let p1 = aifo_coder::preferred_internal_registry_prefix_quiet();
     assert_eq!(p1, "first/");
-    assert_eq!(aifo_coder::preferred_registry_source(), "env");
+    assert_eq!(aifo_coder::preferred_internal_registry_source(), "env");
 
     // Change env override at runtime; quiet should apply the new value
-    set_var("AIFO_CODER_REGISTRY_PREFIX", "second");
-    let p2 = aifo_coder::preferred_registry_prefix_quiet();
-    assert_eq!(p2, "second/");
-    assert_eq!(aifo_coder::preferred_registry_source(), "env");
+    set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "second");
+    let p2 = aifo_coder::preferred_internal_registry_prefix_quiet();
+    assert_eq!(
+        p2,
+        "first/",
+        "internal registry value is cached on first resolution and persists across env changes in-process"
+    );
+    assert_eq!(aifo_coder::preferred_internal_registry_source(), "env");
 
-    // Cache should reflect the latest normalized value
-    let cache = td.path().join("aifo-coder.regprefix");
-    let content = fs::read_to_string(&cache).expect("cache should exist");
-    assert_eq!(content, "second/");
+    // Internal registry has no on-disk cache
+    let cache = td.path().join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache.exists(),
+        "internal registry does not use on-disk cache"
+    );
 
     // Cleanup
-    remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }

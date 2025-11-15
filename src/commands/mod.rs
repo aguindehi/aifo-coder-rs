@@ -29,18 +29,26 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     aifo_coder::log_info_stderr(use_err, "aifo-coder images");
     eprintln!();
 
-    // Flavor and registry display
+    // Flavor and registries display
     let flavor_env = std::env::var("AIFO_CODER_IMAGE_FLAVOR").unwrap_or_default();
     let flavor = if flavor_env.trim().eq_ignore_ascii_case("slim") {
         "slim"
     } else {
         "full"
     };
-    let rp = aifo_coder::preferred_registry_prefix_quiet();
-    let reg_display = if rp.is_empty() {
-        "Docker Hub".to_string()
+
+    let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+    let ir_display = if irp.is_empty() {
+        "(none)".to_string()
     } else {
-        rp.trim_end_matches('/').to_string()
+        irp.trim_end_matches('/').to_string()
+    };
+
+    let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
+    let mr_display = if mrp.is_empty() {
+        "(none)".to_string()
+    } else {
+        mrp.trim_end_matches('/').to_string()
     };
 
     let use_color = atty::is(atty::Stream::Stderr);
@@ -49,14 +57,20 @@ pub fn run_images(cli: &Cli) -> std::process::ExitCode {
     } else {
         flavor.to_string()
     };
-    let reg_val = if use_color {
-        format!("\x1b[34;1m{}\x1b[0m", reg_display)
+    let ir_val = if use_color {
+        format!("\x1b[34;1m{}\x1b[0m", ir_display)
     } else {
-        reg_display
+        ir_display
+    };
+    let mr_val = if use_color {
+        format!("\x1b[34;1m{}\x1b[0m", mr_display)
+    } else {
+        mr_display
     };
 
-    eprintln!("  flavor:   {}", flavor_val);
-    eprintln!("  registry: {}", reg_val);
+    eprintln!("  flavor: {}", flavor_val);
+    eprintln!("  internal registry: {}", ir_val);
+    eprintln!("  mirror registry: {}", mr_val);
     eprintln!();
 
     // Effective image references

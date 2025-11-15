@@ -14,7 +14,7 @@ TAG="${TAG:-latest}"
 RP=""
 echo "Checking reachability of https://repository.migros.net ..."
 if command -v curl >/dev/null 2>&1 && curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://repository.migros.net/v2/ >/dev/null 2>&1; then
-  echo "repository.migros.net reachable via HTTPS; tagging image with registry prefix."
+  echo "repository.migros.net reachable via HTTPS; using mirror registry prefix for base image pulls."
   RP="repository.migros.net/"
 else
   echo "repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix)."
@@ -31,6 +31,15 @@ if [ -z "${targets}" ]; then
   targets="codex crush aider openhands opencode plandex"
 fi
 
+# Determine internal registry for tagging/push (never tag to mirror)
+INTERNAL_REG="${REGISTRY:-${AIFO_CODER_INTERNAL_REGISTRY_PREFIX:-}}"
+if [ -n "${INTERNAL_REG}" ]; then
+  case "${INTERNAL_REG}" in
+    */) : ;;
+    *) INTERNAL_REG="${INTERNAL_REG}/" ;;
+  esac
+fi
+
 for t in ${targets}; do
   case "${t}" in
     codex|crush|aider|openhands|opencode|plandex|codex-slim|crush-slim|aider-slim|openhands-slim|opencode-slim|plandex-slim) ;;
@@ -42,9 +51,9 @@ for t in ${targets}; do
   esac
 
   img="${IMAGE_PREFIX}-${t}:${TAG}"
-  if [ -n "${RP}" ]; then
-    echo "Building ${img} (also tagging ${RP}${img}) ..."
-    docker build --build-arg REGISTRY_PREFIX="${RP}" --target "${t}" -t "${img}" -t "${RP}${img}" .
+  if [ -n "${INTERNAL_REG}" ]; then
+    echo "Building ${img} (also tagging ${INTERNAL_REG}${img}) ..."
+    docker build --build-arg REGISTRY_PREFIX="${RP}" --target "${t}" -t "${img}" -t "${INTERNAL_REG}${img}" .
   else
     echo "Building ${img} ..."
     docker build --build-arg REGISTRY_PREFIX="${RP}" --target "${t}" -t "${img}" .

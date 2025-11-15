@@ -1,6 +1,6 @@
 /*
 Targets in src/registry.rs:
-- preferred_registry_source: "unknown" with no prior resolution or envs.
+- preferred_mirror_registry_source: "unknown" with no prior resolution or envs.
 Note: We avoid calling prefix resolution to keep OnceCell unset.
 */
 #[test]
@@ -17,5 +17,5 @@ fn unit_source_unknown_in_pristine_state() {
     aifo_coder::registry_probe_set_override_for_tests(None);
 
     // In pristine state, source reports "unknown"
-    assert_eq!(aifo_coder::preferred_registry_source(), "unknown");
+    assert_eq!(aifo_coder::preferred_mirror_registry_source(), "unknown");
 }

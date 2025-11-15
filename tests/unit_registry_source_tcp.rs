@@ -10,7 +10,7 @@ fn unit_test_preferred_registry_source_env_probe_tcp() {
     remove_var("AIFO_CODER_REGISTRY_PREFIX");
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "tcp", "env probe tcp-fail should yield source=tcp");
 
     // Cleanup

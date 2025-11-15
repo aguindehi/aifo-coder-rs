@@ -7,7 +7,7 @@ Targets in src/registry.rs:
 #[test]
 fn unit_env_override_trailing_spaces_normalizes_and_writes_cache() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());
@@ -18,19 +18,20 @@ fn unit_env_override_trailing_spaces_normalizes_and_writes_cache() {
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 
     // Override with trailing spaces should be trimmed and normalized
-    set_var("AIFO_CODER_REGISTRY_PREFIX", "beta   ");
-    let pref = aifo_coder::preferred_registry_prefix();
+    set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "beta   ");
+    let pref = aifo_coder::preferred_internal_registry_prefix_quiet();
     assert_eq!(pref, "beta/", "trailing spaces trimmed; single slash added");
 
     assert_eq!(
-        aifo_coder::preferred_registry_source(),
+        aifo_coder::preferred_internal_registry_source(),
         "env",
         "source must be 'env' for non-empty override"
     );
 
-    // Cache should contain normalized value
-    let cache = td.path().join("aifo-coder.regprefix");
-    assert!(cache.exists(), "cache file must exist");
-    let content = fs::read_to_string(&cache).expect("read cache");
-    assert_eq!(content, "beta/");
+    // Internal registry has no on-disk cache
+    let cache = td.path().join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache.exists(),
+        "internal registry does not use on-disk cache"
+    );
 }
