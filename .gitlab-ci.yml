@@ -70,10 +70,6 @@ cancel-branch-pipeline:
   allow_failure: true
   tags:
     - qual-mcap-gcp
-  needs:
-    - job: prepare-apple-sdk
-      artifacts: true
-      optional: true
   variables:
     # Expect a project-level token with API scope. If not set, job will no-op.
     GITLAB_API_TOKEN: "${GITLAB_API_TOKEN}"
@@ -254,7 +250,13 @@ prepare-apple-sdk:
         exit 1
       fi
       ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+      if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+        echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME}" | sha256sum -c -
+      else
+        echo "Warning: APPLE_SDK_SHA256 not set; computing and storing checksum only." >&2
+      fi
       sha256sum "ci/osx/${OSX_SDK_FILENAME}" | tee "ci/osx/${OSX_SDK_FILENAME}.sha256" >/dev/null
+      if command -v xz >/dev/null 2>&1; then xz -t "ci/osx/${OSX_SDK_FILENAME}" || echo "WARNING: xz test failed" >&2; fi
   artifacts:
     expire_in: 1 week
     paths:
@@ -276,6 +278,10 @@ build-macos-cross-rust-builder:
   resource_group: macos-cross-rust-builder
   tags:
     - qual-mcap-gcp
+  needs:
+    - job: prepare-apple-sdk
+      artifacts: true
+      optional: true
   variables:
     TARGET_NAME: "macos-cross-rust-builder"
     IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
@@ -292,6 +298,13 @@ build-macos-cross-rust-builder:
         echo "Error: ci/osx/${OSX_SDK_FILENAME} not found and APPLE_SDK_BASE64 not set." >&2
         echo "Hint: ensure the 'prepare-apple-sdk' job runs in the same pipeline and is listed in needs (artifacts: true)." >&2
         exit 1
+      fi
+      if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+        echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME}" | sha256sum -c -
+      elif [ -f "ci/osx/${OSX_SDK_FILENAME}.sha256" ]; then
+        sha256sum -c "ci/osx/${OSX_SDK_FILENAME}.sha256"
+      else
+        echo "Warning: no APPLE_SDK_SHA256 provided and no .sha256 artifact found; skipping verification." >&2
       fi
     - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
     - |

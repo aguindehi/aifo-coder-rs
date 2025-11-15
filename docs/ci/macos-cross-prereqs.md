@@ -32,6 +32,7 @@ prepare-apple-sdk:
     - set -euo pipefail
     - mkdir -p ci/osx
     - curl -fL "$APPLE_SDK_URL" -o "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}"
+    - '[ -n "${APPLE_SDK_SHA256:-}" ] && echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}" | sha256sum -c - || echo "Warning: APPLE_SDK_SHA256 not set; skipping verification." >&2'
     - sha256sum "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}" |
       tee "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}.sha256" >/dev/null
   artifacts:
@@ -55,11 +56,14 @@ Policy recommendations
 Alternative: variable-based fallback (APPLE_SDK_BASE64)
 
 Required CI variables (GitLab)
-- APPLE_SDK_BASE64: masked + protected
-  - Contents: base64 of the SDK tarball, e.g. MacOSX13.3.sdk.tar.xz
-  - This variable is decoded by CI into ci/osx/${OSX_SDK_FILENAME} just-in-time.
+- APPLE_SDK_URL: protected
+  - HTTPS URL to the SDK tarball, e.g. MacOSX13.3.sdk.tar.xz
+- APPLE_SDK_SHA256: masked + protected
+  - Expected SHA-256 checksum for integrity verification.
 
 Optional CI variables
+- APPLE_SDK_BASE64: masked + protected (fallback)
+  - Contents: base64 of the SDK tarball. Used only if APPLE_SDK_URL is unset.
 - OSX_SDK_FILENAME (default: MacOSX13.3.sdk.tar.xz)
   - The filename used when placing the decoded SDK into the build context.
 
@@ -104,6 +108,7 @@ Notes
 
 Security reminders
 - Never commit the SDK to the repository.
-- Do not print the SDK contents in CI logs (only print file names/metadata like ls -lh).
-- Do not upload the SDK as an artifact.
+- Do not print the SDK contents in CI logs (only file names/metadata like ls -lh).
+- Use short-lived artifacts (expire_in hours/days) limited to protected pipelines/runners.
+- Verify integrity using APPLE_SDK_SHA256 in both producer and consumer jobs.
 - Keep variables masked and protected, and scope jobs as described above.

@@ -28,6 +28,13 @@ fi
 # Show only metadata; never print file contents.
 ls -lh "$out"
 
+# Verify checksum when provided via APPLE_SDK_SHA256; otherwise warn.
+if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+  echo "${APPLE_SDK_SHA256}  $out" | sha256sum -c -
+else
+  echo "Warning: APPLE_SDK_SHA256 not set; skipping checksum verification." >&2
+fi
+
 # Best-effort integrity check if xz is available.
 if command -v xz >/dev/null 2>&1; then
   if ! xz -t "$out" >/dev/null 2>&1; then
