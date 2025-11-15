@@ -18,7 +18,7 @@ fn unit_test_registry_oncecell_cache_persists_across_env_clear_and_disk_invalida
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 
     // Disk cache contains first value
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     let content = fs::read_to_string(&cache_path).expect("cache exists");
     assert_eq!(content, "alpha/");
 
