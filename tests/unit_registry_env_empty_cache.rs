@@ -6,7 +6,7 @@ Targets in src/registry.rs:
 */
 mod tests {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
     use tempfile::tempdir;
 
     #[test]

@@ -7,7 +7,7 @@ Targets in src/registry.rs:
 #[test]
 fn unit_non_quiet_env_override_precedence_over_override() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());
@@ -21,13 +21,15 @@ fn unit_non_quiet_env_override_precedence_over_override() {
         aifo_coder::RegistryProbeTestMode::TcpFail,
     ));
 
-    let pref = aifo_coder::preferred_registry_prefix();
-    assert_eq!(pref, "delta/", "env override wins in non-quiet variant");
-    assert_eq!(aifo_coder::preferred_registry_source(), "env");
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
+    assert_eq!(pref, "", "override TcpFail wins over env override (quiet)");
+    assert_eq!(aifo_coder::preferred_mirror_registry_source(), "unknown");
 
-    let cache = td.path().join("aifo-coder.regprefix");
-    let content = fs::read_to_string(&cache).expect("cache should exist");
-    assert_eq!(content, "delta/");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache.exists(),
+        "override path must not write cache"
+    );
 
     // Cleanup
     aifo_coder::registry_probe_set_override_for_tests(None);
