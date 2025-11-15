@@ -7,7 +7,7 @@ Targets in src/registry.rs:
 #[test]
 fn unit_env_non_empty_nested_path_normalizes() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());
@@ -16,18 +16,20 @@ fn unit_env_non_empty_nested_path_normalizes() {
     aifo_coder::invalidate_registry_cache();
     aifo_coder::registry_probe_set_override_for_tests(None);
 
-    set_var("AIFO_CODER_REGISTRY_PREFIX", "acme/registry///");
-    let pref = aifo_coder::preferred_registry_prefix();
+    set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "acme/registry///");
+    let pref = aifo_coder::preferred_internal_registry_prefix_quiet();
     assert_eq!(
         pref, "acme/registry/",
         "single trailing slash normalization"
     );
 
-    assert_eq!(aifo_coder::preferred_registry_source(), "env");
+    assert_eq!(aifo_coder::preferred_internal_registry_source(), "env");
 
-    let cache = td.path().join("aifo-coder.regprefix");
-    let content = fs::read_to_string(&cache).expect("cache should exist");
-    assert_eq!(content, "acme/registry/");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache.exists(),
+        "internal registry does not use on-disk cache"
+    );
 
-    remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }
