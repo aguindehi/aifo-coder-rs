@@ -6,7 +6,7 @@ fn unit_test_registry_invalidate_no_file_is_safe_noop() {
     set_var("XDG_RUNTIME_DIR", td.path());
 
     // Ensure cache file does not exist and invalidate does not panic
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(
         !cache_path.exists(),
         "precondition: cache file should not exist"

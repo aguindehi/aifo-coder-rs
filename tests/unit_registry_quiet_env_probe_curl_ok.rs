@@ -24,7 +24,7 @@ fn unit_env_probe_curl_ok_returns_prefix_and_no_cache() {
     assert_eq!(src, "curl");
 
     // Should not write cache
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache.exists(), "env-probe path must not write cache");
 
     // Cleanup

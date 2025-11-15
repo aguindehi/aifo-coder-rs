@@ -8,7 +8,7 @@ Targets in src/registry.rs:
 #[test]
 fn unit_env_override_change_updates_prefix_and_cache() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());

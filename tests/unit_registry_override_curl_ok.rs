@@ -14,7 +14,7 @@ fn unit_test_registry_probe_override_curl_ok() {
         aifo_coder::RegistryProbeTestMode::CurlOk,
     ));
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(
         pref, "repository.migros.net/",
         "CurlOk override should yield migros prefix"

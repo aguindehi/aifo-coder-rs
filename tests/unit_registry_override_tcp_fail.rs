@@ -14,7 +14,7 @@ fn unit_test_registry_probe_override_tcp_fail() {
         aifo_coder::RegistryProbeTestMode::TcpFail,
     ));
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "TcpFail override should yield empty prefix");
 
     let src = aifo_coder::preferred_mirror_registry_source();

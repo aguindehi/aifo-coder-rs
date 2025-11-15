@@ -1,7 +1,7 @@
 #[test]
 fn unit_test_registry_env_empty_uses_hub_and_writes_cache_then_invalidate_removes() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
     use std::path::PathBuf;
 
     // Unique runtime dir per test file
@@ -14,19 +14,21 @@ fn unit_test_registry_env_empty_uses_hub_and_writes_cache_then_invalidate_remove
 
     // Start clean and set env override to whitespace (treated as empty)
     aifo_coder::invalidate_registry_cache();
-    set_var("AIFO_CODER_REGISTRY_PREFIX", "   ");
+    set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "   ");
 
     // Prefer non-quiet for parity; both variants write cache
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_internal_registry_prefix_quiet();
     assert_eq!(pref, "", "env-empty should yield empty prefix");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_internal_registry_source();
     assert_eq!(src, "env-empty", "source should be env-empty");
 
     // Verify cache file content is empty string
-    let cache_path: PathBuf = rt.join("aifo-coder.regprefix");
-    let content = fs::read_to_string(&cache_path).expect("cache should exist");
-    assert_eq!(content, "", "cache content should be empty");
+    let cache_path: PathBuf = rt.join("aifo-coder.mirrorprefix");
+    assert!(
+        !cache_path.exists(),
+        "internal registry does not use on-disk cache"
+    );
 
     // Invalidate should remove cache file
     aifo_coder::invalidate_registry_cache();
@@ -36,5 +38,5 @@ fn unit_test_registry_env_empty_uses_hub_and_writes_cache_then_invalidate_remove
     );
 
     // Cleanup env
-    remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }
