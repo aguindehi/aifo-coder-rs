@@ -128,8 +128,9 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
       ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
     done
-# Environment for cargo cross-compilation to macOS arm64 (optional x86_64 commented)
-ENV PATH="/opt/osxcross/target/bin:${PATH}" \
+# Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
+# Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
+ENV PATH="/opt/osxcross/target/bin:/usr/local/cargo/bin:${PATH}" \
     MACOSX_DEPLOYMENT_TARGET=11.0 \
     CC_aarch64_apple_darwin=oa64-clang \
     CXX_aarch64_apple_darwin=oa64-clang++ \
