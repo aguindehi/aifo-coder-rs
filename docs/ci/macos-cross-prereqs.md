@@ -4,10 +4,55 @@ This document captures the CI prerequisites required to build the aifo-coder mac
 launcher on Linux via osxcross as described in:
 spec/aifo-coder-implement-macos-cross-builder-image-v3.spec (v3).
 
-Goal
-- The Apple SDK must NOT be committed to the repository or uploaded as an artifact.
-- The SDK must be injected into CI securely via masked, protected variables.
-- CI jobs using the SDK must be restricted to tags (and optionally default-branch manual runs).
+Goals
+- Do not commit the Apple SDK to the repository.
+- Prefer short-lived, scoped CI artifacts to move the SDK between jobs; restrict retention
+  and job scope.
+- If artifacts are not viable, use masked and protected variables as a fallback.
+- Restrict jobs that handle the SDK to tag pipelines and (optionally) default-branch manual
+  runs.
+
+Recommended: artifact-based exchange between jobs
+- Overview: a producer job downloads or assembles the SDK into ci/osx/${OSX_SDK_FILENAME}
+  and publishes it as an artifact with a short expire_in. Consumer jobs declare needs with
+  artifacts: true so GitLab transfers the file directly.
+- Pros:
+  - Avoids huge masked variables (a 70–100MB base64 string is slow and error-prone).
+  - Clear data lineage with checksums and retention controls.
+  - Easy to scope to protected tags and default-branch manual runs.
+- Cons:
+  - Artifacts exist on the GitLab instance for the retention period; keep expire_in short
+    and scope jobs tightly.
+
+Minimal CI pattern
+prepare-apple-sdk:
+  stage: build
+  image: alpine:3.20
+  script:
+    - set -euo pipefail
+    - mkdir -p ci/osx
+    - curl -fL "$APPLE_SDK_URL" -o "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}"
+    - sha256sum "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}" |
+      tee "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}.sha256" >/dev/null
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}
+      - ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}.sha256
+
+build-macos-cross-rust-builder:
+  needs:
+    - job: prepare-apple-sdk
+      artifacts: true
+
+Policy recommendations
+- Scope producer/consumer jobs to:
+  - Tag pipelines (preferred)
+  - Default-branch manual runs (allowed)
+- Lock runners and never expose raw contents in logs (print only file metadata).
+- Use a short expire_in (hours or days), not weeks, unless required.
+
+Alternative: variable-based fallback (APPLE_SDK_BASE64)
 
 Required CI variables (GitLab)
 - APPLE_SDK_BASE64: masked + protected

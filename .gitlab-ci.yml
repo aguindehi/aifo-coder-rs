@@ -70,6 +70,10 @@ cancel-branch-pipeline:
   allow_failure: true
   tags:
     - qual-mcap-gcp
+  needs:
+    - job: prepare-apple-sdk
+      artifacts: true
+      optional: true
   variables:
     # Expect a project-level token with API scope. If not set, job will no-op.
     GITLAB_API_TOKEN: "${GITLAB_API_TOKEN}"
@@ -225,6 +229,45 @@ build-toolchain:
 
 # Phase 2 — build macOS cross image (Kaniko) and macOS launcher
 
+prepare-apple-sdk:
+  stage: build
+  image: alpine:3.20
+  interruptible: true
+  timeout: 15m
+  tags:
+    - qual-mcap-gcp
+  variables:
+    OSX_SDK_FILENAME: "MacOSX13.3.sdk.tar.xz"
+  script:
+    - |
+      set -euo pipefail
+      mkdir -p ci/osx
+      if [ -n "${APPLE_SDK_URL:-}" ]; then
+        echo "Downloading Apple SDK from APPLE_SDK_URL into ci/osx/${OSX_SDK_FILENAME} ..."
+        apk add --no-cache curl >/dev/null
+        curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o "ci/osx/${OSX_SDK_FILENAME}"
+      elif [ -n "${APPLE_SDK_BASE64:-}" ]; then
+        echo "Decoding APPLE_SDK_BASE64 into ci/osx/${OSX_SDK_FILENAME} (fallback) ..."
+        printf '%s' "$APPLE_SDK_BASE64" | base64 -d > "ci/osx/${OSX_SDK_FILENAME}"
+      else
+        echo "Error: neither APPLE_SDK_URL nor APPLE_SDK_BASE64 is set. Provide a URL (preferred) or a base64 fallback." >&2
+        exit 1
+      fi
+      ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+      sha256sum "ci/osx/${OSX_SDK_FILENAME}" | tee "ci/osx/${OSX_SDK_FILENAME}.sha256" >/dev/null
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - ci/osx/${OSX_SDK_FILENAME}
+      - ci/osx/${OSX_SDK_FILENAME}.sha256
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+
 build-macos-cross-rust-builder:
   extends: container-build
   stage: build
@@ -239,8 +282,17 @@ build-macos-cross-rust-builder:
     OSX_SDK_FILENAME: "MacOSX13.3.sdk.tar.xz"
   before_script:
     - mkdir -p ci/osx
-    - test -n "$APPLE_SDK_BASE64"
-    - /bin/sh ci/bin/decode-apple-sdk.sh
+    - |
+      if [ -f "ci/osx/${OSX_SDK_FILENAME}" ]; then
+        echo "Using SDK artifact: ci/osx/${OSX_SDK_FILENAME}"
+      elif [ -n "${APPLE_SDK_BASE64:-}" ]; then
+        echo "Decoding APPLE_SDK_BASE64 into ci/osx/${OSX_SDK_FILENAME} ..."
+        /bin/sh ci/bin/decode-apple-sdk.sh
+      else
+        echo "Error: ci/osx/${OSX_SDK_FILENAME} not found and APPLE_SDK_BASE64 not set." >&2
+        echo "Hint: ensure the 'prepare-apple-sdk' job runs in the same pipeline and is listed in needs (artifacts: true)." >&2
+        exit 1
+      fi
     - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
     - |
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
