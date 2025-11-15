@@ -298,9 +298,9 @@ help: banner
 	$(call title,Test suites:)
 	@echo ""
 	@echo "  check ....................... Run 'lint', 'lint-docker', 'lint-tests-naming' then 'test' (lint and unit test suites)"
-	@echo "  check-unit .................. Run unit tests (uni suite)"
-	@echo "  check-int ................... Run integration tests (integration suite)"
-	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance suites)"
+	@echo "  check-unit .................. Run unit tests (unit test suite)"
+	@echo "  check-int ................... Run integration tests (integration test suite)"
+	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance test suite)"
 	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
 	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
