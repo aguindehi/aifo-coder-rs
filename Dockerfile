@@ -67,6 +67,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Shim compile stage (throwaway; contains sources only) ---
 FROM rust-base AS shim-builder
+ARG CLEAN_CARGO=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 # Build the Rust aifo-shim binary for the current build platform without baking sources into rust-builder
@@ -86,7 +87,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     install -d -m 0755 /workspace/out; \
     cp target/release/aifo-shim /workspace/out/aifo-shim; \
     strip /workspace/out/aifo-shim 2>/dev/null || true; \
-    rm -rf target /usr/local/cargo/registry /usr/local/cargo/git; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
+    rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
