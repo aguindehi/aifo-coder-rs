@@ -11,10 +11,10 @@ fn unit_test_registry_env_probe_curl_fail_prefix_and_source() {
     aifo_coder::invalidate_registry_cache();
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-fail");
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "curl-fail should yield empty prefix");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(
         src, "curl",
         "source should be 'curl' for curl-fail env probe"
