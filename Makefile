@@ -1371,14 +1371,14 @@ test-acceptance-suite:
 	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
 
 test-integration-suite:
 	@set -e; \
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
 
 check-e2e:
 	@echo "Running ignored-by-default e2e (acceptance) suite ..."
