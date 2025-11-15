@@ -26,10 +26,7 @@ fn unit_non_quiet_env_override_precedence_over_override() {
     assert_eq!(aifo_coder::preferred_mirror_registry_source(), "unknown");
 
     let cache = td.path().join("aifo-coder.mirrorprefix");
-    assert!(
-        !cache.exists(),
-        "override path must not write cache"
-    );
+    assert!(!cache.exists(), "override path must not write cache");
 
     // Cleanup
     aifo_coder::registry_probe_set_override_for_tests(None);
