@@ -18,10 +18,9 @@ RUN set -eux; \
       ca-certificates \
       curl \
       git \
-      procps \
       unzip; \
     apt-mark manual ca-certificates curl git unzip >/dev/null 2>&1 || true; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
 
 # Home, caches and PATH defaults
 ENV HOME=/home/coder \

@@ -30,14 +30,13 @@ RUN set -eux; \
       libcurl4-openssl-dev \
       git \
       git-lfs \
-      docker.io \
       ca-certificates \
       curl \
       procps \
       tzdata \
       locales; \
-    apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs docker.io ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
-    rm -rf /var/lib/apt/lists/*
+    apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
 
 # Configure a default git identity and enable LFS filters system-wide for tests
 RUN set -eux; \
@@ -80,7 +79,9 @@ RUN set -eux; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
     cargo install cargo-nextest --locked; \
-    cargo install grcov --locked
+    cargo install grcov --locked; \
+    strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
