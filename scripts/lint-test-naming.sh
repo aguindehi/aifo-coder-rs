@@ -80,7 +80,6 @@ check_unit_no_spawns() {
   grep -nE 'std::process::Command|[^A-Za-z_]Command::new\(|container_runtime_path\(' "$f" || true
 }
 
-echo "== Test naming lint (optional enforcement) =="
 echo "Strict mode: $strict"
 echo
 
@@ -126,7 +125,6 @@ for f in $(list_test_files); do
   fi
 done
 
-echo
 echo "Summary:"
 echo "  files without lane prefix: $non_lane_files"
 echo "  #[test] function prefix violations: $func_prefix_violations"
