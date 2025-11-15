@@ -194,3 +194,18 @@ Notes
 - Kaniko cannot read BuildKit RUN secrets; the SDK must be present in the build context and copied during
   the Docker build of the cross image.
 - The stable filename MacOSX.sdk.tar.xz prevents filename/version drift; version is carried by URL and checksum.
+
+Testing the macOS cross image
+- To validate the cross image locally:
+  - make build-macos-cross-rust-builder
+  - make test-macos-cross-image
+- What these tests cover:
+  - Environment and toolchain presence in the image (including oa64-clang/o64-clang, stable tool aliases).
+  - SDK installation sanity (MacOSX<ver>.sdk directory and SDK_NAME.txt).
+  - C smoke link against CoreFoundation producing a Mach-O binary.
+  - Rust hello-world build for aarch64-apple-darwin producing a Mach-O arm64 binary.
+
+CI
+- A dedicated job `test-macos-cross-image` can run these tests inside the cross image:
+  - It uses the same image tags as the build (`:$CI_COMMIT_TAG` on tags; `:ci` on default-branch manual runs and schedules).
+  - It runs only the macOS cross tests using nextest expression `test(/^e2e_macos_cross_/)`.

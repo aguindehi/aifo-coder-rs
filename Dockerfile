@@ -119,7 +119,9 @@ RUN set -e; \
     fi; \
     mkdir -p osxcross/tarballs; \
     mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
-    UNATTENDED=1 osxcross/build.sh
+    UNATTENDED=1 osxcross/build.sh; \
+    mkdir -p /opt/osxcross/SDK; \
+    printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
@@ -142,6 +144,10 @@ ENV CC_x86_64_apple_darwin=o64-clang \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang
 # Install Rust target inside the image (best-effort)
 RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
+
+# Preinstall nextest to speed up CI test startup (best effort; keep image lean)
+RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base

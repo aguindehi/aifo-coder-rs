@@ -565,6 +565,38 @@ test-e2e:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
       when: on_success
 
+test-macos-cross-image:
+  stage: test
+  interruptible: true
+  timeout: 45m
+  needs:
+    - job: build-macos-cross-rust-builder
+      optional: true
+  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CROSS_IMAGE_TAG
+  tags:
+    - qual-mcap-gcp
+  variables:
+    RUST_BACKTRACE: "1"
+  script:
+    - rustc --version; cargo --version
+    - cargo nextest -V || cargo install cargo-nextest --locked
+    - cargo nextest run --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
+  rules:
+    # Run on release tags
+    - if: $CI_COMMIT_TAG
+      variables:
+        CROSS_IMAGE_TAG: $CI_COMMIT_TAG
+      when: on_success
+    # Allow manual or scheduled verification on default branch using the 'ci' tag
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        CROSS_IMAGE_TAG: "ci"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        CROSS_IMAGE_TAG: "ci"
+      when: manual
+
 lint-dockerfiles:
   stage: test
   image: repository.migros.net/hadolint/hadolint:2.12.0-debian

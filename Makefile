@@ -642,6 +642,30 @@ validate-macos-artifact:
 	fi; \
 	echo "macOS artifact validation OK: $$BIN"
 
+.PHONY: test-macos-cross-image
+test-macos-cross-image:
+	@set -e; \
+	if ! docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "Error: $(MACOS_CROSS_IMAGE) not present locally. Hint: make build-macos-cross-rust-builder"; \
+	  exit 1; \
+	fi; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Running macOS cross image tests inside $(MACOS_CROSS_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$PWD/target:/workspace/target" \
+	  -w /workspace \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; cargo nextest run --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
 	@set -e; \
