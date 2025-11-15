@@ -16,4 +16,4 @@ ISSUES
 target/**
 Cargo.lock
 node_modules/**
-ci/osx/.tar.xz
+ci/osx/*.tar.xz
