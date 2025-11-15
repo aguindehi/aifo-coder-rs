@@ -24,6 +24,34 @@ fn connect(url: &str) -> (TcpStream, String, u16, String) {
 #[ignore]
 #[test]
 fn e2e_proxy_handles_large_payload_notifications_cmd() {
+    // Respect CI override disabling docker and ensure daemon is reachable
+    if std::env::var("AIFO_CODER_TEST_DISABLE_DOCKER")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        eprintln!("skipping: AIFO_CODER_TEST_DISABLE_DOCKER=1");
+        return;
+    }
+    let runtime = match aifo_coder::container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: docker not found in PATH");
+            return;
+        }
+    };
+    let ok = std::process::Command::new(&runtime)
+        .arg("ps")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: Docker daemon not reachable");
+        return;
+    }
+
     let sid = "unit-test-session";
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(sid, true).expect("start proxy");
