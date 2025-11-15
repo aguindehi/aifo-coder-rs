@@ -1,7 +1,7 @@
 #[test]
 fn unit_test_registry_oncecell_cache_persists_across_env_clear_and_disk_invalidate() {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
 
     let td = tempfile::tempdir().expect("tmpdir");
     set_var("XDG_RUNTIME_DIR", td.path());
