@@ -97,14 +97,15 @@ ARG OSXCROSS_REF=
 # Optional: pass the exact versioned tarball name (e.g., MacOSX13.3.sdk.tar.xz) for osxcross
 ARG OSXCROSS_SDK_TARBALL
 # Copy SDK from build context (decoded in CI) into osxcross tarballs
-COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
+# Use a stable filename to avoid COPY src variable expansion issues in some builders (e.g., Kaniko)
+COPY ci/osx/MacOSX.sdk.tar.xz /tmp/MacOSX.sdk.tar.xz
 # Build osxcross unattended and install into /opt/osxcross
 RUN set -e; \
     git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
     if [ -n "${OSXCROSS_REF}" ]; then \
       cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
     fi; \
-    SDK_TMP="/tmp/${OSX_SDK_FILENAME}"; \
+    SDK_TMP="/tmp/MacOSX.sdk.tar.xz"; \
     SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
     if [ -z "$SDK_NAME" ]; then \
       # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
