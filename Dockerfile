@@ -63,7 +63,11 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
-# Build the Rust aifo-shim binary for the current build platform
+# --- Shim compile stage (throwaway; contains sources only) ---
+FROM rust-base AS shim-builder
+WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
+# Build the Rust aifo-shim binary for the current build platform without baking sources into rust-builder
 COPY Cargo.toml .
 COPY build.rs .
 COPY src ./src
@@ -79,7 +83,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     /usr/local/cargo/bin/cargo build --release --bin aifo-shim; \
     install -d -m 0755 /workspace/out; \
     cp target/release/aifo-shim /workspace/out/aifo-shim; \
-    rm -rf target /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp; \
+    rm -rf target /usr/local/cargo/registry /usr/local/cargo/git; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -207,7 +211,7 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
@@ -582,7 +586,7 @@ WORKDIR /workspace
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
