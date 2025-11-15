@@ -110,7 +110,7 @@ RUN set -e; \
     if [ -z "$SDK_NAME" ]; then \
       # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
       TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
-      VER="$(printf '%s\n' "$TOP" | sed -n -E 's#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p')"; \
+      VER="$(printf '%s\n' "$TOP" | sed -n -E 's#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p' | tr -d ' \t\r\n')"; \
       if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
     fi; \
     if [ -z "$SDK_NAME" ]; then \
