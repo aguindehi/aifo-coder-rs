@@ -272,11 +272,10 @@ help: banner
 	@echo ""
 	$(call title,Test targets:)
 	@echo ""
-	@echo "  lint ........................ Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings)"
-	@echo "  lint-ultra .................. Run cargo fmt -- --check and cargo clippy (workspace, all targets/features; -D warnings,unsafe_code,clippy::*)"
-	@echo "  lint-tests-naming ........... Lint test files for lane prefixes and conventions (optional)"
-	@echo ""
-	@echo "  hadolint .................... Run hadolint on all Dockerfiles"
+	@echo "  lint ........................ Lint by running cargo fmt and cargo clippy (workspace, all targets; -D warnings) and lint naming"
+	@echo "  lint-docker ................. Lint by running hadolint on all Dockerfiles of the project"
+	@echo "  lint-tests-naming ........... Lint by running lint-test-naming.sh to test files for lane prefixes and conventions"
+	@echo "  lint-ultra .................. Lint by running cargo fmt cargo clippy (workspace, all targets; -D warnings,unsafe_code,clippy::*) and lint naming"
 	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
@@ -298,9 +297,9 @@ help: banner
 	@echo ""
 	$(call title,Test suites:)
 	@echo ""
-	@echo "  check ....................... Run 'lint' then 'test' (composite validation target - lint + unit test suite)"
-	@echo "  check-unit .................. Run unit tests (uni suite)
-	@echo "  check-int ................... Run integration tests (integration suite)
+	@echo "  check ....................... Run 'lint', 'lint-docker', 'lint-tests-naming' then 'test' (lint and unit test suites)"
+	@echo "  check-unit .................. Run unit tests (uni suite)"
+	@echo "  check-int ................... Run integration tests (integration suite)"
 	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance suites)"
 	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
@@ -1091,7 +1090,7 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint test
+check: lint lint-docker lint-tests-naming test
 
 check-unit: test
 
@@ -2202,16 +2201,18 @@ loc:
 	printf "  -------------------------\n"; \
 	printf "  Total:           %8d\n\n" "$$total"
 
-.PHONY: hadolint
-hadolint:
+.PHONY: lint-docker
+lint-docker:
 	@set -e; \
 	if command -v hadolint >/dev/null 2>&1; then \
+	  echo; \
 	  echo "Running hadolint on Dockerfile(s) ..."; \
 	  hadolint Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
+	  echo; \
 	  echo "hadolint not found; using hadolint/hadolint container ..."; \
 	  docker run --rm -i hadolint/hadolint < Dockerfile || true; \
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
@@ -2224,7 +2225,8 @@ hadolint:
 
 .PHONY: lint-tests-naming
 lint-tests-naming:
-	@echo "Running test naming lint (Phase 6 — optional enforcement) ..."
+	@echo
+	@echo "Running test naming lint ..."
 	@sh scripts/lint-test-naming.sh --strict
 
 .PHONY: release-app release-dmg release-dmg-sign
