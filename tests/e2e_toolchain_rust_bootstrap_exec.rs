@@ -69,10 +69,10 @@ fn e2e_bootstrap_exec_installs_nextest_and_is_idempotent() {
     let code1 = aifo_coder::toolchain_run(
         "rust",
         &["cargo".to_string(), "nextest".to_string(), "-V".to_string()],
-        Some(&rust_image),  // use prebuilt AIFO rust toolchain image with nextest
-        false, // no_cache = false (allow default mounts)
-        false, // verbose
-        false, // dry_run
+        Some(&rust_image), // use prebuilt AIFO rust toolchain image with nextest
+        false,             // no_cache = false (allow default mounts)
+        false,             // verbose
+        false,             // dry_run
     )
     .expect("toolchain_run nextest -V (first)");
     assert_eq!(
