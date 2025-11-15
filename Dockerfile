@@ -95,7 +95,7 @@ WORKDIR /opt
 ARG OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
 ARG OSXCROSS_REF=
 # Optional: pass the exact versioned tarball name (e.g., MacOSX13.3.sdk.tar.xz) for osxcross
-ARG OSXCROSS_SDK_TARBALL=
+ARG OSXCROSS_SDK_TARBALL
 # Copy SDK from build context (decoded in CI) into osxcross tarballs
 COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
 # Build osxcross unattended and install into /opt/osxcross
@@ -109,7 +109,7 @@ RUN set -e; \
     if [ -z "$SDK_NAME" ]; then \
       # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
       TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
-      VER="$(printf '%s\n' "$TOP" | sed -nE 's#^MacOSX([0-9.]+)\.sdk/.*#\1#p')"; \
+      VER="$(printf '%s\n' "$TOP" | sed -n -E 's#^(\./)?MacOSX([0-9.]+)\.sdk/.*#\2#p')"; \
       if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
     fi; \
     if [ -z "$SDK_NAME" ]; then \
