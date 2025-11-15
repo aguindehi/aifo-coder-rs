@@ -16,7 +16,7 @@ fn unit_test_registry_env_probe_tcp_fail_prefix_and_source() {
     let src = aifo_coder::preferred_registry_source();
     assert_eq!(src, "tcp");
 
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists());
 
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");

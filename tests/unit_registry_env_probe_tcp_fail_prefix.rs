@@ -17,10 +17,10 @@ fn unit_env_probe_tcp_fail_returns_empty_and_no_cache_non_quiet() {
     aifo_coder::registry_probe_set_override_for_tests(None);
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "tcp-fail should yield empty prefix (non-quiet)");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "tcp");
 
     // Should not write cache
