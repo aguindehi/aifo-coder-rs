@@ -20,6 +20,11 @@ Optional CI variables
 
 How to create APPLE_SDK_BASE64 locally
 1) Ensure you have a .tar.xz Apple SDK file, e.g. MacOSX13.3.sdk.tar.xz
+   - Download MacOSX:
+     curl -LO https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
+     echo "518e35eae6039b3f64e8025f4525c1c43786cc5cf39459d609852faf091e34be MacOSX13.3.sdk.tar.xz" | sha256sum -c
+   - This should echo "MacOSX13.3.sdk.tar.xz: OK"
+
 2) Base64 encode it without line wrapping:
    - Linux:
      base64 -w0 MacOSX13.3.sdk.tar.xz > MacOSX13.3.sdk.tar.xz.b64
