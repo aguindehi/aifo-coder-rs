@@ -18,7 +18,7 @@ mod tests {
         aifo_coder::registry_probe_set_override_for_tests(None);
 
         let _ = aifo_coder::preferred_registry_prefix();
-        let cache = td.path().join("aifo-coder.regprefix");
+        let cache = td.path().join("aifo-coder.mirrorprefix");
         assert!(cache.exists(), "cache should be created");
 
         // Invalidate and ensure removal

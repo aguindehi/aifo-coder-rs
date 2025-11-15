@@ -20,14 +20,14 @@ fn unit_test_registry_probe_override_curl_ok() {
         "CurlOk override should yield migros prefix"
     );
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(
         src, "unknown",
         "source should be unknown when override is used"
     );
 
     // Override should not write cache in this runtime dir
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists(), "override should not write cache");
 
     // Cleanup

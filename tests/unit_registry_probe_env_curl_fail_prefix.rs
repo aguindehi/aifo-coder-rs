@@ -21,7 +21,7 @@ fn unit_test_registry_env_probe_curl_fail_prefix_and_source() {
     );
 
     // Env-probe branch returns immediately; cache file should not be written
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists(), "env-probe should not write cache");
 
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");

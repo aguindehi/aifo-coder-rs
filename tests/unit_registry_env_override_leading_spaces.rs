@@ -25,7 +25,7 @@ fn unit_env_override_leading_spaces_normalizes_and_writes_cache() {
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 
     // Cache should contain normalized value
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     let content = fs::read_to_string(&cache).expect("read cache");
     assert_eq!(content, "gamma/");
 }

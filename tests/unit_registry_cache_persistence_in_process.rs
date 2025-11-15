@@ -26,7 +26,7 @@ fn unit_cache_persists_in_process_after_env_removed() {
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 
     // Cache file should exist with normalized content
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     let content = fs::read_to_string(&cache_path).expect("cache should exist");
     assert_eq!(content, "alpha/");
 
