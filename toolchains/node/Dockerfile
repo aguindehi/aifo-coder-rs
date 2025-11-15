@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # hadolint ignore=DL3008
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
       ca-certificates \
       curl \
       git \
@@ -109,6 +109,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get autoremove -y; \
     apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
     rm -rf /var/lib/apt/lists/*; \
   fi
 # Verify critical tools still present after optional cleanup (fail fast if missing)
