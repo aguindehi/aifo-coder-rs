@@ -75,6 +75,15 @@ fn int_test_fork_create_snapshot_on_empty_repo() {
         .status()
         .unwrap()
         .success());
+    // Set local author identity for CI where global config may be missing
+    let _ = Command::new("git")
+        .args(["config", "user.name", "AIFO Test"])
+        .current_dir(repo)
+        .status();
+    let _ = Command::new("git")
+        .args(["config", "user.email", "aifo@example.com"])
+        .current_dir(repo)
+        .status();
     std::fs::write(repo.join("a.txt"), "a\n").unwrap();
     let sid = "empty";
     let snap = aifo_coder::fork_create_snapshot(repo, sid).expect("snapshot on empty repo");
