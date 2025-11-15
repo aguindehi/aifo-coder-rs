@@ -7,7 +7,7 @@
 #   OSX_SDK_FILENAME (optional; default: MacOSX13.3.sdk.tar.xz)
 set -eu
 
-: "${OSX_SDK_FILENAME:=MacOSX13.3.sdk.tar.xz}"
+: "${OSX_SDK_FILENAME:=MacOSX.sdk.tar.xz}"
 
 if [ -z "${APPLE_SDK_BASE64:-}" ]; then
   echo "ERROR: APPLE_SDK_BASE64 is not set. Aborting." >&2

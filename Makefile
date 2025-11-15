@@ -408,7 +408,7 @@ OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
-OSX_SDK_FILENAME ?= MacOSX13.3.sdk.tar.xz
+OSX_SDK_FILENAME ?= MacOSX.sdk.tar.xz
 # Include Windows cross toolchain (mingw) automatically on Windows shells
 RUST_BUILDER_WITH_WIN ?= 0
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)

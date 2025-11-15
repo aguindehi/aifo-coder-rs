@@ -31,15 +31,15 @@ prepare-apple-sdk:
   script:
     - set -euo pipefail
     - mkdir -p ci/osx
-    - curl -fL "$APPLE_SDK_URL" -o "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}"
-    - '[ -n "${APPLE_SDK_SHA256:-}" ] && echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}" | sha256sum -c - || echo "Warning: APPLE_SDK_SHA256 not set; skipping verification." >&2'
-    - sha256sum "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}" |
-      tee "ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}.sha256" >/dev/null
+    - curl -fL "$APPLE_SDK_URL" -o "ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}"
+    - '[ -n "${APPLE_SDK_SHA256:-}" ] && echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}" | sha256sum -c - || echo "Warning: APPLE_SDK_SHA256 not set; skipping verification." >&2'
+    - sha256sum "ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}" |
+      tee "ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}.sha256" >/dev/null
   artifacts:
     expire_in: 1 week
     paths:
-      - ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}
-      - ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}.sha256
+      - ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}
+      - ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}.sha256
 
 build-macos-cross-rust-builder:
   needs:
@@ -64,8 +64,8 @@ Required CI variables (GitLab)
 Optional CI variables
 - APPLE_SDK_BASE64: masked + protected (fallback)
   - Contents: base64 of the SDK tarball. Used only if APPLE_SDK_URL is unset.
-- OSX_SDK_FILENAME (default: MacOSX13.3.sdk.tar.xz)
-  - The filename used when placing the decoded SDK into the build context.
+- OSX_SDK_FILENAME (default: MacOSX.sdk.tar.xz)
+  - Generic stable filename used in CI build context; version is carried by APPLE_SDK_URL and APPLE_SDK_SHA256.
 
 How to create APPLE_SDK_BASE64 locally
 1) Ensure you have a .tar.xz Apple SDK file, e.g. MacOSX13.3.sdk.tar.xz
@@ -99,7 +99,7 @@ Job restrictions (policy)
 
 Decoding helper
 - Use the script ci/bin/decode-apple-sdk.sh to decode the variable into the expected path:
-  - ci/osx/${OSX_SDK_FILENAME:-MacOSX13.3.sdk.tar.xz}
+  - ci/osx/${OSX_SDK_FILENAME:-MacOSX.sdk.tar.xz}
 
 Notes
 - Kaniko cannot use BuildKit RUN secret mounts; therefore we rely on a COPY of ci/osx/${OSX_SDK_FILENAME}
