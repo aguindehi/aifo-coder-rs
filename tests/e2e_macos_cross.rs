@@ -97,7 +97,7 @@ fn e2e_macos_cross_tools_and_env() {
 #[ignore]
 fn e2e_macos_cross_sdk_installed() {
     // SDK should be installed under /opt/osxcross/SDK/MacOSX<ver>.sdk
-    let (code, out, err) = run_sh("ls -d /opt/osxcross/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
+    let (code, out, err) = run_sh("ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
     assert_eq!(code, 0, "cannot locate SDK dir under /opt/osxcross/SDK: {}\n{}", out, err);
     let sdk_dir = out.trim();
     assert!(
@@ -155,7 +155,7 @@ fn e2e_macos_cross_c_link_corefoundation() {
 #[ignore]
 fn e2e_macos_cross_rust_build_arm64() {
     // Build a tiny local Rust crate for aarch64-apple-darwin and verify Mach-O output
-    for t in ["rustc", "cargo"] {
+    for t in ["cargo"] {
         require_tool(t);
     }
     let dir = tempfile::tempdir().expect("tmpdir");

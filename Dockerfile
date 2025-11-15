@@ -127,7 +127,11 @@ RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
       ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
       ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
-    done
+    done; \
+    ln -sf "$(ls aarch64-apple-darwin*-clang    | head -n1)" oa64-clang    || true; \
+    ln -sf "$(ls aarch64-apple-darwin*-clang++  | head -n1)" oa64-clang++  || true; \
+    ln -sf "$(ls x86_64-apple-darwin*-clang     | head -n1)" o64-clang     || true; \
+    ln -sf "$(ls x86_64-apple-darwin*-clang++   | head -n1)" o64-clang++   || true
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
