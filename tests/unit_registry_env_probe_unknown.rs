@@ -11,17 +11,17 @@ fn unit_test_registry_env_probe_unknown_prefix_and_source() {
     aifo_coder::invalidate_registry_cache();
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "bogus-mode");
 
-    let pref = aifo_coder::preferred_registry_prefix();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "unknown env-probe should yield empty prefix");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(
         src, "unknown",
         "unknown env-probe should yield source=unknown"
     );
 
     // Env-probe branch returns immediately; cache file should not be written
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists(), "env-probe should not write cache");
 
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");

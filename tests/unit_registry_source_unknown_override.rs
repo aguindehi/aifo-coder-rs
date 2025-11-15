@@ -21,11 +21,11 @@ fn unit_source_unknown_when_override_active() {
     ));
 
     // Source is unknown under override; prefix is returned; no cache written
-    assert_eq!(aifo_coder::preferred_registry_source(), "unknown");
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    assert_eq!(aifo_coder::preferred_mirror_registry_source(), "unknown");
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "repository.migros.net/");
 
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache.exists(), "override path must not write cache");
 
     // Cleanup

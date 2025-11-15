@@ -19,13 +19,13 @@ fn unit_quiet_env_override_root_prefix_normalizes_and_writes_cache() {
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 
     set_var("AIFO_CODER_REGISTRY_PREFIX", "/");
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "/", "root override should normalize to '/' (quiet)");
 
     assert_eq!(aifo_coder::preferred_registry_source(), "env");
 
     // Cache should contain "/"
-    let cache = td.path().join("aifo-coder.regprefix");
+    let cache = td.path().join("aifo-coder.mirrorprefix");
     let content = fs::read_to_string(&cache).expect("read cache");
     assert_eq!(content, "/");
 

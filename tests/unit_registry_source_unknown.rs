@@ -12,6 +12,6 @@ fn unit_test_preferred_registry_source_unknown_when_no_env_or_override() {
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
 
     // Without any resolution performed, source should be unknown
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "unknown");
 }

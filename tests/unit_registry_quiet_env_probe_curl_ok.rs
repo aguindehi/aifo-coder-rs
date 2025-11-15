@@ -17,10 +17,10 @@ fn unit_env_probe_curl_ok_returns_prefix_and_no_cache() {
     aifo_coder::registry_probe_set_override_for_tests(None);
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
 
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "repository.migros.net/");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "curl");
 
     // Should not write cache

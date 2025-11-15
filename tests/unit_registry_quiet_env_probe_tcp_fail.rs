@@ -11,14 +11,14 @@ fn unit_test_registry_quiet_env_probe_tcp_fail_prefix_and_source() {
     aifo_coder::invalidate_registry_cache();
     set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
 
-    let pref = aifo_coder::preferred_registry_prefix_quiet();
+    let pref = aifo_coder::preferred_mirror_registry_prefix_quiet();
     assert_eq!(pref, "", "tcp-fail should yield empty prefix (quiet)");
 
-    let src = aifo_coder::preferred_registry_source();
+    let src = aifo_coder::preferred_mirror_registry_source();
     assert_eq!(src, "tcp", "source should be 'tcp' for tcp-fail env probe");
 
     // Env-probe branch returns immediately; cache file should not be written
-    let cache_path = td.path().join("aifo-coder.regprefix");
+    let cache_path = td.path().join("aifo-coder.mirrorprefix");
     assert!(!cache_path.exists(), "env-probe should not write cache");
 
     remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
