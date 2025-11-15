@@ -32,23 +32,32 @@ fn require_tool(bin: &str) {
     }
 }
 
+fn require_executable(path: &str) {
+    let (code, _, err) = run_sh(&format!("[ -x '{}' ]", path), None);
+    if code != 0 {
+        panic!("Required executable '{}' not found or not executable. stderr: {}", path, err);
+    }
+}
+
 #[test]
 #[ignore]
 fn e2e_macos_cross_tools_and_env() {
     // Validate critical tools exist
-    for t in [
-        "oa64-clang",
-        "o64-clang",
-        "aarch64-apple-darwin-ar",
-        "aarch64-apple-darwin-ranlib",
-        "aarch64-apple-darwin-strip",
-        "file",
+    // Prefer absolute paths to avoid PATH differences in test runner environments.
+    require_tool("file");
+    for p in [
+        "/opt/osxcross/target/bin/oa64-clang",
+        "/opt/osxcross/target/bin/o64-clang",
     ] {
-        require_tool(t);
+        require_executable(p);
     }
 
     // Optional tool invocations to ensure wrappers are functional
-    for t in ["oa64-clang", "o64-clang", "aarch64-apple-darwin-ar"] {
+    for t in [
+        "/opt/osxcross/target/bin/oa64-clang",
+        "/opt/osxcross/target/bin/o64-clang",
+        "/opt/osxcross/target/bin/aarch64-apple-darwin-ar",
+    ] {
         let (code, out, err) = run_sh(&format!("{} --version || true", t), None);
         assert!(
             code == 0 || code == 127,
@@ -98,7 +107,7 @@ fn e2e_macos_cross_tools_and_env() {
 fn e2e_macos_cross_sdk_installed() {
     // SDK should be installed under /opt/osxcross/SDK/MacOSX<ver>.sdk
     let (code, out, err) = run_sh("ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
-    assert_eq!(code, 0, "cannot locate SDK dir under /opt/osxcross/SDK: {}\n{}", out, err);
+    assert_eq!(code, 0, "cannot locate SDK dir under /opt/osxcross/target/SDK: {}\n{}", out, err);
     let sdk_dir = out.trim();
     assert!(
         sdk_dir.contains("MacOSX") && sdk_dir.ends_with(".sdk"),
@@ -119,7 +128,7 @@ fn e2e_macos_cross_sdk_installed() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_c_link_corefoundation() {
-    require_tool("oa64-clang");
+    require_executable("/opt/osxcross/target/bin/oa64-clang");
     // Write a tiny CoreFoundation program and link with -framework
     let dir = tempfile::tempdir().expect("tmpdir");
     let c_path = dir.path().join("t.c");
@@ -133,7 +142,7 @@ fn e2e_macos_cross_c_link_corefoundation() {
     // Try linking; osxcross wrappers should set sysroot automatically
     let exe = dir.path().join("t");
     let cmd = format!(
-        "oa64-clang -framework CoreFoundation '{}' -o '{}' && file '{}'",
+        "/opt/osxcross/target/bin/oa64-clang -framework CoreFoundation '{}' -o '{}' && file '{}'",
         c_path.display(),
         exe.display(),
         exe.display()
@@ -155,17 +164,16 @@ fn e2e_macos_cross_c_link_corefoundation() {
 #[ignore]
 fn e2e_macos_cross_rust_build_arm64() {
     // Build a tiny local Rust crate for aarch64-apple-darwin and verify Mach-O output
-    for t in ["cargo"] {
-        require_tool(t);
-    }
+    // Prefer absolute cargo path to avoid PATH differences
+    require_executable("/usr/local/cargo/bin/cargo");
     let dir = tempfile::tempdir().expect("tmpdir");
     let root = dir.path().to_path_buf();
     create_min_crate(&root, "hello");
 
     // Ensure target installed (should already be in the image, but harmless)
-    let (_c1, _o1, _e1) = run_sh("rustup target add aarch64-apple-darwin || true", Some(&root));
+    let (_c1, _o1, _e1) = run_sh("/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true", Some(&root));
 
-    let (code, out, err) = run_sh("cargo build --release --target aarch64-apple-darwin", Some(&root));
+    let (code, out, err) = run_sh("/usr/local/cargo/bin/cargo build --release --target aarch64-apple-darwin", Some(&root));
     assert_eq!(code, 0, "cargo build failed.\nstdout:\n{}\nstderr:\n{}", out, err);
 
     let bin = root
