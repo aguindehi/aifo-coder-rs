@@ -6,7 +6,7 @@
 ARG REGISTRY_PREFIX
 
 # --- Base layer: Rust image ---
-FROM ${REGISTRY_PREFIX}rust:1-bookworm-slim AS rust-base
+FROM ${REGISTRY_PREFIX}rust:1-slim-bookworm AS rust-base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
