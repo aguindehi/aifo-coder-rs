@@ -94,14 +94,30 @@ WORKDIR /opt
 # Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
 ARG OSX_SDK_FILENAME=MacOSX13.3.sdk.tar.xz
 ARG OSXCROSS_REF=
+# Optional: pass the exact versioned tarball name (e.g., MacOSX13.3.sdk.tar.xz) for osxcross
+ARG OSXCROSS_SDK_TARBALL=
 # Copy SDK from build context (decoded in CI) into osxcross tarballs
 COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
 # Build osxcross unattended and install into /opt/osxcross
-RUN git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross && \
+RUN set -e; \
+    git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
     if [ -n "${OSXCROSS_REF}" ]; then \
       cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
-    fi && \
-    mv /tmp/${OSX_SDK_FILENAME} osxcross/tarballs/ && \
+    fi; \
+    SDK_TMP="/tmp/${OSX_SDK_FILENAME}"; \
+    SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
+    if [ -z "$SDK_NAME" ]; then \
+      # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
+      TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
+      VER="$(printf '%s\n' "$TOP" | sed -n 's#^MacOSX\([0-9.]\+\)\.sdk/.*#\1#p')"; \
+      if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
+    fi; \
+    if [ -z "$SDK_NAME" ]; then \
+      echo "warning: could not derive SDK version from ${OSX_SDK_FILENAME}; using original name (osxcross may reject it)"; \
+      SDK_NAME="${OSX_SDK_FILENAME}"; \
+    fi; \
+    mkdir -p osxcross/tarballs; \
+    mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
     UNATTENDED=1 osxcross/build.sh
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 RUN set -e; cd /opt/osxcross/target/bin; \
