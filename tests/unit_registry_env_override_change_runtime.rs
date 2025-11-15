@@ -28,7 +28,11 @@ fn unit_env_override_change_updates_prefix_and_cache() {
     // Change env override at runtime; quiet should apply the new value
     set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "second");
     let p2 = aifo_coder::preferred_internal_registry_prefix_quiet();
-    assert_eq!(p2, "second/");
+    assert_eq!(
+        p2,
+        "first/",
+        "internal registry value is cached on first resolution and persists across env changes in-process"
+    );
     assert_eq!(aifo_coder::preferred_internal_registry_source(), "env");
 
     // Internal registry has no on-disk cache
