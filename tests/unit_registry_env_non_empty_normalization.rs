@@ -6,7 +6,7 @@ Targets in src/registry.rs:
 */
 mod tests {
     use std::env::{remove_var, set_var};
-    use std::fs;
+    // use std::fs;
     use tempfile::tempdir;
 
     #[test]
@@ -16,25 +16,26 @@ mod tests {
 
         // Clean env and state
         remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
-        set_var("AIFO_CODER_REGISTRY_PREFIX", "repo///");
+        set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "repo///");
         aifo_coder::invalidate_registry_cache();
         aifo_coder::registry_probe_set_override_for_tests(None);
 
-        let pref = aifo_coder::preferred_registry_prefix();
+        let pref = aifo_coder::preferred_internal_registry_prefix_quiet();
         assert_eq!(pref, "repo/", "normalize to single trailing slash");
 
         assert_eq!(
-            aifo_coder::preferred_registry_source(),
+            aifo_coder::preferred_internal_registry_source(),
             "env",
             "source must be 'env' for non-empty override"
         );
 
-        let cache = td.path().join("aifo-coder.regprefix");
-        assert!(cache.exists(), "cache file must exist");
-        let content = fs::read_to_string(&cache).expect("read cache");
-        assert_eq!(content, "repo/", "cache content must match normalized");
+        let cache = td.path().join("aifo-coder.mirrorprefix");
+        assert!(
+            !cache.exists(),
+            "internal registry does not use on-disk cache"
+        );
 
         // Cleanup
-        remove_var("AIFO_CODER_REGISTRY_PREFIX");
+        remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
     }
 }
