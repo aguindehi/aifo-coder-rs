@@ -27,15 +27,19 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
-# Set to 1 to keep apt/procps in final images (default drops them in final stages)
-KEEP_APT ?= 0
+# Set to 1 to keep apt/procps in final images (local default keeps them; CI overrides to 0)
+KEEP_APT ?= 1
+
+# In CI pipelines, override to 0 to slim images
+ifeq ($(CI),true)
+KEEP_APT := 0
+endif
 
 # BuildKit/Buildx configuration
 USE_BUILDX ?= 1
 PLATFORMS ?=
 PUSH ?= 0
 CACHE_DIR ?= .buildx-cache
-
 
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
