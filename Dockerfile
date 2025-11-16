@@ -156,7 +156,8 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
       '  SDK_VER=""' \
       '  if [ -n "$SDK_DIR" ]; then' \
-      '    SDK_VER="$(printf "%s\n" "$SDK_DIR" | sed -n -E "s#.*/MacOSX([0-9][0-9.]*)\\.sdk$#\\1#p")"' \
+      '    base="${SDK_DIR%/}"; base="${base##*/}";' \
+      '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
       '  fi' \
       '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
       '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
