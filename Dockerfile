@@ -131,11 +131,9 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
     done; \
     # Ensure a Mach-O-aware linker is available as 'ld' for the clang wrappers
-    if [ ! -x ld ]; then \
-      if [ -x ld64 ]; then ln -sf ld64 ld; \
-      elif [ -x ld64.lld ]; then ln -sf ld64.lld ld; \
-      elif [ -x /usr/bin/ld64.lld ]; then ln -sf /usr/bin/ld64.lld ld; \
-      fi; \
+    if [ ! -e ld ]; then \
+      CAND="$(ls -1 ld64 ld64.* aarch64-apple-darwin*-ld x86_64-apple-darwin*-ld 2>/dev/null | head -n1 || true)"; \
+      if [ -n "$CAND" ]; then ln -sf "$CAND" ld; fi; \
     fi
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
@@ -147,7 +145,8 @@ ENV RUSTUP_HOME="/usr/local/rustup" \
     CXX_aarch64_apple_darwin=oa64-clang++ \
     AR_aarch64_apple_darwin=aarch64-apple-darwin-ar \
     RANLIB_aarch64_apple_darwin=aarch64-apple-darwin-ranlib \
-    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/oa64-clang
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/oa64-clang \
+    LD=/opt/osxcross/target/bin/ld
 # Enable optional x86_64 macOS cross-compilation as well
 ENV CC_x86_64_apple_darwin=o64-clang \
     CXX_x86_64_apple_darwin=o64-clang++ \
