@@ -338,13 +338,14 @@ build-macos-cross-rust-builder:
         IMAGE_TAG_CUSTOM_ONLY: "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       variables:
-        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
       variables:
-        IMAGE_TAG_CUSTOM: "ci"
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
 
 build-launcher-macos:
   stage: build
@@ -571,7 +572,6 @@ test-macos-cross-image:
   timeout: 45m
   needs:
     - job: build-macos-cross-rust-builder
-      optional: true
   image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CROSS_IMAGE_TAG
   tags:
     - qual-mcap-gcp
@@ -587,15 +587,16 @@ test-macos-cross-image:
       variables:
         CROSS_IMAGE_TAG: $CI_COMMIT_TAG
       when: on_success
-    # Allow manual or scheduled verification on default branch using the 'ci' tag
+    # Scheduled pipelines: use per-commit image tag
     - if: $CI_PIPELINE_SOURCE == "schedule"
       variables:
-        CROSS_IMAGE_TAG: "ci"
+        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
       when: on_success
+    # Default branch: use per-commit image tag
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       variables:
-        CROSS_IMAGE_TAG: "ci"
-      when: manual
+        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
+      when: on_success
 
 lint-dockerfiles:
   stage: test

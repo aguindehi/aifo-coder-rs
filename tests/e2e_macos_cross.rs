@@ -119,7 +119,7 @@ fn e2e_macos_cross_tools_and_env() {
 #[ignore]
 fn e2e_macos_cross_sdk_installed() {
     // SDK should be installed under /opt/osxcross/SDK/MacOSX<ver>.sdk
-    let (code, out, err) = run_sh("ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
+    let (code, out, err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
     assert_eq!(code, 0, "cannot locate SDK dir under /opt/osxcross/target/SDK: {}\n{}", out, err);
     let sdk_dir = out.trim();
     assert!(

@@ -131,38 +131,24 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
       ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
     done; \
-    # Ensure clang wrappers exist (prefer osxcross-produced drivers; else create minimal wrappers)
-    if [ ! -x oa64-clang ]; then \
-      CAND="$(ls -1 aarch64-apple-darwin*-clang 2>/dev/null | head -n1 || true)"; \
-      if [ -n "$CAND" ] && [ -x "$CAND" ]; then ln -sf "$CAND" oa64-clang; \
-      else \
-        printf '%s\n' '#!/bin/sh' \
-          'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-          'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
-        chmod 0755 oa64-clang; \
-      fi; \
-    fi; \
-    if [ ! -x o64-clang ]; then \
-      CAND="$(ls -1 x86_64-apple-darwin*-clang 2>/dev/null | head -n1 || true)"; \
-      if [ -n "$CAND" ] && [ -x "$CAND" ]; then ln -sf "$CAND" o64-clang; \
-      else \
-        printf '%s\n' '#!/bin/sh' \
-          'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-          'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
-        chmod 0755 o64-clang; \
-      fi; \
-    fi; \
-    # Provide a robust Mach-O-aware linker wrapper as 'ld'
-    if [ ! -e ld ]; then \
-      printf '%s\n' '#!/bin/sh' \
-        'set -e' \
-        'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
-        'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
-        'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
-        'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
-        > ld; \
-      chmod 0755 ld; \
-    fi
+    # Create clang wrappers (always overwrite to ensure presence)
+    printf '%s\n' '#!/bin/sh' \
+      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+      'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
+    chmod 0755 oa64-clang; \
+    printf '%s\n' '#!/bin/sh' \
+      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+      'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
+    chmod 0755 o64-clang; \
+    # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
+    printf '%s\n' '#!/bin/sh' \
+      'set -e' \
+      'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+      'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+      'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+      'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
+      > ld; \
+    chmod 0755 ld
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
