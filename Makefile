@@ -711,7 +711,7 @@ test-macos-cross-image:
 	  -v "$$PWD:/workspace" \
 	  -v "$$PWD/target:/workspace/target" \
 	  -w /workspace \
-	  $(MACOS_CROSS_IMAGE) sh -lc 'export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; unset LD; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; export PATH="/opt/osxcross/target/bin:/usr/local/cargo/bin:/usr/local/rustup/bin:$$PATH"; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+	  $(MACOS_CROSS_IMAGE) sh -lc 'export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; unset LD; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
 
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
