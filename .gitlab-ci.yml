@@ -223,7 +223,7 @@ build-toolchain:
     matrix:
       - FOLDER: [ "rust", "node", "cpp" ]
 
-# Phase 2 — build macOS cross image (Kaniko) and macOS launcher
+# Build macOS cross image (Kaniko) and macOS launcher
 
 prepare-apple-sdk:
   stage: build
@@ -288,7 +288,7 @@ build-macos-cross-rust-builder:
   timeout: 60m
   resource_group: macos-cross-rust-builder
   tags:
-    - qual-mcap-gcp
+    - qual-mcap-gcp-mem4G
   needs:
     - job: prepare-apple-sdk
       artifacts: true
