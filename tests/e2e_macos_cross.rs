@@ -98,14 +98,8 @@ fn e2e_macos_cross_tools_and_env() {
         );
     }
 
-    // ld should resolve to osxcross Mach-O ld (shadow /usr/bin/ld).
-    let (code_ld, out_ld, err_ld) = run_sh("command -v ld || true", None);
-    assert_eq!(code_ld, 0, "command -v ld failed: {}", err_ld);
-    assert!(
-        out_ld.trim() == "/opt/osxcross/target/bin/ld",
-        "ld resolves to '{}', expected '/opt/osxcross/target/bin/ld'",
-        out_ld.trim()
-    );
+    // Ensure osxcross Mach-O ld wrapper exists (we force selection via -B in wrappers)
+    require_executable("/opt/osxcross/target/bin/ld");
 
     // Tool aliases should exist (avoid relying on darwin minor suffixes)
     for p in [

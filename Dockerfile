@@ -89,6 +89,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
       clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates \
+      autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
 # Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
@@ -137,7 +138,7 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       else \
         printf '%s\n' '#!/bin/sh' \
           'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-          'exec clang -target aarch64-apple-darwin --sysroot="$SDK" "$@"' > oa64-clang; \
+          'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
         chmod 0755 oa64-clang; \
       fi; \
     fi; \
@@ -147,7 +148,7 @@ RUN set -e; cd /opt/osxcross/target/bin; \
       else \
         printf '%s\n' '#!/bin/sh' \
           'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-          'exec clang -target x86_64-apple-darwin --sysroot="$SDK" "$@"' > o64-clang; \
+          'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
         chmod 0755 o64-clang; \
       fi; \
     fi; \
@@ -155,10 +156,10 @@ RUN set -e; cd /opt/osxcross/target/bin; \
     if [ ! -e ld ]; then \
       printf '%s\n' '#!/bin/sh' \
         'set -e' \
-        'for L in "/opt/osxcross/target/bin/ld64" "/opt/osxcross/target/bin/ld64.lld" "/usr/bin/ld64.lld" "/usr/bin/ld.lld"; do' \
-        '  if [ -x "$L" ]; then exec "$L" "$@"; fi' \
-        'done' \
-        'echo "error: Mach-O ld (ld64/ld64.lld) not found" >&2; exit 127' \
+        'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+        'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+        'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+        'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
         > ld; \
       chmod 0755 ld; \
     fi
