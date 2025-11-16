@@ -287,10 +287,40 @@ prepare-apple-sdk:
       when: on_success
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
+      when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+
+prepare-apple-sdk-skip-note:
+  stage: build
+  image: alpine:3.20
+  interruptible: true
+  timeout: 3m
+  tags:
+    - qual-mcap-gcp
+  rules:
+    - if: $APPLE_SDK_URL || $APPLE_SDK_BASE64
+      when: never
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: on_success
+  script:
+    - |
+      set -euo pipefail
+      echo "Skipping prepare-apple-sdk: APPLE_SDK_URL and APPLE_SDK_BASE64 are both unset."
+      echo "macOS cross-image build is disabled for this pipeline on branch=${CI_COMMIT_BRANCH} (ref slug: ${CI_COMMIT_REF_SLUG})."
+      echo "To enable, set protected CI variables: APPLE_SDK_URL (preferred) or APPLE_SDK_BASE64."
+      echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 build-macos-cross-rust-builder:
   extends: container-build
@@ -303,7 +333,6 @@ build-macos-cross-rust-builder:
   needs:
     - job: prepare-apple-sdk
       artifacts: true
-      optional: true
   variables:
     TARGET_NAME: "macos-cross-rust-builder"
     IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
