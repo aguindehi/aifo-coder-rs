@@ -35,6 +35,7 @@ RUN set -eux; \
       procps \
       tzdata; \
     apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs ca-certificates curl tzdata >/dev/null 2>&1 || true; \
+    apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
 # Immediately verify CMake installed successfully; fail fast if not present
 RUN /usr/bin/cmake --version >/dev/null
@@ -97,6 +98,7 @@ RUN set -eux; \
       apt-get update; \
       apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends cmake cmake-data; \
       apt-mark manual cmake cmake-data >/dev/null 2>&1 || true; \
+      apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; \
       rm -rf /var/lib/apt/lists/*; \
     fi; \
     /usr/bin/cmake --version >/dev/null
