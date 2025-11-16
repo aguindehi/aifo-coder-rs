@@ -390,21 +390,30 @@ build-macos-cross-rust-builder:
       variables:
         IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
         IMAGE_TAG_CUSTOM_ONLY: "true"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "schedule" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
+        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
+      variables:
+        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
+        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      variables:
-        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
-        IMAGE_TAG_CUSTOM_ONLY: "true"
-      when: on_success
+      when: never
 
 build-launcher-macos:
   stage: build
@@ -647,24 +656,30 @@ test-macos-cross-image:
         CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder"
         CROSS_IMAGE_TAG: "$CI_COMMIT_TAG"
       when: on_success
-    # Scheduled pipelines: namespaced by ref slug + commit SHA
+    # Scheduled pipelines: require Apple SDK secrets; namespaced path
+    - if: $CI_PIPELINE_SOURCE == "schedule" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
+      variables:
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
+      when: on_success
     - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    # Default branch: require Apple SDK secrets; namespaced path
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
         CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
-    # Default branch: namespaced by ref slug + commit SHA
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    # Merge requests: require Apple SDK secrets; namespaced path
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
         CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
-    # Merge requests: namespaced by ref slug + commit SHA
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      variables:
-        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
-        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
-      when: on_success
+      when: never
 
 lint-dockerfiles:
   stage: test
