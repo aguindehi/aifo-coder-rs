@@ -333,6 +333,18 @@ build-macos-cross-rust-builder:
       KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
       # If TARGET_NAME or TARGET is provided, add --target attribute to build
       [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
+  after_script:
+    - |
+      echo "Debug: cross-image build refs"
+      echo "  CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE"
+      echo "  CI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG"
+      echo "  IMAGE_TAG_CUSTOM=${IMAGE_TAG_CUSTOM:-unset}"
+      if [ -f container_image_name_and_tag.txt ]; then
+        echo "  container_image_name_and_tag.txt:"
+        cat container_image_name_and_tag.txt || true
+      else
+        echo "  container_image_name_and_tag.txt not found."
+      fi
   rules:
     - if: $CI_COMMIT_TAG
       variables:
@@ -579,7 +591,7 @@ test-macos-cross-image:
   timeout: 45m
   needs:
     - job: build-macos-cross-rust-builder
-  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CROSS_IMAGE_TAG
+  image: $CROSS_IMAGE_PATH:$CROSS_IMAGE_TAG
   tags:
     - qual-mcap-gcp
   variables:
@@ -589,25 +601,29 @@ test-macos-cross-image:
     - /usr/local/cargo/bin/cargo nextest -V || /usr/local/cargo/bin/cargo install cargo-nextest --locked
     - /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
   rules:
-    # Run on release tags
+    # Run on release tags: plain path + tag
     - if: $CI_COMMIT_TAG
       variables:
-        CROSS_IMAGE_TAG: $CI_COMMIT_TAG
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_TAG"
       when: on_success
-    # Scheduled pipelines: use per-commit image tag
+    # Scheduled pipelines: namespaced by ref slug + commit SHA
     - if: $CI_PIPELINE_SOURCE == "schedule"
       variables:
-        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
-    # Default branch: use per-commit image tag
+    # Default branch: namespaced by ref slug + commit SHA
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       variables:
-        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
-    # Merge requests: use per-commit image tag and run automatically
+    # Merge requests: namespaced by ref slug + commit SHA
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
-        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
 
 lint-dockerfiles:

@@ -212,5 +212,6 @@ Testing the macOS cross image
 CI
 - A dedicated job `test-macos-cross-image` runs these tests inside the cross image automatically:
   - On merge requests and default-branch pipelines it uses the per‑commit image tag (`$CI_COMMIT_SHA`); on tags it uses `$CI_COMMIT_TAG`.
+  - Image path scheme: for merge requests and default-branch pipelines the image is published under `$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA`. For tags it is published as `$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG`.
   - It uses the cargo-nextest binary and PATH/LD hygiene to avoid host-linker conflicts.
   - It runs only the macOS cross tests using nextest expression `test(/^e2e_macos_cross_/)`.
