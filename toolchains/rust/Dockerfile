@@ -88,11 +88,16 @@ RUN set -eux; \
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
     apt-get clean; \
-    apt-get remove --purge -y --allow-remove-essential apt || true; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   fi
 
-# CMake was verified earlier after install; skip post-purge check
+# Verify CMake still present after cleanup; do not attempt apt here
+RUN set -e; \
+    if [ ! -x /usr/bin/cmake ]; then \
+      echo "error: /usr/bin/cmake missing after cleanup"; \
+      exit 64; \
+    fi; \
+    /usr/bin/cmake --version >/dev/null
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace

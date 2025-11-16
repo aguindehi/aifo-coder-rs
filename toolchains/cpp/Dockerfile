@@ -31,7 +31,6 @@ ENV CCACHE_DIR=/home/coder/.cache/ccache
 RUN if [ "$KEEP_APT" = "0" ]; then \
   apt-get remove -y procps || true; \
   apt-get clean; \
-  apt-get remove --purge -y --allow-remove-essential apt || true; \
   rm -rf /var/lib/apt/lists/*; \
 fi
 # Verify cmake still present after optional cleanup; do not attempt apt here

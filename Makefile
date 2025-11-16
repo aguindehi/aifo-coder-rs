@@ -423,7 +423,7 @@ else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findst
 endif
 RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
-RUST_BASE_TAG ?= 1-bookworm
+RUST_BASE_TAG ?= 1-slim-bookworm
 NODE_BASE_TAG ?= 22-bookworm-slim
 # Toolchain repos/images (centralized)
 TC_REPO_RUST ?= aifo-coder-toolchain-rust
