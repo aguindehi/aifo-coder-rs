@@ -1,5 +1,5 @@
 # macOS cross-compilation in GitLab CI: prerequisites and setup
-Last updated: 2025-11-15
+Last updated: 2025-11-16
 
 This guide explains how to configure GitLab CI to build the aifo-coder macOS launcher on Linux
 using an osxcross-based builder image. It covers prerequisites, required CI variables, the
@@ -189,6 +189,10 @@ Troubleshooting
   - Ensure both jobs run in the same pipeline and the producer succeeded.
 - Fallback variable too large/slow
   - Prefer the artifact-based flow. If you must use base64, ensure CI quotas and job timeouts are sufficient.
+- Host linker conflicts during nextest install/run
+  - Keep PATH to system toolchains and unset LD when installing/running cargo-nextest; do not prepend
+    /opt/osxcross/target/bin for host tasks. Mac tests invoke the absolute osxcross wrapper
+    (/opt/osxcross/target/bin/oa64-clang), which uses -B/opt/osxcross/target/bin to select the Mach‑O linker.
 
 Notes
 - Kaniko cannot read BuildKit RUN secrets; the SDK must be present in the build context and copied during
