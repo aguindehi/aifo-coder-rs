@@ -6,6 +6,7 @@
 
 ARG RUST_TAG=1-slim-bookworm
 ARG REGISTRY_PREFIX
+# CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
 ARG KEEP_APT

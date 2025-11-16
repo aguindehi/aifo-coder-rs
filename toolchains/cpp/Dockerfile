@@ -1,6 +1,7 @@
 # c-cpp toolchain sidecar image for aifo-coder toolchains
 # Default tag: aifo-coder-toolchain-cpp:latest
 ARG REGISTRY_PREFIX
+# CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}debian:bookworm-slim
 
 ARG KEEP_APT

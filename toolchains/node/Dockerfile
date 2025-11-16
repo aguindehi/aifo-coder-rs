@@ -4,6 +4,7 @@
 # - Prepares a writable HOME for arbitrary uid:gid mappings
 
 ARG REGISTRY_PREFIX
+# CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim
 
 ARG KEEP_APT

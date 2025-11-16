@@ -55,6 +55,18 @@ container-build:
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
       # Use time-based snapshotting to reduce Kaniko memory usage
       KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
+      # Rely on Kaniko --use-new-run to support BuildKit RUN semantics:
+      # - RUN --mount=type=secret (supported)
+      # - RUN --mount=type=cache (supported)
+      # Keep shared Dockerfiles Kaniko-safe: avoid COPY --link/--chmod.
+      # Rely on Kaniko --use-new-run to support BuildKit RUN semantics:
+      # - RUN --mount=type=secret (supported)
+      # - RUN --mount=type=cache (supported)
+      # Keep shared Dockerfiles Kaniko-safe: avoid COPY --link/--chmod.
+      # Rely on Kaniko --use-new-run to support BuildKit RUN semantics:
+      # - RUN --mount=type=secret (supported)
+      # - RUN --mount=type=cache (supported)
+      # Keep shared Dockerfiles Kaniko-safe: avoid COPY --link/--chmod.
       # If TARGET_NAME or TARGET is provided, add --target attribute to build
       [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
   rules: # Turn off component rules

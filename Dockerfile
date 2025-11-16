@@ -4,6 +4,7 @@
 # Default working directory at /workspace: the host project will be mounted there
 
 ARG REGISTRY_PREFIX
+# CI builds use Kaniko --use-new-run; keep RUN --mount (secrets/cache); avoid COPY --link/--chmod.
 
 # --- Base layer: Rust image ---
 FROM ${REGISTRY_PREFIX}rust:1-slim-bookworm AS rust-base
