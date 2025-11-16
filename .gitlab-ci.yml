@@ -278,6 +278,8 @@ prepare-apple-sdk:
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
 
 build-macos-cross-rust-builder:
   extends: container-build
@@ -342,6 +344,11 @@ build-macos-cross-rust-builder:
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
@@ -579,8 +586,8 @@ test-macos-cross-image:
     RUST_BACKTRACE: "1"
   script:
     - export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; unset LD; rustc --version; /usr/local/cargo/bin/cargo --version || true
-    - /usr/local/cargo/bin/cargo nextest -V || /usr/local/cargo/bin/cargo install cargo-nextest --locked
-    - /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
+    - /usr/local/cargo/bin/cargo-nextest --version || /usr/local/cargo/bin/cargo install cargo-nextest --locked
+    - /usr/local/cargo/bin/cargo-nextest run --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
   rules:
     # Run on release tags
     - if: $CI_COMMIT_TAG
@@ -594,6 +601,11 @@ test-macos-cross-image:
       when: on_success
     # Default branch: use per-commit image tag
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        CROSS_IMAGE_TAG: $CI_COMMIT_SHA
+      when: on_success
+    # Merge requests: use per-commit image tag and run automatically
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
         CROSS_IMAGE_TAG: $CI_COMMIT_SHA
       when: on_success

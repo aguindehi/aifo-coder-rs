@@ -210,6 +210,7 @@ Testing the macOS cross image
   - Rust hello-world build for aarch64-apple-darwin producing a Mach-O arm64 binary.
 
 CI
-- A dedicated job `test-macos-cross-image` can run these tests inside the cross image:
-  - It uses the same image tags as the build (`:$CI_COMMIT_TAG` on tags; `:ci` on default-branch manual runs and schedules).
+- A dedicated job `test-macos-cross-image` runs these tests inside the cross image automatically:
+  - On merge requests and default-branch pipelines it uses the per‑commit image tag (`$CI_COMMIT_SHA`); on tags it uses `$CI_COMMIT_TAG`.
+  - It uses the cargo-nextest binary and PATH/LD hygiene to avoid host-linker conflicts.
   - It runs only the macOS cross tests using nextest expression `test(/^e2e_macos_cross_/)`.

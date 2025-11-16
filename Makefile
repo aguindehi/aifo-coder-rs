@@ -711,7 +711,7 @@ test-macos-cross-image:
 	  -v "$$PWD:/workspace" \
 	  -v "$$PWD/target:/workspace/target" \
 	  -w /workspace \
-	  $(MACOS_CROSS_IMAGE) sh -lc 'export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; unset LD; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+	  $(MACOS_CROSS_IMAGE) sh -lc 'export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; unset LD; /usr/local/cargo/bin/cargo-nextest --version >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo-nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
 
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
@@ -1637,12 +1637,18 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^e2e_/)' ; \
+	  EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
 	else \
 	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
+	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
+	  $(MAKE) test-macos-cross-image; \
+	else \
+	  echo "macOS cross image $(MACOS_CROSS_IMAGE) not found locally; skipping macOS cross E2E."; \
+	fi
 
 test-integration-suite:
 	@set -e; \
