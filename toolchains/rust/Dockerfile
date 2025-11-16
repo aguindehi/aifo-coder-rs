@@ -86,16 +86,18 @@ RUN set -eux; \
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   fi
 
-# Verify CMake still present after cleanup; do not attempt apt here
-RUN set -e; \
+# Verify CMake still present after cleanup; if missing, re-install and verify (APT retained)
+RUN set -eux; \
     if [ ! -x /usr/bin/cmake ]; then \
-      echo "error: /usr/bin/cmake missing after cleanup"; \
-      exit 64; \
+      echo "warning: /usr/bin/cmake missing after cleanup; re-installing cmake ..." >&2; \
+      apt-get update; \
+      apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends cmake cmake-data; \
+      apt-mark manual cmake cmake-data >/dev/null 2>&1 || true; \
+      rm -rf /var/lib/apt/lists/*; \
     fi; \
     /usr/bin/cmake --version >/dev/null
 
