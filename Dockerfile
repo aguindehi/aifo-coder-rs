@@ -340,7 +340,7 @@ WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
-# Inherit /opt/aifo/bin PATH from base
+ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
@@ -643,7 +643,7 @@ WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
-# Inherit /opt/aifo/bin PATH from base
+ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
@@ -827,7 +827,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
   fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps curl || true; \
@@ -862,7 +862,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
   fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps curl || true; \
@@ -884,7 +884,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 FROM base-slim AS plandex-slim
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 RUN chmod 0755 /usr/local/bin/plandex
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps curl || true; \
