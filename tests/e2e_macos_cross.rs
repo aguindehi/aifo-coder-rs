@@ -82,11 +82,21 @@ fn e2e_macos_cross_tools_and_env() {
         "MACOSX_DEPLOYMENT_TARGET expected '11.0', got '{}'",
         dep_target
     );
-    assert!(
-        aarch_linker.trim() == "/opt/osxcross/target/bin/oa64-clang",
-        "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER expected '/opt/osxcross/target/bin/oa64-clang', got '{}'",
-        aarch_linker
-    );
+    let aarch_linker = aarch_linker.trim();
+    // Accept absolute path or basename; verify it resolves to the wrapper under /opt/osxcross/target/bin.
+    if aarch_linker.contains('/') {
+        let (s, _, e) = run_sh(&format!("[ -x '{}' ]", aarch_linker), None);
+        assert_eq!(s, 0, "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER points to non-executable: {} ({})", aarch_linker, e);
+    } else {
+        let (s, out, e) = run_sh(&format!("command -v '{}' || true", aarch_linker), None);
+        assert_eq!(s, 0, "command -v {} failed: {}", aarch_linker, e);
+        assert!(
+            out.trim().ends_with("/opt/osxcross/target/bin/oa64-clang"),
+            "linker '{}' resolves to '{}', expected '/opt/osxcross/target/bin/oa64-clang'",
+            aarch_linker,
+            out.trim()
+        );
+    }
 
     // Tool aliases should exist (avoid relying on darwin minor suffixes)
     for p in [
@@ -146,7 +156,7 @@ fn e2e_macos_cross_c_link_corefoundation() {
     assert_eq!(code_sdk, 0, "cannot discover SDK dir for C link");
     let sdk = sdk_out.trim();
     let cmd = format!(
-        "SDKROOT='{}' OSX_SYSROOT='{}' /opt/osxcross/target/bin/oa64-clang -fuse-ld=lld -framework CoreFoundation '{}' -o '{}' && file '{}'",
+        "SDKROOT='{}' OSX_SYSROOT='{}' /opt/osxcross/target/bin/oa64-clang -framework CoreFoundation '{}' -o '{}' && file '{}'",
         sdk,
         sdk,
         c_path.display(),

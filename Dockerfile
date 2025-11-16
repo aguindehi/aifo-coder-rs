@@ -88,7 +88,7 @@ FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      clang llvm make cmake patch xz-utils unzip curl git python3 file ca-certificates \
+      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
 # Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
@@ -129,7 +129,14 @@ RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
       ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
       ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
-    done
+    done; \
+    # Ensure a Mach-O-aware linker is available as 'ld' for the clang wrappers
+    if [ ! -x ld ]; then \
+      if [ -x ld64 ]; then ln -sf ld64 ld; \
+      elif [ -x ld64.lld ]; then ln -sf ld64.lld ld; \
+      elif [ -x /usr/bin/ld64.lld ]; then ln -sf /usr/bin/ld64.lld ld; \
+      fi; \
+    fi
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
