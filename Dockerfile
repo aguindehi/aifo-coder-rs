@@ -101,6 +101,85 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
+# --- Shim outputs stage (deduplicates wrapper/entrypoint) ---
+FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS shim-common
+WORKDIR /
+# Build once: sh/bash/dash wrappers, tool symlinks, and aifo-entrypoint; consume via COPY in base/base-slim
+RUN install -d -m 0755 /opt/aifo/bin
+COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+# hadolint ignore=SC2016,SC2026
+RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
+  printf '%s\n' \
+  '#!/bin/sh' \
+  '# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.' \
+  '# Opt-out: AIFO_SH_WRAP_DISABLE=1' \
+  'if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then' \
+  '  exec /bin/sh "$@"' \
+  'fi' \
+  '' \
+  '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
+  'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
+  '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
+  '  NOW="$(date +%s)"' \
+  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
+  '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
+  '    for d in "$HOME"/.aifo-exec/*; do' \
+  '      [ -d "$d" ] || continue' \
+  '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
+  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
+  '        AGE="$((NOW - MTIME))"' \
+  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
+  '      fi' \
+  '    done' \
+  '  fi' \
+  'fi' \
+  '' \
+  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
+  'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
+  '  flag="$1"' \
+  '  cmd="$2"' \
+  '  shift 2' \
+  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
+  'fi' \
+  '' \
+  'exec /bin/sh "$@"' \
+  > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
+  sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
+  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
+# hadolint ignore=SC2016,SC2145
+RUN install -d -m 0755 /usr/local/bin \
+ && printf '%s\n' '#!/bin/sh' 'set -e' \
+ 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
+ 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
+ 'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
+ 'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
+ '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \
+ 'if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi' \
+ 'mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true' \
+ '# Copy keyrings from mounted host dir if present and not already in place' \
+ 'if [ -d "$HOME/.gnupg-host" ]; then' \
+ '  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do' \
+ '    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi' \
+ '  done' \
+ '  for d in private-keys-v1.d openpgp-revocs.d; do' \
+ '    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi' \
+ '  done' \
+ 'fi' \
+ '# Configure pinentry if not set' \
+ 'if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi' \
+ 'grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"' \
+ 'grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"' \
+ 'grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"' \
+ '# Prefer a TTY for pinentry' \
+ 'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
+ 'unset GPG_AGENT_INFO' \
+ '# Launch gpg-agent' \
+ 'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
+ 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
+ && chmod +x /usr/local/bin/aifo-entrypoint
+
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
@@ -259,86 +338,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
 
-# embed compiled Rust PATH shim into agent images, but do not yet add to PATH
-RUN install -d -m 0755 /opt/aifo/bin
-# Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
-# hadolint ignore=SC2016,SC2026
-RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-  printf '%s\n' \
-  '#!/bin/sh' \
-  '# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.' \
-  '# Opt-out: AIFO_SH_WRAP_DISABLE=1' \
-  'if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then' \
-  '  exec /bin/sh "$@"' \
-  'fi' \
-  '' \
-  '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
-  'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
-  '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
-  '  NOW="$(date +%s)"' \
-  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
-  '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
-  '    for d in "$HOME"/.aifo-exec/*; do' \
-  '      [ -d "$d" ] || continue' \
-  '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
-  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
-  '        AGE="$((NOW - MTIME))"' \
-  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
-  '      fi' \
-  '    done' \
-  '  fi' \
-  'fi' \
-  '' \
-  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
-  'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
-  '  flag="$1"' \
-  '  cmd="$2"' \
-  '  shift 2' \
-  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
-  'fi' \
-  '' \
-  'exec /bin/sh "$@"' \
-  > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
-  sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Copy shims and wrappers from shim-common
+COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
-# Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
-# hadolint ignore=SC2016,SC2145
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
- 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
- 'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
- 'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
- '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \
- 'if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi' \
- 'mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true' \
- '# Copy keyrings from mounted host dir if present and not already in place' \
- 'if [ -d "$HOME/.gnupg-host" ]; then' \
- '  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do' \
- '    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi' \
- '  done' \
- '  for d in private-keys-v1.d openpgp-revocs.d; do' \
- '    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi' \
- '  done' \
- 'fi' \
- '# Configure pinentry if not set' \
- 'if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi' \
- 'grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"' \
- '# Prefer a TTY for pinentry' \
- 'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
- 'unset GPG_AGENT_INFO' \
- '# Launch gpg-agent' \
- 'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
- && chmod +x /usr/local/bin/aifo-entrypoint \
- && install -d -m 1777 /home/coder
+# Copy entrypoint from shim-common and ensure HOME exists
+COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
+RUN install -d -m 1777 /home/coder
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
@@ -635,86 +642,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
 
-# embed compiled Rust PATH shim into slim images, but do not yet add to PATH
-RUN install -d -m 0755 /opt/aifo/bin
-# Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
-# hadolint ignore=SC2016,SC2026
-RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
-  printf '%s\n' \
-  '#!/bin/sh' \
-  '# aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.' \
-  '# Opt-out: AIFO_SH_WRAP_DISABLE=1' \
-  'if [ "${AIFO_SH_WRAP_DISABLE:-0}" = "1" ]; then' \
-  '  exec /bin/sh "$@"' \
-  'fi' \
-  '' \
-  '# If interactive and this TTY was used for a recent tool exec, exit immediately.' \
-  'if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then' \
-  '  TTY_PATH="$(readlink -f "/proc/$$/fd/0" 2>/dev/null || readlink -f "/proc/$$/fd/1" 2>/dev/null || readlink -f "/proc/$$/fd/2" 2>/dev/null || true)"' \
-  '  NOW="$(date +%s)"' \
-  '  RECENT="${AIFO_SH_RECENT_SECS:-10}"' \
-  '  if [ -n "$TTY_PATH" ] && [ -d "$HOME/.aifo-exec" ]; then' \
-  '    for d in "$HOME"/.aifo-exec/*; do' \
-  '      [ -d "$d" ] || continue' \
-  '      if [ -f "$d/no_shell_on_tty" ] && [ -f "$d/tty" ] && [ "$(cat "$d/tty" 2>/dev/null)" = "$TTY_PATH" ]; then' \
-  '        MTIME="$(stat -c %Y "$d" 2>/dev/null || stat -f %m "$d" 2>/dev/null || echo 0)"' \
-  '        AGE="$((NOW - MTIME))"' \
-  '        if [ "$AGE" -le "$RECENT" ] 2>/dev/null; then exit 0; fi' \
-  '      fi' \
-  '    done' \
-  '  fi' \
-  'fi' \
-  '' \
-  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
-  'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
-  '  flag="$1"' \
-  '  cmd="$2"' \
-  '  shift 2' \
-  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
-  'fi' \
-  '' \
-  'exec /bin/sh "$@"' \
-  > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
-  sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
-  sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
+# Copy shims and wrappers from shim-common
+COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
 # will get added by the top layer
 #ENV PATH="/opt/aifo/bin:${PATH}"
 
-# Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
-# hadolint ignore=SC2016,SC2145
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
- 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
- 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
- 'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
- 'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
- '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \
- 'if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi' \
- 'mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true' \
- '# Copy keyrings from mounted host dir if present and not already in place' \
- 'if [ -d "$HOME/.gnupg-host" ]; then' \
- '  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do' \
- '    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi' \
- '  done' \
- '  for d in private-keys-v1.d openpgp-revocs.d; do' \
- '    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi' \
- '  done' \
- 'fi' \
- '# Configure pinentry if not set' \
- 'if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi' \
- 'grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"' \
- '# Prefer a TTY for pinentry' \
- 'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
- 'unset GPG_AGENT_INFO' \
- '# Launch gpg-agent' \
- 'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
- && chmod +x /usr/local/bin/aifo-entrypoint \
- && install -d -m 1777 /home/coder
+# Copy entrypoint from shim-common and ensure HOME exists
+COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
+RUN install -d -m 1777 /home/coder
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
