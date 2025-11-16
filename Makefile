@@ -183,6 +183,7 @@ help: banner
 	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
 	@echo "  build-macos-cross-rust-builder Build the macOS cross image (requires ci/osx/$${OSX_SDK_FILENAME})"
+	@echo "  rebuild-macos-cross-rust-builder Rebuild the macOS cross image (no cache, pull fresh base)"
 	@echo "  build-launcher-macos-cross .... Build aifo-coder for macOS arm64 and x86_64 using cross image"
 	@echo "  build-launcher-macos-cross-arm64 Build aifo-coder for macOS arm64 using cross image"
 	@echo "  build-launcher-macos-cross-x86_64 Build aifo-coder for macOS x86_64 using cross image"
@@ -547,7 +548,7 @@ build-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
-.PHONY: build-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
+.PHONY: build-macos-cross-rust-builder rebuild-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
 build-macos-cross-rust-builder:
 	@set -e; \
 	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
@@ -560,6 +561,49 @@ build-macos-cross-rust-builder:
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	fi
+
+rebuild-macos-cross-rust-builder:
+	@set -e; \
+	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "Error: SDK file 'ci/osx/$(OSX_SDK_FILENAME)' not found. Decode it via ci/bin/decode-apple-sdk.sh or place it locally."; \
+	  exit 1; \
+	fi; \
+	$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
+	if docker buildx version >/dev/null 2>&1; then \
+	  echo "Rebuilding macOS cross image with buildx (no-cache, pull) ..."; \
+	  if [ -n "$(CACHE_DIR)" ] && [ -d "$(CACHE_DIR)" ]; then echo "Purging local buildx cache at $(CACHE_DIR) ..."; rm -rf "$(CACHE_DIR)" || true; fi; \
+	  if [ -n "$$REG" ]; then \
+	    docker buildx build --no-cache --pull --load \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) \
+	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	  else \
+	    docker buildx build --no-cache --pull --load \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
+	else \
+	  echo "Rebuilding macOS cross image with classic docker build (no-cache, pull) ..."; \
+	  if [ -n "$$REG" ]; then \
+	    docker build --no-cache --pull \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) \
+	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	  else \
+	    docker build --no-cache --pull \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
 	fi
 
 build-launcher-macos-cross-arm64:
