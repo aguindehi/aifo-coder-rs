@@ -524,14 +524,18 @@ build-launcher:
     GIT_LFS_SKIP_SMUDGE: "1"
     AIFO_SUPPORT_SKIP_GREEN: "1"
     AIFO_CODER_TEST_DISABLE_DOCKER: "1"
+    CARGO_INCREMENTAL: "0"
+    RUSTC_WRAPPER: "sccache"
+    SCCACHE_DIR: "$CI_PROJECT_DIR/.cache/sccache"
   cache:
     key:
       files:
         - .cargo/config.toml
-    policy: pull-push
+    policy: pull
     paths:
-      - .cargo
-      - target
+      - .cargo/registry
+      - .cargo/git
+      - .cache/sccache
   before_script:
     - echo "Running CI job (base)…"
     - rustc --version

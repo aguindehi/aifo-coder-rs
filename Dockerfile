@@ -30,7 +30,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
-    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends make git pkg-config git-lfs ca-certificates; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends make git pkg-config git-lfs ca-certificates sccache; \
     if [ "${WITH_WIN:-0}" = "1" ]; then \
         apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
         /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
