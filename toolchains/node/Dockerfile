@@ -106,10 +106,10 @@ WORKDIR /workspace
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
     apt-get clean; \
-    apt-get remove --purge -y --allow-remove-essential apt || true; \
-    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm /usr/bin/apt /usr/bin/apt-cache /usr/bin/apt-cdrom /usr/bin/apt-config /usr/bin/apt-get; \
+    rm /usr/bin/apt-key /usr/bin/apt-mark; \
   fi
 # Verify critical tools still present after optional cleanup (fail fast if missing)
 RUN command -v curl >/dev/null && git --version >/dev/null
