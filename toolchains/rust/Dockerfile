@@ -91,13 +91,11 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   fi
 
-# Verify cmake still present after optional cleanup; if missing, re-install and mark manual, then verify
+# Verify cmake still present after optional cleanup; do not attempt apt here
 RUN set -eux; \
     if ! command -v cmake >/dev/null 2>&1; then \
-      apt-get update; \
-      apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends cmake cmake-data; \
-      apt-mark manual cmake cmake-data >/dev/null 2>&1 || true; \
-      rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+      echo "error: cmake missing after cleanup; this should not happen" >&2; \
+      exit 64; \
     fi; \
     cmake --version >/dev/null
 
