@@ -143,6 +143,28 @@ RUN set -e; cd /opt/osxcross/target/bin; \
     # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
     printf '%s\n' '#!/bin/sh' \
       'set -e' \
+      'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
+      'HAVE_PV=0; OS_MIN="";' \
+      'for a in "$@"; do' \
+      '  case "$a" in' \
+      '    -platform_version) HAVE_PV=1 ;;' \
+      '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
+      '  esac' \
+      'done' \
+      'if [ "$HAVE_PV" -eq 0 ]; then' \
+      '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
+      '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
+      '  SDK_VER=""' \
+      '  if [ -n "$SDK_DIR" ]; then' \
+      '    SDK_VER="$(printf "%s\n" "$SDK_DIR" | sed -n -E "s#.*/MacOSX([0-9][0-9.]*)\\.sdk$#\\1#p")"' \
+      '  fi' \
+      '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
+      '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
+      '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
+      'fi' \
+      'HAVE_SR=0' \
+      'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
+      'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
       'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
       'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
       'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
