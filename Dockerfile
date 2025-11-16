@@ -127,13 +127,37 @@ RUN set -e; \
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
-      ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
-      ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
+      ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
+      ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
     done; \
+    # Ensure clang wrappers exist (prefer osxcross-produced drivers; else create minimal wrappers)
+    if [ ! -x oa64-clang ]; then \
+      CAND="$(ls -1 aarch64-apple-darwin*-clang 2>/dev/null | head -n1 || true)"; \
+      if [ -n "$CAND" ] && [ -x "$CAND" ]; then ln -sf "$CAND" oa64-clang; \
+      else \
+        printf '%s\n' '#!/bin/sh' \
+          'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+          'exec clang -target aarch64-apple-darwin --sysroot="$SDK" "$@"' > oa64-clang; \
+        chmod 0755 oa64-clang; \
+      fi; \
+    fi; \
+    if [ ! -x o64-clang ]; then \
+      CAND="$(ls -1 x86_64-apple-darwin*-clang 2>/dev/null | head -n1 || true)"; \
+      if [ -n "$CAND" ] && [ -x "$CAND" ]; then ln -sf "$CAND" o64-clang; \
+      else \
+        printf '%s\n' '#!/bin/sh' \
+          'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+          'exec clang -target x86_64-apple-darwin --sysroot="$SDK" "$@"' > o64-clang; \
+        chmod 0755 o64-clang; \
+      fi; \
+    fi; \
     # Ensure a Mach-O-aware linker is available as 'ld' for the clang wrappers
-    if [ ! -e ld ]; then \
+    if [ ! -x ld ]; then \
       CAND="$(ls -1 ld64 ld64.* aarch64-apple-darwin*-ld x86_64-apple-darwin*-ld 2>/dev/null | head -n1 || true)"; \
-      if [ -n "$CAND" ]; then ln -sf "$CAND" ld; fi; \
+      if [ -n "$CAND" ] && [ -x "$CAND" ]; then ln -sf "$CAND" ld; \
+      elif command -v ld64.lld >/dev/null 2>&1; then ln -sf "$(command -v ld64.lld)" ld; \
+      elif command -v ld.lld   >/dev/null 2>&1; then ln -sf "$(command -v ld.lld)"   ld; \
+      fi; \
     fi
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
