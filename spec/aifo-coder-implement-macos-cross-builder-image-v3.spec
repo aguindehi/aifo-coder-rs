@@ -10,8 +10,10 @@ Executive summary
 - Approach: Add Dockerfile stage macos-cross-rust-builder bundling osxcross; build it with Kaniko
   after decoding SDK into ci/osx/; compile the Rust launcher in that image; ship artifacts and attach
   to releases alongside Linux binaries.
-- Security/license: SDK is never committed or artifacted; decode from masked CI variable only on tags
-  or protected runs. Cross image is internal; do not mirror publicly.
+- Security/license: Do not commit the SDK to the repository. Prefer short‑lived, protected CI artifacts
+  to move the SDK between jobs with checksum verification; allow masked/protected variables as a
+  fallback. Restrict jobs handling the SDK to tags, schedules, or default‑branch manual runs. Cross
+  image is internal; do not mirror publicly.
 
 Plan validation and consistency checks (v2 → v3)
 - Naming: Use macos-cross-rust-builder consistently in Dockerfile, CI, Makefile, and image refs.
@@ -52,11 +54,15 @@ Design details
   - rustup targets: aarch64-apple-darwin (required); x86_64-apple-darwin (optional).
 
 - CI integration (.gitlab-ci.yml)
+  - prepare-apple-sdk:
+    - Downloads or decodes the Apple SDK into ci/osx/${OSX_SDK_FILENAME}, verifies APPLE_SDK_SHA256,
+      and publishes it as a short‑lived artifact (expire_in). Restricted to tags, schedules, and
+      default‑branch manual runs.
   - build-macos-cross-rust-builder:
-    - extends container-build; before_script decodes APPLE_SDK_BASE64 into ci/osx/${OSX_SDK_FILENAME};
-      sets KANIKO_BUILD_OPTIONS += --target macos-cross-rust-builder; tags image as
-      $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG (or :ci).
-    - rules: tags and default-branch manual; resource_group to serialize builds.
+    - extends container-build; declares needs on prepare-apple-sdk with artifacts: true; verifies
+      checksum; sets KANIKO_BUILD_OPTIONS += --target macos-cross-rust-builder; tags
+      $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG (or :ci). Resource group
+      serializes builds; rules limited to tags and default‑branch manual runs.
   - build-launcher-macos:
     - uses image $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG; builds
       cargo --release --target aarch64-apple-darwin; copies to dist/aifo-coder-macos-arm64; asserts
@@ -73,8 +79,10 @@ Design details
   - macOS x86_64 (optional): dist/aifo-coder-macos-x86_64.
 
 Security and compliance controls
-- APPLE_SDK_BASE64: masked + protected; restricted to tags and default-branch manual runs.
-- Jobs using SDK: do not log SDK contents; show only ls of decoded file; never artifact SDK.
+- Prefer APPLE_SDK_URL (protected) with APPLE_SDK_SHA256 (masked + protected) for integrity; allow
+  APPLE_SDK_BASE64 as a fallback when artifacts are not viable.
+- Jobs using the SDK: do not log SDK contents; show only file metadata (ls -lh). Use short‑lived,
+  protected artifacts for job‑to‑job transfer; restrict job scope to tags/schedules/default‑branch manual.
 - Image scope: macos-cross-rust-builder is project-internal; avoid public mirroring.
 
 Acceptance criteria
@@ -94,9 +102,11 @@ Risks, constraints and mitigations
 Comprehensive phased implementation plan
 
 Phase 0 — prerequisites (CI setup)
-- Create masked, protected CI variable APPLE_SDK_BASE64 with base64 of MacOSX13.3.sdk.tar.xz (or
-  preferred SDK). Optionally set OSX_SDK_FILENAME (defaults to MacOSX13.3.sdk.tar.xz).
-- Restrict jobs using the SDK to tags and default-branch manual runs; lock runners to project/group.
+- Define APPLE_SDK_URL (protected) and APPLE_SDK_SHA256 (masked + protected). Optionally provide
+  APPLE_SDK_BASE64 as a fallback. Set OSX_SDK_FILENAME (defaults to MacOSX.sdk.tar.xz).
+- Use a producer job (prepare-apple-sdk) to download/verify the SDK and publish it as a short‑lived
+  artifact. Restrict jobs using the SDK to tags, schedules, or default‑branch manual runs; lock
+  runners to project/group and avoid logging raw contents.
 
 Phase 1 — Dockerfile: macos-cross-rust-builder stage (no secrets)
 - Append after rust-builder:
@@ -106,7 +116,7 @@ Phase 1 — Dockerfile: macos-cross-rust-builder stage (no secrets)
         clang llvm make cmake patch xz-utils unzip curl git python3 file ca-certificates \
       && rm -rf /var/lib/apt/lists/*
   WORKDIR /opt
-  ARG OSX_SDK_FILENAME=MacOSX13.3.sdk.tar.xz
+  ARG OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
   # Expect CI to place SDK under ci/osx/ before build
   COPY ci/osx/${OSX_SDK_FILENAME} /tmp/${OSX_SDK_FILENAME}
   RUN git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross && \
@@ -216,8 +226,11 @@ Phase 5 — Enhancements (optional)
 - Add a small smoke test with otool -hv if available (best-effort); else rely on file(1).
 
 Appendix: CI variables
-- APPLE_SDK_BASE64 (required, masked, protected): base64-encoded SDK .tar.xz.
-- OSX_SDK_FILENAME (optional; default MacOSX13.3.sdk.tar.xz): filename used in COPY.
+- APPLE_SDK_URL (protected): HTTPS URL to the SDK .tar.xz.
+- APPLE_SDK_SHA256 (masked + protected): expected SHA‑256 digest for integrity verification.
+- APPLE_SDK_BASE64 (masked + protected, optional): base64 of the SDK .tar.xz (fallback when URL/artifacts
+  are not available).
+- OSX_SDK_FILENAME (optional; default MacOSX.sdk.tar.xz): stable filename used in CI workspace and COPY.
 - RB_IMAGE (tests/lint base): unchanged; macOS jobs use the cross image only for building launcher.
 
 Appendix: Reproducibility and caching
