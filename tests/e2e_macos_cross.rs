@@ -83,8 +83,8 @@ fn e2e_macos_cross_tools_and_env() {
         dep_target
     );
     assert!(
-        aarch_linker.trim() == "oa64-clang",
-        "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER expected 'oa64-clang', got '{}'",
+        aarch_linker.trim() == "/opt/osxcross/target/bin/oa64-clang",
+        "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER expected '/opt/osxcross/target/bin/oa64-clang', got '{}'",
         aarch_linker
     );
 
@@ -141,8 +141,14 @@ fn e2e_macos_cross_c_link_corefoundation() {
 
     // Try linking; osxcross wrappers should set sysroot automatically
     let exe = dir.path().join("t");
+    // Discover SDK dir from image (SDK_DIR.txt or fallback to ls)
+    let (code_sdk, sdk_out, _sdk_err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
+    assert_eq!(code_sdk, 0, "cannot discover SDK dir for C link");
+    let sdk = sdk_out.trim();
     let cmd = format!(
-        "/opt/osxcross/target/bin/oa64-clang -framework CoreFoundation '{}' -o '{}' && file '{}'",
+        "SDKROOT='{}' OSX_SYSROOT='{}' /opt/osxcross/target/bin/oa64-clang -fuse-ld=lld -framework CoreFoundation '{}' -o '{}' && file '{}'",
+        sdk,
+        sdk,
         c_path.display(),
         exe.display(),
         exe.display()
@@ -173,7 +179,14 @@ fn e2e_macos_cross_rust_build_arm64() {
     // Ensure target installed (should already be in the image, but harmless)
     let (_c1, _o1, _e1) = run_sh("/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true", Some(&root));
 
-    let (code, out, err) = run_sh("/usr/local/cargo/bin/cargo build --release --target aarch64-apple-darwin", Some(&root));
+    // Discover SDK dir from image and set explicit linker/env for cargo
+    let (code_sdk, sdk_out, _sdk_err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
+    assert_eq!(code_sdk, 0, "cannot discover SDK dir for Rust build");
+    let sdk = sdk_out.trim();
+    let (code, out, err) = run_sh(&format!(
+        "SDKROOT='{}' OSX_SYSROOT='{}' CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER='/opt/osxcross/target/bin/oa64-clang' /usr/local/cargo/bin/cargo build --release --target aarch64-apple-darwin",
+        sdk, sdk
+    ), Some(&root));
     assert_eq!(code, 0, "cargo build failed.\nstdout:\n{}\nstderr:\n{}", out, err);
 
     let bin = root

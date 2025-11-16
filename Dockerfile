@@ -121,17 +121,15 @@ RUN set -e; \
     mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
     UNATTENDED=1 osxcross/build.sh; \
     mkdir -p /opt/osxcross/SDK; \
-    printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true
+    printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
+    SDK_DIR="$(ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"; \
+    [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 RUN set -e; cd /opt/osxcross/target/bin; \
     for t in ar ranlib strip; do \
       ln -sf "$(ls aarch64-apple-darwin*-$t | head -n1)" aarch64-apple-darwin-$t || true; \
       ln -sf "$(ls x86_64-apple-darwin*-$t | head -n1)"  x86_64-apple-darwin-$t  || true; \
-    done; \
-    ln -sf "$(ls aarch64-apple-darwin*-clang    | head -n1)" oa64-clang    || true; \
-    ln -sf "$(ls aarch64-apple-darwin*-clang++  | head -n1)" oa64-clang++  || true; \
-    ln -sf "$(ls x86_64-apple-darwin*-clang     | head -n1)" o64-clang     || true; \
-    ln -sf "$(ls x86_64-apple-darwin*-clang++   | head -n1)" o64-clang++   || true
+    done
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
@@ -142,13 +140,13 @@ ENV RUSTUP_HOME="/usr/local/rustup" \
     CXX_aarch64_apple_darwin=oa64-clang++ \
     AR_aarch64_apple_darwin=aarch64-apple-darwin-ar \
     RANLIB_aarch64_apple_darwin=aarch64-apple-darwin-ranlib \
-    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=oa64-clang
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/oa64-clang
 # Enable optional x86_64 macOS cross-compilation as well
 ENV CC_x86_64_apple_darwin=o64-clang \
     CXX_x86_64_apple_darwin=o64-clang++ \
     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
-    CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang
+    CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
 # Install Rust target inside the image (best-effort)
 RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
 
