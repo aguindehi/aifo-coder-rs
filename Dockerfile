@@ -618,22 +618,21 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # --- Plandex runtime (copy binary; shims-first PATH) ---
 FROM base AS plandex
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
-RUN chmod 0755 /usr/local/bin/plandex
-# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
-RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
-    apt-get autoremove -y; \
-    apt-get clean; \
-    apt-get remove --purge -y --allow-remove-essential apt || true; \
-    npm prune --omit=dev || true; \
-    npm cache clean --force; \
-    rm -rf /root/.npm /root/.cache; \
-    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
-    rm -rf /usr/share/locale/*; \
-    rm -rf /var/lib/apt/lists/*; \
-    rm -rf /var/cache/apt/apt-file/; \
-  fi
+RUN chmod 0755 /usr/local/bin/plandex; \
+    if [ "$KEEP_APT" = "0" ]; then \
+      apt-get remove -y procps || true; \
+      apt-get autoremove -y; \
+      apt-get clean; \
+      apt-get remove --purge -y --allow-remove-essential apt || true; \
+      npm prune --omit=dev || true; \
+      npm cache clean --force; \
+      rm -rf /root/.npm /root/.cache; \
+      rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
+      rm -rf /usr/share/locale/*; \
+      rm -rf /var/lib/apt/lists/*; \
+      rm -rf /var/cache/apt/apt-file/; \
+    fi
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
@@ -883,18 +882,17 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Plandex slim image (copy binary; shims-first PATH) ---
 FROM base-slim AS plandex-slim
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
-RUN chmod 0755 /usr/local/bin/plandex
-# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
-RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps curl || true; \
-    apt-get autoremove -y; \
-    apt-get clean; \
-    apt-get remove --purge -y --allow-remove-essential apt || true; \
-    npm prune --omit=dev || true; \
-    npm cache clean --force; \
-    rm -rf /root/.npm /root/.cache; \
-    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
-    rm -rf /var/lib/apt/lists/*; \
-    rm -rf /var/cache/apt/apt-file/; \
-  fi
+RUN chmod 0755 /usr/local/bin/plandex; \
+    if [ "$KEEP_APT" = "0" ]; then \
+      apt-get remove -y procps curl || true; \
+      apt-get autoremove -y; \
+      apt-get clean; \
+      apt-get remove --purge -y --allow-remove-essential apt || true; \
+      npm prune --omit=dev || true; \
+      npm cache clean --force; \
+      rm -rf /root/.npm /root/.cache; \
+      rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+      rm -rf /var/lib/apt/lists/*; \
+      rm -rf /var/cache/apt/apt-file/; \
+    fi
