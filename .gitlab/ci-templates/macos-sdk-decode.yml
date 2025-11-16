@@ -1,0 +1,40 @@
+# Template snippet to decode the Apple SDK from the masked variable into the build context.
+# Include this in jobs that need to build the macos-cross-rust-builder image, e.g.:
+#
+# include:
+#   - local: '.gitlab/ci-templates/macos-sdk-decode.yml'
+#
+# build-macos-cross-rust-builder:
+#   extends: .decode-apple-sdk
+#   stage: build
+#   before_script:
+#     - ci/bin/decode-apple-sdk.sh
+#     - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+#   script:
+#     - echo "Place docker build/kaniko step here in Phase 2..."
+#   rules:
+#     - if: $CI_COMMIT_TAG
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: manual
+
+variables:
+  OSX_SDK_FILENAME: "MacOSX13.3.sdk.tar.xz"
+
+.decode-apple-sdk:
+  image: debian:bookworm-slim
+  tags: [ qual-mcap-gcp ]
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates coreutils
+    - mkdir -p ci/osx
+    - test -n "$APPLE_SDK_BASE64"
+    - /bin/sh ci/bin/decode-apple-sdk.sh
+    - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+  script:
+    - echo "Decoded Apple SDK; ready to build (Phase 2 will add build steps)."
+  artifacts:
+    paths: []
+    when: never
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual

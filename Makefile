@@ -159,6 +159,10 @@ help: banner
 	@echo ""
 	@echo "  build-launcher .............. Build the Rust host launcher (cargo build --release)"
 	@echo ""
+	@echo "  build-launcher-macos-cross ......... Build aifo-coder for macOS arm64 and x86_64 using cross image"
+	@echo "  build-launcher-macos-cross-arm64 ... Build aifo-coder for macOS arm64 using cross image"
+	@echo "  build-launcher-macos-cross-x86_64 .. Build aifo-coder for macOS x86_64 using cross image"
+	@echo ""
 	@echo "  build-coder ................. Build both slim and fat images (all agents)"
 	@echo "  build-fat ................... Build all fat images (codex, crush, aider, openhands, opencode, plandex)"
 	@echo "  build-slim .................. Build all slim images (codex-slim, crush-slim, aider-slim, openhands-slim, opencode-slim, plandex-slim)"
@@ -182,6 +186,7 @@ help: banner
 	@echo "  build-toolchain-cpp ......... Build the C-CPP toolchain sidecar image ($(TC_REPO_CPP):latest)"
 	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
+	@echo "  build-macos-cross-rust-builder Build the macOS cross image (requires ci/osx/$${OSX_SDK_FILENAME})"
 	@echo ""
 	@echo "  build-debug ................. Debug-build a single Docker stage with buildx and plain logs"
 	@echo "                                Use STAGE=codex|crush|aider|*-slim|rust-builder (default: aider) to specify Docker stage"
@@ -213,6 +218,7 @@ help: banner
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the C-CPP toolchain image without cache"
 	@echo ""
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
+	@echo "  rebuild-macos-cross-rust-builder Rebuild the macOS cross image (no cache, pull fresh base)"
 	@echo ""
 	$(call title,Rebuild existing images by prefix:)
 	@echo ""
@@ -242,6 +248,7 @@ help: banner
 	@echo "  publish-openhands-slim ...... Buildx multi-arch and push OpenHands (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-opencode-slim ....... Buildx multi-arch and push OpenCode (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-plandex-slim ........ Buildx multi-arch and push Plandex (slim; set PLATFORMS=... PUSH=1)"
+	@echo ""
 	@echo "  Note: set PLATFORMS=linux/amd64,linux/arm64 and PUSH=1 to push multi-arch."
 	@echo "        The Plandex Go builder honors TARGETOS/TARGETARCH for buildx."
 	@echo ""
@@ -269,6 +276,9 @@ help: banner
 	@echo "  git-commit-no-sign .......... Commit staged changes without GPG signing (MESSAGE='your message')"
 	@echo "  git-commit-no-sign-all ...... Stage all and commit without signing (MESSAGE='your message' optional)"
 	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
+	@echo ""
+	@echo "  validate-macos-artifact ..... Validate macOS arm64 binary with file(1)"
+	@echo "  validate-macos-artifact-x86_64 Validate macOS x86_64 binary with file(1)"
 	@echo ""
 	$(call title,Test targets:)
 	@echo ""
@@ -401,6 +411,8 @@ OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
+MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
+OSX_SDK_FILENAME ?= MacOSX.sdk.tar.xz
 # Include Windows cross toolchain (mingw) automatically on Windows shells
 RUST_BUILDER_WITH_WIN ?= 0
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
@@ -538,6 +550,189 @@ build-rust-builder:
 	else \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
+
+.PHONY: build-macos-cross-rust-builder rebuild-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
+build-macos-cross-rust-builder:
+	@set -e; \
+	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "Error: SDK file 'ci/osx/$(OSX_SDK_FILENAME)' not found. Decode it via ci/bin/decode-apple-sdk.sh or place it locally."; \
+	  exit 1; \
+	fi; \
+	$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
+	if [ -n "$$REG" ]; then \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	else \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	fi
+
+rebuild-macos-cross-rust-builder:
+	@set -e; \
+	if [ ! -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "Error: SDK file 'ci/osx/$(OSX_SDK_FILENAME)' not found. Decode it via ci/bin/decode-apple-sdk.sh or place it locally."; \
+	  exit 1; \
+	fi; \
+	$(MIRROR_CHECK_STRICT); \
+	$(REG_SETUP_WITH_FALLBACK); \
+	if docker buildx version >/dev/null 2>&1; then \
+	  echo "Rebuilding macOS cross image with buildx (no-cache, pull) ..."; \
+	  if [ -n "$(CACHE_DIR)" ] && [ -d "$(CACHE_DIR)" ]; then echo "Purging local buildx cache at $(CACHE_DIR) ..."; rm -rf "$(CACHE_DIR)" || true; fi; \
+	  if [ -n "$$REG" ]; then \
+	    docker buildx build --no-cache --pull --load \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) \
+	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	  else \
+	    docker buildx build --no-cache --pull --load \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
+	else \
+	  echo "Rebuilding macOS cross image with classic docker build (no-cache, pull) ..."; \
+	  if [ -n "$$REG" ]; then \
+	    docker build --no-cache --pull \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) \
+	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	  else \
+	    docker build --no-cache --pull \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
+	      --target macos-cross-rust-builder \
+	      -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	  fi; \
+	fi
+
+build-launcher-macos-cross-arm64:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Building macOS arm64 launcher inside $(MACOS_CROSS_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'rustup target add aarch64-apple-darwin || true; cargo build --release --target aarch64-apple-darwin'; \
+	BIN="target/aarch64-apple-darwin/release/aifo-coder"; \
+	if [ -x "$$BIN" ]; then \
+	  if command -v file >/dev/null 2>&1; then file "$$BIN" | sed -n "1p"; fi; \
+	  echo "Built $$BIN"; \
+	else \
+	  echo "Error: $$BIN not found or not executable"; \
+	  exit 2; \
+	fi
+
+# Aggregate: build both arm64 and x86_64
+build-launcher-macos-cross: build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
+
+build-launcher-macos-cross-x86_64:
+	@set -e; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Building macOS x86_64 launcher inside $(MACOS_CROSS_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
+	  -v "$$PWD/target:/workspace/target" \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'rustup target add x86_64-apple-darwin || true; cargo build --release --target x86_64-apple-darwin'; \
+	BIN="target/x86_64-apple-darwin/release/aifo-coder"; \
+	if [ -x "$$BIN" ]; then \
+	  if command -v file >/dev/null 2>&1; then file "$$BIN" | sed -n "1p"; fi; \
+	  echo "Built $$BIN"; \
+	else \
+	  echo "Error: $$BIN not found or not executable"; \
+	  exit 2; \
+	fi
+
+.PHONY: validate-macos-artifact
+validate-macos-artifact:
+	@set -e; \
+	BIN1="dist/aifo-coder-macos-arm64"; \
+	BIN2="target/aarch64-apple-darwin/release/aifo-coder"; \
+	if [ -f "$$BIN1" ]; then BIN="$$BIN1"; \
+	elif [ -f "$$BIN2" ]; then BIN="$$BIN2"; \
+	else \
+	  echo "Error: macOS artifact not found at $$BIN1 or $$BIN2"; \
+	  exit 2; \
+	fi; \
+	if command -v file >/dev/null 2>&1; then \
+	  out="$$(file "$$BIN" | sed -n "1p")"; echo "$$out"; \
+	  echo "$$out" | grep -qi "Mach-O 64-bit arm64" || { \
+	    echo "Validation failed: not a Mach-O 64-bit arm64 binary."; exit 3; \
+	  }; \
+	else \
+	  echo "Warning: file(1) not available; skipping validation."; \
+	fi; \
+	echo "macOS artifact validation OK: $$BIN"
+
+.PHONY: test-macos-cross-image
+test-macos-cross-image:
+	@set -e; \
+	if ! docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "Error: $(MACOS_CROSS_IMAGE) not present locally. Hint: make build-macos-cross-rust-builder"; \
+	  exit 1; \
+	fi; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
+	case "$$OS" in \
+	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
+	  *) case "$$ARCH" in \
+	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
+	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
+	       *) DOCKER_PLATFORM_ARGS="" ;; \
+	     esac ;; \
+	esac; \
+	echo "Running macOS cross image tests inside $(MACOS_CROSS_IMAGE) ..."; \
+	MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  -v "$$PWD:/workspace" \
+	  -v "$$PWD/target:/workspace/target" \
+	  -w /workspace \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; unset LD; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+
+.PHONY: validate-macos-artifact-x86_64
+validate-macos-artifact-x86_64:
+	@set -e; \
+	BIN1="dist/aifo-coder-macos-x86_64"; \
+	BIN2="target/x86_64-apple-darwin/release/aifo-coder"; \
+	if [ -f "$$BIN1" ]; then BIN="$$BIN1"; \
+	elif [ -f "$$BIN2" ]; then BIN="$$BIN2"; \
+	else \
+	  echo "Error: macOS artifact not found at $$BIN1 or $$BIN2"; \
+	  exit 2; \
+	fi; \
+	if command -v file >/dev/null 2>&1; then \
+	  out="$$(file "$$BIN" | sed -n "1p")"; echo "$$out"; \
+	  echo "$$out" | grep -qi "Mach-O 64-bit x86_64" || { \
+	    echo "Validation failed: not a Mach-O 64-bit x86_64 binary."; exit 3; \
+	  }; \
+	else \
+	  echo "Warning: file(1) not available; skipping validation."; \
+	fi; \
+	echo "macOS artifact validation OK: $$BIN"
 
 .PHONY: build-debug
 build-debug:
@@ -1442,12 +1637,18 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^e2e_/)' ; \
+	  EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
 	else \
 	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
+	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
+	  $(MAKE) test-macos-cross-image; \
+	else \
+	  echo "macOS cross image $(MACOS_CROSS_IMAGE) not found locally; skipping macOS cross E2E."; \
+	fi
 
 test-integration-suite:
 	@set -e; \

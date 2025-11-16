@@ -223,6 +223,197 @@ build-toolchain:
     matrix:
       - FOLDER: [ "rust", "node", "cpp" ]
 
+# Build macOS cross image (Kaniko) and macOS launcher
+
+prepare-apple-sdk:
+  stage: build
+  image: alpine:3.20
+  interruptible: true
+  timeout: 15m
+  tags:
+    - qual-mcap-gcp
+  variables:
+    OSX_SDK_FILENAME: "MacOSX.sdk.tar.xz"
+  script:
+    - |
+      set -euo pipefail
+      mkdir -p ci/osx
+      if [ -n "${APPLE_SDK_URL:-}" ]; then
+        apk add --no-cache curl >/dev/null
+        src="$(basename "$APPLE_SDK_URL")"
+        tmp="ci/osx/${src}"
+        echo "Downloading Apple SDK from APPLE_SDK_URL into ${tmp} ..."
+        curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o "${tmp}"
+        if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+          echo "${APPLE_SDK_SHA256}  ${tmp}" | sha256sum -c -
+        else
+          echo "Warning: APPLE_SDK_SHA256 not set; skipping pre-move verification." >&2
+        fi
+        mv -f "${tmp}" "ci/osx/${OSX_SDK_FILENAME}"
+      elif [ -n "${APPLE_SDK_BASE64:-}" ]; then
+        echo "Decoding APPLE_SDK_BASE64 into ci/osx/${OSX_SDK_FILENAME} (fallback) ..."
+        printf '%s' "$APPLE_SDK_BASE64" | base64 -d > "ci/osx/${OSX_SDK_FILENAME}"
+      else
+        echo "Error: neither APPLE_SDK_URL nor APPLE_SDK_BASE64 is set. Provide a URL (preferred) or a base64 fallback." >&2
+        exit 1
+      fi
+      ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+      # Verify again against stable filename if a checksum is provided
+      if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+        echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME}" | sha256sum -c -
+      else
+        echo "Warning: APPLE_SDK_SHA256 not set; computing and storing checksum only." >&2
+      fi
+      sha256sum "ci/osx/${OSX_SDK_FILENAME}" | tee "ci/osx/${OSX_SDK_FILENAME}.sha256" >/dev/null
+      if command -v xz >/dev/null 2>&1; then xz -t "ci/osx/${OSX_SDK_FILENAME}" || echo "WARNING: xz test failed" >&2; fi
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - ci/osx/${OSX_SDK_FILENAME}
+      - ci/osx/${OSX_SDK_FILENAME}.sha256
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+
+build-macos-cross-rust-builder:
+  extends: container-build
+  stage: build
+  interruptible: true
+  timeout: 60m
+  resource_group: macos-cross-rust-builder
+  tags:
+    - qual-mcap-gcp-mem4G
+  needs:
+    - job: prepare-apple-sdk
+      artifacts: true
+      optional: true
+  variables:
+    TARGET_NAME: "macos-cross-rust-builder"
+    IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
+    OSX_SDK_FILENAME: "MacOSX.sdk.tar.xz"
+  before_script:
+    - mkdir -p ci/osx
+    - |
+      if [ -f "ci/osx/${OSX_SDK_FILENAME}" ]; then
+        echo "Using SDK artifact: ci/osx/${OSX_SDK_FILENAME}"
+      elif found="$(ls -1 ci/osx/MacOSX*.sdk.tar.* 2>/dev/null | head -n1)"; then
+        echo "Found legacy SDK artifact: ${found}"
+        export OSX_SDK_FILENAME="$(basename "${found}")"
+      elif [ -n "${APPLE_SDK_BASE64:-}" ]; then
+        echo "Decoding APPLE_SDK_BASE64 into ci/osx/${OSX_SDK_FILENAME} ..."
+        /bin/sh ci/bin/decode-apple-sdk.sh
+      else
+        echo "Error: ci/osx/${OSX_SDK_FILENAME} not found and APPLE_SDK_BASE64 not set." >&2
+        echo "Hint: ensure the 'prepare-apple-sdk' job runs in the same pipeline and is listed in needs (artifacts: true)." >&2
+        exit 1
+      fi
+      if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+        echo "${APPLE_SDK_SHA256}  ci/osx/${OSX_SDK_FILENAME}" | sha256sum -c -
+      elif [ -f "ci/osx/${OSX_SDK_FILENAME}.sha256" ]; then
+        sha256sum -c "ci/osx/${OSX_SDK_FILENAME}.sha256"
+      else
+        echo "Warning: no APPLE_SDK_SHA256 provided and no .sha256 artifact found; skipping verification." >&2
+      fi
+    - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
+    - |
+      if [ -n "${APPLE_SDK_URL:-}" ]; then
+        export OSXCROSS_SDK_TARBALL="$(basename "$APPLE_SDK_URL")"
+        KANIKO_CUSTOM_BUILD_ARGUMENTS="${KANIKO_CUSTOM_BUILD_ARGUMENTS} OSXCROSS_SDK_TARBALL=${OSXCROSS_SDK_TARBALL}"
+        export KANIKO_CUSTOM_BUILD_ARGUMENTS
+      fi
+    - |
+      IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
+      # Use time-based snapshotting to reduce Kaniko memory usage
+      KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
+      # If TARGET_NAME or TARGET is provided, add --target attribute to build
+      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
+  after_script:
+    - |
+      echo "Debug: cross-image build refs"
+      echo "  CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE"
+      echo "  CI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG"
+      echo "  IMAGE_TAG_CUSTOM=${IMAGE_TAG_CUSTOM:-unset}"
+      if [ -f container_image_name_and_tag.txt ]; then
+        echo "  container_image_name_and_tag.txt:"
+        cat container_image_name_and_tag.txt || true
+      else
+        echo "  container_image_name_and_tag.txt not found."
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_TAG
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
+        IMAGE_TAG_CUSTOM_ONLY: "true"
+      when: on_success
+
+build-launcher-macos:
+  stage: build
+  timeout: 45m
+  interruptible: true
+  needs:
+    - build-macos-cross-rust-builder
+  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
+  tags:
+    - qual-mcap-gcp
+  script:
+    - rustc --version; cargo --version
+    - rustup target add aarch64-apple-darwin || true
+    - cargo build --release --target aarch64-apple-darwin
+    - mkdir -p dist
+    - cp target/aarch64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-arm64
+    - file dist/aifo-coder-macos-arm64 | grep -qi 'Mach-O 64-bit arm64' || { echo "not a Mach-O arm64"; exit 2; }
+    - command -v otool >/dev/null 2>&1 && otool -hv dist/aifo-coder-macos-arm64 || true
+  artifacts:
+    paths:
+      - dist/aifo-coder-macos-arm64
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG
+
+build-launcher-macos-x86_64:
+  stage: build
+  timeout: 45m
+  interruptible: true
+  needs:
+    - build-macos-cross-rust-builder
+  image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
+  tags:
+    - qual-mcap-gcp
+  script:
+    - rustc --version; cargo --version
+    - rustup target add x86_64-apple-darwin || true
+    - cargo build --release --target x86_64-apple-darwin
+    - mkdir -p dist
+    - cp target/x86_64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-x86_64
+    - file dist/aifo-coder-macos-x86_64 | grep -qi 'Mach-O 64-bit x86_64' || { echo "not a Mach-O x86_64"; exit 2; }
+    - command -v otool >/dev/null 2>&1 && otool -hv dist/aifo-coder-macos-x86_64 || true
+  artifacts:
+    paths:
+      - dist/aifo-coder-macos-x86_64
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG
+
 
 # Build executables
 
@@ -251,6 +442,8 @@ build-launcher:
     expire_in: 1 week
     paths:
       - aifo-coder
+      - dist/aifo-coder-macos-arm64
+      - dist/aifo-coder-macos-x86_64
       - README.md
       - NOTICE
       - LICENSE
@@ -392,6 +585,47 @@ test-e2e:
         RB_IMAGE: "$CI_REGISTRY_IMAGE/aifo-coder-rust-builder:ci"
       when: on_success
 
+test-macos-cross-image:
+  stage: test
+  interruptible: true
+  timeout: 45m
+  needs:
+    - job: build-macos-cross-rust-builder
+  image: $CROSS_IMAGE_PATH:$CROSS_IMAGE_TAG
+  tags:
+    - qual-mcap-gcp
+  variables:
+    RUST_BACKTRACE: "1"
+  script:
+    - export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; unset LD; rustc --version; /usr/local/cargo/bin/cargo --version || true
+    - /usr/local/cargo/bin/cargo nextest -V || /usr/local/cargo/bin/cargo install cargo-nextest --locked
+    - /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
+  rules:
+    # Run on release tags: plain path + tag
+    - if: $CI_COMMIT_TAG
+      variables:
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_TAG"
+      when: on_success
+    # Scheduled pipelines: namespaced by ref slug + commit SHA
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
+      when: on_success
+    # Default branch: namespaced by ref slug + commit SHA
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
+      when: on_success
+    # Merge requests: namespaced by ref slug + commit SHA
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
+      when: on_success
+
 lint-dockerfiles:
   stage: test
   image: repository.migros.net/hadolint/hadolint:2.12.0-debian
@@ -442,8 +676,13 @@ publish-release:
       - runner_system_failure
       - api_failure
       - stuck_or_timeout_failure
-  dependencies:
-    - build-launcher
+  needs:
+    - job: build-launcher
+      artifacts: true
+    - job: build-launcher-macos
+      artifacts: true
+    - job: build-launcher-macos-x86_64
+      artifacts: true
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
   image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:v0.24.0
@@ -463,6 +702,10 @@ publish-release:
     assets:
       links:
         - name: aifo-coder
+          url: $CI_JOB_URL/artifacts/download
+        - name: aifo-coder-macos-arm64
+          url: $CI_JOB_URL/artifacts/download
+        - name: aifo-coder-macos-x86_64
           url: $CI_JOB_URL/artifacts/download
   rules:
     - if: $CI_COMMIT_TAG
