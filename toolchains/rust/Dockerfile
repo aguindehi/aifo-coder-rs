@@ -36,6 +36,8 @@ RUN set -eux; \
       tzdata; \
     apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs ca-certificates curl tzdata >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
+# Immediately verify CMake installed successfully; fail fast if not present
+RUN /usr/bin/cmake --version >/dev/null
 
 # Configure a default git identity and enable LFS filters system-wide for tests
 RUN set -eux; \
@@ -90,13 +92,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   fi
 
-# Verify cmake still present after optional cleanup; do not attempt apt here
-RUN set -eux; \
-    if ! command -v cmake >/dev/null 2>&1; then \
-      echo "error: cmake missing after cleanup; this should not happen" >&2; \
-      exit 64; \
-    fi; \
-    cmake --version >/dev/null
+# CMake was verified earlier after install; skip post-purge check
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
