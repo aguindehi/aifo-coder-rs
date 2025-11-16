@@ -340,8 +340,7 @@ WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
-# will get added by the top layer
-#ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
@@ -355,7 +354,7 @@ CMD ["bash"]
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 # hadolint ignore=SC2026
@@ -379,7 +378,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 # hadolint ignore=SC2026
@@ -455,7 +454,7 @@ FROM base AS aider
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
@@ -529,7 +528,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
   fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 # hadolint ignore=SC2026
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -565,7 +564,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
   fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
@@ -620,7 +619,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base AS plandex
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 RUN chmod 0755 /usr/local/bin/plandex
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 RUN if [ "$KEEP_APT" = "0" ]; then \
     apt-get remove -y procps || true; \
@@ -644,8 +643,7 @@ WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
-# will get added by the top layer
-#ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
@@ -658,7 +656,7 @@ CMD ["bash"]
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -680,7 +678,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
@@ -755,7 +753,7 @@ FROM base-slim AS aider-slim
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
-ENV PATH="/opt/aifo/bin:${PATH}"
+# Inherit /opt/aifo/bin PATH from base
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
