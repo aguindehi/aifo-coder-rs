@@ -14,14 +14,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # hadolint ignore=DL3008
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
       ca-certificates \
       curl \
       git \
-      procps \
       unzip; \
     apt-mark manual ca-certificates curl git unzip >/dev/null 2>&1 || true; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
 
 # Home, caches and PATH defaults
 ENV HOME=/home/coder \
@@ -107,10 +106,10 @@ WORKDIR /workspace
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
-    apt-get autoremove -y; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm /usr/bin/apt /usr/bin/apt-cache /usr/bin/apt-cdrom /usr/bin/apt-config /usr/bin/apt-get; \
+    rm /usr/bin/apt-key /usr/bin/apt-mark; \
   fi
 # Verify critical tools still present after optional cleanup (fail fast if missing)
 RUN command -v curl >/dev/null && git --version >/dev/null

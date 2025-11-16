@@ -4,7 +4,7 @@
 # - System packages commonly needed by crates
 # - Ensures CARGO_HOME=/home/coder/.cargo and PATH prepends $CARGO_HOME/bin, keeps /usr/local/cargo/bin
 
-ARG RUST_TAG=1-bookworm
+ARG RUST_TAG=1-slim-bookworm
 ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
@@ -16,7 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # hadolint ignore=DL3008
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \
       build-essential \
       pkg-config \
       cmake \
@@ -30,14 +30,15 @@ RUN set -eux; \
       libcurl4-openssl-dev \
       git \
       git-lfs \
-      docker.io \
       ca-certificates \
       curl \
       procps \
-      tzdata \
-      locales; \
-    apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs docker.io ca-certificates curl tzdata locales >/dev/null 2>&1 || true; \
-    rm -rf /var/lib/apt/lists/*
+      tzdata; \
+    apt-mark manual build-essential pkg-config cmake cmake-data ninja-build clang libclang-dev python3 libssl-dev zlib1g-dev libsqlite3-dev libcurl4-openssl-dev git git-lfs ca-certificates curl tzdata >/dev/null 2>&1 || true; \
+    apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*
+# Immediately verify CMake installed successfully; fail fast if not present
+RUN /usr/bin/cmake --version >/dev/null
 
 # Configure a default git identity and enable LFS filters system-wide for tests
 RUN set -eux; \
@@ -80,25 +81,32 @@ RUN set -eux; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
     cargo install cargo-nextest --locked; \
-    cargo install grcov --locked
+    cargo install grcov --locked; \
+    strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
 
 # Optionally drop procps from final image to reduce footprint
 RUN if [ "$KEEP_APT" = "0" ]; then \
-    apt-get remove -y procps || true; \
-    apt-get autoremove -y; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm /usr/bin/apt /usr/bin/apt-cache /usr/bin/apt-cdrom /usr/bin/apt-config /usr/bin/apt-get; \
+    rm /usr/bin/apt-key /usr/bin/apt-mark /bin/kill /bin/ps /sbin/sysctl /usr/bin/free /usr/bin/pgrep; \
+    rm /usr/bin/pidwait /usr/bin/pmap /usr/bin/pwdx /usr/bin/skill; \
+    rm /usr/bin/slabtop /usr/bin/tload /usr/bin/top /usr/bin/uptime /usr/bin/vmstat /usr/bin/w /usr/bin/watch; \
+    rm /usr/bin/pkill /usr/bin/snice; \
   fi
 
-# Verify cmake still present after optional cleanup; if missing, re-install and mark manual, then verify
+# Verify CMake still present after cleanup; if missing, re-install and verify (APT retained)
 RUN set -eux; \
-    if ! command -v cmake >/dev/null 2>&1; then \
+    if [ ! -x /usr/bin/cmake ]; then \
+      echo "warning: /usr/bin/cmake missing after cleanup; re-installing cmake ..." >&2; \
       apt-get update; \
-      apt-get install -y --no-install-recommends cmake cmake-data; \
+      apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends cmake cmake-data; \
       apt-mark manual cmake cmake-data >/dev/null 2>&1 || true; \
+      apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; \
       rm -rf /var/lib/apt/lists/*; \
     fi; \
-    cmake --version >/dev/null
+    /usr/bin/cmake --version >/dev/null
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace

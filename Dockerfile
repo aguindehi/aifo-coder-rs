@@ -6,14 +6,15 @@
 ARG REGISTRY_PREFIX
 
 # --- Base layer: Rust image ---
-FROM ${REGISTRY_PREFIX}rust:1-bookworm AS rust-base
+FROM ${REGISTRY_PREFIX}rust:1-slim-bookworm AS rust-base
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -y upgrade; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
 
 # --- Rust target builder for Linux, Windows & macOS ---
 FROM rust-base AS rust-builder
 ARG WITH_WIN=0
+ARG CLEAN_CARGO=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
@@ -29,14 +30,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
-    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends pkg-config git-lfs ca-certificates; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends make git pkg-config git-lfs ca-certificates; \
     if [ "${WITH_WIN:-0}" = "1" ]; then \
         apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
         /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
     fi; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
+    /usr/local/cargo/bin/rustup set profile minimal; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
     /usr/local/cargo/bin/rustup component add clippy rustfmt; \
+    rm -rf /usr/local/rustup/downloads /usr/local/rustup/tmp; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -44,7 +47,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # Pre-install cargo-nextest to speed up tests inside this container
 # hadolint ignore=DL3059
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -55,17 +58,23 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
-    rm -rf /usr/local/cargo/registry /usr/local/cargo/git; \
+    strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
-# Build the Rust aifo-shim binary for the current build platform
+# --- Shim compile stage (throwaway; contains sources only) ---
+FROM rust-base AS shim-builder
+ARG CLEAN_CARGO=0
+WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
+# Build the Rust aifo-shim binary for the current build platform without baking sources into rust-builder
 COPY Cargo.toml .
 COPY build.rs .
 COPY src ./src
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -77,6 +86,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     /usr/local/cargo/bin/cargo build --release --bin aifo-shim; \
     install -d -m 0755 /workspace/out; \
     cp target/release/aifo-shim /workspace/out/aifo-shim; \
+    strip /workspace/out/aifo-shim 2>/dev/null || true; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
     rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -199,13 +210,13 @@ RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
 
 # embed compiled Rust PATH shim into agent images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
@@ -290,7 +301,7 @@ CMD ["bash"]
 # --- Codex image (adds only Codex CLI on top of base) ---
 FROM base AS codex
 # Codex docs: npm i -g @openai/codex
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -314,7 +325,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Crush image (adds only Crush CLI on top of base) ---
 FROM base AS crush
 # Crush docs: npm i -g @charmland/crush
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -337,7 +348,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv python3-pip build-essential pkg-config libssl-dev; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv python3-pip build-essential pkg-config libssl-dev; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 # Python: Aider via uv (PEP 668-safe)
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
@@ -388,7 +399,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PATH="/opt/aifo/bin:${PATH}"
@@ -496,6 +507,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
+  npm cache clean --force; rm -rf /root/.npm /root/.cache; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -574,13 +586,13 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 WORKDIR /workspace
 
 # embed compiled Rust PATH shim into slim images, but do not yet add to PATH
 RUN install -d -m 0755 /opt/aifo/bin
 # Install compiled Rust aifo-shim and shell wrappers for sh/bash/dash
-COPY --from=rust-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
+COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
 # hadolint ignore=SC2016,SC2026
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
@@ -664,7 +676,7 @@ CMD ["bash"]
 
 # --- Codex slim image ---
 FROM base-slim AS codex-slim
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -686,7 +698,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 ENV PATH="/opt/aifo/bin:${PATH}"
 ARG KEEP_APT=0
 # Optionally drop apt/procps from final image to reduce footprint
@@ -708,7 +720,7 @@ RUN if [ "$KEEP_APT" = "0" ]; then \
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv python3-pip build-essential pkg-config libssl-dev; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv python3-pip build-essential pkg-config libssl-dev; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 # Python: Aider via uv (PEP 668-safe)
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
@@ -776,6 +788,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
             fi; \
             /opt/venv/bin/python -m playwright install --with-deps chromium; \
+            rm -rf /root/.cache; \
             if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
                 rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
                 command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -865,6 +878,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
+  npm cache clean --force; rm -rf /root/.npm /root/.cache; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \

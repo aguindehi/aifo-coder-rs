@@ -11,6 +11,7 @@ include:
 
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
+  KEEP_APT: "0"
 
 # Workflow
 
@@ -124,10 +125,20 @@ build-rust-builder:
   resource_group: "rust-builder-${IMAGE_TAG_CUSTOM}"
   tags:
     - qual-mcap-gcp
+  before_script:
+    - |
+      IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
+      # Use time-based snapshotting to reduce Kaniko memory usage
+      KANIKO_BUILD_OPTIONS="--snapshotMode=time --use-new-run"
+      # If TARGET_NAME or TARGET is provided, add --target attribute to build
+      [ -n "${TARGET_NAME:-$TARGET}" ] && KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --target ${TARGET_NAME:-$TARGET}"
+      # Pass CLEAN_CARGO as a build-arg via job variable (avoids abusing KANIKO_CUSTOM_BUILD_ARGUMENTS)
+      KANIKO_BUILD_OPTIONS="${KANIKO_BUILD_OPTIONS} --build-arg CLEAN_CARGO=${CLEAN_CARGO:-1}"
   variables:
     TARGET_NAME: "rust-builder"
     IMAGE_PATH_EXTRA: "rust-builder"
     KANIKO_CUSTOM_BUILD_ARGUMENTS: "REGISTRY_PREFIX=repository.migros.net/"
+    CLEAN_CARGO: "1"
   # Consolidated rules: tags -> :$CI_COMMIT_TAG, default-branch changes -> :ci, branches/MRs -> per-commit <$CI_COMMIT_REF_SLUG>:$CI_COMMIT_SHA
   rules:
     # Release tags: publish builder as :$CI_COMMIT_TAG
