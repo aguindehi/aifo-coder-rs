@@ -392,7 +392,6 @@ build-macos-cross-rust-builder:
         IMAGE_TAG_CUSTOM_ONLY: "true"
     - if: $CI_PIPELINE_SOURCE == "schedule" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
-        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
@@ -400,7 +399,6 @@ build-macos-cross-rust-builder:
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
-        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
@@ -408,7 +406,6 @@ build-macos-cross-rust-builder:
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
-        IMAGE_PATH_EXTRA: "macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
         IMAGE_TAG_CUSTOM: $CI_COMMIT_SHA
         IMAGE_TAG_CUSTOM_ONLY: "true"
       when: on_success
