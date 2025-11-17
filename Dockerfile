@@ -426,7 +426,6 @@ ENV PATH="/opt/venv/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
-ARG KEEP_APT=0
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         CAF=/run/secrets/migros_root_ca; \
