@@ -3,6 +3,7 @@
 # - Cargo tools: cargo-nextest (installed with --locked)
 # - System packages commonly needed by crates
 # - Ensures CARGO_HOME=/home/coder/.cargo and PATH prepends $CARGO_HOME/bin, keeps /usr/local/cargo/bin
+# - Note: CMake verification and system git configuration consolidated into base deps RUN to reduce layers
 
 ARG RUST_TAG=1-slim-bookworm
 ARG REGISTRY_PREFIX
@@ -46,6 +47,7 @@ RUN set -eux; \
     git lfs install --system || true
 
 # Optionally trust corporate CA via BuildKit secret and update system trust store
+# Note: CMake verification and system git config consolidated into base deps RUN above
 # Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
 RUN --mount=type=secret,id=migros_root_ca,required=false,target=/run/secrets/MigrosRootCA2.crt \
     if [ -s /run/secrets/MigrosRootCA2.crt ]; then \
