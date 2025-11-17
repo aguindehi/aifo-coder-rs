@@ -38,8 +38,8 @@ RUN set -eux; \
     mkdir -p /home/coder/.cache /home/coder/.local/share/pnpm /home/coder/.npm; \
     chmod -R 0777 /home/coder || true
 
-# Enable corepack and activate yarn/pnpm channels (with optional enterprise CA injection)
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+# Enable corepack (yarn/pnpm) and install deno in a single RUN (with optional enterprise CA injection)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -eu; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
       install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -52,24 +52,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     corepack enable; \
     corepack prepare yarn@stable --activate; \
     corepack prepare pnpm@latest --activate; \
-    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
-      rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-    fi'
-
-# Install Deno system-wide to /usr/local/bin/deno (with optional enterprise CA injection)
-# hadolint ignore=DL3059
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -eu; \
-    CAF=/run/secrets/migros_root_ca; \
-    if [ -f "$CAF" ]; then \
-      install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
-      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
-    fi; \
+    # Deno install (direct binary preferred; fallback to installer) \
     INSTALLED=0; \
-    # Prefer direct binary download from dl.deno.land to avoid installer network issues \
-    ver="$(curl -fsSL https://dl.deno.land/release-latest.txt | tr -d '\r' | tr -d '\n' || true)"; \
+    ver="$(curl -fsSL https://dl.deno.land/release-latest.txt | tr -d '\''\r'\'' | tr -d '\''\n'\'' || true)"; \
     if [ -n "$ver" ]; then \
       arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; \
       case "$arch" in aarch64|arm64) triple="aarch64-unknown-linux-gnu" ;; x86_64|amd64) triple="x86_64-unknown-linux-gnu" ;; *) triple="";; esac; \
@@ -97,10 +82,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
       sh "$tmp" -d /usr/local; \
       rm -f "$tmp"; \
     fi; \
+    # Best-effort strip to reduce size \
+    strip /usr/local/bin/deno 2>/dev/null || true; \
+    # Remove injected enterprise CA (best-effort) \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
       rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
       command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
+
+# Consolidated into the previous RUN (corepack + yarn/pnpm + deno + CA cleanup)
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace
