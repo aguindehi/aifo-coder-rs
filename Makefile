@@ -66,6 +66,7 @@ title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG
+export DOCKER_BUILDKIT ?= 1
 
 banner:
 	@echo ""
