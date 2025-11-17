@@ -39,6 +39,8 @@ RUN set -eux; \
     chmod -R 0777 /home/coder || true
 
 # Enable corepack (yarn/pnpm) and install deno in a single RUN (with optional enterprise CA injection)
+# Guardrail: This uses BuildKit RUN --mount=type=secret for enterprise CA; CI relies on Kaniko --use-new-run.
+# Best-effort CA handling: inject inside RUN and remove in the same RUN to avoid persisting CA in layers.
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -eu; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \

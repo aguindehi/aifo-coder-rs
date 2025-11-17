@@ -47,6 +47,7 @@ RUN set -eux; \
     git lfs install --system || true
 
 # Optionally trust corporate CA via BuildKit secret and update system trust store
+# Guardrail: This uses BuildKit RUN --mount=type=secret; CI relies on Kaniko --use-new-run to support this.
 # Note: CMake verification and system git config consolidated into base deps RUN above
 # Pass during build: --secret id=migros_root_ca,src=$HOME/.certificates/MigrosRootCA2.crt
 RUN --mount=type=secret,id=migros_root_ca,required=false,target=/run/secrets/MigrosRootCA2.crt \

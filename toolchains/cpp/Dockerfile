@@ -9,6 +9,8 @@ ARG KEEP_APT
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Base developer toolchain for C/C++
+# Guardrail: Uses BuildKit RUN --mount for secret/caches; CI relies on Kaniko --use-new-run to support these mounts.
+# Best-effort CA handling: inject inside RUN and remove in the same RUN to avoid persisting CA in layers.
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt/lists sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config ccache procps ca-certificates git; apt-mark manual cmake cmake-data ninja-build build-essential clang pkg-config ccache git ca-certificates >/dev/null 2>&1 || true; apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; /usr/bin/cmake --version >/dev/null'
 # Enterprise CA is injected via BuildKit secret only during RUN steps; not persisted in the final image
 
