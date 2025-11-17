@@ -543,6 +543,28 @@ build-launcher:
     - rustc --version
     - cargo --version
     - cargo nextest --version || true
+  after_script:
+    - |
+      echo "CI validation: sccache stats and cache footprints"
+      if command -v sccache >/dev/null 2>&1; then
+        sccache --show-stats || true
+      else
+        echo "sccache not found"
+      fi
+      if [ -n "${SCCACHE_DIR:-}" ]; then
+        echo "SCCACHE_DIR: $SCCACHE_DIR"
+        du -sh "$SCCACHE_DIR" 2>/dev/null || true
+        echo "sccache file count:"
+        find "$SCCACHE_DIR" -type f 2>/dev/null | wc -l || true
+      fi
+      if [ -d ".cargo/registry" ]; then
+        echo ".cargo/registry file count:"
+        find .cargo/registry -type f | wc -l || true
+      fi
+      if [ -d ".cargo/git" ]; then
+        echo ".cargo/git file count:"
+        find .cargo/git -type f | wc -l || true
+      fi
   rules: &rb_image_rules
     - if: $CI_COMMIT_TAG
       when: never
