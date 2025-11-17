@@ -99,7 +99,7 @@ FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates \
+      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
       autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
