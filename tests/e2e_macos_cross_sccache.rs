@@ -72,11 +72,7 @@ fn e2e_macos_cross_sccache_available() {
     // Try starting server and showing stats; tolerate existing server.
     let (_scode, _sout, _serr) = run_sh("sccache --start-server || true", None);
     let (code, out, err) = run_sh("sccache --show-stats", None);
-    assert_eq!(
-        code, 0,
-        "sccache --show-stats failed: {}\n{}",
-        out, err
-    );
+    assert_eq!(code, 0, "sccache --show-stats failed: {}\n{}", out, err);
     assert!(
         out.to_lowercase().contains("compile requests")
             || out.to_lowercase().contains("cache hits")
@@ -127,11 +123,7 @@ fn e2e_macos_cross_sccache_used() {
 
     // Stats should show at least one compile request
     let (scode, sout, serr) = run_sh("sccache --show-stats", None);
-    assert_eq!(
-        scode, 0,
-        "sccache --show-stats failed: {}\n{}",
-        sout, serr
-    );
+    assert_eq!(scode, 0, "sccache --show-stats failed: {}\n{}", sout, serr);
     let reqs = parse_compile_requests(&sout);
     assert!(
         reqs > 0,

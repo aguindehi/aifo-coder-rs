@@ -326,7 +326,7 @@ build-macos-cross-rust-builder:
   extends: container-build
   stage: build
   interruptible: true
-  timeout: 60m
+  timeout: 1h 30m
   resource_group: macos-cross-rust-builder
   tags:
     - qual-mcap-gcp-mem4G
