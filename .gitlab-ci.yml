@@ -546,6 +546,7 @@ build-launcher:
   after_script:
     - |
       echo "CI validation: sccache stats and cache footprints"
+      echo "UTC now: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
       if command -v sccache >/dev/null 2>&1; then
         sccache --show-stats || true
       else

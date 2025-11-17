@@ -41,4 +41,10 @@ Notes
 - sccache directory is scoped to $CI_PROJECT_DIR/.cache/sccache and included in the job cache.
 - CI cache retention policies will purge stale sccache content automatically.
 
+Recent validation snapshot
+- Nextest:
+  Summary [  21.443s] 337 tests run: 337 passed, 38 skipped
+- Timestamp (UTC):
+  2025-11-17T00:10:21Z
+
 End of doc
