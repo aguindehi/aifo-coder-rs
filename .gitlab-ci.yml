@@ -671,6 +671,19 @@ test-macos-cross-image:
     - qual-mcap-gcp
   variables:
     RUST_BACKTRACE: "1"
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+    RUSTC_WRAPPER: "sccache"
+    SCCACHE_DIR: "$CI_PROJECT_DIR/.cache/sccache"
+    CARGO_INCREMENTAL: "0"
+  cache:
+    key:
+      files:
+        - .cargo/config.toml
+    policy: pull
+    paths:
+      - .cargo/registry
+      - .cargo/git
+      - .cache/sccache
   script:
     - export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; unset LD; rustc --version; /usr/local/cargo/bin/cargo --version || true
     - /usr/local/cargo/bin/cargo nextest -V || /usr/local/cargo/bin/cargo install cargo-nextest --locked
