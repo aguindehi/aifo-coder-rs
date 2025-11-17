@@ -656,7 +656,7 @@ test-macos-cross-image:
     # Scheduled pipelines: require Apple SDK secrets; namespaced path
     - if: $CI_PIPELINE_SOURCE == "schedule" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
-        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder"
         CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -664,7 +664,7 @@ test-macos-cross-image:
     # Default branch: require Apple SDK secrets; namespaced path
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       variables:
-        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder/$CI_COMMIT_REF_SLUG"
+        CROSS_IMAGE_PATH: "$CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder"
         CROSS_IMAGE_TAG: "$CI_COMMIT_SHA"
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
