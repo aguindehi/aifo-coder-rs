@@ -524,6 +524,7 @@ build-launcher:
     GIT_LFS_SKIP_SMUDGE: "1"
     AIFO_SUPPORT_SKIP_GREEN: "1"
     AIFO_CODER_TEST_DISABLE_DOCKER: "1"
+    # CI spec v1: disable incremental to reduce target churn; use sccache for compiled artifacts
     CARGO_INCREMENTAL: "0"
     RUSTC_WRAPPER: "sccache"
     SCCACHE_DIR: "$CI_PROJECT_DIR/.cache/sccache"
@@ -532,6 +533,7 @@ build-launcher:
       files:
         - .cargo/config.toml
     policy: pull
+    # Do not cache target; narrow to registry/git sources and sccache directory
     paths:
       - .cargo/registry
       - .cargo/git
