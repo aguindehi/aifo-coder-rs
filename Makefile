@@ -1646,9 +1646,17 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	    EXPR='test(/^e2e_/)' ; \
+	  else \
+	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	  fi; \
 	else \
-	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	  else \
+	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/) & !test(/_uds/)' ; \
+	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
