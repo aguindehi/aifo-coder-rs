@@ -206,6 +206,10 @@ RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-dar
 # Preinstall nextest to speed up CI test startup (best effort; keep image lean)
 RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git
+# Configure sccache wrapper for rustc and prepare cache directory
+ENV RUSTC_WRAPPER="/usr/bin/sccache" \
+    SCCACHE_DIR="/opt/sccache"
+RUN install -d -m 0755 /opt/sccache
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
