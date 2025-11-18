@@ -12,7 +12,10 @@ use std::process::{Command, Stdio};
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
     let mut c = Command::new("sh");
-    c.arg("-lc").arg(cmd).stdout(Stdio::piped()).stderr(Stdio::piped());
+    c.arg("-lc")
+        .arg(cmd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if let Some(d) = cwd {
         c.current_dir(d);
     }
@@ -35,7 +38,10 @@ fn require_tool(bin: &str) {
 fn require_executable(path: &str) {
     let (code, _, err) = run_sh(&format!("[ -x '{}' ]", path), None);
     if code != 0 {
-        panic!("Required executable '{}' not found or not executable. stderr: {}", path, err);
+        panic!(
+            "Required executable '{}' not found or not executable. stderr: {}",
+            path, err
+        );
     }
 }
 
@@ -86,7 +92,11 @@ fn e2e_macos_cross_tools_and_env() {
     // Accept absolute path or basename; verify it resolves to the wrapper under /opt/osxcross/target/bin.
     if aarch_linker.contains('/') {
         let (s, _, e) = run_sh(&format!("[ -x '{}' ]", aarch_linker), None);
-        assert_eq!(s, 0, "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER points to non-executable: {} ({})", aarch_linker, e);
+        assert_eq!(
+            s, 0,
+            "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER points to non-executable: {} ({})",
+            aarch_linker, e
+        );
     } else {
         let (s, out, e) = run_sh(&format!("command -v '{}' || true", aarch_linker), None);
         assert_eq!(s, 0, "command -v {} failed: {}", aarch_linker, e);
@@ -120,7 +130,11 @@ fn e2e_macos_cross_tools_and_env() {
 fn e2e_macos_cross_sdk_installed() {
     // SDK should be installed under /opt/osxcross/SDK/MacOSX<ver>.sdk
     let (code, out, err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
-    assert_eq!(code, 0, "cannot locate SDK dir under /opt/osxcross/target/SDK: {}\n{}", out, err);
+    assert_eq!(
+        code, 0,
+        "cannot locate SDK dir under /opt/osxcross/target/SDK: {}\n{}",
+        out, err
+    );
     let sdk_dir = out.trim();
     assert!(
         sdk_dir.contains("MacOSX") && sdk_dir.ends_with(".sdk"),
@@ -190,7 +204,10 @@ fn e2e_macos_cross_rust_build_arm64() {
     create_min_crate(&root, "hello");
 
     // Ensure target installed (should already be in the image, but harmless)
-    let (_c1, _o1, _e1) = run_sh("/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true", Some(&root));
+    let (_c1, _o1, _e1) = run_sh(
+        "/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true",
+        Some(&root),
+    );
 
     // Discover SDK dir from image and set explicit linker/env for cargo
     let (code_sdk, sdk_out, _sdk_err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
@@ -200,14 +217,22 @@ fn e2e_macos_cross_rust_build_arm64() {
         "SDKROOT='{}' OSX_SYSROOT='{}' CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER='/opt/osxcross/target/bin/oa64-clang' /usr/local/cargo/bin/cargo build --release --target aarch64-apple-darwin",
         sdk, sdk
     ), Some(&root));
-    assert_eq!(code, 0, "cargo build failed.\nstdout:\n{}\nstderr:\n{}", out, err);
+    assert_eq!(
+        code, 0,
+        "cargo build failed.\nstdout:\n{}\nstderr:\n{}",
+        out, err
+    );
 
     let bin = root
         .join("target")
         .join("aarch64-apple-darwin")
         .join("release")
         .join("hello");
-    assert!(bin.exists(), "expected binary not found at {}", bin.display());
+    assert!(
+        bin.exists(),
+        "expected binary not found at {}",
+        bin.display()
+    );
 
     let (code2, out2, err2) = run_sh(&format!("file '{}'", bin.display()), None);
     assert_eq!(code2, 0, "file(1) failed: {}\n{}", out2, err2);

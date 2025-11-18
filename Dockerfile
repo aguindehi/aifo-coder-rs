@@ -30,7 +30,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
         export RUSTUP_USE_CURL=1; \
     fi; \
-    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends make git pkg-config git-lfs ca-certificates; \
+    apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends make git pkg-config git-lfs ca-certificates sccache; \
     if [ "${WITH_WIN:-0}" = "1" ]; then \
         apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64; \
         /usr/local/cargo/bin/rustup target add x86_64-pc-windows-gnu; \
@@ -59,7 +59,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
-    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
+        find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+        find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    fi; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -87,7 +90,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     install -d -m 0755 /workspace/out; \
     cp target/release/aifo-shim /workspace/out/aifo-shim; \
     strip /workspace/out/aifo-shim 2>/dev/null || true; \
-    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
+        find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+        find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    fi; \
     rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -99,7 +105,7 @@ FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates \
+      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
       autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
@@ -200,12 +206,51 @@ ENV CC_x86_64_apple_darwin=o64-clang \
     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
-# Install Rust target inside the image (best-effort)
-RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
+# Install Rust targets with corporate CA trust (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+    export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export RUSTUP_USE_CURL=1; \
+  fi; \
+  /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 
-# Preinstall nextest to speed up CI test startup (best effort; keep image lean)
-RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
-    rm -rf /usr/local/cargo/registry /usr/local/cargo/git
+# Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
+    strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
+    find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
+# Configure sccache wrapper for rustc and prepare cache directory
+ENV RUSTC="/usr/local/cargo/bin/rustc" \
+    RUSTC_WRAPPER="/usr/bin/sccache" \
+    SCCACHE_DIR="/opt/sccache" \
+    SCCACHE_CACHE_SIZE="2G"
+RUN install -d -m 0755 /opt/sccache
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
