@@ -7,7 +7,6 @@
 // ignore-tidy-linelength
 
 use std::fs;
-use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
