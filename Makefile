@@ -66,6 +66,7 @@ title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG
+export DOCKER_BUILDKIT ?= 1
 
 banner:
 	@echo ""
@@ -87,6 +88,9 @@ banner:
 	@echo "    - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy."
 	@echo "    - Optional unix:// proxy on Linux; host-gateway bridging when needed."
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
+	@echo ""
+	@echo " ⚠️  Guardrail: Local builds should prefer docker buildx/BuildKit (DOCKER_BUILDKIT=1)."
+	@echo "     Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 	@echo " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB "
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
@@ -1642,9 +1646,17 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	    EXPR='test(/^e2e_/)' ; \
+	  else \
+	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	  fi; \
 	else \
-	  EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	  else \
+	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/) & !test(/_uds/)' ; \
+	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \

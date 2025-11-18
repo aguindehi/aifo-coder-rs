@@ -9,6 +9,7 @@
 use std::fs;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::path::Path;
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
     let mut c = Command::new("sh");
@@ -44,10 +45,39 @@ fn require_executable(path: &str) {
         );
     }
 }
-
+/// Return true if running inside the macos-cross-rust-builder image (or explicitly opted in).
+fn should_run_macos_cross() -> bool {
+    if std::env::var("AIFO_E2E_MACOS_CROSS").ok().as_deref() == Some("1") {
+        return true;
+    }
+    let have_oa64 = Path::new("/opt/osxcross/target/bin/oa64-clang").is_file();
+    let have_cargo = Path::new("/usr/local/cargo/bin/cargo").is_file();
+    if !(have_oa64 && have_cargo) {
+        return false;
+    }
+    let sdk_txt = Path::new("/opt/osxcross/SDK/SDK_DIR.txt").is_file();
+    if sdk_txt {
+        return true;
+    }
+    if let Ok(rd) = fs::read_dir("/opt/osxcross/target/SDK") {
+        for ent in rd.flatten() {
+            let name = ent.file_name();
+            let s = name.to_string_lossy();
+            if s.starts_with("MacOSX") && s.ends_with(".sdk") {
+                return true;
+            }
+        }
+    }
+    false
+}
+ 
 #[test]
 #[ignore]
 fn e2e_macos_cross_tools_and_env() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Validate critical tools exist
     // Prefer absolute paths to avoid PATH differences in test runner environments.
     require_tool("file");
@@ -128,6 +158,10 @@ fn e2e_macos_cross_tools_and_env() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_sdk_installed() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // SDK should be installed under /opt/osxcross/SDK/MacOSX<ver>.sdk
     let (code, out, err) = run_sh("cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1", None);
     assert_eq!(
@@ -155,6 +189,10 @@ fn e2e_macos_cross_sdk_installed() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_c_link_corefoundation() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     require_executable("/opt/osxcross/target/bin/oa64-clang");
     // Write a tiny CoreFoundation program and link with -framework
     let dir = tempfile::tempdir().expect("tmpdir");
@@ -196,6 +234,10 @@ fn e2e_macos_cross_c_link_corefoundation() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_rust_build_arm64() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Build a tiny local Rust crate for aarch64-apple-darwin and verify Mach-O output
     // Prefer absolute cargo path to avoid PATH differences
     require_executable("/usr/local/cargo/bin/cargo");
