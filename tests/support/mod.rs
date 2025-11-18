@@ -278,7 +278,8 @@ pub fn should_run_macos_cross() -> bool {
     }
     if let Ok(rd) = std::fs::read_dir("/opt/osxcross/target/SDK") {
         for ent in rd.flatten() {
-            let s = ent.file_name().to_string_lossy();
+            // Own the string to avoid borrowing from a temporary OsString (E0716).
+            let s = ent.file_name().to_string_lossy().into_owned();
             if s.starts_with("MacOSX") && s.ends_with(".sdk") {
                 return true;
             }
