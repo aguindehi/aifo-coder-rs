@@ -8,8 +8,8 @@
 
 use std::fs;
 use std::io::Write;
-use std::process::{Command, Stdio};
 use std::path::Path;
+use std::process::{Command, Stdio};
 #[path = "support/mod.rs"]
 mod support;
 use support::should_run_macos_cross;
@@ -48,7 +48,7 @@ fn require_executable(path: &str) {
         );
     }
 }
- 
+
 #[test]
 #[ignore]
 fn e2e_macos_cross_tools_and_env() {
