@@ -10,6 +10,9 @@ use std::fs;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::path::Path;
+#[path = "support/mod.rs"]
+mod support;
+use support::should_run_macos_cross;
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
     let mut c = Command::new("sh");
@@ -44,31 +47,6 @@ fn require_executable(path: &str) {
             path, err
         );
     }
-}
-/// Return true if running inside the macos-cross-rust-builder image (or explicitly opted in).
-fn should_run_macos_cross() -> bool {
-    if std::env::var("AIFO_E2E_MACOS_CROSS").ok().as_deref() == Some("1") {
-        return true;
-    }
-    let have_oa64 = Path::new("/opt/osxcross/target/bin/oa64-clang").is_file();
-    let have_cargo = Path::new("/usr/local/cargo/bin/cargo").is_file();
-    if !(have_oa64 && have_cargo) {
-        return false;
-    }
-    let sdk_txt = Path::new("/opt/osxcross/SDK/SDK_DIR.txt").is_file();
-    if sdk_txt {
-        return true;
-    }
-    if let Ok(rd) = fs::read_dir("/opt/osxcross/target/SDK") {
-        for ent in rd.flatten() {
-            let name = ent.file_name();
-            let s = name.to_string_lossy();
-            if s.starts_with("MacOSX") && s.ends_with(".sdk") {
-                return true;
-            }
-        }
-    }
-    false
 }
  
 #[test]

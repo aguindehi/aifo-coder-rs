@@ -8,6 +8,9 @@
 
 use std::fs;
 use std::process::{Command, Stdio};
+#[path = "support/mod.rs"]
+mod support;
+use support::should_run_macos_cross;
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
     let mut c = Command::new("sh");
@@ -108,6 +111,10 @@ fn create_min_crate(root: &std::path::Path, name: &str) {
 #[test]
 #[ignore]
 fn e2e_macos_cross_sccache_available() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Ensure sccache CLI is present and can show stats (server may auto-start).
     require_tool("sccache");
     let (vcode, vout, verr) = run_sh("sccache --version", None);
@@ -129,6 +136,10 @@ fn e2e_macos_cross_sccache_available() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_sccache_used() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Prepare clean stats
     let (_st1, _o1, _e1) = run_sh("sccache --start-server || true", None);
     let (_zt, _oz, _ez) = run_sh("sccache --zero-stats || true", None);

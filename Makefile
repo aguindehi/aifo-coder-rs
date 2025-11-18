@@ -1649,13 +1649,13 @@ test-acceptance-suite:
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	    EXPR='test(/^e2e_/) & !binary(/^e2e_macos_cross(_sccache)?$/)' ; \
 	  fi; \
 	else \
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/) & !test(/_uds/)' ; \
+	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$/)' ; \
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
@@ -1685,6 +1685,7 @@ check-int:
 check-all:
 	@echo "Running full ignored-by-default E2E suite (unit + integration + e2e) ..."
 	$(MAKE) test
+	$(MAKE) ensure-macos-cross-image
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
 
@@ -1710,7 +1711,7 @@ test-all-junit:
 	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
 	  else \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$/)' $(ARGS); \
 	  fi; \
 	fi
 
