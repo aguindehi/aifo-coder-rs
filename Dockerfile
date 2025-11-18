@@ -107,7 +107,8 @@ WORKDIR /
 # Build once: sh/bash/dash wrappers, tool symlinks, and aifo-entrypoint; consume via COPY in base/base-slim
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
-# hadolint ignore=SC2016,SC2026
+# Install sh wrappers and entrypoint in one layer to reduce image layers
+# hadolint ignore=SC2016,SC2026,SC2145
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -146,11 +147,9 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
-# Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
-# hadolint ignore=SC2016,SC2145
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  install -d -m 0755 /usr/local/bin && \
+  printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
  'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
  'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
@@ -177,8 +176,8 @@ RUN install -d -m 0755 /usr/local/bin \
  'unset GPG_AGENT_INFO' \
  '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
- && chmod +x /usr/local/bin/aifo-entrypoint
+ 'exec "$@"' > /usr/local/bin/aifo-entrypoint && \
+ chmod +x /usr/local/bin/aifo-entrypoint
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
@@ -226,59 +225,56 @@ RUN set -e; \
     [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
 WORKDIR /opt/osxcross/target/bin
+# hadolint ignore=SC2016,SC2026
 RUN set -e; \
     for t in ar ranlib strip; do \
       set -- aarch64-apple-darwin*-"$t"; [ -e "$1" ] && ln -sf "$1" aarch64-apple-darwin-"$t" || true; \
       set -- x86_64-apple-darwin*-"$t";  [ -e "$1" ] && ln -sf "$1" x86_64-apple-darwin-"$t"  || true; \
-    done
-# hadolint ignore=SC2016,SC2026
-RUN printf '%s\n' \
-'#!/bin/sh' \
-'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
-'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
-> oa64-clang
-RUN chmod 0755 oa64-clang
-# hadolint ignore=SC2016,SC2026
-RUN printf '%s\n' \
-'#!/bin/sh' \
-'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
-'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
-> o64-clang
-RUN chmod 0755 o64-clang
-# Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
-# hadolint ignore=SC2016,SC2026
-RUN printf '%s\n' \
-'#!/bin/sh' \
-'set -e' \
-'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
-'HAVE_PV=0; OS_MIN="";' \
-'for a in "$@"; do' \
-'  case "$a" in' \
-'    -platform_version) HAVE_PV=1 ;;' \
-'    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
-'  esac' \
-'done' \
-'if [ "$HAVE_PV" -eq 0 ]; then' \
-'  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
-'  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
-'  SDK_VER=""' \
-'  if [ -n "$SDK_DIR" ]; then' \
-'    base="${SDK_DIR%/}"; base="${base##*/}"' \
-'    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
-'  fi' \
-'  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
-'  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
-'  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
-'fi' \
-'HAVE_SR=0' \
-'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
-'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
-'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
-'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
-'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
-'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
-> ld
-RUN chmod 0755 ld
+    done; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
+    'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+    > oa64-clang; \
+    chmod 0755 oa64-clang; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
+    'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+    > o64-clang; \
+    chmod 0755 o64-clang; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
+    'HAVE_PV=0; OS_MIN="";' \
+    'for a in "$@"; do' \
+    '  case "$a" in' \
+    '    -platform_version) HAVE_PV=1 ;;' \
+    '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
+    '  esac' \
+    'done' \
+    'if [ "$HAVE_PV" -eq 0 ]; then' \
+    '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
+    '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
+    '  SDK_VER=""' \
+    '  if [ -n "$SDK_DIR" ]; then' \
+    '    base="${SDK_DIR%/}"; base="${base##*/}"' \
+    '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
+    '  fi' \
+    '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
+    '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
+    '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
+    'fi' \
+    'HAVE_SR=0' \
+    'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
+    'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
+    'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+    'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+    'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+    'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
+    > ld; \
+    chmod 0755 ld
 WORKDIR /
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
@@ -297,44 +293,29 @@ ENV CC_x86_64_apple_darwin=o64-clang \
     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
-# Install Rust targets with corporate CA trust (best-effort)
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  CAF=/run/secrets/migros_root_ca; \
-  if [ -f "$CAF" ]; then \
-    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
-    export SSL_CERT_DIR=/etc/ssl/certs; \
-    export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
-    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
-    export RUSTUP_USE_CURL=1; \
-  fi; \
-  /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
-  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
-    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-  fi'
-
-# Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
+# Install Rust targets and preinstall nextest (with corp CA; caches) in one layer
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
-        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
-        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
-        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+      install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+      export SSL_CERT_DIR=/etc/ssl/certs; \
+      export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+      export RUSTUP_USE_CURL=1; \
     fi; \
+    /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
     find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
     find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
-        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 # Configure sccache wrapper for rustc and prepare cache directory
 ENV RUSTC="/usr/local/cargo/bin/rustc" \
