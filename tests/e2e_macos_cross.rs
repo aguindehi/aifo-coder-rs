@@ -8,8 +8,6 @@
 
 use std::fs;
 use std::io::Write;
-#[allow(unused_imports)]
-use std::path::Path;
 use std::process::{Command, Stdio};
 #[path = "support/mod.rs"]
 mod support;

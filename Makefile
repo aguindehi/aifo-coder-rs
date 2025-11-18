@@ -743,6 +743,40 @@ validate-macos-artifact-x86_64:
 	fi; \
 	echo "macOS artifact validation OK: $$BIN"
 
+.PHONY: ensure-macos-cross-image
+ensure-macos-cross-image:
+	@set -e; \
+	if [ -n "$$AIFO_SKIP_CROSS_BUILD" ]; then \
+	  echo "Skipping macOS cross image build (AIFO_SKIP_CROSS_BUILD=1)"; \
+	  exit 0; \
+	fi; \
+	if docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "macOS cross image present: $(MACOS_CROSS_IMAGE)"; \
+	  exit 0; \
+	fi; \
+	mkdir -p ci/osx; \
+	if [ -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "SDK found locally, building macOS cross image ..."; \
+	  $(MAKE) build-macos-cross-rust-builder; \
+	elif [ -n "$$APPLE_SDK_URL" ]; then \
+	  echo "Fetching Apple SDK from APPLE_SDK_URL ..."; \
+	  if command -v curl >/dev/null 2>&1; then \
+	    curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$$APPLE_SDK_URL" -o "ci/osx/$(OSX_SDK_FILENAME)"; \
+	    if [ -n "$$APPLE_SDK_SHA256" ]; then \
+	      echo "$$APPLE_SDK_SHA256  ci/osx/$(OSX_SDK_FILENAME)" | sha256sum -c -; \
+	    fi; \
+	    $(MAKE) build-macos-cross-rust-builder; \
+	  else \
+	    echo "Error: curl not available; cannot fetch APPLE_SDK_URL. Skipping macOS cross." >&2; \
+	  fi; \
+	elif [ -n "$$APPLE_SDK_BASE64" ]; then \
+	  echo "Decoding Apple SDK from APPLE_SDK_BASE64 ..."; \
+	  printf '%s' "$$APPLE_SDK_BASE64" | base64 -d > "ci/osx/$(OSX_SDK_FILENAME)"; \
+	  $(MAKE) build-macos-cross-rust-builder; \
+	else \
+	  echo "Skipping macOS cross: SDK not available (provide ci/osx/$(OSX_SDK_FILENAME), APPLE_SDK_URL or APPLE_SDK_BASE64)."; \
+	fi
+
 .PHONY: build-debug
 build-debug:
 	@set -e; \
