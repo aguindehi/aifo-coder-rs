@@ -1683,13 +1683,13 @@ test-acceptance-suite:
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !binary(/^e2e_macos_cross(_sccache)?$/)' ; \
+	    EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$/)' ; \
 	  fi; \
 	else \
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$/)' ; \
+	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$/)' ; \
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
