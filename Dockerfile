@@ -203,9 +203,26 @@ ENV CC_x86_64_apple_darwin=o64-clang \
 # Install Rust target inside the image (best-effort)
 RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
 
-# Preinstall nextest to speed up CI test startup (best effort; keep image lean)
-RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
-    rm -rf /usr/local/cargo/registry /usr/local/cargo/git
+# Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    sh -lc 'set -e; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
+    strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
+    rm -rf /usr/local/cargo/registry /usr/local/cargo/git; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
 # Configure sccache wrapper for rustc and prepare cache directory
 ENV RUSTC="/usr/local/cargo/bin/rustc" \
     RUSTC_WRAPPER="/usr/bin/sccache" \
