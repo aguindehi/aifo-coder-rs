@@ -49,6 +49,21 @@ fn parse_compile_requests(stats_out: &str) -> u64 {
     0
 }
 
+fn parse_cache_hits(stats_out: &str) -> u64 {
+    for line in stats_out.lines() {
+        let line = line.trim();
+        if line.to_lowercase().starts_with("cache hits") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(last) = parts.last() {
+                if let Ok(n) = last.parse::<u64>() {
+                    return n;
+                }
+            }
+        }
+    }
+    0
+}
+
 fn create_min_crate(root: &std::path::Path, name: &str) {
     let cargo_toml = format!(
         "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
@@ -125,11 +140,30 @@ fn e2e_macos_cross_sccache_used() {
     // Stats should show at least one compile request
     let (scode, sout, serr) = run_sh("sccache --show-stats", None);
     assert_eq!(scode, 0, "sccache --show-stats failed: {}\n{}", sout, serr);
-    let reqs = parse_compile_requests(&sout);
+    let reqs_first = parse_compile_requests(&sout);
     assert!(
-        reqs > 0,
+        reqs_first > 0,
         "expected compile requests > 0, got {}.\nStats:\n{}",
-        reqs,
+        reqs_first,
         sout
+    );
+
+    // Force a recompile to exercise cache hits on identical inputs
+    let (_clcode, _clout, _clerr) = run_sh("/usr/local/cargo/bin/cargo clean", Some(&root));
+    let (b2code, b2out, b2err) = run_sh(&cmd, Some(&root));
+    assert_eq!(
+        b2code, 0,
+        "second cargo build failed.\nstdout:\n{}\nstderr:\n{}",
+        b2out, b2err
+    );
+
+    // After second build, expect cache hits > 0
+    let (scode2, sout2, serr2) = run_sh("sccache --show-stats", None);
+    assert_eq!(scode2, 0, "sccache --show-stats failed: {}\n{}", sout2, serr2);
+    let hits = parse_cache_hits(&sout2);
+    assert!(
+        hits > 0,
+        "expected cache hits > 0 after second identical build.\nStats:\n{}",
+        sout2
     );
 }
