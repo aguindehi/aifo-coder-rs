@@ -59,7 +59,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
-    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
+        find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+        find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    fi; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -87,7 +90,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     install -d -m 0755 /workspace/out; \
     cp target/release/aifo-shim /workspace/out/aifo-shim; \
     strip /workspace/out/aifo-shim 2>/dev/null || true; \
-    if [ "${CLEAN_CARGO:-0}" = "1" ]; then rm -rf /usr/local/cargo/registry /usr/local/cargo/git; fi; \
+    if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
+        find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+        find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    fi; \
     rm -rf target; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -218,7 +224,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
-    rm -rf /usr/local/cargo/registry /usr/local/cargo/git; \
+    find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
