@@ -268,10 +268,8 @@ pub fn should_run_macos_cross() -> bool {
     if std::env::var("AIFO_E2E_MACOS_CROSS").ok().as_deref() == Some("1") {
         return true;
     }
-    let have_oa64 =
-        std::path::Path::new("/opt/osxcross/target/bin/oa64-clang").is_file();
-    let have_cargo =
-        std::path::Path::new("/usr/local/cargo/bin/cargo").is_file();
+    let have_oa64 = std::path::Path::new("/opt/osxcross/target/bin/oa64-clang").is_file();
+    let have_cargo = std::path::Path::new("/usr/local/cargo/bin/cargo").is_file();
     if !(have_oa64 && have_cargo) {
         return false;
     }
