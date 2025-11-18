@@ -107,6 +107,8 @@ fn e2e_macos_cross_sccache_used() {
     let sdk = sdk_out.trim();
 
     // Build for aarch64-apple-darwin with explicit linker (env inherited uses sccache wrapper)
+    // Ensure target is installed (best-effort; avoids CA flakiness if image pre-install failed)
+    let (_tcode, _tout, _terr) = run_sh("/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true", Some(&root));
     let cmd = format!(
         "SDKROOT='{}' OSX_SYSROOT='{}' \
          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER='/opt/osxcross/target/bin/oa64-clang' \

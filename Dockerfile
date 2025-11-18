@@ -206,8 +206,23 @@ ENV CC_x86_64_apple_darwin=o64-clang \
     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
-# Install Rust target inside the image (best-effort)
-RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
+# Install Rust targets with corporate CA trust (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+    export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export RUSTUP_USE_CURL=1; \
+  fi; \
+  /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 
 # Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
