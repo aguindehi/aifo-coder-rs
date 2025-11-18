@@ -720,7 +720,8 @@ test-macos-cross-image:
 	  -v "$$PWD/target:/workspace/target" \
 	  $(if $(wildcard $(MIGROS_CA)),-v "$(MIGROS_CA):/run/secrets/migros_root_ca:ro",) \
 	  -w /workspace \
-	  $(MACOS_CROSS_IMAGE) sh -lc 'set -e; CA="/run/secrets/migros_root_ca"; if [ -f "$$CA" ]; then install -m 0644 "$$CA" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; fi; export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; export RUSTC="/usr/local/cargo/bin/rustc"; unset LD; sccache --version || true; sccache --show-stats || true; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+	  -t -e TERM=xterm-256color -e CARGO_TERM_COLOR=always \
+	  $(MACOS_CROSS_IMAGE) sh -lc 'set -e; CA="/run/secrets/migros_root_ca"; if [ -f "$$CA" ]; then install -m 0644 "$$CA" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; fi; export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; export RUSTC="/usr/local/cargo/bin/rustc"; unset LD; sccache --version || true; sccache --show-stats || true; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --color always --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
 
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
@@ -742,6 +743,40 @@ validate-macos-artifact-x86_64:
 	  echo "Warning: file(1) not available; skipping validation."; \
 	fi; \
 	echo "macOS artifact validation OK: $$BIN"
+
+.PHONY: ensure-macos-cross-image
+ensure-macos-cross-image:
+	@set -e; \
+	if [ -n "$$AIFO_SKIP_CROSS_BUILD" ]; then \
+	  echo "Skipping macOS cross image build (AIFO_SKIP_CROSS_BUILD=1)"; \
+	  exit 0; \
+	fi; \
+	if docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
+	  echo "macOS cross image present: $(MACOS_CROSS_IMAGE)"; \
+	  exit 0; \
+	fi; \
+	mkdir -p ci/osx; \
+	if [ -f "ci/osx/$(OSX_SDK_FILENAME)" ]; then \
+	  echo "SDK found locally, building macOS cross image ..."; \
+	  $(MAKE) build-macos-cross-rust-builder; \
+	elif [ -n "$$APPLE_SDK_URL" ]; then \
+	  echo "Fetching Apple SDK from APPLE_SDK_URL ..."; \
+	  if command -v curl >/dev/null 2>&1; then \
+	    curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$$APPLE_SDK_URL" -o "ci/osx/$(OSX_SDK_FILENAME)"; \
+	    if [ -n "$$APPLE_SDK_SHA256" ]; then \
+	      echo "$$APPLE_SDK_SHA256  ci/osx/$(OSX_SDK_FILENAME)" | sha256sum -c -; \
+	    fi; \
+	    $(MAKE) build-macos-cross-rust-builder; \
+	  else \
+	    echo "Error: curl not available; cannot fetch APPLE_SDK_URL. Skipping macOS cross." >&2; \
+	  fi; \
+	elif [ -n "$$APPLE_SDK_BASE64" ]; then \
+	  echo "Decoding Apple SDK from APPLE_SDK_BASE64 ..."; \
+	  printf '%s' "$$APPLE_SDK_BASE64" | base64 -d > "ci/osx/$(OSX_SDK_FILENAME)"; \
+	  $(MAKE) build-macos-cross-rust-builder; \
+	else \
+	  echo "Skipping macOS cross: SDK not available (provide ci/osx/$(OSX_SDK_FILENAME), APPLE_SDK_URL or APPLE_SDK_BASE64)."; \
+	fi
 
 .PHONY: build-debug
 build-debug:
@@ -1649,13 +1684,13 @@ test-acceptance-suite:
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/)' ; \
+	    EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
 	  fi; \
 	else \
 	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
 	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/^e2e_macos_cross_/) & !test(/_uds/)' ; \
+	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
@@ -1685,6 +1720,7 @@ check-int:
 check-all:
 	@echo "Running full ignored-by-default E2E suite (unit + integration + e2e) ..."
 	$(MAKE) test
+	$(MAKE) ensure-macos-cross-image
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
 
@@ -1710,7 +1746,7 @@ test-all-junit:
 	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
 	  else \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$$/)' $(ARGS); \
 	  fi; \
 	fi
 

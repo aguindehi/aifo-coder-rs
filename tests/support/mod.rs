@@ -261,3 +261,29 @@ pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
         s
     }
 }
+
+#[allow(dead_code)]
+/// Return true if running inside the macos-cross-rust-builder image (or explicitly opted in).
+pub fn should_run_macos_cross() -> bool {
+    if std::env::var("AIFO_E2E_MACOS_CROSS").ok().as_deref() == Some("1") {
+        return true;
+    }
+    let have_oa64 = std::path::Path::new("/opt/osxcross/target/bin/oa64-clang").is_file();
+    let have_cargo = std::path::Path::new("/usr/local/cargo/bin/cargo").is_file();
+    if !(have_oa64 && have_cargo) {
+        return false;
+    }
+    if std::path::Path::new("/opt/osxcross/SDK/SDK_DIR.txt").is_file() {
+        return true;
+    }
+    if let Ok(rd) = std::fs::read_dir("/opt/osxcross/target/SDK") {
+        for ent in rd.flatten() {
+            // Own the string to avoid borrowing from a temporary OsString (E0716).
+            let s = ent.file_name().to_string_lossy().into_owned();
+            if s.starts_with("MacOSX") && s.ends_with(".sdk") {
+                return true;
+            }
+        }
+    }
+    false
+}

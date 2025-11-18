@@ -8,6 +8,9 @@
 
 use std::fs;
 use std::process::{Command, Stdio};
+#[path = "support/mod.rs"]
+mod support;
+use support::should_run_macos_cross;
 
 fn run_sh(cmd: &str, cwd: Option<&std::path::Path>) -> (i32, String, String) {
     let mut c = Command::new("sh");
@@ -108,6 +111,10 @@ fn create_min_crate(root: &std::path::Path, name: &str) {
 #[test]
 #[ignore]
 fn e2e_macos_cross_sccache_available() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Ensure sccache CLI is present and can show stats (server may auto-start).
     require_tool("sccache");
     let (vcode, vout, verr) = run_sh("sccache --version", None);
@@ -129,6 +136,10 @@ fn e2e_macos_cross_sccache_available() {
 #[test]
 #[ignore]
 fn e2e_macos_cross_sccache_used() {
+    if !should_run_macos_cross() {
+        eprintln!("skipping: not macos-cross environment");
+        return;
+    }
     // Prepare clean stats
     let (_st1, _o1, _e1) = run_sh("sccache --start-server || true", None);
     let (_zt, _oz, _ez) = run_sh("sccache --zero-stats || true", None);
@@ -153,7 +164,10 @@ fn e2e_macos_cross_sccache_used() {
 
     // Build for aarch64-apple-darwin with explicit linker (env inherited uses sccache wrapper)
     // Ensure target is installed (best-effort; avoids CA flakiness if image pre-install failed)
-    let (_tcode, _tout, _terr) = run_sh("/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true", Some(&root));
+    let (_tcode, _tout, _terr) = run_sh(
+        "/usr/local/cargo/bin/rustup target add aarch64-apple-darwin || true",
+        Some(&root),
+    );
     let cmd = format!(
         "SDKROOT='{}' OSX_SYSROOT='{}' \
          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER='/opt/osxcross/target/bin/oa64-clang' \
@@ -189,7 +203,11 @@ fn e2e_macos_cross_sccache_used() {
 
     // After second build, expect cache hits > 0
     let (scode2, sout2, serr2) = run_sh("sccache --show-stats", None);
-    assert_eq!(scode2, 0, "sccache --show-stats failed: {}\n{}", sout2, serr2);
+    assert_eq!(
+        scode2, 0,
+        "sccache --show-stats failed: {}\n{}",
+        sout2, serr2
+    );
     let hits = parse_cache_hits(&sout2);
     let misses = parse_cache_misses(&sout2);
     let nccalls = parse_non_cacheable_calls(&sout2);
