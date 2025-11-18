@@ -184,6 +184,7 @@ RUN install -d -m 0755 /usr/local/bin \
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
       autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
@@ -198,10 +199,11 @@ ARG OSXCROSS_SDK_TARBALL
 # Use a stable filename to avoid COPY src variable expansion issues in some builders (e.g., Kaniko)
 COPY ci/osx/MacOSX.sdk.tar.xz /tmp/MacOSX.sdk.tar.xz
 # Build osxcross unattended and install into /opt/osxcross
+# hadolint ignore=DL4006
 RUN set -e; \
     git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
     if [ -n "${OSXCROSS_REF}" ]; then \
-      cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
+      git -C osxcross fetch --depth=1 origin "${OSXCROSS_REF}" && git -C osxcross checkout FETCH_HEAD; \
     fi; \
     SDK_TMP="/tmp/MacOSX.sdk.tar.xz"; \
     SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
@@ -220,55 +222,61 @@ RUN set -e; \
     UNATTENDED=1 osxcross/build.sh; \
     mkdir -p /opt/osxcross/SDK; \
     printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
-    SDK_DIR="$(ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"; \
+    SDK_DIR="$(find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name 'MacOSX*.sdk' -print -quit 2>/dev/null)"; \
     [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
-RUN set -e; cd /opt/osxcross/target/bin; \
+WORKDIR /opt/osxcross/target/bin
+RUN set -e; \
     for t in ar ranlib strip; do \
-      ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
-      ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
-    done; \
-    # Create clang wrappers (always overwrite to ensure presence)
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
-    chmod 0755 oa64-clang; \
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
-    chmod 0755 o64-clang; \
-    # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
-    printf '%s\n' '#!/bin/sh' \
-      'set -e' \
-      'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
-      'HAVE_PV=0; OS_MIN="";' \
-      'for a in "$@"; do' \
-      '  case "$a" in' \
-      '    -platform_version) HAVE_PV=1 ;;' \
-      '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
-      '  esac' \
-      'done' \
-      'if [ "$HAVE_PV" -eq 0 ]; then' \
-      '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
-      '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
-      '  SDK_VER=""' \
-      '  if [ -n "$SDK_DIR" ]; then' \
-      '    base="${SDK_DIR%/}"; base="${base##*/}";' \
-      '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
-      '  fi' \
-      '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
-      '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
-      '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
-      'fi' \
-      'HAVE_SR=0' \
-      'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
-      'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
-      'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
-      'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
-      'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
-      'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
-      > ld; \
-    chmod 0755 ld
+      set -- aarch64-apple-darwin*-"$t"; [ -e "$1" ] && ln -sf "$1" aarch64-apple-darwin-"$t" || true; \
+      set -- x86_64-apple-darwin*-"$t";  [ -e "$1" ] && ln -sf "$1" x86_64-apple-darwin-"$t"  || true; \
+    done
+RUN cat > oa64-clang <<'EOF'
+#!/bin/sh
+SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name 'MacOSX*.sdk' -print -quit 2>/dev/null)"
+exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"
+EOF
+RUN chmod 0755 oa64-clang
+RUN cat > o64-clang <<'EOF'
+#!/bin/sh
+SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name 'MacOSX*.sdk' -print -quit 2>/dev/null)"
+exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"
+EOF
+RUN chmod 0755 o64-clang
+# Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
+RUN cat > ld <<'EOF'
+#!/bin/sh
+set -e
+SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"
+HAVE_PV=0; OS_MIN="";
+for a in "$@"; do
+  case "$a" in
+    -platform_version) HAVE_PV=1 ;;
+    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;
+  esac
+done
+if [ "$HAVE_PV" -eq 0 ]; then
+  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac
+  SDK_VER=""
+  if [ -n "$SDK_DIR" ]; then
+    base="${SDK_DIR%/}"; base="${base##*/}"
+    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac
+  fi
+  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"
+  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac
+  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"
+fi
+HAVE_SR=0
+for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done
+if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi
+if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi
+if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi
+if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi
+echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127
+EOF
+RUN chmod 0755 ld
+WORKDIR /
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
@@ -484,7 +492,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
+  cat >/usr/local/bin/openhands <<'EOF'
+#!/bin/sh
+exec /opt/venv-openhands/bin/openhands "$@"
+EOF
   chmod 0755 /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
@@ -750,7 +761,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
+  cat >/usr/local/bin/openhands <<'EOF'
+#!/bin/sh
+exec /opt/venv-openhands/bin/openhands "$@"
+EOF
   chmod 0755 /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \

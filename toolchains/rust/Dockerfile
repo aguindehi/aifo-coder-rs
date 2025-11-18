@@ -87,6 +87,7 @@ RUN set -eux; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
 
 # Optionally drop procps/apt and fold final CMake verification into same layer
+# hadolint ignore=DL3008
 RUN set -eux; \
   if [ "$KEEP_APT" = "0" ] ; then \
     # Ensure CMake present before removing apt; reinstall if missing (best-effort) \
