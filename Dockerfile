@@ -207,8 +207,10 @@ RUN /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-dar
 RUN /usr/local/cargo/bin/cargo install cargo-nextest --locked || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 # Configure sccache wrapper for rustc and prepare cache directory
-ENV RUSTC_WRAPPER="/usr/bin/sccache" \
-    SCCACHE_DIR="/opt/sccache"
+ENV RUSTC="/usr/local/cargo/bin/rustc" \
+    RUSTC_WRAPPER="/usr/bin/sccache" \
+    SCCACHE_DIR="/opt/sccache" \
+    SCCACHE_CACHE_SIZE="2G"
 RUN install -d -m 0755 /opt/sccache
 
 # --- Base layer: Node image + common OS tools used by all agents ---
