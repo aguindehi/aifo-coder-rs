@@ -47,7 +47,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Pre-install cargo-nextest to speed up tests inside this container
-# hadolint ignore=DL3059
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -455,9 +454,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base AS openhands
 ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
-# hadolint ignore=SC2016,SC2145,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  # shellcheck disable=SC2026
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -508,7 +505,6 @@ FROM base AS opencode
 ARG OPCODE_VERSION=latest
 ARG KEEP_APT=0
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  # shellcheck disable=SC2026
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -722,7 +718,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base-slim AS openhands-slim
 ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
-# hadolint ignore=SC2016,SC2145,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
