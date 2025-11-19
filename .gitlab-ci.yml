@@ -183,12 +183,6 @@ build-rust-builder:
       variables:
         IMAGE_TAG_CUSTOM: "ci"
         IMAGE_TAG_CUSTOM_ONLY: "true"
-    # Manual refresh of the 'ci' tag on default branch
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-      variables:
-        IMAGE_TAG_CUSTOM: "ci"
-        IMAGE_TAG_CUSTOM_ONLY: "true"
     # Other branches: publish per-commit builder under <slug>:$CI_COMMIT_SHA
     - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
       variables:
