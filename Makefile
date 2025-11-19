@@ -1718,7 +1718,7 @@ check-int:
 	$(MAKE) test-integration-suite
 
 check-all:
-	@echo "Running full ignored-by-default E2E suite (unit + integration + e2e) ..."
+	@echo "Running full test suite incluing ignored-by-default (unit + integration + all e2e tests) ..."
 	$(MAKE) test
 	$(MAKE) ensure-macos-cross-image
 	$(MAKE) test-acceptance-suite

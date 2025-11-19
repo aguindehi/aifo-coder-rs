@@ -47,7 +47,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Pre-install cargo-nextest to speed up tests inside this container
-# hadolint ignore=DL3059
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -107,7 +106,8 @@ WORKDIR /
 # Build once: sh/bash/dash wrappers, tool symlinks, and aifo-entrypoint; consume via COPY in base/base-slim
 RUN install -d -m 0755 /opt/aifo/bin
 COPY --from=shim-builder /workspace/out/aifo-shim /opt/aifo/bin/aifo-shim
-# hadolint ignore=SC2016,SC2026
+# Install sh wrappers and entrypoint in one layer to reduce image layers
+# hadolint ignore=SC2016,SC2026,SC2145
 RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   printf '%s\n' \
   '#!/bin/sh' \
@@ -146,11 +146,9 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done
-# Install a tiny entrypoint to prep GnuPG runtime and launch gpg-agent if available
-# hadolint ignore=SC2016,SC2145
-RUN install -d -m 0755 /usr/local/bin \
- && printf '%s\n' '#!/bin/sh' 'set -e' \
+  for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  install -d -m 0755 /usr/local/bin && \
+  printf '%s\n' '#!/bin/sh' 'set -e' \
  'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
  'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
  'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
@@ -177,13 +175,14 @@ RUN install -d -m 0755 /usr/local/bin \
  'unset GPG_AGENT_INFO' \
  '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
- && chmod +x /usr/local/bin/aifo-entrypoint
+ 'exec "$@"' > /usr/local/bin/aifo-entrypoint && \
+ chmod +x /usr/local/bin/aifo-entrypoint
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
       autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
@@ -198,17 +197,18 @@ ARG OSXCROSS_SDK_TARBALL
 # Use a stable filename to avoid COPY src variable expansion issues in some builders (e.g., Kaniko)
 COPY ci/osx/MacOSX.sdk.tar.xz /tmp/MacOSX.sdk.tar.xz
 # Build osxcross unattended and install into /opt/osxcross
+# hadolint ignore=DL4006
 RUN set -e; \
     git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
     if [ -n "${OSXCROSS_REF}" ]; then \
-      cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
+      git -C osxcross fetch --depth=1 origin "${OSXCROSS_REF}" && git -C osxcross checkout FETCH_HEAD; \
     fi; \
     SDK_TMP="/tmp/MacOSX.sdk.tar.xz"; \
     SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
     if [ -z "$SDK_NAME" ]; then \
       # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
       TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
-      VER="$(printf '%s\n' "$TOP" | sed -n -E 's#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p' | tr -d ' \t\r\n')"; \
+      VER="$(printf '%s\n' "$TOP" | sed -n -E "s#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p" | tr -d " \t\r\n")"; \
       if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
     fi; \
     if [ -z "$SDK_NAME" ]; then \
@@ -220,55 +220,61 @@ RUN set -e; \
     UNATTENDED=1 osxcross/build.sh; \
     mkdir -p /opt/osxcross/SDK; \
     printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
-    SDK_DIR="$(ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"; \
+    SDK_DIR="$(find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name 'MacOSX*.sdk' -print -quit 2>/dev/null)"; \
     [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
-RUN set -e; cd /opt/osxcross/target/bin; \
+WORKDIR /opt/osxcross/target/bin
+# hadolint ignore=SC2016,SC2026
+RUN set -e; \
     for t in ar ranlib strip; do \
-      ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
-      ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
+      set -- aarch64-apple-darwin*-"$t"; [ -e "$1" ] && ln -sf "$1" aarch64-apple-darwin-"$t" || true; \
+      set -- x86_64-apple-darwin*-"$t";  [ -e "$1" ] && ln -sf "$1" x86_64-apple-darwin-"$t"  || true; \
     done; \
-    # Create clang wrappers (always overwrite to ensure presence)
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name MacOSX\*.sdk -print -quit 2>/dev/null)"' \
+    'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+    > oa64-clang; \
     chmod 0755 oa64-clang; \
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name MacOSX\*.sdk -print -quit 2>/dev/null)"' \
+    'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+    > o64-clang; \
     chmod 0755 o64-clang; \
-    # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
-    printf '%s\n' '#!/bin/sh' \
-      'set -e' \
-      'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
-      'HAVE_PV=0; OS_MIN="";' \
-      'for a in "$@"; do' \
-      '  case "$a" in' \
-      '    -platform_version) HAVE_PV=1 ;;' \
-      '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
-      '  esac' \
-      'done' \
-      'if [ "$HAVE_PV" -eq 0 ]; then' \
-      '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
-      '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
-      '  SDK_VER=""' \
-      '  if [ -n "$SDK_DIR" ]; then' \
-      '    base="${SDK_DIR%/}"; base="${base##*/}";' \
-      '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
-      '  fi' \
-      '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
-      '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
-      '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
-      'fi' \
-      'HAVE_SR=0' \
-      'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
-      'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
-      'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
-      'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
-      'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
-      'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
-      > ld; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
+    'HAVE_PV=0; OS_MIN="";' \
+    'for a in "$@"; do' \
+    '  case "$a" in' \
+    '    -platform_version) HAVE_PV=1 ;;' \
+    '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
+    '  esac' \
+    'done' \
+    'if [ "$HAVE_PV" -eq 0 ]; then' \
+    '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
+    '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
+    '  SDK_VER=""' \
+    '  if [ -n "$SDK_DIR" ]; then' \
+    '    base="${SDK_DIR%/}"; base="${base##*/}"' \
+    '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
+    '  fi' \
+    '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
+    '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
+    '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
+    'fi' \
+    'HAVE_SR=0' \
+    'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
+    'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
+    'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+    'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+    'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+    'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
+    > ld; \
     chmod 0755 ld
+WORKDIR /
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
@@ -286,44 +292,29 @@ ENV CC_x86_64_apple_darwin=o64-clang \
     AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
     RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
-# Install Rust targets with corporate CA trust (best-effort)
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  CAF=/run/secrets/migros_root_ca; \
-  if [ -f "$CAF" ]; then \
-    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
-    export SSL_CERT_DIR=/etc/ssl/certs; \
-    export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
-    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
-    export RUSTUP_USE_CURL=1; \
-  fi; \
-  /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
-  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
-    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-  fi'
-
-# Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
+# Install Rust targets and preinstall nextest (with corp CA; caches) in one layer
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
-        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
-        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
-        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+      install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+      export SSL_CERT_DIR=/etc/ssl/certs; \
+      export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+      export RUSTUP_USE_CURL=1; \
     fi; \
+    /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
     /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
     strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
     find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
     find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
-        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+      rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 # Configure sccache wrapper for rustc and prepare cache directory
 ENV RUSTC="/usr/local/cargo/bin/rustc" \
@@ -385,7 +376,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if command -v curl >/dev/null 2>&1; then \
         curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
     else \
-        python3 -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
+        python3 -c "import urllib.request; open(\"/tmp/uv.sh\",\"wb\").write(urllib.request.urlopen(\"https://astral.sh/uv/install.sh\").read())"; \
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
@@ -395,7 +386,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --native-tls --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
     fi; \
-    find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
+    find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -463,7 +454,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base AS openhands
 ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
-# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -484,8 +474,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
-  chmod 0755 /usr/local/bin/openhands; \
+  ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
@@ -651,7 +640,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if command -v curl >/dev/null 2>&1; then \
         curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
     else \
-        python3 -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
+        python3 -c "import urllib.request; open(\"/tmp/uv.sh\",\"wb\").write(urllib.request.urlopen(\"https://astral.sh/uv/install.sh\").read())"; \
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
@@ -661,7 +650,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --native-tls --python /opt/venv/bin/python --upgrade aider-chat[playwright]; \
     fi; \
-    find /opt/venv -name '\''pycache'\'' -type d -exec rm -rf {} +; find /opt/venv -name '\''*.pyc'\'' -delete; \
+    find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -729,7 +718,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base-slim AS openhands-slim
 ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
-# hadolint ignore=SC2016,SC2145
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -750,8 +738,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
   HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/openhands "$@"' > /usr/local/bin/openhands; \
-  chmod 0755 /usr/local/bin/openhands; \
+  ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
