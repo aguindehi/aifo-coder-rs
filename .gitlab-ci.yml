@@ -789,11 +789,31 @@ publish-release:
     - qual-mcap-gcp
   image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:v0.24.0
   script:
-    - echo "Running the release job."
+    - |
+      set -euo pipefail
+      echo "Preparing release artifacts..."
+      # Flatten macOS binaries to the job root
+      cp dist/aifo-coder-macos-arm64 .
+      cp dist/aifo-coder-macos-x86_64 .
+      # Rename Linux binary for clarity
+      mv aifo-coder aifo-coder-linux-x86_64
+      # Create per-OS archives including docs
+      tar -czf aifo-coder-linux-x86_64.tar.gz \
+        aifo-coder-linux-x86_64 README.md NOTICE LICENSE
+      tar -czf aifo-coder-macos.tar.gz \
+        aifo-coder-macos-arm64 aifo-coder-macos-x86_64 README.md NOTICE LICENSE
+      echo "Artifacts ready:"
+      ls -lh aifo-coder-linux-x86_64 aifo-coder-macos-arm64 aifo-coder-macos-x86_64
+      ls -lh aifo-coder-linux-x86_64.tar.gz aifo-coder-macos.tar.gz
+      ls -lh README.md NOTICE LICENSE
   artifacts:
     expire_in: 1 week
     paths:
-      - aifo-coder
+      - aifo-coder-linux-x86_64
+      - aifo-coder-macos-arm64
+      - aifo-coder-macos-x86_64
+      - aifo-coder-linux-x86_64.tar.gz
+      - aifo-coder-macos.tar.gz
       - README.md
       - NOTICE
       - LICENSE
@@ -803,11 +823,15 @@ publish-release:
     description: "$CI_COMMIT_MESSAGE"
     assets:
       links:
-        - name: aifo-coder
-          url: $CI_JOB_URL/artifacts/download
+        - name: aifo-coder-linux-x86_64.tar.gz
+          url: $CI_JOB_URL/artifacts/file/aifo-coder-linux-x86_64.tar.gz
+        - name: aifo-coder-macos.tar.gz
+          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos.tar.gz
+        - name: aifo-coder-linux-x86_64
+          url: $CI_JOB_URL/artifacts/file/aifo-coder-linux-x86_64
         - name: aifo-coder-macos-arm64
-          url: $CI_JOB_URL/artifacts/download
+          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos-arm64
         - name: aifo-coder-macos-x86_64
-          url: $CI_JOB_URL/artifacts/download
+          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos-x86_64
   rules:
     - if: $CI_COMMIT_TAG
