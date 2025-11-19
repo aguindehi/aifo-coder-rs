@@ -457,6 +457,7 @@ ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
 # hadolint ignore=SC2016,SC2145,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  # shellcheck disable=SC2026
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -507,6 +508,7 @@ FROM base AS opencode
 ARG OPCODE_VERSION=latest
 ARG KEEP_APT=0
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  # shellcheck disable=SC2026
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
