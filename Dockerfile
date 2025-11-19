@@ -233,13 +233,13 @@ RUN set -e; \
     done; \
     printf '%s\n' \
     '#!/bin/sh' \
-    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name MacOSX\*.sdk -print -quit 2>/dev/null)"' \
     'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
     > oa64-clang; \
     chmod 0755 oa64-clang; \
     printf '%s\n' \
     '#!/bin/sh' \
-    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name '"'"'MacOSX*.sdk'"'"' -print -quit 2>/dev/null)"' \
+    'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name MacOSX\*.sdk -print -quit 2>/dev/null)"' \
     'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
     > o64-clang; \
     chmod 0755 o64-clang; \
