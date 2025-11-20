@@ -12,6 +12,7 @@ use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use serde_yaml::Value as YamlValue;
 use std::fs;
+#[allow(unused_imports)]
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
