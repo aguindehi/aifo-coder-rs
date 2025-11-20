@@ -71,6 +71,12 @@ pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
     // Default: prefer stable toolchain pinned to image's RUSTUP_HOME for determinism.
     // Opt-in developer mode: when AIFO_CODER_RUSTUP_MUTABLE=1, make rustup writable for on-demand installs.
     let rustup_mutable = env::var("AIFO_CODER_RUSTUP_MUTABLE").ok().as_deref() == Some("1");
+    // On official rust images (or when explicitly requested), avoid forcing RUSTUP_TOOLCHAIN to prevent rustup sync noise.
+    let official = env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok().as_deref() == Some("1")
+        || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
+            .ok()
+            .as_deref()
+            == Some("1");
 
     if rustup_mutable {
         // Developer mode: use per-user rustup home; do not force RUSTUP_TOOLCHAIN to allow switching (e.g., nightly).
@@ -80,12 +86,14 @@ pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
         // This reduces rustup channel sync chatter on first use.
         push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
     } else {
-        // Deterministic mode: force stable and system rustup home.
-        push_env(args, "RUSTUP_TOOLCHAIN", "stable");
+        // Deterministic mode: use system rustup home; only force stable when not using official images.
+        if !official {
+            push_env(args, "RUSTUP_TOOLCHAIN", "stable");
+        }
         push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
     }
 
-    // Cargo home remains per-user for writable caches/tools.
+    // Cargo home remains per-user for writable caches/tools (overridden as needed for official images elsewhere).
     push_env(args, "CARGO_HOME", "/home/coder/.cargo");
 
     // Linker defaults
