@@ -1739,7 +1739,7 @@ test-acceptance-suite:
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
 	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
 	  $(MAKE) test-macos-cross-image; \
@@ -1752,7 +1752,7 @@ test-integration-suite:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
 
 check-e2e:
 	@echo "Running ignored-by-default e2e (acceptance) suite ..."
