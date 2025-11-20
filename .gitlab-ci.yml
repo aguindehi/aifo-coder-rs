@@ -371,11 +371,9 @@ build-macos-cross-rust-builder:
       fi
     - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
     - |
-      if [ -n "${APPLE_SDK_URL:-}" ]; then
-        export OSXCROSS_SDK_TARBALL="$(basename "$APPLE_SDK_URL")"
-        KANIKO_CUSTOM_BUILD_ARGUMENTS="${KANIKO_CUSTOM_BUILD_ARGUMENTS} OSXCROSS_SDK_TARBALL=${OSXCROSS_SDK_TARBALL}"
-        export KANIKO_CUSTOM_BUILD_ARGUMENTS
-      fi
+      # Do not mutate KANIKO_CUSTOM_BUILD_ARGUMENTS here.
+      # If needed, set OSXCROSS_SDK_TARBALL as a global CI variable; the Dockerfile derives the SDK name when unset.
+      :
     - |
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
       # Use time-based snapshotting to reduce Kaniko memory usage
