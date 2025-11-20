@@ -222,6 +222,7 @@ pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
     use nix::libc::STDOUT_FILENO;
     use nix::unistd::{close, dup, dup2, pipe, read};
     use std::io::Write;
+    use std::os::fd::AsRawFd;
 
     // Create a pipe and redirect stdout to its write end
     let (r_fd, w_fd) = match pipe() {
@@ -233,17 +234,17 @@ pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
     let saved = match dup(STDOUT_FILENO) {
         Ok(fd) => fd,
         Err(_) => {
-            let _ = close(r_fd);
-            let _ = close(w_fd);
+            drop(r_fd);
+            drop(w_fd);
             return String::new();
         }
     };
 
     // Redirect stdout to the pipe writer
-    if dup2(w_fd, STDOUT_FILENO).is_err() {
+    if dup2(w_fd.as_raw_fd(), STDOUT_FILENO).is_err() {
         let _ = close(saved);
-        let _ = close(r_fd);
-        let _ = close(w_fd);
+        drop(r_fd);
+        drop(w_fd);
         return String::new();
     }
 
@@ -254,19 +255,19 @@ pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
     let _ = std::io::stdout().flush();
     let _ = dup2(saved, STDOUT_FILENO);
     let _ = close(saved);
-    let _ = close(w_fd);
+    drop(w_fd);
 
     // Read captured bytes from the pipe reader
     let mut buf = Vec::new();
     let mut tmp = [0u8; 4096];
     loop {
-        match read(r_fd, &mut tmp) {
+        match read(r_fd.as_raw_fd(), &mut tmp) {
             Ok(0) => break,
             Ok(n) => buf.extend_from_slice(&tmp[..n]),
             Err(_) => break,
         }
     }
-    let _ = close(r_fd);
+    drop(r_fd);
 
     String::from_utf8_lossy(&buf).to_string()
 }
