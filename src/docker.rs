@@ -367,23 +367,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     }
 
-    // Aider root-level config files (only for aider agent)
-    if agent == "aider" {
-        for fname in [
-            ".aider.conf.yml",
-            ".aider.model.metadata.json",
-            ".aider.model.settings.yml",
-        ] {
-            let src = host_home.join(fname);
-            ensure_file_exists(&src).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!(
-                "{}:/home/coder/{}:ro",
-                src.display(),
-                fname
-            )));
-        }
-    }
+    // Aider root-level config files: handled via config clone policy in entrypoint (Phase 1).
+    // No direct bind-mount of original host files here.
 
     // Git config
     let gitconfig = host_home.join(".gitconfig");
