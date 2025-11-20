@@ -204,7 +204,7 @@ fn run_with_timeout(
             }
         }
     }
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = {
         // Retry on transient EBUSY (Text file busy) a few times with small sleeps
         let mut attempts = 0usize;
@@ -231,24 +231,40 @@ fn run_with_timeout(
         }
     };
 
+    // Read stdout/stderr concurrently to avoid blocking pipes
+    let so = child.stdout.take();
+    let se = child.stderr.take();
+    let out_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut s) = so {
+            use std::io::Read as _;
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut s) = se {
+            use std::io::Read as _;
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+
     let start = std::time::Instant::now();
     // Poll until exit or timeout
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                // Read stdout and stderr; append stderr after stdout
+                // Join readers and collect output; append stderr after stdout
                 let mut all: Vec<u8> = Vec::new();
-                if let Some(mut so) = child.stdout.take() {
-                    let mut buf = Vec::new();
-                    let _ = so.read_to_end(&mut buf);
-                    all.extend_from_slice(&buf);
+                let out = out_handle.join().unwrap_or_default();
+                if !out.is_empty() {
+                    all.extend_from_slice(&out);
                 }
-                if let Some(mut se) = child.stderr.take() {
-                    let mut buf = Vec::new();
-                    let _ = se.read_to_end(&mut buf);
-                    if !buf.is_empty() {
-                        all.extend_from_slice(&buf);
-                    }
+                let err = err_handle.join().unwrap_or_default();
+                if !err.is_empty() {
+                    all.extend_from_slice(&err);
                 }
                 let code = status.code().unwrap_or(1);
                 return Ok((code, all));
@@ -259,14 +275,11 @@ fn run_with_timeout(
                     #[cfg(unix)]
                     {
                         let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM);
-                        let deadline = std::time::Instant::now() + Duration::from_millis(250);
-                        let mut still_alive = true;
+                        let deadline =
+                            std::time::Instant::now() + Duration::from_millis(250);
                         loop {
                             match child.try_wait() {
-                                Ok(Some(_)) => {
-                                    still_alive = false;
-                                    break;
-                                }
+                                Ok(Some(_)) => break,
                                 Ok(None) => {
                                     if std::time::Instant::now() >= deadline {
                                         break;
@@ -276,7 +289,7 @@ fn run_with_timeout(
                             }
                             std::thread::sleep(Duration::from_millis(25));
                         }
-                        if still_alive {
+                        if let Ok(None) = child.try_wait() {
                             let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGKILL);
                         }
                     }
@@ -285,6 +298,9 @@ fn run_with_timeout(
                         let _ = child.kill();
                     }
                     let _ = child.wait();
+                    // Ensure readers finish after pipes are closed
+                    let _ = out_handle.join();
+                    let _ = err_handle.join();
                     return Err(NotifyError::Timeout);
                 }
                 std::thread::sleep(Duration::from_millis(25));
@@ -295,6 +311,9 @@ fn run_with_timeout(
                     .file_name()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| exec_abs.display().to_string());
+                // Ensure readers finish; best-effort
+                let _ = out_handle.join();
+                let _ = err_handle.join();
                 return Err(NotifyError::ExecSpawn(format!(
                     "host '{}' execution failed: {}",
                     bn, e
