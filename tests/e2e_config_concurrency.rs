@@ -17,8 +17,12 @@ fn image_for_aider() -> Option<String> {
     }
     Some(format!(
         "{}-aider:{}",
-        std::env::var("IMAGE_PREFIX").ok().unwrap_or_else(|_| "aifo-coder".to_string()),
-        std::env::var("TAG").ok().unwrap_or_else(|_| "latest".to_string())
+        std::env::var("IMAGE_PREFIX")
+            .ok()
+            .unwrap_or_else(|_| "aifo-coder".to_string()),
+        std::env::var("TAG")
+            .ok()
+            .unwrap_or_else(|_| "latest".to_string())
     ))
 }
 
@@ -72,11 +76,7 @@ fn run_detached_sleep_container(
 
 fn exec_sh(runtime: &PathBuf, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("sh")
-        .arg("-lc")
-        .arg(script);
+    cmd.arg("exec").arg(name).arg("sh").arg("-lc").arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
@@ -125,11 +125,27 @@ fn e2e_config_concurrent_isolation() {
     let td = tempfile::tempdir().expect("tmpdir");
     let root = td.path();
     std::fs::create_dir_all(root.join("aider")).expect("mk aider");
-    std::fs::write(root.join("aider").join(".aider.model.settings.yml"), "model: x")
-        .expect("write model settings");
+    std::fs::write(
+        root.join("aider").join(".aider.model.settings.yml"),
+        "model: x",
+    )
+    .expect("write model settings");
 
-    let name1 = format!("aifo-e2e-cfg-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros());
-    let name2 = format!("aifo-e2e-cfg-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() + 1);
+    let name1 = format!(
+        "aifo-e2e-cfg-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros()
+    );
+    let name2 = format!(
+        "aifo-e2e-cfg-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros()
+            + 1
+    );
 
     assert!(run_detached_sleep_container(&runtime, &image, &name1, root));
     assert!(run_detached_sleep_container(&runtime, &image, &name2, root));

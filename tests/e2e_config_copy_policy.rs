@@ -22,8 +22,12 @@ fn image_for_aider() -> Option<String> {
     // Fallback to typical default
     Some(format!(
         "{}-aider:{}",
-        env::var("IMAGE_PREFIX").ok().unwrap_or_else(|_| "aifo-coder".to_string()),
-        env::var("TAG").ok().unwrap_or_else(|_| "latest".to_string())
+        env::var("IMAGE_PREFIX")
+            .ok()
+            .unwrap_or_else(|_| "aifo-coder".to_string()),
+        env::var("TAG")
+            .ok()
+            .unwrap_or_else(|_| "latest".to_string())
     ))
 }
 
@@ -91,11 +95,7 @@ fn run_detached_sleep_container(
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("sh")
-        .arg("-lc")
-        .arg(script);
+    cmd.arg("exec").arg(name).arg("sh").arg("-lc").arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
@@ -229,7 +229,13 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     std::os::unix::fs::symlink(aider.join("ok.yaml"), aider.join("link.yml")).ok();
 
     let name = unique_name("aifo-e2e-config");
-    let ok = run_detached_sleep_container(&runtime, &image, &name, root, &[("AIFO_TOOLCHAIN_VERBOSE", "1")]);
+    let ok = run_detached_sleep_container(
+        &runtime,
+        &image,
+        &name,
+        root,
+        &[("AIFO_TOOLCHAIN_VERBOSE", "1")],
+    );
     assert!(ok, "failed to start container {}", name);
 
     let script = r#"
