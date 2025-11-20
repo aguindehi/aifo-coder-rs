@@ -108,7 +108,9 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     // Phase 1: Config clone policy envs (entrypoint will perform the copy)
     // Always set in-container host config mount path explicitly.
     env_flags.push(OsString::from("-e"));
-    env_flags.push(OsString::from("AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host"));
+    env_flags.push(OsString::from(
+        "AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host",
+    ));
     // Optional policy knobs: pass through when set on host.
     if let Ok(v) = env::var("AIFO_CONFIG_ENABLE") {
         if !v.is_empty() {
@@ -423,11 +425,19 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         .map(PathBuf::from)
         .or_else(|| {
             let p = host_home.join(".config").join("aifo-coder");
-            if p.is_dir() { Some(p) } else { None }
+            if p.is_dir() {
+                Some(p)
+            } else {
+                None
+            }
         })
         .or_else(|| {
             let p = host_home.join(".aifo-coder");
-            if p.is_dir() { Some(p) } else { None }
+            if p.is_dir() {
+                Some(p)
+            } else {
+                None
+            }
         });
     if let Some(cfg) = cfg_host_dir {
         volume_flags.push(OsString::from("-v"));
