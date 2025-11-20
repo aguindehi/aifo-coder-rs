@@ -1,8 +1,10 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
+use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use tempfile::Builder;
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -58,6 +60,8 @@ fn run_detached_sleep_container(
         ),
         "-e".into(),
         "AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host".into(),
+        "-e".into(),
+        "AIFO_CODER_CONFIG_HOST_DIR=/home/coder/.aifo-config-host".into(),
         "-e".into(),
         "HOME=/home/coder".into(),
         "-e".into(),
@@ -122,7 +126,8 @@ fn e2e_config_concurrent_isolation() {
     }
 
     // Host config with a simple aider file to trigger aider dir creation
-    let td = tempfile::tempdir().expect("tmpdir");
+    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or(env::temp_dir());
+    let td = Builder::new().prefix("aifo-e2e-").tempdir_in(&home).expect("tmpdir in HOME");
     let root = td.path();
     std::fs::create_dir_all(root.join("aider")).expect("mk aider");
     std::fs::write(

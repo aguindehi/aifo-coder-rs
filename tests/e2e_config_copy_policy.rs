@@ -6,6 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use tempfile::Builder;
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -70,6 +71,8 @@ fn run_detached_sleep_container(
         ),
         "-e".into(),
         "AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host".into(),
+        "-e".into(),
+        "AIFO_CODER_CONFIG_HOST_DIR=/home/coder/.aifo-config-host".into(),
         "-e".into(),
         "HOME=/home/coder".into(),
         "-e".into(),
@@ -139,7 +142,8 @@ fn e2e_config_copy_and_permissions_for_aider() {
     }
 
     // Prepare host config root with allowed files
-    let td = tempfile::tempdir().expect("tmpdir");
+    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or(env::temp_dir());
+    let td = Builder::new().prefix("aifo-e2e-").tempdir_in(&home).expect("tmpdir in HOME");
     let root = td.path();
     let global = root.join("global");
     let aider = root.join("aider");
@@ -208,7 +212,8 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         return;
     }
 
-    let td = tempfile::tempdir().expect("tmpdir");
+    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or(env::temp_dir());
+    let td = Builder::new().prefix("aifo-e2e-").tempdir_in(&home).expect("tmpdir in HOME");
     let root = td.path();
     let aider = root.join("aider");
     fs::create_dir_all(&aider).expect("mk aider");
