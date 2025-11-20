@@ -200,6 +200,17 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  'if [ "$CFG_ENABLE" = "1" ]; then' \
  '  install -d -m 0700 "$CFG_DST" || true' \
  '  if [ -d "$CFG_HOST" ]; then' \
+ '    STAMP="$CFG_DST/.copied"' \
+ '    SHOULD=1' \
+ '    if [ "$CFG_COPY_ALWAYS" != "1" ] && [ -f "$STAMP" ]; then' \
+ '      max_src=0' \
+ '      for f in "$CFG_HOST"/* "$CFG_HOST"/global/* "$CFG_HOST"/*/*; do [ -e "$f" ] || continue; mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"; [ "$mt" -gt "$max_src" ] && max_src="$mt"; done' \
+ '      dst_mt="$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || echo 0)"' \
+ '      if [ "$max_src" -le "$dst_mt" ]; then SHOULD=0; fi' \
+ '    fi' \
+ '    if [ "$SHOULD" = "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: copying files from $CFG_HOST to $CFG_DST"; fi' \
+ '    if [ "$SHOULD" != "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: skip copy (up-to-date)"; fi' \
+ '    if [ "$SHOULD" = "1" ]; then' \
  '    copy_one() {' \
  '      src="$1"; base="$(basename "$src")";' \
  '      case "$base" in' \
@@ -220,6 +231,7 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
  '    done' \
  '    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true' \
+ '    fi' \
  '  fi' \
  'fi' \
  'exec "$@"' > /usr/local/bin/aifo-entrypoint \
