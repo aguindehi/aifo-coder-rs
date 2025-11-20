@@ -10,7 +10,8 @@ ARG REGISTRY_PREFIX
 # CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
-ARG KEEP_APT
+ARG KEEP_APT=0
+ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -89,7 +90,7 @@ RUN set -eux; \
 # Optionally drop procps/apt and fold final CMake verification into same layer
 # hadolint ignore=DL3008
 RUN set -eux; \
-  if [ "$KEEP_APT" = "0" ] ; then \
+  if [ "${KEEP_APT:-0}" = "0" ] ; then \
     # Ensure CMake present before removing apt; reinstall if missing (best-effort) \
     if [ ! -x /usr/bin/cmake ] ; then \
       apt-get update; \

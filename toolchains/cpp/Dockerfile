@@ -4,7 +4,8 @@ ARG REGISTRY_PREFIX
 # CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}debian:bookworm-slim
 
-ARG KEEP_APT
+ARG KEEP_APT=0
+ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -28,7 +29,7 @@ ENV CCACHE_DIR=/home/coder/.cache/ccache
 
 # Optionally drop procps and apt after verifying cmake; retain apt cache mounts for re-install if needed
 RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt/lists sh -lc 'set -eux; \
-  if [ "$KEEP_APT" = "0" ]; then \
+  if [ "${KEEP_APT:-0}" = "0" ]; then \
     if [ ! -x /usr/bin/cmake ]; then \
       echo "warning: /usr/bin/cmake missing; re-installing cmake ..." >&2; \
       apt-get update; \

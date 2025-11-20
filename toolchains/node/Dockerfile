@@ -7,7 +7,8 @@ ARG REGISTRY_PREFIX
 # CI builds use Kaniko --use-new-run; retain RUN --mount (secrets/cache). Avoid COPY --link/--chmod.
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim
 
-ARG KEEP_APT
+ARG KEEP_APT=0
+ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -98,7 +99,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 WORKDIR /workspace
 
 # Optionally drop procps from final image to reduce footprint
-RUN if [ "$KEEP_APT" = "0" ]; then \
+RUN if [ "${KEEP_APT:-0}" = "0" ]; then \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm /usr/bin/apt /usr/bin/apt-cache /usr/bin/apt-cdrom /usr/bin/apt-config /usr/bin/apt-get; \
