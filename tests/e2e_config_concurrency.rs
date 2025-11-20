@@ -174,8 +174,17 @@ fn e2e_config_concurrent_isolation() {
         r#"set -e; cat "$HOME/.aifo-config/isolation.txt" || echo missing"#,
     );
 
-    stop_container(&runtime, &name1);
-    stop_container(&runtime, &name2);
+    // Verify Aider bridging exists in each container
+    let (_ecb1, bridge1) = exec_sh(
+        &runtime,
+        &name1,
+        r#"set -e; if [ -f "$HOME/.aider.model.settings.yml" ]; then echo "BRIDGE=ok"; else echo "BRIDGE=miss"; fi"#,
+    );
+    let (_ecb2, bridge2) = exec_sh(
+        &runtime,
+        &name2,
+        r#"set -e; if [ -f "$HOME/.aider.model.settings.yml" ]; then echo "BRIDGE=ok"; else echo "BRIDGE=miss"; fi"#,
+    );
 
     assert!(
         out1b.contains("alpha"),
@@ -187,4 +196,17 @@ fn e2e_config_concurrent_isolation() {
         "container2 should see beta; got:\n{}",
         out2b
     );
+    assert!(
+        bridge1.contains("BRIDGE=ok"),
+        "container1 missing Aider bridging file; out:\n{}",
+        bridge1
+    );
+    assert!(
+        bridge2.contains("BRIDGE=ok"),
+        "container2 missing Aider bridging file; out:\n{}",
+        bridge2
+    );
+
+    stop_container(&runtime, &name1);
+    stop_container(&runtime, &name2);
 }
