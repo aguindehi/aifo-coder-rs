@@ -337,13 +337,13 @@ if { [ -t 0 ] || [ -t 1 ] || [ -t 2 ]; }; then
   fi
 fi
 
-# When invoked as sh -c "cmd" [...] or sh -lc "cmd" [...],
-# append '; exit' so the shell terminates after the command finishes.
+# Normalize '-lc' to '-c' for POSIX shells; do not append '; exit'
 if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then
   flag="$1"
   cmd="$2"
   shift 2
-  exec /bin/sh "$flag" "$cmd; exit" "$@"
+  [ "$flag" = "-lc" ] && flag="-c"
+  exec /bin/sh "$flag" "$cmd" "$@"
 fi
 
 # Fallback: just chain to real /bin/sh

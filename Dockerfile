@@ -148,12 +148,13 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   '  fi' \
   'fi' \
   '' \
-  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
+  '# Normalize -lc to -c for dash/posix shells; do not append ; exit.' \
   'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
   '  flag="$1"' \
   '  cmd="$2"' \
   '  shift 2' \
-  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
+  '  [ "$flag" = "-lc" ] && flag="-c"' \
+  '  exec /bin/sh "$flag" "$cmd" "$@"' \
   'fi' \
   '' \
   'exec /bin/sh "$@"' \
