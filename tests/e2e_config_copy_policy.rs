@@ -93,7 +93,7 @@ fn run_detached_sleep_container(
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec").arg(name).arg("sh").arg("-c").arg(script);
+    cmd.arg("exec").arg(name).arg("/bin/sh").arg("-c").arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
