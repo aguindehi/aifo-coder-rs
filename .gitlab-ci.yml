@@ -344,6 +344,8 @@ build-macos-cross-rust-builder:
     TARGET_NAME: "macos-cross-rust-builder"
     IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
     OSX_SDK_FILENAME: "MacOSX.sdk.tar.xz"
+    DOCKER_FILE: "builders/macos-cross/Dockerfile"
+    KANIKO_CUSTOM_BUILD_ARGUMENTS: "REGISTRY_PREFIX=repository.migros.net/"
   before_script:
     - mkdir -p ci/osx
     - |
@@ -369,11 +371,9 @@ build-macos-cross-rust-builder:
       fi
     - ls -lh "ci/osx/${OSX_SDK_FILENAME}"
     - |
-      if [ -n "${APPLE_SDK_URL:-}" ]; then
-        export OSXCROSS_SDK_TARBALL="$(basename "$APPLE_SDK_URL")"
-        KANIKO_CUSTOM_BUILD_ARGUMENTS="${KANIKO_CUSTOM_BUILD_ARGUMENTS} OSXCROSS_SDK_TARBALL=${OSXCROSS_SDK_TARBALL}"
-        export KANIKO_CUSTOM_BUILD_ARGUMENTS
-      fi
+      # Do not mutate KANIKO_CUSTOM_BUILD_ARGUMENTS here.
+      # If needed, set OSXCROSS_SDK_TARBALL as a global CI variable; the Dockerfile derives the SDK name when unset.
+      :
     - |
       IMAGE_PATH_EXTRA="aifo-${IMAGE_PREFIX}-${IMAGE_PATH_EXTRA:-$TARGET}"
       # Use time-based snapshotting to reduce Kaniko memory usage
@@ -743,6 +743,7 @@ lint-dockerfiles:
       [ -f toolchains/rust/Dockerfile ] && FILES="$FILES toolchains/rust/Dockerfile"
       [ -f toolchains/node/Dockerfile ] && FILES="$FILES toolchains/node/Dockerfile"
       [ -f toolchains/cpp/Dockerfile ] && FILES="$FILES toolchains/cpp/Dockerfile"
+      [ -f builders/macos-cross/Dockerfile ] && FILES="$FILES builders/macos-cross/Dockerfile"
       if [ -n "$FILES" ]; then
         hadolint --format gitlab_codeclimate $FILES > gl-code-quality-report.json || true
       else

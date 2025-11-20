@@ -308,6 +308,7 @@ help: banner
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
+	@echo "  test-macos-cross-image ...... Run macOS cross E2E tests inside cross image (e2e_macos_cross_*)"
 	@echo ""
 	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
 	@echo "  cov-results ................. Show coverage-html in the browser"
@@ -570,9 +571,9 @@ build-macos-cross-rust-builder:
 	$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) -f builders/macos-cross/Dockerfile --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) -f builders/macos-cross/Dockerfile --build-arg REGISTRY_PREFIX="$$RP" --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" --target macos-cross-rust-builder -t $(MACOS_CROSS_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-macos-cross-rust-builder:
@@ -588,6 +589,7 @@ rebuild-macos-cross-rust-builder:
 	  if [ -n "$(CACHE_DIR)" ] && [ -d "$(CACHE_DIR)" ]; then echo "Purging local buildx cache at $(CACHE_DIR) ..."; rm -rf "$(CACHE_DIR)" || true; fi; \
 	  if [ -n "$$REG" ]; then \
 	    docker buildx build --no-cache --pull --load \
+	      -f builders/macos-cross/Dockerfile \
 	      --build-arg REGISTRY_PREFIX="$$RP" \
 	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
 	      --target macos-cross-rust-builder \
@@ -595,6 +597,7 @@ rebuild-macos-cross-rust-builder:
 	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
 	  else \
 	    docker buildx build --no-cache --pull --load \
+	      -f builders/macos-cross/Dockerfile \
 	      --build-arg REGISTRY_PREFIX="$$RP" \
 	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
 	      --target macos-cross-rust-builder \
@@ -604,6 +607,7 @@ rebuild-macos-cross-rust-builder:
 	  echo "Rebuilding macOS cross image with classic docker build (no-cache, pull) ..."; \
 	  if [ -n "$$REG" ]; then \
 	    docker build --no-cache --pull \
+	      -f builders/macos-cross/Dockerfile \
 	      --build-arg REGISTRY_PREFIX="$$RP" \
 	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
 	      --target macos-cross-rust-builder \
@@ -611,6 +615,7 @@ rebuild-macos-cross-rust-builder:
 	      -t "$${REG}$(MACOS_CROSS_IMAGE)" $(CA_SECRET) .; \
 	  else \
 	    docker build --no-cache --pull \
+	      -f builders/macos-cross/Dockerfile \
 	      --build-arg REGISTRY_PREFIX="$$RP" \
 	      --build-arg OSX_SDK_FILENAME="$(OSX_SDK_FILENAME)" \
 	      --target macos-cross-rust-builder \
