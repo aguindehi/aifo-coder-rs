@@ -293,7 +293,7 @@ help: banner
 	@echo "  lint ........................ Lint by running cargo fmt and cargo clippy (workspace, all targets; -D warnings) and lint naming"
 	@echo "  lint-docker ................. Lint by running hadolint on all Dockerfiles of the project"
 	@echo "  lint-tests-naming ........... Lint by running lint-test-naming.sh to test files for lane prefixes and conventions"
-	@echo "  lint-ultra .................. Lint by running cargo fmt cargo clippy (workspace, all targets; -D warnings,unsafe_code,clippy::*) and lint naming"
+	@echo "  lint-ultra .................. Curated clippy: deny unsafe/dbg/await-holding-lock; others hidden (set AIFO_ULTRA_WARNINGS=1 to show)"
 	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
@@ -1375,13 +1375,23 @@ lint-ultra:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (sidecar, curated strict + warnings) ..."; \
-	  cargo clippy --workspace --all-features --all-targets -- -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
+	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
+	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
+	  else \
+	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
+	  fi; \
+	  cargo -q clippy --workspace --all-features --all-targets -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable, curated strict + warnings) ..."; \
-	  rustup run stable cargo clippy --workspace --all-features --all-targets -- -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing || cargo clippy --workspace --all-features --all-targets -- -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
+	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
+	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
+	  else \
+	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
+	  fi; \
+	  rustup run stable cargo -q clippy --workspace --all-features --all-targets -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock || cargo -q clippy --workspace --all-features --all-targets -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
@@ -1390,7 +1400,12 @@ lint-ultra:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (local cargo, curated strict + warnings) ..."; \
-	  cargo clippy --workspace --all-features --all-targets -- -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
+	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
+	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
+	  else \
+	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
+	  fi; \
+	  cargo -q clippy --workspace --all-features --all-targets -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1398,9 +1413,15 @@ lint-ultra:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
+	    -e AIFO_ULTRA_WARNINGS \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
-	      cargo clippy --workspace --all-features --all-targets -- -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing'; \
+	      if [ "${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
+	        LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
+	      else \
+	        LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
+	      fi; \
+	      cargo -q clippy --workspace --all-features --all-targets -- $LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
 	  exit 1; \
