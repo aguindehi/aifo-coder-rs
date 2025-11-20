@@ -19,10 +19,10 @@ fn image_for_aider() -> Option<String> {
         "{}-aider:{}",
         std::env::var("IMAGE_PREFIX")
             .ok()
-            .unwrap_or_else(|_| "aifo-coder".to_string()),
+            .unwrap_or_else(|| "aifo-coder".to_string()),
         std::env::var("TAG")
             .ok()
-            .unwrap_or_else(|_| "latest".to_string())
+            .unwrap_or_else(|| "latest".to_string())
     ))
 }
 
