@@ -285,7 +285,7 @@ help: banner
 	@echo "  git-commit-no-sign-all ...... Stage all and commit without signing (MESSAGE='your message' optional)"
 	@echo "  git-amend-no-sign ........... Amend the last commit without GPG signing"
 	@echo ""
-	@echo "  validate-macos-artifact ..... Validate macOS arm64 binary with file(1)"
+	@echo "  validate-macos-artifact-arm64  Validate macOS arm64 binary with file(1)"
 	@echo "  validate-macos-artifact-x86_64 Validate macOS x86_64 binary with file(1)"
 	@echo ""
 	$(call title,Test targets:)
@@ -293,7 +293,8 @@ help: banner
 	@echo "  lint ........................ Lint by running cargo fmt and cargo clippy (workspace, all targets; -D warnings) and lint naming"
 	@echo "  lint-docker ................. Lint by running hadolint on all Dockerfiles of the project"
 	@echo "  lint-tests-naming ........... Lint by running lint-test-naming.sh to test files for lane prefixes and conventions"
-	@echo "  lint-ultra .................. Curated clippy: deny unsafe/dbg/await-holding-lock; includes tests by default (AIFO_ULTRA_INCLUDE_TESTS=0 to skip). Set AIFO_ULTRA_WARNINGS=1 to show advisories."
+	@echo "  lint-ultra .................. Lint by running curated clippy: deny unsafe/dbg/await-holding-lock; includes tests by default"
+	@echo "                                Set AIFO_ULTRA_INCLUDE_TESTS=0 to skip tests. Set AIFO_ULTRA_WARNINGS=1 to show advisories."
 	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
@@ -676,8 +677,8 @@ build-launcher-macos-cross-x86_64:
 	  exit 2; \
 	fi
 
-.PHONY: validate-macos-artifact
-validate-macos-artifact:
+.PHONY: validate-macos-artifact-arm64
+validate-macos-artifact-arm64:
 	@set -e; \
 	BIN1="dist/aifo-coder-macos-arm64"; \
 	BIN2="target/aarch64-apple-darwin/release/aifo-coder"; \
