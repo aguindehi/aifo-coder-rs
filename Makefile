@@ -1374,14 +1374,14 @@ lint-ultra:
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
-	  echo "Running cargo clippy (sidecar, excessive) ..."; \
-	  cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
+	  echo "Running cargo clippy (sidecar, curated strict + warnings) ..."; \
+	  cargo clippy --workspace --all-features --all-targets -- -D warnings -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
-	  echo "Running cargo clippy (rustup stable, excessive) ..."; \
-	  rustup run stable cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing || cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
+	  echo "Running cargo clippy (rustup stable, curated strict + warnings) ..."; \
+	  rustup run stable cargo clippy --workspace --all-features --all-targets -- -D warnings -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing || cargo clippy --workspace --all-features --all-targets -- -D warnings -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
@@ -1389,8 +1389,8 @@ lint-ultra:
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
-	  echo "Running cargo clippy (local cargo, excessive) ..."; \
-	  cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing; \
+	  echo "Running cargo clippy (local cargo, curated strict + warnings) ..."; \
+	  cargo clippy --workspace --all-features --all-targets -- -D warnings -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1400,7 +1400,7 @@ lint-ultra:
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
-	      cargo clippy --workspace --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing'; \
+	      cargo clippy --workspace --all-features --all-targets -- -D warnings -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
 	  exit 1; \
