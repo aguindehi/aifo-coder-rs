@@ -308,6 +308,7 @@ help: banner
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
+	@echo "  test-macos-cross-image ...... Run macOS cross E2E tests inside cross image (e2e_macos_cross_*)"
 	@echo ""
 	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
 	@echo "  cov-results ................. Show coverage-html in the browser"
