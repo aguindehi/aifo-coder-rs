@@ -205,7 +205,9 @@ fn run_with_timeout(
             }
         }
     }
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = {
         // Retry on transient EBUSY (Text file busy) a few times with small sleeps
         let mut attempts = 0usize;
@@ -276,8 +278,7 @@ fn run_with_timeout(
                     #[cfg(unix)]
                     {
                         let _ = kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM);
-                        let deadline =
-                            std::time::Instant::now() + Duration::from_millis(250);
+                        let deadline = std::time::Instant::now() + Duration::from_millis(250);
                         loop {
                             match child.try_wait() {
                                 Ok(Some(_)) => break,
