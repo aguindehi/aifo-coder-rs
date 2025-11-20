@@ -215,51 +215,60 @@ pub fn urlencode(s: &str) -> String {
 }
 
 #[cfg(unix)]
-/// Capture stdout to a temporary file while running `f`, returning the captured text.
+/// Capture stdout while running `f` using a pipe, returning the captured text.
 /// Intended for integration tests; mirrors repeated inline helpers.
 #[allow(dead_code)]
 pub fn capture_stdout<F: FnOnce()>(f: F) -> String {
-    use libc::{dup, dup2, fflush, fileno, fopen, STDOUT_FILENO};
-    use std::os::fd::{FromRawFd, RawFd};
-    unsafe {
-        // Open a temporary file (unique per call to avoid cross-test interleaving)
-        let unique = format!(
-            "/tmp/aifo-coder-test-stdout-{}-{}.tmp",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-                .as_nanos()
-        );
-        let path = std::ffi::CString::new(unique).unwrap();
-        let mode = std::ffi::CString::new("w+").unwrap();
-        let file = fopen(path.as_ptr(), mode.as_ptr());
-        assert!(!file.is_null(), "failed to open temp file for capture");
-        let fd: RawFd = fileno(file);
+    use nix::libc::STDOUT_FILENO;
+    use nix::unistd::{close, dup, dup2, pipe, read};
+    use std::io::Write;
 
-        // Duplicate current stdout
-        let stdout_fd = STDOUT_FILENO;
-        let saved = dup(stdout_fd);
-        assert!(saved >= 0, "dup(stdout) failed");
+    // Create a pipe and redirect stdout to its write end
+    let (r_fd, w_fd) = match pipe() {
+        Ok(p) => p,
+        Err(_) => return String::new(),
+    };
 
-        // Redirect stdout to file
-        assert!(dup2(fd, stdout_fd) >= 0, "dup2 failed");
+    // Duplicate current stdout
+    let saved = match dup(STDOUT_FILENO) {
+        Ok(fd) => fd,
+        Err(_) => {
+            let _ = close(r_fd);
+            let _ = close(w_fd);
+            return String::new();
+        }
+    };
 
-        // Run the function
-        f();
-
-        // Flush and restore stdout
-        fflush(std::ptr::null_mut());
-        assert!(dup2(saved, stdout_fd) >= 0, "restore dup2 failed");
-
-        // Read back the file
-        let mut f = std::fs::File::from_raw_fd(fd);
-        use std::io::{Read, Seek};
-        let mut s = String::new();
-        let _ = f.rewind();
-        f.read_to_string(&mut s).expect("read captured");
-        s
+    // Redirect stdout to the pipe writer
+    if dup2(w_fd, STDOUT_FILENO).is_err() {
+        let _ = close(saved);
+        let _ = close(r_fd);
+        let _ = close(w_fd);
+        return String::new();
     }
+
+    // Run the function while stdout is redirected
+    f();
+
+    // Flush Rust stdio buffers, restore stdout, and close writer end
+    let _ = std::io::stdout().flush();
+    let _ = dup2(saved, STDOUT_FILENO);
+    let _ = close(saved);
+    let _ = close(w_fd);
+
+    // Read captured bytes from the pipe reader
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 4096];
+    loop {
+        match read(r_fd, &mut tmp) {
+            Ok(0) => break,
+            Ok(n) => buf.extend_from_slice(&tmp[..n]),
+            Err(_) => break,
+        }
+    }
+    let _ = close(r_fd);
+
+    String::from_utf8_lossy(&buf).to_string()
 }
 
 #[allow(dead_code)]
