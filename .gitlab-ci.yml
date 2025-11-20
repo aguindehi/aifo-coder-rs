@@ -344,6 +344,8 @@ build-macos-cross-rust-builder:
     TARGET_NAME: "macos-cross-rust-builder"
     IMAGE_PATH_EXTRA: "macos-cross-rust-builder"
     OSX_SDK_FILENAME: "MacOSX.sdk.tar.xz"
+    DOCKER_FILE: "builders/macos-cross/Dockerfile"
+    KANIKO_CUSTOM_BUILD_ARGUMENTS: "REGISTRY_PREFIX=repository.migros.net/"
   before_script:
     - mkdir -p ci/osx
     - |
@@ -743,6 +745,7 @@ lint-dockerfiles:
       [ -f toolchains/rust/Dockerfile ] && FILES="$FILES toolchains/rust/Dockerfile"
       [ -f toolchains/node/Dockerfile ] && FILES="$FILES toolchains/node/Dockerfile"
       [ -f toolchains/cpp/Dockerfile ] && FILES="$FILES toolchains/cpp/Dockerfile"
+      [ -f builders/macos-cross/Dockerfile ] && FILES="$FILES builders/macos-cross/Dockerfile"
       if [ -n "$FILES" ]; then
         hadolint --format gitlab_codeclimate $FILES > gl-code-quality-report.json || true
       else
