@@ -105,6 +105,48 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     env_flags.push(OsString::from("-e"));
     env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
 
+    // Phase 1: Config clone policy envs (entrypoint will perform the copy)
+    // Always set in-container host config mount path explicitly.
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from("AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host"));
+    // Optional policy knobs: pass through when set on host.
+    if let Ok(v) = env::var("AIFO_CONFIG_ENABLE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_ENABLE={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_MAX_SIZE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_MAX_SIZE={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_ALLOW_EXT") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_ALLOW_EXT={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_SECRET_HINTS") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_SECRET_HINTS={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_COPY_ALWAYS") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_COPY_ALWAYS={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_DST_DIR") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_DST_DIR={v}")));
+        }
+    }
+
     // XDG_RUNTIME_DIR (unix only)
     if let Some(uid) = uid_opt {
         env_flags.push(OsString::from("-e"));
@@ -387,6 +429,28 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         "{}:/home/coder/.gnupg-host:ro",
         gnupg_dir.display()
     )));
+
+    // Phase 1: Coding agent config (read-only host mount)
+    // Resolve host config dir: explicit env, else ~/.config/aifo-coder, else ~/.aifo-coder.
+    let cfg_host_dir = env::var("AIFO_CONFIG_HOST_DIR")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            let p = host_home.join(".config").join("aifo-coder");
+            if p.is_dir() { Some(p) } else { None }
+        })
+        .or_else(|| {
+            let p = host_home.join(".aifo-coder");
+            if p.is_dir() { Some(p) } else { None }
+        });
+    if let Some(cfg) = cfg_host_dir {
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(OsString::from(format!(
+            "{}:/home/coder/.aifo-config-host:ro",
+            cfg.display()
+        )));
+    }
 
     // Optional shim dir
     if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {

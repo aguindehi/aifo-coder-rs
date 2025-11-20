@@ -189,8 +189,41 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  'unset GPG_AGENT_INFO' \
  '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint && \
- chmod +x /usr/local/bin/aifo-entrypoint
+ 'CFG_HOST="${AIFO_CONFIG_HOST_DIR:-$HOME/.aifo-config-host}"' \
+ 'CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"' \
+ 'CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"' \
+ 'CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"' \
+ 'CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"' \
+ 'CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"' \
+ 'CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"' \
+ 'export AIFO_CODER_CONFIG_DIR="$CFG_DST"' \
+ 'if [ "$CFG_ENABLE" = "1" ]; then' \
+ '  install -d -m 0700 "$CFG_DST" || true' \
+ '  if [ -d "$CFG_HOST" ]; then' \
+ '    copy_one() {' \
+ '      src="$1"; base="$(basename "$src")";' \
+ '      case "$base" in' \
+ '        *[!A-Za-z0-9._-]*|"") return ;;' \
+ '      esac;' \
+ '      ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")";' \
+ '      ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; [ "$ok" -eq 1 ] || return;' \
+ '      [ -f "$src" ] || return; sz="$(wc -c < "$src" 2>/dev/null || echo 0)"; [ "$sz" -le "$CFG_MAX" ] || return;' \
+ '      mode=0644;' \
+ '      case "$ext_lc" in pem|key|token) mode=0600 ;; esac;' \
+ '      hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")";' \
+ '      IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS;' \
+ '      install -m "$mode" "$src" "$CFG_DST/$base" >/dev/null 2>&1 || true' \
+ '    }' \
+ '    if [ -d "$CFG_HOST/global" ]; then for f in "$CFG_HOST"/global/*; do [ -e "$f" ] || continue; copy_one "$f"; done; fi' \
+ '    for d in "$CFG_HOST"/*; do [ -d "$d" ] || continue; name="$(basename "$d")"; [ "$name" = "global" ] && continue; install -d -m 0700 "$CFG_DST/$name" >/dev/null 2>&1 || true; for f in "$d"/*; do [ -e "$f" ] || continue; [ -f "$f" ] || continue; base="$(basename "$f")"; case "$base" in *[!A-Za-z0-9._-]*|"") continue ;; esac; ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"; ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; [ "$ok" -eq 1 ] || continue; [ -f "$f" ] || continue; sz="$(wc -c < "$f" 2>/dev/null || echo 0)"; [ "$sz" -le "$CFG_MAX" ] || continue; mode=0644; case "$ext_lc" in pem|key|token) mode=0600 ;; esac; hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")"; IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS; install -m "$mode" "$f" "$CFG_DST/$name/$base" >/dev/null 2>&1 || true; done; done' \
+ '    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do' \
+ '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
+ '    done' \
+ '    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true' \
+ '  fi' \
+ 'fi' \
+ 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
+ && chmod +x /usr/local/bin/aifo-entrypoint
 
 
 # --- Base layer: Node image + common OS tools used by all agents ---
