@@ -159,11 +159,90 @@ Phase 1 – Foundation (entrypoint copy + agent mount)
   - Dry-run preview: ensure docker preview shows the new directory mount (host → /.aifo-config-host:ro).
 
 Phase 2 – Schema consolidation and documentation
-- Document the host config schema (global + per-agent subdirs).
-- Provide migration notes:
-  - Move legacy root-level Aider files into $HOST_CFG_ROOT/aider/ (automatic bridging ensures no break).
-  - Create $HOST_CFG_ROOT/global/ for shared configs.
-- Update project docs: environment knobs, expected directory paths, troubleshooting.
+
+Authoritative schema documentation
+
+- Host config root resolution:
+  - Default: $HOME/.config/aifo-coder
+  - Legacy fallback: $HOME/.aifo-coder (only if default absent)
+  - Override: AIFO_CONFIG_HOST_DIR must point to an existing directory
+- Directory layout under $HOST_CFG_ROOT:
+  - $HOST_CFG_ROOT/global/                shared config for any agent
+  - $HOST_CFG_ROOT/aider/                 Aider-specific config
+  - $HOST_CFG_ROOT/codex/                 Codex-specific config
+  - $HOST_CFG_ROOT/crush/                 Crush-specific config
+  - $HOST_CFG_ROOT/openhands/             OpenHands-specific config
+  - $HOST_CFG_ROOT/opencode/              OpenCode-specific config
+  - $HOST_CFG_ROOT/plandex/               Plandex-specific config
+- Filename and format rules:
+  - Depth=1 only (no recursion); subdirectories are only per-agent names and “global”
+  - Filenames: ASCII [A-Za-z0-9._-]+ (no path separators)
+  - Extensions allowlist (case-insensitive): json, toml, yaml, yml, ini, conf, crt, pem, key, token
+  - Per-file size cap: 256 KiB (configurable via AIFO_CONFIG_MAX_SIZE)
+- In-container mapping:
+  - Destination base: $HOME/.aifo-config
+  - Copy $HOST_CFG_ROOT/global/* → $HOME/.aifo-config/global/
+  - Copy $HOST_CFG_ROOT/<agent>/* → $HOME/.aifo-config/<agent>/
+  - Export AIFO_CODER_CONFIG_DIR="$HOME/.aifo-config" for agent processes
+
+Agent-specific notes
+
+- Aider bridging (implemented in Phase 1):
+  - If .aider.conf.yml, .aider.model.settings.yml, .aider.model.metadata.json exist in $HOST_CFG_ROOT/aider/, after copying to $HOME/.aifo-config/aider/, also copy into $HOME/<filename> (mode 0644) so Aider finds them at legacy paths.
+- Other agents (codex, crush, openhands, opencode, plandex):
+  - No root-level bridging required at this time; agents should consult their XDG paths or read from AIFO_CODER_CONFIG_DIR/<agent> where applicable.
+  - Future phases may add additional bridging if a tool requires non-XDG locations.
+
+Migration notes (host-side)
+
+- Create the new config root and subdirectories:
+  - Linux/macOS:
+    - mkdir -p "$HOME/.config/aifo-coder/global" "$HOME/.config/aifo-coder/aider" "$HOME/.config/aifo-coder/codex" "$HOME/.config/aifo-coder/crush" "$HOME/.config/aifo-coder/openhands" "$HOME/.config/aifo-coder/opencode" "$HOME/.config/aifo-coder/plandex"
+  - Windows (PowerShell example):
+    - New-Item -ItemType Directory -Force -Path "$Env:APPDATA\aifo-coder", "$Env:APPDATA\aifo-coder\global", "$Env:APPDATA\aifo-coder\aider", "$Env:APPDATA\aifo-coder\codex", "$Env:APPDATA\aifo-coder\crush", "$Env:APPDATA\aifo-coder\openhands", "$Env:APPDATA\aifo-coder\opencode", "$Env:APPDATA\aifo-coder\plandex"
+- Move legacy Aider files:
+  - If you had Aider root files in $HOME:
+    - mv "$HOME/.aider.conf.yml"        "$HOME/.config/aifo-coder/aider/.aider.conf.yml"        2>/dev/null || true
+    - mv "$HOME/.aider.model.settings.yml" "$HOME/.config/aifo-coder/aider/.aider.model.settings.yml" 2>/dev/null || true
+    - mv "$HOME/.aider.model.metadata.json" "$HOME/.config/aifo-coder/aider/.aider.model.metadata.json" 2>/dev/null || true
+  - Bridging ensures Aider continues to work; the entrypoint will copy into $HOME as needed.
+- Create global or agent-specific config files with allowed names/extensions; keep individual file size ≤ 256 KiB (default policy).
+
+Environment knobs (documented for ops)
+
+- AIFO_CONFIG_ENABLE: 1 (default enable), 0 to disable copying.
+- AIFO_CONFIG_HOST_DIR: host directory to mount; launcher resolves default; in-container default is $HOME/.aifo-config-host.
+- AIFO_CONFIG_DST_DIR: in-container destination directory; default $HOME/.aifo-config.
+- AIFO_CODER_CONFIG_DIR: exported by entrypoint; points to $HOME/.aifo-config.
+- AIFO_CONFIG_MAX_SIZE: default 262144 bytes (256 KiB).
+- AIFO_CONFIG_ALLOW_EXT: comma list (case-insensitive) default: json,toml,yaml,yml,ini,conf,crt,pem,key,token.
+- AIFO_CONFIG_SECRET_HINTS: comma list of substrings; default: token,secret,key,pem.
+- AIFO_CONFIG_COPY_ALWAYS: 0 (default), 1 to force re-copy each start.
+
+Troubleshooting and validation
+
+- If a file does not appear in $HOME/.aifo-config:
+  - Name may be invalid (must match ^[A-Za-z0-9._-]+$); rename to a safe filename.
+  - Extension may be disallowed; update AIFO_CONFIG_ALLOW_EXT to include it or change the extension.
+  - File may be a symlink or non-regular file; ensure it is a regular file.
+  - File may exceed MAX_SIZE; reduce size or increase AIFO_CONFIG_MAX_SIZE.
+- Verify permissions:
+  - Secrets (.pem/.key/.token or names containing SECRET_HINTS) should be 0600; other config 0644; directories 0700.
+- Concurrency/fork mode:
+  - Multiple instances and fork N panes are isolated; each container copies into its private $HOME/.aifo-config.
+- Disable/override:
+  - Temporarily disable copying via AIFO_CONFIG_ENABLE=0 for debugging.
+  - Override source/destination via AIFO_CONFIG_HOST_DIR/AIFO_CONFIG_DST_DIR when necessary.
+
+Documentation updates
+
+- Update project docs to reference:
+  - Host schema layout and resolution order.
+  - Allowed filename patterns, extensions, and size limits.
+  - Environment knobs and their defaults.
+  - Aider bridging behavior and legacy migration.
+  - Troubleshooting steps above.
+- Include examples and quickstart commands for creating directories and populating initial config files.
 
 Phase 3 – Optimization and per-agent bridging enhancements
 - Optional: mtime/stamp check to skip re-copy when COPY_ALWAYS=0 and source unchanged.
