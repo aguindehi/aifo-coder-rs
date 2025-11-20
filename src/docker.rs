@@ -441,10 +441,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         });
     if let Some(cfg) = cfg_host_dir {
         volume_flags.push(OsString::from("-v"));
-        volume_flags.push(OsString::from(format!(
-            "{}:/home/coder/.aifo-config-host:ro",
-            cfg.display()
-        )));
+        volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
     }
 
     // Optional shim dir
