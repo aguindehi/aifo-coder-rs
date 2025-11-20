@@ -293,7 +293,7 @@ help: banner
 	@echo "  lint ........................ Lint by running cargo fmt and cargo clippy (workspace, all targets; -D warnings) and lint naming"
 	@echo "  lint-docker ................. Lint by running hadolint on all Dockerfiles of the project"
 	@echo "  lint-tests-naming ........... Lint by running lint-test-naming.sh to test files for lane prefixes and conventions"
-	@echo "  lint-ultra .................. Curated clippy: deny unsafe/dbg/await-holding-lock; default lib+bins; set AIFO_ULTRA_WARNINGS=1 to show advisories; AIFO_ULTRA_INCLUDE_TESTS=1 to include tests"
+	@echo "  lint-ultra .................. Curated clippy: deny unsafe/dbg/await-holding-lock; includes tests by default (AIFO_ULTRA_INCLUDE_TESTS=0 to skip). Set AIFO_ULTRA_WARNINGS=1 to show advisories."
 	@echo ""
 	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
 	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
@@ -1380,7 +1380,7 @@ lint-ultra:
 	  else \
 	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
 	  fi; \
-	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-0}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
+	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
@@ -1393,7 +1393,7 @@ lint-ultra:
 	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
 	  fi; \
 	  if rustup run stable cargo -V >/dev/null 2>&1; then USE_RUSTUP=1; else USE_RUSTUP=0; fi; \
-	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-0}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
+	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  if [ "$$USE_RUSTUP" -eq 1 ]; then \
 	    rustup run stable cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	  else \
@@ -1412,7 +1412,7 @@ lint-ultra:
 	  else \
 	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
 	  fi; \
-	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-0}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
+	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
@@ -1429,7 +1429,7 @@ lint-ultra:
 	      else \
 	        LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
 	      fi; \
-	      if [ "${AIFO_ULTRA_INCLUDE_TESTS:-0}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
+	      if [ "${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	      cargo -q clippy --workspace --all-features $TARGETS -- $LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
