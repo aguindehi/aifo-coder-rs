@@ -245,7 +245,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --native-tls --python /opt/venv/bin/python "aider-chat[playwright]"; \
         uv pip install --native-tls --python /opt/venv/bin/python playwright; \
-        /opt/venv/bin/python -c 'import playwright' >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+        /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
     fi; \
     find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
@@ -517,7 +517,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         uv pip install --native-tls --python /opt/venv/bin/python "aider-chat[playwright]"; \
         uv pip install --native-tls --python /opt/venv/bin/python playwright; \
-        /opt/venv/bin/python -c 'import playwright' >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+        /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
     fi; \
     find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
