@@ -1328,9 +1328,23 @@ lint:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
-	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
+	  HAVE_FMT=$$(rustup component list --toolchain stable 2>/dev/null | awk '/^rustfmt .* (installed)/{print 1; exit}'); \
+	  if [ "$$HAVE_FMT" = "1" ]; then \
+	    echo "Using rustup stable rustfmt"; \
+	    rustup run stable cargo fmt -- --check || rustup run stable cargo fmt; \
+	  else \
+	    echo "Using local cargo fmt"; \
+	    cargo fmt -- --check || cargo fmt; \
+	  fi; \
 	  echo "Running cargo clippy (rustup stable) ..."; \
-	  rustup run stable cargo clippy --workspace --all-features -- -D warnings || cargo clippy --workspace --all-features -- -D warnings; \
+	  HAVE_CLIPPY=$$(rustup component list --toolchain stable 2>/dev/null | awk '/^clippy .* (installed)/{print 1; exit}'); \
+	  if [ "$$HAVE_CLIPPY" = "1" ]; then \
+	    echo "Using rustup stable clippy (-D warnings)"; \
+	    rustup run stable cargo -q clippy --workspace --all-features -- -D warnings; \
+	  else \
+	    echo "Using local cargo clippy (-D warnings)"; \
+	    cargo -q clippy --workspace --all-features -- -D warnings; \
+	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
