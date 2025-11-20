@@ -30,12 +30,13 @@ RUN set -e; \
     if [ -z "$SDK_NAME" ]; then \
       # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
       TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
-      VER="$(printf '%s\n' "$TOP" | sed -n -E "s#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p" | tr -d " \t\r\n")"; \
+      base="${TOP%/}"; base="${base##*/}"; VER=""; \
+      case "$base" in MacOSX*.sdk) VER="${base#MacOSX}"; VER="${VER%.sdk}";; esac; \
       if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
     fi; \
     if [ -z "$SDK_NAME" ]; then \
-      echo "warning: could not derive SDK version from ${OSX_SDK_FILENAME}; using original name (osxcross may reject it)"; \
-      SDK_NAME="${OSX_SDK_FILENAME}"; \
+      echo "error: could not derive SDK version; set APPLE_SDK_URL or OSXCROSS_SDK_TARBALL" >&2; \
+      exit 2; \
     fi; \
     mkdir -p osxcross/tarballs; \
     mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
@@ -75,7 +76,7 @@ RUN set -e; \
     '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
     '  esac' \
     'done' \
-    'if [ "$HAVE_PV" -eq 0 ] then' \
+    'if [ "$HAVE_PV" -eq 0 ]; then' \
     '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
     '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
     '  SDK_VER=""' \
