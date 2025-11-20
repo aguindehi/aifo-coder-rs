@@ -109,7 +109,7 @@ fn workspace_access_hint(
     }
     args.push(container.into());
     args.push("sh".into());
-    args.push("-lc".into());
+    args.push("-c".into());
     let script = "set -e; ls -ld /workspace 2>&1; if [ -x /workspace ] && [ -r /workspace ]; then echo OK; else echo DENIED; fi";
     args.push(script.into());
     if verbose {
@@ -274,7 +274,7 @@ fn kill_in_container(
         "exec".into(),
         container.into(),
         "sh".into(),
-        "-lc".into(),
+        "-c".into(),
         script,
     ];
     if verbose {
@@ -348,7 +348,7 @@ fn kill_agent_shell_in_agent_container(
         "exec".into(),
         agent_container.into(),
         "sh".into(),
-        "-lc".into(),
+        "-c".into(),
         script,
     ];
     if verbose {

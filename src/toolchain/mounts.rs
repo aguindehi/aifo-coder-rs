@@ -42,7 +42,7 @@ fn init_rust_named_volume(
         mount,
         image.into(),
         "sh".into(),
-        "-lc".into(),
+        "-c".into(),
         script,
     ];
     if verbose {
@@ -128,7 +128,7 @@ pub(crate) fn init_node_cache_volume(
         mount,
         image.into(),
         "sh".into(),
-        "-lc".into(),
+        "-c".into(),
         script,
     ];
     if verbose {

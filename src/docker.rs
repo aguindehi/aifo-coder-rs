@@ -894,7 +894,7 @@ pub fn build_docker_preview_only(
     let resolved_image = crate::registry::resolve_image(&base_image);
     preview_args.push(resolved_image.clone());
     preview_args.push("/bin/sh".to_string());
-    preview_args.push("-lc".to_string());
+    preview_args.push("-c".to_string());
 
     let sh_cmd = format!(
         "set -e; umask 077; \
@@ -1108,9 +1108,9 @@ pub fn build_docker_cmd(
     preview_args.push(effective_image.clone());
 
     // shell and command
-    cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);
+    cmd.arg("/bin/sh").arg("-c").arg(&sh_cmd);
     preview_args.push("/bin/sh".to_string());
-    preview_args.push("-lc".to_string());
+    preview_args.push("-c".to_string());
     preview_args.push(sh_cmd.clone());
 
     // Render preview string with conservative shell escaping

@@ -72,7 +72,7 @@ fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str)
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec").arg(name).arg("sh").arg("-lc").arg(script);
+    cmd.arg("exec").arg(name).arg("sh").arg("-c").arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
