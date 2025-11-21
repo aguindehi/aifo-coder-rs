@@ -32,6 +32,7 @@ Notes:
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
   - CLI override: --image takes precedence over defaults.
+  - Default tag: release-<version> matching the launcher version (e.g., release-0.6.3). Override via AIFO_CODER_IMAGE_TAG or AIFO_CODER_AGENT_TAG.
 - To build only full (fat) images: make build-fat
 - To build only slim images: make build-slim
 - The wrapper script aifo-coder will try to build the Rust launcher with cargo; if cargo is missing, it can build using Docker.

@@ -18,6 +18,7 @@ Conventions and registries (IR vs MR)
 - Agent image overrides (coding agents):
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
+  - Default tag: release-<version> (matches launcher version). Override with AIFO_CODER_IMAGE_TAG or AIFO_CODER_AGENT_TAG.
 
 Toolchain image overrides
 

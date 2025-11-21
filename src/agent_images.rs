@@ -17,7 +17,8 @@ pub(crate) fn default_image_for(agent: &str) -> String {
     }
     let name_prefix =
         env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
-    let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
+    let tag = env::var("AIFO_CODER_IMAGE_TAG")
+        .unwrap_or_else(|_| format!("release-{}", env!("CARGO_PKG_VERSION")));
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
         _ => "",
@@ -39,7 +40,8 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
     }
     let name_prefix =
         env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
-    let tag = env::var("AIFO_CODER_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
+    let tag = env::var("AIFO_CODER_IMAGE_TAG")
+        .unwrap_or_else(|_| format!("release-{}", env!("CARGO_PKG_VERSION")));
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
         _ => "",
