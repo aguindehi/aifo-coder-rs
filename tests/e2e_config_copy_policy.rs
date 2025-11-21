@@ -190,12 +190,14 @@ fn e2e_config_copy_and_permissions_for_aider() {
 set -e
 ok1=""; ok2=""; ok3=""; ok4=""; ok5=""
 [ -f "$HOME/.aifo-config/global/config.toml" ] && ok1="1"
-perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null | awk '{printf "%04o\n",$1}' || echo "")"
-[ "$perm1" = "0644" ] && ok2="1"
+perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null || echo "")"
+[ -n "$perm1" ] && p1="${perm1#${perm1%???}}" || p1=""
+[ "$p1" = "644" ] && ok2="1"
 [ -f "$HOME/.aifo-config/aider/.aider.conf.yml" ] && ok3="1"
 [ -f "$HOME/.aifo-config/aider/creds.token" ] && {
-  perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null | awk '{printf "%04o\n",$1}' || echo "")"
-  [ "$perm2" = "0600" ] && ok4="1"
+  perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || echo "")"
+  [ -n "$perm2" ] && p2="${perm2#${perm2%???}}" || p2=""
+  [ "$p2" = "600" ] && ok4="1"
 }
 [ -f "$HOME/.aider.conf.yml" ] && ok5="1"
 [ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing"
