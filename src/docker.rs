@@ -544,7 +544,8 @@ pub fn build_docker_preview_only(
         preview_args.push(f.to_string_lossy().to_string());
     }
 
-    preview_args.push(image.to_string());
+    let resolved_image = crate::registry::resolve_image(image);
+    preview_args.push(resolved_image.clone());
     preview_args.push("/bin/sh".to_string());
     preview_args.push("-lc".to_string());
 
@@ -750,8 +751,9 @@ pub fn build_docker_cmd(
     }
 
     // image
-    cmd.arg(image);
-    preview_args.push(image.to_string());
+    let resolved_image = crate::registry::resolve_image(image);
+    cmd.arg(&resolved_image);
+    preview_args.push(resolved_image.clone());
 
     // shell and command
     cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);

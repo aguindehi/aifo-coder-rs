@@ -218,3 +218,31 @@ pub fn preferred_internal_registry_source() -> String {
         .cloned()
         .unwrap_or_else(|| "unset".to_string())
 }
+
+/// Resolve an image reference against the configured registries.
+///
+/// Rules:
+/// - If the reference already specifies a registry (first path component contains '.' or ':'
+///   or equals "localhost"), return it unchanged.
+/// - Otherwise prefer the internal registry prefix if set (env-based), else the mirror registry
+///   prefix if available; both prefixes are normalized to include a trailing '/'.
+pub fn resolve_image(image: &str) -> String {
+    // Detect if image already specifies an explicit registry
+    if let Some(first) = image.split('/').next() {
+        if first.contains('.') || first.contains(':') || first == "localhost" {
+            return image.to_string();
+        }
+    }
+    // Prefer internal registry if configured
+    let internal = preferred_internal_registry_prefix_quiet();
+    if !internal.is_empty() {
+        return format!("{}{}", internal, image);
+    }
+    // Fall back to mirror registry
+    let mirror = preferred_mirror_registry_prefix_quiet();
+    if !mirror.is_empty() {
+        return format!("{}{}", mirror, image);
+    }
+    // No registry configured; return unchanged
+    image.to_string()
+}
