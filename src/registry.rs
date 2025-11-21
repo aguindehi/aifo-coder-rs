@@ -228,7 +228,7 @@ pub fn preferred_internal_registry_source() -> String {
 ///   prefix if available; both prefixes are normalized to include a trailing '/'.
 pub fn resolve_image(image: &str) -> String {
     // Detect if image already specifies an explicit registry
-    if let Some(first) = image.split('/').next() {
+    if let Some((first, _rest)) = image.split_once('/') {
         if first.contains('.') || first.contains(':') || first == "localhost" {
             return image.to_string();
         }
