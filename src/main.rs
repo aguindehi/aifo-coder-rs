@@ -239,7 +239,7 @@ fn resolve_agent_and_args(cli: &Cli) -> Option<(&'static str, Vec<String>)> {
 
 fn print_verbose_run_info(
     agent: &str,
-    image: &str,
+    image_display: &str,
     apparmor_opt: Option<&str>,
     preview: &str,
     cli_verbose: bool,
@@ -285,7 +285,6 @@ fn print_verbose_run_info(
                 mr_display, mr_src
             ),
         );
-        let image_display = aifo_coder::resolve_agent_image_log_display(image);
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image_display));
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
     }
@@ -426,6 +425,15 @@ fn main() -> ExitCode {
     // Determine desired AppArmor profile (may be disabled on non-Linux)
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
 
+    // Choose image to display in logs:
+    // - If CLI provided --image, show it verbatim.
+    // - Otherwise, show resolved (env overrides + registry/namespace).
+    let image_display = if cli.image.is_some() {
+        image.clone()
+    } else {
+        aifo_coder::resolve_agent_image_log_display(&image)
+    };
+
     // In dry-run, render a preview without requiring docker to be present
     if cli.dry_run {
         let preview = aifo_coder::build_docker_preview_only(
@@ -436,7 +444,7 @@ fn main() -> ExitCode {
         );
         print_verbose_run_info(
             agent,
-            &image,
+            &image_display,
             apparmor_profile.as_deref(),
             &preview,
             cli.verbose,
@@ -455,7 +463,7 @@ fn main() -> ExitCode {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
                 agent,
-                &image,
+                &image_display,
                 apparmor_profile.as_deref(),
                 &preview,
                 cli.verbose,
