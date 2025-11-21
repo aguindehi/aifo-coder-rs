@@ -105,6 +105,21 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
             _ => String::new(),
         };
     }
+    // Env override: prefer explicit mirror registry prefix when provided
+    if let Ok(val) = env::var("AIFO_CODER_MIRROR_REGISTRY_PREFIX") {
+        let trimmed = val.trim();
+        let v = if trimmed.is_empty() {
+            String::new()
+        } else {
+            let mut s = trimmed.trim_end_matches('/').to_string();
+            s.push('/');
+            s
+        };
+        let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = MIRROR_REGISTRY_SOURCE.set("env".to_string());
+        write_registry_cache_disk(&v);
+        return v;
+    }
     if let Some(v) = MIRROR_REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
     }
@@ -267,4 +282,37 @@ pub fn resolve_image(image: &str) -> String {
     }
     // No registry configured; return unchanged
     image.to_string()
+}
+
+/// Retag an image by setting a new ':tag' (dropping any '@digest').
+fn retag_image(image: &str, new_tag: &str) -> String {
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let last_slash = base.rfind('/');
+    let last_colon = base.rfind(':');
+    let without_tag = match (last_slash, last_colon) {
+        (Some(slash), Some(colon)) if colon > slash => &base[..colon],
+        (None, Some(_colon)) => base.split(':').next().unwrap_or(base),
+        _ => base,
+    };
+    format!("{}:{}", without_tag, new_tag)
+}
+
+/// Compute the effective agent image for logging: applies env overrides and registry resolution.
+pub fn resolve_agent_image_log_display(image: &str) -> String {
+    // Full image override takes precedence; used verbatim (then resolved for registry/namespace).
+    if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return resolve_image(t);
+        }
+    }
+    // Tag override: retag default then resolve via registry/namespace.
+    if let Ok(tag) = env::var("AIFO_CODER_AGENT_TAG") {
+        let t = tag.trim();
+        if !t.is_empty() {
+            let retagged = retag_image(image, t);
+            return resolve_image(&retagged);
+        }
+    }
+    resolve_image(image)
 }

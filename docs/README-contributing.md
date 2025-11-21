@@ -4,11 +4,20 @@ This document summarizes how to override toolchain images, how caches are laid o
 mounted, and a few execution environment details for each supported toolchain.
 
 Conventions and registries (IR vs MR)
-- Images can be overridden via environment variables, following the pattern:
+- Toolchain overrides:
   - AIFO_<KIND>_TOOLCHAIN_IMAGE: full image reference (highest precedence)
   - AIFO_<KIND>_TOOLCHAIN_VERSION: version tag (maps to aifo-coder-toolchain-<kind>:{version})
-- Internal registry (IR) at runtime via AIFO_CODER_INTERNAL_REGISTRY_PREFIX: when non-empty, it is normalized to a single trailing “/” and prepended to our aifo-coder-* images. Empty/unset yields no prefix.
-- Mirror registry (MR) at build time via Docker ARG REGISTRY_PREFIX: used only for base image pulls by Makefile/scripts/CI. The runtime launcher does not use MR.
+- Internal registry (IR) prefix at runtime:
+  - AIFO_CODER_INTERNAL_REGISTRY_PREFIX: normalized to include a single trailing "/" and
+    prepended to our aifo-coder-* images. Empty/unset yields no prefix.
+- Mirror registry (MR) prefix:
+  - Build-time: Docker ARG REGISTRY_PREFIX remains for base pulls in CI/Makefile.
+  - Runtime: AIFO_CODER_MIRROR_REGISTRY_PREFIX (normalized, trailing "/") prefixes unqualified
+    images when IR is unset. Optional AIFO_CODER_REGISTRY_NAMESPACE inserts a path segment before
+    the image name (e.g., ai-foundation/prototypes/aifo-coder-rs).
+- Agent image overrides (coding agents):
+  - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
+  - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
 
 Toolchain image overrides
 
