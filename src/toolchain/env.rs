@@ -10,6 +10,10 @@ pub(crate) const PROXY_ENV_NAMES: &[&str] = &[
     "no_proxy",
     "CARGO_NET_GIT_FETCH_WITH_CLI",
     "CARGO_REGISTRIES_CRATES_IO_PROTOCOL",
+    // Preview/env policy flags: pass through to sidecars and preview runs
+    "AIFO_CONFIG_ALLOW_EXT",
+    "AIFO_CONFIG_COPY_ALWAYS",
+    "AIFO_CONFIG_MAX_SIZE",
 ];
 
 /// Env vars that must not be forwarded from host into sidecars to avoid
