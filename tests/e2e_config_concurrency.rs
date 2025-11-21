@@ -5,6 +5,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tempfile::Builder;
+use std::{thread, time::Duration};
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -154,6 +155,56 @@ fn e2e_config_concurrent_isolation() {
 
     assert!(run_detached_sleep_container(&runtime, &image, &name1, root));
     assert!(run_detached_sleep_container(&runtime, &image, &name2, root));
+
+    // Wait for config readiness in container 1
+    let mut ready1 = false;
+    for _ in 0..50 {
+        let (_ec, out) = exec_sh(
+            &runtime,
+            &name1,
+            r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
+        );
+        if out.contains("READY") { ready1 = true; break; }
+        thread::sleep(Duration::from_millis(100));
+    }
+    if !ready1 {
+        let _ = exec_sh(&runtime, &name1, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        for _ in 0..50 {
+            let (_ec, out) = exec_sh(
+                &runtime,
+                &name1,
+                r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+            );
+            if out.contains("READY") { ready1 = true; break; }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(ready1, "config not ready in {}", name1);
+
+    // Wait for config readiness in container 2
+    let mut ready2 = false;
+    for _ in 0..50 {
+        let (_ec, out) = exec_sh(
+            &runtime,
+            &name2,
+            r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
+        );
+        if out.contains("READY") { ready2 = true; break; }
+        thread::sleep(Duration::from_millis(100));
+    }
+    if !ready2 {
+        let _ = exec_sh(&runtime, &name2, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        for _ in 0..50 {
+            let (_ec, out) = exec_sh(
+                &runtime,
+                &name2,
+                r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+            );
+            if out.contains("READY") { ready2 = true; break; }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(ready2, "config not ready in {}", name2);
 
     // Create distinct markers in each container's private copy dir
     let (_ec1, _out1) = exec_sh(

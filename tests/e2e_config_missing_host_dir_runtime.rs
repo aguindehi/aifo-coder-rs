@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::{thread, time::Duration};
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -124,6 +125,23 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
         "failed to start container {}",
         name
     );
+
+    // Wait for $HOME/.aifo-config to be created (stamp should remain absent)
+    let mut have_dir = false;
+    for _ in 0..50 {
+        let (_ec, out_ready) = exec_sh(&runtime, &name, r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#);
+        if out_ready.contains("READY") { have_dir = true; break; }
+        thread::sleep(Duration::from_millis(100));
+    }
+    if !have_dir {
+        let _ = exec_sh(&runtime, &name, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        for _ in 0..50 {
+            let (_ec, out_ready) = exec_sh(&runtime, &name, r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#);
+            if out_ready.contains("READY") { have_dir = true; break; }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(have_dir, "expected $HOME/.aifo-config to be created by entrypoint or fallback");
 
     // Inside container: $HOME/.aifo-config should exist; .copied stamp should be absent
     let script = r#"

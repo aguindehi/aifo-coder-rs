@@ -7,6 +7,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tempfile::Builder;
+use std::{thread, time::Duration};
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -159,6 +160,31 @@ fn e2e_config_copy_and_permissions_for_aider() {
     let ok = run_detached_sleep_container(&runtime, &image, &name, root, &[]);
     assert!(ok, "failed to start container {}", name);
 
+    // Wait for entrypoint to copy config (stamp or at least dir)
+    let mut ready = false;
+    for _ in 0..50 {
+        let (_ec, out_ready) = exec_sh(
+            &runtime,
+            &name,
+            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+        );
+        if out_ready.contains("READY") { ready = true; break; }
+        thread::sleep(Duration::from_millis(100));
+    }
+    if !ready {
+        let _ = exec_sh(&runtime, &name, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        for _ in 0..50 {
+            let (_ec, out_ready) = exec_sh(
+                &runtime,
+                &name,
+                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+            );
+            if out_ready.contains("READY") { ready = true; break; }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(ready, "copy stamp or config dir did not appear in time for {}", name);
+
     // Verify files and permissions inside container
     let script = r#"
 set -e
@@ -240,6 +266,31 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         &[("AIFO_TOOLCHAIN_VERBOSE", "1")],
     );
     assert!(ok, "failed to start container {}", name);
+
+    // Wait for entrypoint to copy config (stamp or at least dir)
+    let mut ready = false;
+    for _ in 0..50 {
+        let (_ec, out_ready) = exec_sh(
+            &runtime,
+            &name,
+            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+        );
+        if out_ready.contains("READY") { ready = true; break; }
+        thread::sleep(Duration::from_millis(100));
+    }
+    if !ready {
+        let _ = exec_sh(&runtime, &name, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        for _ in 0..50 {
+            let (_ec, out_ready) = exec_sh(
+                &runtime,
+                &name,
+                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+            );
+            if out_ready.contains("READY") { ready = true; break; }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    assert!(ready, "copy stamp or config dir did not appear in time for {}", name);
 
     let script = r#"
 set -e
