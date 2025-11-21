@@ -122,7 +122,8 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "  Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail."
+            "  Without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …)\n"
+            "  will not be proxied and builds may fail."
         )
     );
     eprintln!(
