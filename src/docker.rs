@@ -111,6 +111,11 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     env_flags.push(OsString::from(
         "AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host",
     ));
+    // Back-compat for images expecting AIFO_CODER_CONFIG_HOST_DIR
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from(
+        "AIFO_CODER_CONFIG_HOST_DIR=/home/coder/.aifo-config-host",
+    ));
     // Optional policy knobs: pass through when set on host.
     if let Ok(v) = env::var("AIFO_CONFIG_ENABLE") {
         if !v.is_empty() {
