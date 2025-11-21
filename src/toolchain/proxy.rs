@@ -14,6 +14,7 @@ Implements v3 signal propagation and timeout model:
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
 */
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env as std_env;
 #[cfg(target_os = "linux")]
 use std::fs;
@@ -28,6 +29,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use once_cell::sync::Lazy;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -695,6 +697,48 @@ pub fn toolexec_start_proxy(
 }
 
 // Handle a single proxy connection
+ // Warm up rust toolchain once (per container) to suppress rustup channel sync chatter in streams.
+static RUST_WARMED: Lazy<std::sync::Mutex<HashSet<String>>> =
+    Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
+
+fn ensure_rust_toolchain_warm(
+    runtime: &PathBuf,
+    container: &str,
+    uidgid: Option<(u32, u32)>,
+    verbose: bool,
+) {
+    {
+        let warmed = RUST_WARMED.lock().unwrap();
+        if warmed.contains(container) {
+            return;
+        }
+    }
+    // docker exec [-u uid:gid] <container> sh -lc "rustc -V >/dev/null 2>&1 || true"
+    let mut args: Vec<String> = vec!["docker".into(), "exec".into()];
+    if let Some((uid, gid)) = uidgid {
+        args.push("-u".into());
+        args.push(format!("{uid}:{gid}"));
+    }
+    args.push(container.into());
+    args.push("sh".into());
+    args.push("-lc".into());
+    args.push("rustc -V >/dev/null 2>&1 || true".into());
+
+    if verbose {
+        log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));
+    }
+
+    let mut cmd = Command::new(runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    let _ = cmd.status();
+
+    let mut warmed = RUST_WARMED.lock().unwrap();
+    warmed.insert(container.to_string());
+}
+
 fn handle_connection<S: Read + Write>(
     ctx: &ProxyCtx,
     stream: &mut S,
@@ -1099,6 +1143,11 @@ fn handle_connection<S: Read + Write>(
         respond_plain(stream, "409 Conflict", 86, msg.as_bytes());
         let _ = stream.flush();
         return;
+    }
+
+    // Rust sidecar can emit rustup sync on first use; warm up silently off-stream
+    if kind == "rust" {
+        ensure_rust_toolchain_warm(&ctx.runtime, &name, uidgid, verbose);
     }
 
     let pwd = std::path::PathBuf::from(cwd);
