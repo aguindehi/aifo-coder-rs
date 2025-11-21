@@ -219,6 +219,15 @@ pub fn preferred_internal_registry_source() -> String {
         .unwrap_or_else(|| "unset".to_string())
 }
 
+/// Optional namespace for registry paths, read from AIFO_CODER_REGISTRY_NAMESPACE.
+/// Returns Some("namespace") without leading/trailing slashes, or None if unset/empty.
+fn registry_namespace_opt() -> Option<String> {
+    env::var("AIFO_CODER_REGISTRY_NAMESPACE")
+        .ok()
+        .map(|s| s.trim().trim_matches('/').to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Resolve an image reference against the configured registries.
 ///
 /// Rules:
@@ -233,14 +242,27 @@ pub fn resolve_image(image: &str) -> String {
             return image.to_string();
         }
     }
+    let unqualified = !image.contains('/');
+    let ns = registry_namespace_opt();
+
     // Prefer internal registry if configured
     let internal = preferred_internal_registry_prefix_quiet();
     if !internal.is_empty() {
+        if unqualified {
+            if let Some(ns) = ns.as_ref() {
+                return format!("{}{}/{}", internal, ns, image);
+            }
+        }
         return format!("{}{}", internal, image);
     }
     // Fall back to mirror registry
     let mirror = preferred_mirror_registry_prefix_quiet();
     if !mirror.is_empty() {
+        if unqualified {
+            if let Some(ns) = ns.as_ref() {
+                return format!("{}{}/{}", mirror, ns, image);
+            }
+        }
         return format!("{}{}", mirror, image);
     }
     // No registry configured; return unchanged
