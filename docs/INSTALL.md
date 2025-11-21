@@ -14,6 +14,7 @@ Fork mode prerequisites:
 Quick install:
 ```bash
 make build
+make build-launcher
 make install
 aifo-coder --help
 ```
