@@ -447,6 +447,36 @@ fn compute_container_identity(agent: &str, prefix: &str) -> (String, String) {
     (container_name, hostname)
 }
 
+/// Helper: set/replace tag on an image reference (strip any digest, replace last tag after '/').
+fn set_image_tag(image: &str, new_tag: &str) -> String {
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let last_slash = base.rfind('/');
+    let last_colon = base.rfind(':');
+    let without_tag = match (last_slash, last_colon) {
+        (Some(slash), Some(colon)) if colon > slash => &base[..colon],
+        (None, Some(_colon)) => base.split(':').next().unwrap_or(base),
+        _ => base,
+    };
+    format!("{}:{}", without_tag, new_tag)
+}
+
+/// Helper: apply agent image overrides from environment.
+fn maybe_override_agent_image(image: &str) -> String {
+    if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(tag) = env::var("AIFO_CODER_AGENT_TAG") {
+        let t = tag.trim();
+        if !t.is_empty() {
+            return set_image_tag(image, t);
+        }
+    }
+    image.to_string()
+}
+
 /// Build a docker run preview string without requiring docker in PATH (used for dry-run).
 pub fn build_docker_preview_only(
     agent: &str,
