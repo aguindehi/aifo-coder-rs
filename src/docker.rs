@@ -908,6 +908,7 @@ pub fn build_docker_preview_only(
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
          unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
+         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
          exec {agent_joined}"
     );
     preview_args.push(sh_cmd.clone());
@@ -1024,6 +1025,7 @@ pub fn build_docker_cmd(
          unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; \
          gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
          if [ -f \"/var/log/host/apparmor.log\" ]; then (nohup sh -c \"tail -n0 -F /var/log/host/apparmor.log >> \\\"$HOME/.aifo-logs/apparmor.log\\\" 2>&1\" >/dev/null 2>&1 &); fi; \
+         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
          exec {agent_joined}"
     );
 
