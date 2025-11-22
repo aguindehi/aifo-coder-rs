@@ -774,7 +774,7 @@ publish-multiarch:
   image: docker:24
   services:
     - name: docker:24-dind
-      privileged: true
+      alias: docker
   interruptible: true
   timeout: 2h
   tags:
