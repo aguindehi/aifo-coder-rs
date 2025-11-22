@@ -402,7 +402,11 @@ ARG PLX_GIT_REF=main
 WORKDIR /src
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/go/bin:${PATH}"
-ENV GOTOOLCHAIN=auto
+# Harden Go build under QEMU emulation to avoid asm segfaults
+ENV GOTOOLCHAIN=local \
+    GOFLAGS="-trimpath -mod=readonly -p=1" \
+    GOMAXPROCS=1 \
+    GODEBUG=asyncpreemptoff=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -419,11 +423,14 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   cd app/cli; \
   export PATH="/usr/local/go/bin:${PATH}"; \
   export CGO_ENABLED=0; \
-  export GOFLAGS="-trimpath -mod=readonly"; \
+  export GOFLAGS="${GOFLAGS:- -trimpath -mod=readonly -p=1}"; \
+  export GOMAXPROCS="${GOMAXPROCS:-1}"; \
+  export GODEBUG="${GODEBUG:-asyncpreemptoff=1}"; \
   V="$([ -f version.txt ] && cat version.txt || echo dev)"; \
   LDFLAGS="-s -w -X plandex/version.Version=$V"; \
   case "${TARGETOS:-}" in "") GOOS="$(/usr/local/go/bin/go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
   case "${TARGETARCH:-}" in "") GOARCH="$(/usr/local/go/bin/go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
+  if [ "$GOARCH" = "amd64" ]; then export GOAMD64="${GOAMD64:-v1}"; fi; \
   GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go build -ldflags "$LDFLAGS" -o /out/plandex .; \
   rm -rf /root/go/pkg /go/pkg/mod; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
@@ -442,9 +449,7 @@ RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
       apt-get autoremove -y; \
       apt-get clean; \
       apt-get remove --purge -y --allow-remove-essential apt || true; \
-      npm prune --omit=dev || true; \
-      npm cache clean --force; \
-      rm -rf /root/.npm /root/.cache; \
+      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
       rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
       rm -rf /usr/share/locale/*; \
       rm -rf /var/lib/apt/lists/*; \
@@ -673,9 +678,7 @@ RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
       apt-get autoremove -y; \
       apt-get clean; \
       apt-get remove --purge -y --allow-remove-essential apt || true; \
-      npm prune --omit=dev || true; \
-      npm cache clean --force; \
-      rm -rf /root/.npm /root/.cache; \
+      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
       rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
       rm -rf /var/lib/apt/lists/*; \
       rm -rf /var/cache/apt/apt-file/; \
