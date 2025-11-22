@@ -8,6 +8,45 @@ Toolchain kind normalization and image selection.
 */
 use std::env;
 
+/// Helper: read an env var, trim, and return Some when non-empty.
+fn env_trim(k: &str) -> Option<String> {
+    env::var(k)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Resolve a tag override for a toolchain kind with precedence:
+/// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_GLOBAL_TAG.
+fn tag_override_for_kind(kind: &str) -> Option<String> {
+    match kind {
+        "rust" => env_trim("RUST_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_GLOBAL_TAG")),
+        "node" => env_trim("NODE_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_GLOBAL_TAG")),
+        "c-cpp" => env_trim("CPP_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_GLOBAL_TAG")),
+        _ => env_trim("AIFO_TOOLCHAIN_TAG").or_else(|| env_trim("AIFO_GLOBAL_TAG")),
+    }
+}
+
+/// First-party toolchain images are named "aifo-coder-toolchain-<kind>:<tag>".
+/// This remains true even when prefixed with an internal registry.
+fn is_first_party(image: &str) -> bool {
+    image.contains("aifo-coder-toolchain-")
+}
+
+/// Replace the tag component of an image reference (last ':' split).
+fn replace_tag(image: &str, tag: &str) -> String {
+    let mut parts = image.rsplitn(2, ':');
+    let _old = parts.next().unwrap_or("");
+    let repo = parts.next().unwrap_or(image);
+    format!("{repo}:{tag}")
+}
+
 /// Structured mappings for toolchain normalization and default images
 /// Canonical kind aliases (lhs -> rhs)
 const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
@@ -113,14 +152,20 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
     }
-    let base = default_image_for_kind_const(&k)
+    let mut base = default_image_for_kind_const(&k)
         .unwrap_or("node:22-bookworm-slim")
         .to_string();
     // Prepend internal registry for our toolchain images when set; upstream defaults remain unprefixed.
     if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
         let ir = crate::preferred_internal_registry_prefix_quiet();
         if !ir.is_empty() {
-            return format!("{ir}{base}");
+            base = format!("{ir}{base}");
+        }
+    }
+    // Apply tag overrides for first-party toolchain images.
+    if is_first_party(&base) {
+        if let Some(tag) = tag_override_for_kind(&k) {
+            base = replace_tag(&base, &tag);
         }
     }
     base
@@ -130,11 +175,17 @@ pub fn default_toolchain_image(kind: &str) -> String {
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     let k = normalize_toolchain_kind(kind);
     if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
-        let base = fmt.replace("{version}", version);
+        let mut base = fmt.replace("{version}", version);
         if base.starts_with("aifo-coder-toolchain-") {
             let ir = crate::preferred_internal_registry_prefix_quiet();
             if !ir.is_empty() {
-                return format!("{ir}{base}");
+                base = format!("{ir}{base}");
+            }
+        }
+        // Apply tag overrides for first-party toolchain images.
+        if is_first_party(&base) {
+            if let Some(tag) = tag_override_for_kind(&k) {
+                base = replace_tag(&base, &tag);
             }
         }
         return base;
