@@ -447,6 +447,10 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     if let Some(cfg) = cfg_host_dir {
         volume_flags.push(OsString::from("-v"));
         volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
+    } else {
+        crate::warn_print(
+            "coding agent host config dir not found; aider may use API env defaults. Set AIFO_CONFIG_HOST_DIR or create ~/.config/aifo-coder",
+        );
     }
 
     // Optional shim dir
