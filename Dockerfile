@@ -258,9 +258,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -299,9 +297,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -529,9 +525,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -572,9 +566,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 apt-get autoremove -y; \
                 apt-get clean; \
                 apt-get remove --purge -y --allow-remove-essential apt || true; \
-                npm prune --omit=dev || true; \
-                npm cache clean --force; \
-                rm -rf /root/.npm /root/.cache; \
+                rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
                 rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
                 rm -rf /var/lib/apt/lists/*; \
                 rm -rf /var/cache/apt/apt-file/; \
