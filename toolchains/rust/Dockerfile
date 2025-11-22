@@ -73,6 +73,7 @@ RUN set -eux; \
 
 # Ensure PATH exposes user and system cargo bins
 ENV PATH="/home/coder/.cargo/bin:/usr/local/cargo/bin:${PATH}"
+ARG NEXTEST_VERSION=0.9.114
 
 # Preinstall rust components and cargo-nextest (idempotent on rebuild)
 RUN set -eux; \
@@ -82,7 +83,20 @@ RUN set -eux; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
-    cargo install cargo-nextest --locked; \
+    # Install cargo-nextest via prebuilt binary when available to avoid emulation build failures \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
+    ok=0; \
+    if [ -n "$tgt" ]; then \
+      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
+      if curl -fsSL "$url" -o /tmp/nextest.tar.xz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+        bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
+        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+      fi; \
+    fi; \
+    if [ "$ok" -ne 1 ]; then cargo install cargo-nextest --locked; fi; \
     cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp

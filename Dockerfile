@@ -19,6 +19,7 @@ ARG CLEAN_CARGO=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
+ARG NEXTEST_VERSION=0.9.114
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -56,7 +57,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
-    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
+    # Prefer prebuilt cargo-nextest to avoid heavy compile under QEMU; fallback to cargo install \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
+    ok=0; \
+    if [ -n "$tgt" ]; then \
+      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
+      if curl -fsSL "$url" -o /tmp/nextest.tar.xz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+        bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
+        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+      fi; \
+    fi; \
+    if [ "$ok" -ne 1 ]; then /usr/local/cargo/bin/cargo install cargo-nextest --locked; fi; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
