@@ -234,13 +234,18 @@ pub fn preferred_internal_registry_source() -> String {
         .unwrap_or_else(|| "unset".to_string())
 }
 
-/// Optional namespace for registry paths, read from AIFO_CODER_REGISTRY_NAMESPACE.
-/// Returns Some("namespace") without leading/trailing slashes, or None if unset/empty.
+const DEFAULT_INTERNAL_HOST: &str = "registry.intern.migros.net";
+const DEFAULT_INTERNAL_NAMESPACE: &str = "ai-foundation/prototypes/aifo-coder-rs";
+
+/// Optional namespace for our internal registry; env override or sensible default.
 fn registry_namespace_opt() -> Option<String> {
-    env::var("AIFO_CODER_REGISTRY_NAMESPACE")
-        .ok()
-        .map(|s| s.trim().trim_matches('/').to_string())
-        .filter(|s| !s.is_empty())
+    if let Ok(v) = env::var("AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE") {
+        let t = v.trim().trim_matches('/').to_string();
+        if !t.is_empty() {
+            return Some(t);
+        }
+    }
+    Some(DEFAULT_INTERNAL_NAMESPACE.to_string())
 }
 
 /// Resolve an image reference against the configured registries.
@@ -250,6 +255,62 @@ fn registry_namespace_opt() -> Option<String> {
 ///   or equals "localhost"), return it unchanged.
 /// - Otherwise prefer the internal registry prefix if set (env-based), else the mirror registry
 ///   prefix if available; both prefixes are normalized to include a trailing '/'.
+fn is_our_image(image: &str) -> bool {
+    // Examine the final name component without tag/digest
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let name = base.split('/').last().unwrap_or(base);
+    name.starts_with("aifo-coder-") || name.starts_with("aifo-coder-toolchain-")
+}
+
+/// Probe default internal registry reachability (curl HEAD, else TCP).
+fn internal_registry_reachable() -> bool {
+    if which("curl").is_ok() {
+        let status = Command::new("curl")
+            .args([
+                "--connect-timeout",
+                "1",
+                "--max-time",
+                "2",
+                "-sSI",
+                &format!("https://{}/v2/", DEFAULT_INTERNAL_HOST),
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        if let Ok(st) = status {
+            if st.success() {
+                return true;
+            }
+        }
+    }
+    is_host_port_reachable(DEFAULT_INTERNAL_HOST, 443, 300)
+}
+
+/// Autodetect internal registry prefix:
+/// - Env AIFO_CODER_INTERNAL_REGISTRY_PREFIX wins (normalized trailing '/')
+/// - Else if registry.intern.migros.net reachable, compose "<host>/<namespace>/"
+/// - Else empty (Docker Hub fallback)
+pub fn preferred_internal_registry_prefix_autodetect() -> String {
+    if let Ok(val) = env::var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX") {
+        let trimmed = val.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let mut s = trimmed.trim_end_matches('/').to_string();
+        s.push('/');
+        return s;
+    }
+    if internal_registry_reachable() {
+        let ns = registry_namespace_opt().unwrap_or_else(|| DEFAULT_INTERNAL_NAMESPACE.to_string());
+        let mut s = format!("{}/{}/", DEFAULT_INTERNAL_HOST, ns.trim_matches('/'));
+        while s.contains("//") {
+            s = s.replace("//", "/");
+        }
+        return s;
+    }
+    String::new()
+}
+
 pub fn resolve_image(image: &str) -> String {
     // Detect if image already specifies an explicit registry
     if let Some((first, _rest)) = image.split_once('/') {
@@ -258,29 +319,23 @@ pub fn resolve_image(image: &str) -> String {
         }
     }
     let unqualified = !image.contains('/');
-    let ns = registry_namespace_opt();
 
-    // Prefer internal registry if configured
-    let internal = preferred_internal_registry_prefix_quiet();
-    if !internal.is_empty() {
-        if unqualified {
-            if let Some(ns) = ns.as_ref() {
-                return format!("{}{}/{}", internal, ns, image);
-            }
+    // Our images: prefer internal autodetect (with namespace already in prefix), else leave unqualified
+    if unqualified && is_our_image(image) {
+        let internal = preferred_internal_registry_prefix_autodetect();
+        if !internal.is_empty() {
+            return format!("{}{}", internal, image);
         }
-        return format!("{}{}", internal, image);
+        return image.to_string();
     }
-    // Fall back to mirror registry
+
+    // Third-party images: use mirror when reachable; do not apply internal namespace to mirror
     let mirror = preferred_mirror_registry_prefix_quiet();
     if !mirror.is_empty() {
-        if unqualified {
-            if let Some(ns) = ns.as_ref() {
-                return format!("{}{}/{}", mirror, ns, image);
-            }
-        }
         return format!("{}{}", mirror, image);
     }
-    // No registry configured; return unchanged
+
+    // No registry configured; return unchanged (Docker Hub fallback)
     image.to_string()
 }
 

@@ -25,9 +25,10 @@ Notes:
     trailing "/" (e.g., registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/). IR
     takes precedence at runtime for our aifo-coder-* images.
   - Mirror registry (MR): set AIFO_CODER_MIRROR_REGISTRY_PREFIX to a host prefix with a trailing
-    "/" (e.g., registry.intern.migros.net/). When IR is unset, MR prefixes unqualified images at
-    runtime. Optional AIFO_CODER_REGISTRY_NAMESPACE inserts a path segment between host and image
-    (e.g., ai-foundation/prototypes/aifo-coder-rs).
+    "/" (e.g., repository.migros.net/). When IR is unset, MR prefixes unqualified third‑party images at
+    runtime. Internal namespaces do not apply to MR.
+  - Internal namespace: set AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE for the path segment used with
+    the internal registry (default: ai-foundation/prototypes/aifo-coder-rs).
 - Agent image overrides:
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).

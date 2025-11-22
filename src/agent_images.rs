@@ -24,7 +24,7 @@ pub(crate) fn default_image_for(agent: &str) -> String {
         _ => "",
     };
     let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_internal_registry_prefix_quiet();
+    let registry = aifo_coder::preferred_internal_registry_prefix_autodetect();
     if registry.is_empty() {
         image_name
     } else {
@@ -47,7 +47,7 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
         _ => "",
     };
     let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_internal_registry_prefix_quiet();
+    let registry = aifo_coder::preferred_internal_registry_prefix_autodetect();
     if registry.is_empty() {
         image_name
     } else {

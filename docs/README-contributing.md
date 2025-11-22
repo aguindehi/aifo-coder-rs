@@ -13,8 +13,9 @@ Conventions and registries (IR vs MR)
 - Mirror registry (MR) prefix:
   - Build-time: Docker ARG REGISTRY_PREFIX remains for base pulls in CI/Makefile.
   - Runtime: AIFO_CODER_MIRROR_REGISTRY_PREFIX (normalized, trailing "/") prefixes unqualified
-    images when IR is unset. Optional AIFO_CODER_REGISTRY_NAMESPACE inserts a path segment before
-    the image name (e.g., ai-foundation/prototypes/aifo-coder-rs).
+    third‑party images when IR is unset. Internal namespace is not applied to MR.
+  - Internal namespace: AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE controls the path segment used with IR
+    (default: ai-foundation/prototypes/aifo-coder-rs).
 - Agent image overrides (coding agents):
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
