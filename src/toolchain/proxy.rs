@@ -13,6 +13,7 @@ Implements v3 signal propagation and timeout model:
 - Notifications policy per spec with independent short timeout.
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
 */
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env as std_env;
@@ -29,7 +30,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use once_cell::sync::Lazy;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -697,7 +697,7 @@ pub fn toolexec_start_proxy(
 }
 
 // Handle a single proxy connection
- // Warm up rust toolchain once (per container) to suppress rustup channel sync chatter in streams.
+// Warm up rust toolchain once (per container) to suppress rustup channel sync chatter in streams.
 static RUST_WARMED: Lazy<std::sync::Mutex<HashSet<String>>> =
     Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
 
