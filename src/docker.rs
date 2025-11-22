@@ -493,6 +493,8 @@ fn image_exists_locally(runtime: &Path, image: &str) -> bool {
         .arg("image")
         .arg("inspect")
         .arg(image)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .ok();
     status.map(|s| s.success()).unwrap_or(false)
