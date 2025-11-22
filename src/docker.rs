@@ -544,20 +544,14 @@ fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::
         login_cmd.arg("login");
         if let Some(h) = host.as_deref() {
             if verbose {
-                crate::log_info_stderr(
-                    use_err,
-                    &format!("aifo-coder: docker: docker login {}", h),
-                );
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
             }
             login_cmd.arg(h);
         } else if verbose {
             crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
         }
         let st = login_cmd.status().map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("docker login failed to start: {}", e),
-            )
+            io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
         })?;
         if !st.success() {
             return Err(io::Error::new(
