@@ -254,37 +254,48 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             .map(|s| s != "0")
             .unwrap_or(true);
         if automigrate {
-            let cfg_aider = host_home.join(".config").join("aifo-coder").join("aider");
-            let _ = fs::create_dir_all(&cfg_aider);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = fs::set_permissions(&cfg_aider, fs::Permissions::from_mode(0o700));
-            }
-            let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
-                .ok()
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(262_144);
-
-            for name in [
+            // Only create the standardized config dir if at least one legacy Aider file exists in host $HOME.
+            let legacy_names = [
                 ".aider.conf.yml",
                 ".aider.model.settings.yml",
                 ".aider.model.metadata.json",
-            ] {
-                let src = host_home.join(name);
-                if src.is_file() {
-                    if let Ok(md) = fs::metadata(&src) {
-                        if md.len() <= max_sz {
-                            let dst = cfg_aider.join(name);
-                            if !dst.exists() {
-                                let _ = fs::copy(&src, &dst);
-                                #[cfg(unix)]
-                                {
-                                    use std::os::unix::fs::PermissionsExt;
-                                    let _ = fs::set_permissions(
-                                        &dst,
-                                        fs::Permissions::from_mode(0o644),
-                                    );
+            ];
+            let mut have_legacy = false;
+            for name in &legacy_names {
+                if host_home.join(name).is_file() {
+                    have_legacy = true;
+                    break;
+                }
+            }
+            if have_legacy {
+                let cfg_aider = host_home.join(".config").join("aifo-coder").join("aider");
+                let _ = fs::create_dir_all(&cfg_aider);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(&cfg_aider, fs::Permissions::from_mode(0o700));
+                }
+                let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
+                    .ok()
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(262_144);
+
+                for name in &legacy_names {
+                    let src = host_home.join(name);
+                    if src.is_file() {
+                        if let Ok(md) = fs::metadata(&src) {
+                            if md.len() <= max_sz {
+                                let dst = cfg_aider.join(name);
+                                if !dst.exists() {
+                                    let _ = fs::copy(&src, &dst);
+                                    #[cfg(unix)]
+                                    {
+                                        use std::os::unix::fs::PermissionsExt;
+                                        let _ = fs::set_permissions(
+                                            &dst,
+                                            fs::Permissions::from_mode(0o644),
+                                        );
+                                    }
                                 }
                             }
                         }
