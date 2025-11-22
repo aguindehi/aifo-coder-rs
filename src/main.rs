@@ -434,14 +434,12 @@ fn main() -> ExitCode {
         } else {
             aifo_coder::resolve_agent_image_log_display(&image)
         }
+    } else if cli.image.is_some() {
+        image.clone()
     } else {
-        if cli.image.is_some() {
-            image.clone()
-        } else {
-            match aifo_coder::compute_effective_agent_image_for_run(&image) {
-                Ok(s) => s,
-                Err(_) => aifo_coder::resolve_agent_image_log_display(&image),
-            }
+        match aifo_coder::compute_effective_agent_image_for_run(&image) {
+            Ok(s) => s,
+            Err(_) => aifo_coder::resolve_agent_image_log_display(&image),
         }
     };
 
