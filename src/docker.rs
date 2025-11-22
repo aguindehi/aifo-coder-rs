@@ -423,11 +423,29 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     )));
 
     // Phase 1: Coding agent config (read-only host mount)
-    // Resolve host config dir: explicit env, else ~/.config/aifo-coder, else ~/.aifo-coder.
+    // Resolve host config dir: explicit env (AIFO_CONFIG_HOST_DIR or AIFO_CODER_CONFIG_HOST_DIR),
+    // else ~/.config/aifo-coder, else ~/.aifo-coder.
     let cfg_host_dir = env::var("AIFO_CONFIG_HOST_DIR")
         .ok()
         .filter(|v| !v.trim().is_empty())
         .map(PathBuf::from)
+        .or_else(|| {
+            env::var("AIFO_CODER_CONFIG_HOST_DIR")
+                .ok()
+                .and_then(|v| {
+                    let v = v.trim();
+                    if v.is_empty() {
+                        None
+                    } else {
+                        let p = PathBuf::from(v);
+                        if p.is_dir() {
+                            Some(p)
+                        } else {
+                            None
+                        }
+                    }
+                })
+        })
         .or_else(|| {
             let p = host_home.join(".config").join("aifo-coder");
             if p.is_dir() {
