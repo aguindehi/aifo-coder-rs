@@ -241,6 +241,38 @@ build-toolchain:
     matrix:
       - FOLDER: [ "rust", "node", "cpp" ]
 
+# Multi-arch publish using Docker Buildx (manifest with amd64 + arm64)
+publish-multiarch:
+  stage: build
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      privileged: true
+  interruptible: true
+  timeout: 2h
+  tags:
+    - qual-mcap-gcp
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+    PLATFORMS: "linux/amd64,linux/arm64"
+    PUSH: "1"
+    REGISTRY: "$CI_REGISTRY_IMAGE"
+  before_script:
+    - docker version || true
+    - docker buildx version || true
+    - docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+    - docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64
+    - docker buildx create --name ci-builder --use
+    - docker buildx inspect --bootstrap
+  script:
+    - make publish
+    - docker buildx imagetools inspect "$CI_REGISTRY_IMAGE/aifo-coder-codex:$CI_COMMIT_TAG" || true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: on_success
+
 # Build macOS cross image (Kaniko) and macOS launcher
 
 prepare-apple-sdk:
