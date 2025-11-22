@@ -386,6 +386,20 @@ BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || e
 # Detect buildx driver (e.g., docker, docker-container, containerd)
 BUILDX_DRIVER := $(shell docker buildx inspect 2>/dev/null | awk '/^Driver:/{print $$2}')
 
+# Auto-setup a multi-arch buildx builder when PLATFORMS are specified and the current driver is 'docker'.
+# This switches to a container-based builder and installs binfmt for amd64/arm64 once on the host.
+ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
+  ifneq ($(strip $(PLATFORMS)),)
+    ifeq ($(BUILDX_DRIVER),docker)
+      $(info buildx driver 'docker' detected; setting up container-based builder 'aifo' for multi-arch)
+      $(shell docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64 >/dev/null 2>&1 || true)
+      $(shell docker buildx inspect aifo >/dev/null 2>&1 || docker buildx create --name aifo --driver docker-container --use >/dev/null 2>&1)
+      $(shell docker buildx inspect --bootstrap >/dev/null 2>&1 || true)
+      BUILDX_DRIVER := $(shell docker buildx inspect 2>/dev/null | awk '/^Driver:/{print $$2}')
+    endif
+  endif
+endif
+
 # Select build command (buildx with cache/load/push or classic docker build)
 ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
   ifneq ($(strip $(PLATFORMS)),)
