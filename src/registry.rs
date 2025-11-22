@@ -105,6 +105,21 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
             _ => String::new(),
         };
     }
+    // Env override: prefer explicit mirror registry prefix when provided
+    if let Ok(val) = env::var("AIFO_CODER_MIRROR_REGISTRY_PREFIX") {
+        let trimmed = val.trim();
+        let v = if trimmed.is_empty() {
+            String::new()
+        } else {
+            let mut s = trimmed.trim_end_matches('/').to_string();
+            s.push('/');
+            s
+        };
+        let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
+        let _ = MIRROR_REGISTRY_SOURCE.set("env".to_string());
+        write_registry_cache_disk(&v);
+        return v;
+    }
     if let Some(v) = MIRROR_REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
     }
@@ -217,4 +232,142 @@ pub fn preferred_internal_registry_source() -> String {
         .get()
         .cloned()
         .unwrap_or_else(|| "unset".to_string())
+}
+
+const DEFAULT_INTERNAL_HOST: &str = "registry.intern.migros.net";
+const DEFAULT_INTERNAL_NAMESPACE: &str = "ai-foundation/prototypes/aifo-coder-rs";
+
+/// Optional namespace for our internal registry; env override or sensible default.
+fn registry_namespace_opt() -> Option<String> {
+    if let Ok(v) = env::var("AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE") {
+        let t = v.trim().trim_matches('/').to_string();
+        if !t.is_empty() {
+            return Some(t);
+        }
+    }
+    Some(DEFAULT_INTERNAL_NAMESPACE.to_string())
+}
+
+/// Resolve an image reference against the configured registries.
+///
+/// Rules:
+/// - If the reference already specifies a registry (first path component contains '.' or ':'
+///   or equals "localhost"), return it unchanged.
+/// - Otherwise prefer the internal registry prefix if set (env-based), else the mirror registry
+///   prefix if available; both prefixes are normalized to include a trailing '/'.
+fn is_our_image(image: &str) -> bool {
+    // Examine the final name component without tag/digest
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let name = base.rsplit('/').next().unwrap_or(base);
+    name.starts_with("aifo-coder-") || name.starts_with("aifo-coder-toolchain-")
+}
+
+/// Probe default internal registry reachability (curl HEAD, else TCP).
+fn internal_registry_reachable() -> bool {
+    if which("curl").is_ok() {
+        let status = Command::new("curl")
+            .args([
+                "--connect-timeout",
+                "1",
+                "--max-time",
+                "2",
+                "-sSI",
+                &format!("https://{}/v2/", DEFAULT_INTERNAL_HOST),
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        if let Ok(st) = status {
+            if st.success() {
+                return true;
+            }
+        }
+    }
+    is_host_port_reachable(DEFAULT_INTERNAL_HOST, 443, 300)
+}
+
+/// Autodetect internal registry prefix:
+/// - Env AIFO_CODER_INTERNAL_REGISTRY_PREFIX wins (normalized trailing '/')
+/// - Else if registry.intern.migros.net reachable, compose "<host>/<namespace>/"
+/// - Else empty (Docker Hub fallback)
+pub fn preferred_internal_registry_prefix_autodetect() -> String {
+    if let Ok(val) = env::var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX") {
+        let trimmed = val.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let mut s = trimmed.trim_end_matches('/').to_string();
+        s.push('/');
+        return s;
+    }
+    if internal_registry_reachable() {
+        let ns = registry_namespace_opt().unwrap_or_else(|| DEFAULT_INTERNAL_NAMESPACE.to_string());
+        let mut s = format!("{}/{}/", DEFAULT_INTERNAL_HOST, ns.trim_matches('/'));
+        while s.contains("//") {
+            s = s.replace("//", "/");
+        }
+        return s;
+    }
+    String::new()
+}
+
+pub fn resolve_image(image: &str) -> String {
+    // Detect if image already specifies an explicit registry
+    if let Some((first, _rest)) = image.split_once('/') {
+        if first.contains('.') || first.contains(':') || first == "localhost" {
+            return image.to_string();
+        }
+    }
+    let unqualified = !image.contains('/');
+
+    // Our images: prefer internal autodetect (with namespace already in prefix), else leave unqualified
+    if unqualified && is_our_image(image) {
+        let internal = preferred_internal_registry_prefix_autodetect();
+        if !internal.is_empty() {
+            return format!("{}{}", internal, image);
+        }
+        return image.to_string();
+    }
+
+    // Third-party images: use mirror when reachable; do not apply internal namespace to mirror
+    let mirror = preferred_mirror_registry_prefix_quiet();
+    if !mirror.is_empty() {
+        return format!("{}{}", mirror, image);
+    }
+
+    // No registry configured; return unchanged (Docker Hub fallback)
+    image.to_string()
+}
+
+/// Retag an image by setting a new ':tag' (dropping any '@digest').
+fn retag_image(image: &str, new_tag: &str) -> String {
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let last_slash = base.rfind('/');
+    let last_colon = base.rfind(':');
+    let without_tag = match (last_slash, last_colon) {
+        (Some(slash), Some(colon)) if colon > slash => &base[..colon],
+        (None, Some(_colon)) => base.split(':').next().unwrap_or(base),
+        _ => base,
+    };
+    format!("{}:{}", without_tag, new_tag)
+}
+
+/// Compute the effective agent image for logging: applies env overrides and registry resolution.
+pub fn resolve_agent_image_log_display(image: &str) -> String {
+    // Full image override takes precedence; used verbatim (then resolved for registry/namespace).
+    if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return resolve_image(t);
+        }
+    }
+    // Tag override: retag default then resolve via registry/namespace.
+    if let Ok(tag) = env::var("AIFO_CODER_AGENT_TAG") {
+        let t = tag.trim();
+        if !t.is_empty() {
+            let retagged = retag_image(image, t);
+            return resolve_image(&retagged);
+        }
+    }
+    resolve_image(image)
 }

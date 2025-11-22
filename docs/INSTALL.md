@@ -20,7 +20,22 @@ aifo-coder --help
 ```
 
 Notes:
-- Two registries: mirror registry (MR) is used only for Dockerfile base pulls via REGISTRY_PREFIX (set by Makefile/CI); internal registry (IR) is used for tagging/push and runtime image prefixing via REGISTRY or AIFO_CODER_INTERNAL_REGISTRY_PREFIX. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
+- Registries and prefixes:
+  - Internal registry (IR): set AIFO_CODER_INTERNAL_REGISTRY_PREFIX to a host/path prefix with a
+    trailing "/" (e.g., registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/). IR
+    takes precedence at runtime for our aifo-coder-* images.
+  - Mirror registry (MR): set AIFO_CODER_MIRROR_REGISTRY_PREFIX to a host prefix with a trailing
+    "/" (e.g., repository.migros.net/). When IR is unset, MR prefixes unqualified third‑party images at
+    runtime. Internal namespaces do not apply to MR.
+  - Internal namespace: set AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE for the path segment used with
+    the internal registry (default: ai-foundation/prototypes/aifo-coder-rs).
+- Agent image overrides:
+  - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
+  - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
+  - CLI override: --image takes precedence over defaults.
+  - Default tag: release-<version> matching the launcher version (e.g., release-0.6.3). Override via AIFO_CODER_IMAGE_TAG or AIFO_CODER_AGENT_TAG.
+  - Automatic login: on permission-denied pulls, aifo-coder prompts for docker login to the
+    resolved registry and retries (interactive only). Disable via AIFO_CODER_AUTO_LOGIN=0.
 - To build only full (fat) images: make build-fat
 - To build only slim images: make build-slim
 - The wrapper script aifo-coder will try to build the Rust launcher with cargo; if cargo is missing, it can build using Docker.

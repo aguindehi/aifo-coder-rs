@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use which::which;
 
 // Pass-through environment variables to the containerized agent
@@ -447,6 +447,181 @@ fn compute_container_identity(agent: &str, prefix: &str) -> (String, String) {
     (container_name, hostname)
 }
 
+/// Helper: set/replace tag on an image reference (strip any digest, replace last tag after '/').
+fn set_image_tag(image: &str, new_tag: &str) -> String {
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let last_slash = base.rfind('/');
+    let last_colon = base.rfind(':');
+    let without_tag = match (last_slash, last_colon) {
+        (Some(slash), Some(colon)) if colon > slash => &base[..colon],
+        (None, Some(_colon)) => base.split(':').next().unwrap_or(base),
+        _ => base,
+    };
+    format!("{}:{}", without_tag, new_tag)
+}
+
+/// Helper: apply agent image overrides from environment.
+fn maybe_override_agent_image(image: &str) -> String {
+    if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(tag) = env::var("AIFO_CODER_AGENT_TAG") {
+        let t = tag.trim();
+        if !t.is_empty() {
+            return set_image_tag(image, t);
+        }
+    }
+    image.to_string()
+}
+
+/// Derive registry host from an image reference (first component if qualified).
+fn parse_registry_host(image: &str) -> Option<String> {
+    if let Some((first, _rest)) = image.split_once('/') {
+        if first.contains('.') || first.contains(':') || first == "localhost" {
+            return Some(first.to_string());
+        }
+    }
+    None
+}
+
+/// Check if an image exists locally via `docker image inspect`.
+fn image_exists_locally(runtime: &Path, image: &str) -> bool {
+    let status = Command::new(runtime)
+        .arg("image")
+        .arg("inspect")
+        .arg(image)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok();
+    status.map(|s| s.success()).unwrap_or(false)
+}
+
+/// Pull image and on auth failure interactively run `docker login` then retry once.
+fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::Result<()> {
+    if verbose {
+        let use_err = crate::color_enabled_stderr();
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: docker pull {}", image),
+        );
+    }
+    let out = Command::new(runtime)
+        .arg("pull")
+        .arg(image)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()?;
+    if out.status.success() {
+        return Ok(());
+    }
+
+    let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+    let interactive = atty::is(atty::Stream::Stdin);
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+    .to_ascii_lowercase();
+    let auth_patterns = [
+        "pull access denied",
+        "permission denied",
+        "authentication required",
+        "unauthorized",
+        "requested access to the resource is denied",
+        "may require 'docker login'",
+        "requires 'docker login'",
+    ];
+    let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+
+    if auto_enabled && interactive && looks_auth_error {
+        let host = parse_registry_host(image);
+        let use_err = crate::color_enabled_stderr();
+        // Run docker login interactively (inherit stdio)
+        let mut login_cmd = Command::new(runtime);
+        login_cmd.arg("login");
+        if let Some(h) = host.as_deref() {
+            if verbose {
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
+            }
+            login_cmd.arg(h);
+        } else if verbose {
+            crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
+        }
+        let st = login_cmd.status().map_err(|e| {
+            io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+        })?;
+        if !st.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "docker login failed",
+            ));
+        }
+        // Retry pull
+        let out2 = Command::new(runtime)
+            .arg("pull")
+            .arg(image)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        if out2.status.success() {
+            return Ok(());
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "docker pull failed after login",
+        ));
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!(
+            "docker pull failed (status {:?})",
+            out.status.code().unwrap_or(-1)
+        ),
+    ))
+}
+
+/// Derive "local latest" candidate for our agent images from a resolved ref.
+/// E.g., "registry.intern.../aifo-coder-codex:release-0.6.3" -> "aifo-coder-codex:latest".
+fn derive_local_latest_candidate(image: &str) -> Option<String> {
+    // Strip digest
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    // Last path component: repository/name
+    let last = base.rsplit('/').next().unwrap_or(base);
+    // Strip tag (if present)
+    let name_no_tag = match last.rfind(':') {
+        Some(colon) => &last[..colon],
+        None => last,
+    };
+    if name_no_tag.starts_with("aifo-coder-") {
+        Some(format!("{}:latest", name_no_tag))
+    } else {
+        None
+    }
+}
+
+/// Compute the effective agent image for real run:
+/// - Apply env overrides (AIFO_CODER_AGENT_IMAGE/TAG),
+/// - Resolve registry/namespace,
+/// - Prefer local "<name>:latest" when present.
+pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> {
+    let runtime = container_runtime_path()?;
+    // Apply env overrides (same as build path)
+    let base_image = maybe_override_agent_image(image);
+    let resolved_image = crate::registry::resolve_image(&base_image);
+    if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
+        if image_exists_locally(runtime.as_path(), &candidate) {
+            return Ok(candidate);
+        }
+    }
+    Ok(resolved_image)
+}
+
 /// Build a docker run preview string without requiring docker in PATH (used for dry-run).
 pub fn build_docker_preview_only(
     agent: &str,
@@ -544,7 +719,9 @@ pub fn build_docker_preview_only(
         preview_args.push(f.to_string_lossy().to_string());
     }
 
-    preview_args.push(image.to_string());
+    let base_image = maybe_override_agent_image(image);
+    let resolved_image = crate::registry::resolve_image(&base_image);
+    preview_args.push(resolved_image.clone());
     preview_args.push("/bin/sh".to_string());
     preview_args.push("-lc".to_string());
 
@@ -675,7 +852,7 @@ pub fn build_docker_cmd(
     );
 
     // docker run command
-    let mut cmd = Command::new(runtime);
+    let mut cmd = Command::new(&runtime);
     let mut preview_args: Vec<String> = Vec::new();
 
     // program
@@ -749,9 +926,15 @@ pub fn build_docker_cmd(
         cmd.arg(f);
     }
 
-    // image
-    cmd.arg(image);
-    preview_args.push(image.to_string());
+    // image: prefer local ":latest" when present, else resolved remote
+    let effective_image = compute_effective_agent_image_for_run(image)?;
+    // Pre-pull image and auto-login on permission denied (interactive)
+    if !image_exists_locally(runtime.as_path(), &effective_image) {
+        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false);
+    }
+
+    cmd.arg(&effective_image);
+    preview_args.push(effective_image.clone());
 
     // shell and command
     cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);

@@ -75,6 +75,10 @@ pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
     if rustup_mutable {
         // Developer mode: use per-user rustup home; do not force RUSTUP_TOOLCHAIN to allow switching (e.g., nightly).
         push_env(args, "RUSTUP_HOME", "/home/coder/.rustup");
+    } else if env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok().as_deref() == Some("1") {
+        // Official rust:<ver> image: use system rustup home and do not force a moving channel.
+        // This reduces rustup channel sync chatter on first use.
+        push_env(args, "RUSTUP_HOME", "/usr/local/rustup");
     } else {
         // Deterministic mode: force stable and system rustup home.
         push_env(args, "RUSTUP_TOOLCHAIN", "stable");
