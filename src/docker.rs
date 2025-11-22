@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use which::which;
 
 // Pass-through environment variables to the containerized agent
@@ -477,6 +477,119 @@ fn maybe_override_agent_image(image: &str) -> String {
     image.to_string()
 }
 
+/// Derive registry host from an image reference (first component if qualified).
+fn parse_registry_host(image: &str) -> Option<String> {
+    if let Some((first, _rest)) = image.split_once('/') {
+        if first.contains('.') || first.contains(':') || first == "localhost" {
+            return Some(first.to_string());
+        }
+    }
+    None
+}
+
+/// Check if an image exists locally via `docker image inspect`.
+fn image_exists_locally(runtime: &Path, image: &str) -> bool {
+    let status = Command::new(runtime)
+        .arg("image")
+        .arg("inspect")
+        .arg(image)
+        .status()
+        .ok();
+    status.map(|s| s.success()).unwrap_or(false)
+}
+
+/// Pull image and on auth failure interactively run `docker login` then retry once.
+fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::Result<()> {
+    if verbose {
+        let use_err = crate::color_enabled_stderr();
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: docker pull {}", image),
+        );
+    }
+    let out = Command::new(runtime)
+        .arg("pull")
+        .arg(image)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()?;
+    if out.status.success() {
+        return Ok(());
+    }
+
+    let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+    let interactive = atty::is(atty::Stream::Stdin);
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+    .to_ascii_lowercase();
+    let auth_patterns = [
+        "pull access denied",
+        "permission denied",
+        "authentication required",
+        "unauthorized",
+        "requested access to the resource is denied",
+        "may require 'docker login'",
+        "requires 'docker login'",
+    ];
+    let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+
+    if auto_enabled && interactive && looks_auth_error {
+        let host = parse_registry_host(image);
+        let use_err = crate::color_enabled_stderr();
+        // Run docker login interactively (inherit stdio)
+        let mut login_cmd = Command::new(runtime);
+        login_cmd.arg("login");
+        if let Some(h) = host.as_deref() {
+            if verbose {
+                crate::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: docker: docker login {}", h),
+                );
+            }
+            login_cmd.arg(h);
+        } else if verbose {
+            crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
+        }
+        let st = login_cmd.status().map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("docker login failed to start: {}", e),
+            )
+        })?;
+        if !st.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "docker login failed",
+            ));
+        }
+        // Retry pull
+        let out2 = Command::new(runtime)
+            .arg("pull")
+            .arg(image)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        if out2.status.success() {
+            return Ok(());
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "docker pull failed after login",
+        ));
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!(
+            "docker pull failed (status {:?})",
+            out.status.code().unwrap_or(-1)
+        ),
+    ))
+}
+
 /// Build a docker run preview string without requiring docker in PATH (used for dry-run).
 pub fn build_docker_preview_only(
     agent: &str,
@@ -784,6 +897,12 @@ pub fn build_docker_cmd(
     // image
     let base_image = maybe_override_agent_image(image);
     let resolved_image = crate::registry::resolve_image(&base_image);
+
+    // Pre-pull image and auto-login on permission denied (interactive)
+    if !image_exists_locally(runtime.as_path(), &resolved_image) {
+        let _ = pull_image_with_autologin(runtime.as_path(), &resolved_image, false);
+    }
+
     cmd.arg(&resolved_image);
     preview_args.push(resolved_image.clone());
 

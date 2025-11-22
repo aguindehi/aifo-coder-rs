@@ -20,6 +20,8 @@ Conventions and registries (IR vs MR)
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).
   - Default tag: release-<version> (matches launcher version). Override with AIFO_CODER_IMAGE_TAG or AIFO_CODER_AGENT_TAG.
+  - Automatic login: on permission-denied pulls, the launcher will prompt for `docker login` to
+    the resolved registry and retry once (interactive only). Disable with AIFO_CODER_AUTO_LOGIN=0.
 
 Toolchain image overrides
 
