@@ -73,7 +73,11 @@ fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str)
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec").arg(name).arg("/bin/sh").arg("-c").arg(script);
+    cmd.arg("exec")
+        .arg(name)
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
@@ -129,19 +133,40 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
     // Wait for $HOME/.aifo-config to be created (stamp should remain absent)
     let mut have_dir = false;
     for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(&runtime, &name, r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#);
-        if out_ready.contains("READY") { have_dir = true; break; }
+        let (_ec, out_ready) = exec_sh(
+            &runtime,
+            &name,
+            r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+        );
+        if out_ready.contains("READY") {
+            have_dir = true;
+            break;
+        }
         thread::sleep(Duration::from_millis(100));
     }
     if !have_dir {
-        let _ = exec_sh(&runtime, &name, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        let _ = exec_sh(
+            &runtime,
+            &name,
+            r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
+        );
         for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(&runtime, &name, r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#);
-            if out_ready.contains("READY") { have_dir = true; break; }
+            let (_ec, out_ready) = exec_sh(
+                &runtime,
+                &name,
+                r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
+            );
+            if out_ready.contains("READY") {
+                have_dir = true;
+                break;
+            }
             thread::sleep(Duration::from_millis(100));
         }
     }
-    assert!(have_dir, "expected $HOME/.aifo-config to be created by entrypoint or fallback");
+    assert!(
+        have_dir,
+        "expected $HOME/.aifo-config to be created by entrypoint or fallback"
+    );
 
     // Inside container: $HOME/.aifo-config should exist; .copied stamp should be absent
     let script = r#"

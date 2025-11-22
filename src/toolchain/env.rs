@@ -77,10 +77,7 @@ pub(crate) fn apply_rust_common_env(args: &mut Vec<String>) {
     let rustup_mutable = env::var("AIFO_CODER_RUSTUP_MUTABLE").ok().as_deref() == Some("1");
     // On official rust images (or when explicitly requested), avoid forcing RUSTUP_TOOLCHAIN to prevent rustup sync noise.
     let official = env::var("AIFO_RUST_OFFICIAL_BOOTSTRAP").ok().as_deref() == Some("1")
-        || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL")
-            .ok()
-            .as_deref()
-            == Some("1");
+        || env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1");
 
     if rustup_mutable {
         // Developer mode: use per-user rustup home; do not force RUSTUP_TOOLCHAIN to allow switching (e.g., nightly).

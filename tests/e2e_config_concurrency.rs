@@ -4,8 +4,8 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use tempfile::Builder;
 use std::{thread, time::Duration};
+use tempfile::Builder;
 
 fn docker() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
@@ -81,7 +81,11 @@ fn run_detached_sleep_container(
 
 fn exec_sh(runtime: &PathBuf, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec").arg(name).arg("/bin/sh").arg("-c").arg(script);
+    cmd.arg("exec")
+        .arg(name)
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
@@ -127,8 +131,13 @@ fn e2e_config_concurrent_isolation() {
     }
 
     // Host config with a simple aider file to trigger aider dir creation
-    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or(env::temp_dir());
-    let td = Builder::new().prefix("aifo-e2e-").tempdir_in(&home).expect("tmpdir in HOME");
+    let home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or(env::temp_dir());
+    let td = Builder::new()
+        .prefix("aifo-e2e-")
+        .tempdir_in(&home)
+        .expect("tmpdir in HOME");
     let root = td.path();
     std::fs::create_dir_all(root.join("aider")).expect("mk aider");
     std::fs::write(
@@ -164,18 +173,28 @@ fn e2e_config_concurrent_isolation() {
             &name1,
             r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
         );
-        if out.contains("READY") { ready1 = true; break; }
+        if out.contains("READY") {
+            ready1 = true;
+            break;
+        }
         thread::sleep(Duration::from_millis(100));
     }
     if !ready1 {
-        let _ = exec_sh(&runtime, &name1, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        let _ = exec_sh(
+            &runtime,
+            &name1,
+            r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
+        );
         for _ in 0..50 {
             let (_ec, out) = exec_sh(
                 &runtime,
                 &name1,
                 r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
             );
-            if out.contains("READY") { ready1 = true; break; }
+            if out.contains("READY") {
+                ready1 = true;
+                break;
+            }
             thread::sleep(Duration::from_millis(100));
         }
     }
@@ -189,18 +208,28 @@ fn e2e_config_concurrent_isolation() {
             &name2,
             r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
         );
-        if out.contains("READY") { ready2 = true; break; }
+        if out.contains("READY") {
+            ready2 = true;
+            break;
+        }
         thread::sleep(Duration::from_millis(100));
     }
     if !ready2 {
-        let _ = exec_sh(&runtime, &name2, r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#);
+        let _ = exec_sh(
+            &runtime,
+            &name2,
+            r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
+        );
         for _ in 0..50 {
             let (_ec, out) = exec_sh(
                 &runtime,
                 &name2,
                 r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
             );
-            if out.contains("READY") { ready2 = true; break; }
+            if out.contains("READY") {
+                ready2 = true;
+                break;
+            }
             thread::sleep(Duration::from_millis(100));
         }
     }
