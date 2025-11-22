@@ -244,6 +244,56 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
+    // Transparent host-side auto-migration of legacy Aider files into standardized config dir.
+    // Copies $HOME/.aider.conf.yml and optional .aider.model.settings.yml/.aider.model.metadata.json
+    // into $HOME/.config/aifo-coder/aider so aifo-entrypoint can bridge them inside the container.
+    {
+        let automigrate = env::var("AIFO_CONFIG_AUTOMIGRATE")
+            .ok()
+            .as_deref()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+        if automigrate {
+            let cfg_aider = host_home.join(".config").join("aifo-coder").join("aider");
+            let _ = fs::create_dir_all(&cfg_aider);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&cfg_aider, fs::Permissions::from_mode(0o700));
+            }
+            let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(262_144);
+
+            for name in [
+                ".aider.conf.yml",
+                ".aider.model.settings.yml",
+                ".aider.model.metadata.json",
+            ] {
+                let src = host_home.join(name);
+                if src.is_file() {
+                    if let Ok(md) = fs::metadata(&src) {
+                        if md.len() <= max_sz {
+                            let dst = cfg_aider.join(name);
+                            if !dst.exists() {
+                                let _ = fs::copy(&src, &dst);
+                                #[cfg(unix)]
+                                {
+                                    use std::os::unix::fs::PermissionsExt;
+                                    let _ = fs::set_permissions(
+                                        &dst,
+                                        fs::Permissions::from_mode(0o644),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Fork-state mounts or HOME-based mounts
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
         let sd = state_dir.trim();
