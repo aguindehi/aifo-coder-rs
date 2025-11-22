@@ -584,7 +584,7 @@ fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::
     ))
 }
 
- /// Derive "local latest" candidate for our agent images from a resolved ref.
+/// Derive "local latest" candidate for our agent images from a resolved ref.
 /// E.g., "registry.intern.../aifo-coder-codex:release-0.6.3" -> "aifo-coder-codex:latest".
 fn derive_local_latest_candidate(image: &str) -> Option<String> {
     // Strip digest
