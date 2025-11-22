@@ -584,6 +584,42 @@ fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::
     ))
 }
 
+ /// Derive "local latest" candidate for our agent images from a resolved ref.
+/// E.g., "registry.intern.../aifo-coder-codex:release-0.6.3" -> "aifo-coder-codex:latest".
+fn derive_local_latest_candidate(image: &str) -> Option<String> {
+    // Strip digest
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    // Last path component: repository/name
+    let last = base.rsplit('/').next().unwrap_or(base);
+    // Strip tag (if present)
+    let name_no_tag = match last.rfind(':') {
+        Some(colon) => &last[..colon],
+        None => last,
+    };
+    if name_no_tag.starts_with("aifo-coder-") {
+        Some(format!("{}:latest", name_no_tag))
+    } else {
+        None
+    }
+}
+
+/// Compute the effective agent image for real run:
+/// - Apply env overrides (AIFO_CODER_AGENT_IMAGE/TAG),
+/// - Resolve registry/namespace,
+/// - Prefer local "<name>:latest" when present.
+pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> {
+    let runtime = container_runtime_path()?;
+    // Apply env overrides (same as build path)
+    let base_image = maybe_override_agent_image(image);
+    let resolved_image = crate::registry::resolve_image(&base_image);
+    if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
+        if image_exists_locally(runtime.as_path(), &candidate) {
+            return Ok(candidate);
+        }
+    }
+    Ok(resolved_image)
+}
+
 /// Build a docker run preview string without requiring docker in PATH (used for dry-run).
 pub fn build_docker_preview_only(
     agent: &str,
@@ -888,17 +924,15 @@ pub fn build_docker_cmd(
         cmd.arg(f);
     }
 
-    // image
-    let base_image = maybe_override_agent_image(image);
-    let resolved_image = crate::registry::resolve_image(&base_image);
-
+    // image: prefer local ":latest" when present, else resolved remote
+    let effective_image = compute_effective_agent_image_for_run(image)?;
     // Pre-pull image and auto-login on permission denied (interactive)
-    if !image_exists_locally(runtime.as_path(), &resolved_image) {
-        let _ = pull_image_with_autologin(runtime.as_path(), &resolved_image, false);
+    if !image_exists_locally(runtime.as_path(), &effective_image) {
+        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false);
     }
 
-    cmd.arg(&resolved_image);
-    preview_args.push(resolved_image.clone());
+    cmd.arg(&effective_image);
+    preview_args.push(effective_image.clone());
 
     // shell and command
     cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);

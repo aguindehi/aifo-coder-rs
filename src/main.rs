@@ -426,12 +426,23 @@ fn main() -> ExitCode {
     let apparmor_profile = aifo_coder::desired_apparmor_profile();
 
     // Choose image to display in logs:
-    // - If CLI provided --image, show it verbatim.
-    // - Otherwise, show resolved (env overrides + registry/namespace).
-    let image_display = if cli.image.is_some() {
-        image.clone()
+    // - Dry-run: show CLI verbatim (if set) or resolved image (no Docker check).
+    // - Real run: show the effective image (prefers local :latest when present), unless CLI overrides.
+    let image_display = if cli.dry_run {
+        if cli.image.is_some() {
+            image.clone()
+        } else {
+            aifo_coder::resolve_agent_image_log_display(&image)
+        }
     } else {
-        aifo_coder::resolve_agent_image_log_display(&image)
+        if cli.image.is_some() {
+            image.clone()
+        } else {
+            match aifo_coder::compute_effective_agent_image_for_run(&image) {
+                Ok(s) => s,
+                Err(_) => aifo_coder::resolve_agent_image_log_display(&image),
+            }
+        }
     };
 
     // In dry-run, render a preview without requiring docker to be present
