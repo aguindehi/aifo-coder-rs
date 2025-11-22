@@ -258,7 +258,7 @@ fn registry_namespace_opt() -> Option<String> {
 fn is_our_image(image: &str) -> bool {
     // Examine the final name component without tag/digest
     let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
-    let name = base.split('/').last().unwrap_or(base);
+    let name = base.rsplit('/').next().unwrap_or(base);
     name.starts_with("aifo-coder-") || name.starts_with("aifo-coder-toolchain-")
 }
 
