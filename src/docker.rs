@@ -513,8 +513,34 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             }
         });
     if let Some(cfg) = cfg_host_dir {
-        volume_flags.push(OsString::from("-v"));
-        volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
+        // Mount only when the host config dir contains at least one regular file
+        // under either "global/" or the agent-specific subdir (e.g., "aider/").
+        let has_files = {
+            let mut any = false;
+            for name in &["global", agent] {
+                let d = cfg.join(name);
+                if let Ok(rd) = fs::read_dir(&d) {
+                    for ent in rd.flatten() {
+                        if ent
+                            .file_type()
+                            .map(|ft| ft.is_file())
+                            .unwrap_or(false)
+                        {
+                            any = true;
+                            break;
+                        }
+                    }
+                }
+                if any {
+                    break;
+                }
+            }
+            any
+        };
+        if has_files {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
+        }
     } else {
         crate::warn_print(
             "coding agent host config dir not found; aider may use API env defaults. Set AIFO_CONFIG_HOST_DIR or create ~/.config/aifo-coder",
