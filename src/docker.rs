@@ -485,58 +485,51 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
 
     // Phase 1: Coding agent config (read-only host mount)
     // Resolve host config dir: explicit env (AIFO_CONFIG_HOST_DIR or AIFO_CODER_CONFIG_HOST_DIR),
-    // else ~/.config/aifo-coder, else ~/.aifo-coder.
-    let cfg_host_dir = env::var("AIFO_CONFIG_HOST_DIR")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var("AIFO_CODER_CONFIG_HOST_DIR")
-                .ok()
-                .and_then(|v| {
-                    let v = v.trim();
-                    if v.is_empty() {
-                        None
-                    } else {
-                        let p = PathBuf::from(v);
-                        if p.is_dir() {
-                            Some(p)
-                        } else {
-                            None
-                        }
-                    }
-                })
-        })
-        .or_else(|| {
-            let p = host_home.join(".config").join("aifo-coder");
-            if p.is_dir() {
-                Some(p)
+    // else ~/.config/aifo-coder, else ~/.aifo-coder. Mount policy:
+    // - If an explicit env override is provided and points to an existing directory: always mount.
+    // - If using auto-resolved defaults: mount only when the directory contains at least one file
+    //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
+    let (cfg_host_dir, cfg_is_override) = {
+        if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
+            let p = PathBuf::from(v.trim());
+            if !p.as_os_str().is_empty() && p.is_dir() {
+                (Some(p), true)
             } else {
-                None
+                (None, false)
             }
-        })
-        .or_else(|| {
-            let p = host_home.join(".aifo-coder");
-            if p.is_dir() {
-                Some(p)
+        } else if let Ok(v) = env::var("AIFO_CODER_CONFIG_HOST_DIR") {
+            let p = PathBuf::from(v.trim());
+            if !p.as_os_str().is_empty() && p.is_dir() {
+                (Some(p), true)
             } else {
-                None
+                (None, false)
             }
-        });
+        } else {
+            let p1 = host_home.join(".config").join("aifo-coder");
+            if p1.is_dir() {
+                (Some(p1), false)
+            } else {
+                let p2 = host_home.join(".aifo-coder");
+                if p2.is_dir() {
+                    (Some(p2), false)
+                } else {
+                    (None, false)
+                }
+            }
+        }
+    };
     if let Some(cfg) = cfg_host_dir {
-        // Mount only when the host config dir contains at least one regular file
-        // under either "global/" or the agent-specific subdir (e.g., "aider/").
-        let has_files = {
+        let should_mount = if cfg_is_override {
+            true
+        } else {
+            // Mount only when the host config dir contains at least one regular file
+            // under either "global/" or the agent-specific subdir (e.g., "aider/").
             let mut any = false;
             for name in &["global", agent] {
                 let d = cfg.join(name);
                 if let Ok(rd) = fs::read_dir(&d) {
                     for ent in rd.flatten() {
-                        if ent
-                            .file_type()
-                            .map(|ft| ft.is_file())
-                            .unwrap_or(false)
-                        {
+                        if ent.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
                             any = true;
                             break;
                         }
@@ -548,7 +541,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             }
             any
         };
-        if has_files {
+        if should_mount {
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
         }
