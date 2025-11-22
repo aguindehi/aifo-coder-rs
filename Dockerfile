@@ -395,14 +395,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Plandex builder (Go) ---
-FROM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
+FROM --platform=$BUILDPLATFORM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 ARG PLX_GIT_REF=main
 WORKDIR /src
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/go/bin:${PATH}"
-# Harden Go build under QEMU emulation to avoid asm segfaults
+# Harden Go build; conservative flags to reduce concurrency and preemption
 ENV GOTOOLCHAIN=local \
     GOFLAGS="-trimpath -mod=readonly -p=1" \
     GOMAXPROCS=1 \
