@@ -7,6 +7,24 @@ Toolchain kind normalization and image selection.
 - is_official_rust_image / official_rust_image_for_version: helpers for rust
 */
 use std::env;
+use std::process::{Command, Stdio};
+use crate::container_runtime_path;
+
+/// Local image existence check via docker inspect.
+fn docker_image_exists_local(image: &str) -> bool {
+    if let Ok(rt) = container_runtime_path() {
+        return Command::new(&rt)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
 
 /// Helper: read an env var, trim, and return Some when non-empty.
 fn env_trim(k: &str) -> Option<String> {
@@ -167,6 +185,18 @@ pub fn default_toolchain_image(kind: &str) -> String {
         if let Some(tag) = tag_override_for_kind(&k) {
             base = replace_tag(&base, &tag);
         }
+        // If unqualified, prefer local image; otherwise qualify with internal registry automatically.
+        if !base.contains('/') {
+            let explicit_ir = crate::preferred_internal_registry_source() == "env";
+            if !explicit_ir && docker_image_exists_local(&base) {
+                // keep local image as-is
+            } else {
+                let ir = crate::preferred_internal_registry_prefix_quiet();
+                if !ir.is_empty() {
+                    base = format!("{ir}{base}");
+                }
+            }
+        }
     }
     base
 }
@@ -186,6 +216,18 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
         if is_first_party(&base) {
             if let Some(tag) = tag_override_for_kind(&k) {
                 base = replace_tag(&base, &tag);
+            }
+            // If unqualified, prefer local image; otherwise qualify with internal registry automatically.
+            if !base.contains('/') {
+                let explicit_ir = crate::preferred_internal_registry_source() == "env";
+                if !explicit_ir && docker_image_exists_local(&base) {
+                    // keep local image as-is
+                } else {
+                    let ir = crate::preferred_internal_registry_prefix_quiet();
+                    if !ir.is_empty() {
+                        base = format!("{ir}{base}");
+                    }
+                }
             }
         }
         return base;
