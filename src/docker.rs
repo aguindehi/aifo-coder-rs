@@ -814,7 +814,7 @@ pub fn build_docker_cmd(
     );
 
     // docker run command
-    let mut cmd = Command::new(runtime);
+    let mut cmd = Command::new(&runtime);
     let mut preview_args: Vec<String> = Vec::new();
 
     // program
