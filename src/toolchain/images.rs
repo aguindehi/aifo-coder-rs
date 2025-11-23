@@ -185,16 +185,11 @@ pub fn default_toolchain_image(kind: &str) -> String {
         if let Some(tag) = tag_override_for_kind(&k) {
             base = replace_tag(&base, &tag);
         }
-        // If unqualified, prefer local image; otherwise qualify with internal registry automatically.
+        // If unqualified, prefer local; else resolve via internal autodetect (or env).
         if !base.contains('/') {
             let explicit_ir = crate::preferred_internal_registry_source() == "env";
-            if !explicit_ir && docker_image_exists_local(&base) {
-                // keep local image as-is
-            } else {
-                let ir = crate::preferred_internal_registry_prefix_quiet();
-                if !ir.is_empty() {
-                    base = format!("{ir}{base}");
-                }
+            if explicit_ir || !docker_image_exists_local(&base) {
+                base = crate::resolve_image(&base);
             }
         }
     }
@@ -215,15 +210,11 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
         // Apply qualification for first-party toolchain images without overriding explicit version.
         if is_first_party(&base) {
             // Do not override the tag when a specific version was requested; keep {version}.
+            // If unqualified, prefer local; else resolve via internal autodetect (or env).
             if !base.contains('/') {
                 let explicit_ir = crate::preferred_internal_registry_source() == "env";
-                if !explicit_ir && docker_image_exists_local(&base) {
-                    // keep local image as-is
-                } else {
-                    let ir = crate::preferred_internal_registry_prefix_quiet();
-                    if !ir.is_empty() {
-                        base = format!("{ir}{base}");
-                    }
+                if explicit_ir || !docker_image_exists_local(&base) {
+                    base = crate::resolve_image(&base);
                 }
             }
         }
