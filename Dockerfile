@@ -19,6 +19,7 @@ ARG CLEAN_CARGO=0
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/cargo/bin:${PATH}"
+ARG NEXTEST_VERSION=0.9.114
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -56,7 +57,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
         export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
     fi; \
-    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
+    # Prefer prebuilt cargo-nextest to avoid heavy compile under QEMU; fallback to cargo install \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
+    ok=0; \
+    if [ -n "$tgt" ]; then \
+      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
+      if curl -fsSL "$url" -o /tmp/nextest.tar.xz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+        bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
+        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+      fi; \
+    fi; \
+    if [ "$ok" -ne 1 ]; then /usr/local/cargo/bin/cargo install cargo-nextest --locked; fi; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
@@ -202,7 +216,7 @@ FROM base AS codex
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Codex docs: npm i -g @openai/codex
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
@@ -211,7 +225,7 @@ FROM base AS crush
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Crush docs: npm i -g @charmland/crush
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
@@ -258,9 +272,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -299,9 +311,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -378,8 +388,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export SSL_CERT_DIR=/etc/ssl/certs; \
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
+  export NPM_CONFIG_CACHE=/tmp/npm-cache; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
-  npm cache clean --force; rm -rf /root/.npm /root/.cache; \
+  rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -389,9 +400,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
-    npm prune --omit=dev || true; \
-    npm cache clean --force; \
-    rm -rf /root/.npm /root/.cache; \
+    rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
@@ -400,14 +409,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Plandex builder (Go) ---
-FROM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
+FROM --platform=$BUILDPLATFORM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 ARG PLX_GIT_REF=main
 WORKDIR /src
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/go/bin:${PATH}"
-ENV GOTOOLCHAIN=auto
+# Harden Go build; conservative flags to reduce concurrency and preemption
+ENV GOTOOLCHAIN=local \
+    GOFLAGS="-trimpath -mod=readonly -p=1" \
+    GOMAXPROCS=1 \
+    GODEBUG=asyncpreemptoff=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -424,11 +439,14 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   cd app/cli; \
   export PATH="/usr/local/go/bin:${PATH}"; \
   export CGO_ENABLED=0; \
-  export GOFLAGS="-trimpath -mod=readonly"; \
+  export GOFLAGS="${GOFLAGS:- -trimpath -mod=readonly -p=1}"; \
+  export GOMAXPROCS="${GOMAXPROCS:-1}"; \
+  export GODEBUG="${GODEBUG:-asyncpreemptoff=1}"; \
   V="$([ -f version.txt ] && cat version.txt || echo dev)"; \
   LDFLAGS="-s -w -X plandex/version.Version=$V"; \
   case "${TARGETOS:-}" in "") GOOS="$(/usr/local/go/bin/go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
   case "${TARGETARCH:-}" in "") GOARCH="$(/usr/local/go/bin/go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
+  if [ "$GOARCH" = "amd64" ]; then export GOAMD64="${GOAMD64:-v1}"; fi; \
   GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go build -ldflags "$LDFLAGS" -o /out/plandex .; \
   rm -rf /root/go/pkg /go/pkg/mod; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
@@ -447,9 +465,7 @@ RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
       apt-get autoremove -y; \
       apt-get clean; \
       apt-get remove --purge -y --allow-remove-essential apt || true; \
-      npm prune --omit=dev || true; \
-      npm cache clean --force; \
-      rm -rf /root/.npm /root/.cache; \
+      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
       rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
       rm -rf /usr/share/locale/*; \
       rm -rf /var/lib/apt/lists/*; \
@@ -478,14 +494,14 @@ CMD ["bash"]
 FROM base-slim AS codex-slim
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 
 # --- Aider slim builder stage ---
@@ -530,9 +546,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         apt-get autoremove -y; \
         apt-get clean; \
         apt-get remove --purge -y --allow-remove-essential apt || true; \
-        npm prune --omit=dev || true; \
-        npm cache clean --force; \
-        rm -rf /root/.npm /root/.cache; \
+        rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
@@ -573,9 +587,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 apt-get autoremove -y; \
                 apt-get clean; \
                 apt-get remove --purge -y --allow-remove-essential apt || true; \
-                npm prune --omit=dev || true; \
-                npm cache clean --force; \
-                rm -rf /root/.npm /root/.cache; \
+                rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
                 rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
                 rm -rf /var/lib/apt/lists/*; \
                 rm -rf /var/cache/apt/apt-file/; \
@@ -652,8 +664,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export SSL_CERT_DIR=/etc/ssl/certs; \
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
+  export NPM_CONFIG_CACHE=/tmp/npm-cache; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPCODE_VERSION}"; \
-  npm cache clean --force; rm -rf /root/.npm /root/.cache; \
+  rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
     command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -663,9 +676,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     apt-get autoremove -y; \
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
-    npm prune --omit=dev || true; \
-    npm cache clean --force; \
-    rm -rf /root/.npm /root/.cache; \
+    rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
     rm -rf /var/cache/apt/apt-file/; \
@@ -683,9 +694,7 @@ RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
       apt-get autoremove -y; \
       apt-get clean; \
       apt-get remove --purge -y --allow-remove-essential apt || true; \
-      npm prune --omit=dev || true; \
-      npm cache clean --force; \
-      rm -rf /root/.npm /root/.cache; \
+      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
       rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
       rm -rf /var/lib/apt/lists/*; \
       rm -rf /var/cache/apt/apt-file/; \

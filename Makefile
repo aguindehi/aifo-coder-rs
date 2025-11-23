@@ -386,6 +386,20 @@ BUILDX_AVAILABLE := $(shell docker buildx version >/dev/null 2>&1 && echo 1 || e
 # Detect buildx driver (e.g., docker, docker-container, containerd)
 BUILDX_DRIVER := $(shell docker buildx inspect 2>/dev/null | awk '/^Driver:/{print $$2}')
 
+# Auto-setup a multi-arch buildx builder when PLATFORMS are specified and the current driver is 'docker'.
+# This switches to a container-based builder and installs binfmt for amd64/arm64 once on the host.
+ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
+  ifneq ($(strip $(PLATFORMS)),)
+    ifeq ($(BUILDX_DRIVER),docker)
+      $(info buildx driver 'docker' detected; setting up container-based builder 'aifo' for multi-arch)
+      $(shell docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64 >/dev/null 2>&1 || true)
+      $(shell docker buildx inspect aifo >/dev/null 2>&1 || docker buildx create --name aifo --driver docker-container --use >/dev/null 2>&1)
+      $(shell docker buildx inspect --bootstrap >/dev/null 2>&1 || true)
+      BUILDX_DRIVER := $(shell docker buildx inspect 2>/dev/null | awk '/^Driver:/{print $$2}')
+    endif
+  endif
+endif
+
 # Select build command (buildx with cache/load/push or classic docker build)
 ifeq ($(USE_BUILDX)$(BUILDX_AVAILABLE),11)
   ifneq ($(strip $(PLATFORMS)),)
@@ -1272,8 +1286,12 @@ build-shim:
 	    echo "Running cargo nextest (sidecar) ..."; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  else \
-	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
+	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
+	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
+	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.114/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
+	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Building aifo-shim with rustup (stable) ..."; \
@@ -1480,8 +1498,12 @@ test:
 	    echo "Running cargo nextest (sidecar) ..."; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  else \
-	    echo "cargo-nextest not found in sidecar; running 'cargo test' ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
+	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
+	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
+	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.114/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
+	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
