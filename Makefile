@@ -241,8 +241,15 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  PLATFORMS examples: linux/amd64,linux/arm64 (recommended); linux/amd64 (Intel); linux/arm64 (Apple Silicon)"
-	@echo "  Note: base images support amd64/arm64; use other arches only if upstream supports them."
+	@echo "  publish-release ............. Release wrapper: use defaults (multi-arch, push, tags, cargo version) then run publish"
+	@echo ""
+	@echo "                                Note: Set PLATFORMS=linux/amd64,linux/arm64 and PUSH=1 to push multi-arch"
+	@echo "                                      with linux/amd64 (Intel); linux/arm64 (Apple Silicon)"
+	@echo "                                      Base images support amd64/arm64; use other arches only if upstream supports them."
+	@echo "                                Tweak specifics:"
+	@echo "                                      make publish-release TAG=release-0.6.4"
+	@echo "                                      make publish-release REGISTRY=my.registry/prefix/"
+	@echo "                                      make publish-release KEEP_APT=1"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -261,17 +268,6 @@ help: banner
 	@echo "  publish-openhands-slim ...... Buildx multi-arch and push OpenHands (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-opencode-slim ....... Buildx multi-arch and push OpenCode (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-plandex-slim ........ Buildx multi-arch and push Plandex (slim; set PLATFORMS=... PUSH=1)"
-	@echo ""
-	@echo "  publish-release ............. Wrapper: release defaults (multi-arch, push, tags) then run publish"
-	@echo ""
-	@echo "  Convenience:"
-	@echo "    Normal release push: make publish-release"
-	@echo "    Tweak specifics: make publish-release TAG=release-0.6.4"
-	@echo "                     make publish-release REGISTRY=my.registry/prefix/"
-	@echo "                     make publish-release KEEP_APT=1"
-	@echo ""
-	@echo "  Note: set PLATFORMS=linux/amd64,linux/arm64 and PUSH=1 to push multi-arch."
-	@echo "        The Plandex Go builder honors TARGETOS/TARGETARCH for buildx."
 	@echo ""
 	$(call title,Utilities:)
 	@echo ""
@@ -1206,12 +1202,11 @@ publish-release:
 	  PUSH=$(if $(PUSH),$(PUSH),1) \
 	  KEEP_APT=$(if $(KEEP_APT),$(KEEP_APT),0) \
 	  REGISTRY=$(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
-	  VER=$(if $(VER),$(VER),$(VERSION)) \
 	  PREFIX=$(if $(PREFIX),$(PREFIX),release) \
-	  TAG=$(if $(TAG),$(TAG),$$(PREFIX)-$$(VER)) \
-	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
-	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
-	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
+	  TAG=$(if $(TAG),$(TAG),$$(PREFIX)-$$(VERSION)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
+	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
+	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
