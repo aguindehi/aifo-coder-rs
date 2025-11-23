@@ -509,8 +509,7 @@ fn pull_image_with_autologin(
     agent_label: Option<&str>,
 ) -> io::Result<()> {
     // Effective verbosity: honor explicit flag or env set by CLI --verbose.
-    let eff_verbose =
-        verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
+    let eff_verbose = verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
 
     // Helper to do a pull with inherited stdio so progress is visible.
     let pull_inherit = |rt: &Path, img: &str| -> io::Result<bool> {
@@ -569,10 +568,7 @@ fn pull_image_with_autologin(
             let mut login_cmd = Command::new(runtime);
             login_cmd.arg("login");
             if let Some(h) = host.as_deref() {
-                crate::log_info_stderr(
-                    use_err,
-                    &format!("aifo-coder: docker: docker login {}", h),
-                );
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
                 login_cmd.arg(h);
             } else {
                 crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
@@ -596,10 +592,7 @@ fn pull_image_with_autologin(
             ));
         }
 
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "docker pull failed",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "docker pull failed"));
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
         let msg = if let Some(name) = agent_label {
@@ -642,10 +635,7 @@ fn pull_image_with_autologin(
             let host = parse_registry_host(image);
             // Short notice for login
             if let Some(h) = host.as_deref() {
-                crate::log_info_stderr(
-                    use_err,
-                    &format!("aifo-coder: docker login {}", h),
-                );
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker login {}", h));
             } else {
                 crate::log_info_stderr(use_err, "aifo-coder: docker login");
             }
@@ -654,7 +644,9 @@ fn pull_image_with_autologin(
                 .arg("login")
                 .args(host.as_deref().map(|h| vec![h]).unwrap_or_default())
                 .status()
-                .map_err(|e| io::Error::new(e.kind(), format!("docker login failed to start: {}", e)))?;
+                .map_err(|e| {
+                    io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+                })?;
             if !st.success() {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
@@ -1053,12 +1045,7 @@ pub fn build_docker_cmd(
     let effective_image = compute_effective_agent_image_for_run(image)?;
     // Pre-pull image and auto-login on permission denied (interactive)
     if !image_exists_locally(runtime.as_path(), &effective_image) {
-        let _ = pull_image_with_autologin(
-            runtime.as_path(),
-            &effective_image,
-            false,
-            Some(agent),
-        );
+        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false, Some(agent));
     }
 
     cmd.arg(&effective_image);
