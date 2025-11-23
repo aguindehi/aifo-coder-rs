@@ -502,7 +502,12 @@ fn image_exists_locally(runtime: &Path, image: &str) -> bool {
 
 /// Pull image and on auth failure interactively run `docker login` then retry once.
 /// Verbose runs stream docker pull output; non-verbose prints a short notice before quiet pull.
-fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::Result<()> {
+fn pull_image_with_autologin(
+    runtime: &Path,
+    image: &str,
+    verbose: bool,
+    agent_label: Option<&str>,
+) -> io::Result<()> {
     // Effective verbosity: honor explicit flag or env set by CLI --verbose.
     let eff_verbose =
         verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
@@ -597,10 +602,12 @@ fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::
         ));
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
-        crate::log_info_stderr(
-            use_err,
-            &format!("aifo-coder: pulling agent image: {}", image),
-        );
+        let msg = if let Some(name) = agent_label {
+            format!("aifo-coder: pulling agent image [{}]: {}", name, image)
+        } else {
+            format!("aifo-coder: pulling agent image: {}", image)
+        };
+        crate::log_info_stderr(use_err, &msg);
 
         let out = Command::new(runtime)
             .arg("pull")
@@ -1046,7 +1053,12 @@ pub fn build_docker_cmd(
     let effective_image = compute_effective_agent_image_for_run(image)?;
     // Pre-pull image and auto-login on permission denied (interactive)
     if !image_exists_locally(runtime.as_path(), &effective_image) {
-        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false);
+        let _ = pull_image_with_autologin(
+            runtime.as_path(),
+            &effective_image,
+            false,
+            Some(agent),
+        );
     }
 
     cmd.arg(&effective_image);
