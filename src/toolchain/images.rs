@@ -212,12 +212,9 @@ pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String 
                 base = format!("{ir}{base}");
             }
         }
-        // Apply tag overrides for first-party toolchain images.
+        // Apply qualification for first-party toolchain images without overriding explicit version.
         if is_first_party(&base) {
-            if let Some(tag) = tag_override_for_kind(&k) {
-                base = replace_tag(&base, &tag);
-            }
-            // If unqualified, prefer local image; otherwise qualify with internal registry automatically.
+            // Do not override the tag when a specific version was requested; keep {version}.
             if !base.contains('/') {
                 let explicit_ir = crate::preferred_internal_registry_source() == "env";
                 if !explicit_ir && docker_image_exists_local(&base) {
