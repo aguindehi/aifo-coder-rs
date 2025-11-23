@@ -97,9 +97,9 @@ RUN set -eux; \
         rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
       fi; \
     fi; \
-    # Verify cargo-nextest runs; if it fails, try compile fallback \
+    # Verify cargo-nextest runs; if it fails, compile-install fallback unconditionally \
     if [ "$ok" -eq 1 ]; then /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 || ok=0; fi; \
-    if [ "$ok" -ne 1 ] && [ "${NEXTEST_FALLBACK_COMPILE:-0}" = "1" ]; then cargo install cargo-nextest --locked; ok=1; fi; \
+    if [ "$ok" -ne 1 ]; then cargo install cargo-nextest --locked; ok=1; fi; \
     cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
