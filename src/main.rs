@@ -486,7 +486,11 @@ fn main() -> ExitCode {
     let tag_env_present = std::env::var("AIFO_CODER_IMAGE_TAG")
         .ok()
         .filter(|s| !s.trim().is_empty())
-        .or_else(|| std::env::var("AIFO_TAG").ok().filter(|s| !s.trim().is_empty()))
+        .or_else(|| {
+            std::env::var("AIFO_TAG")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+        })
         .is_some();
 
     // Finalize run image: CLI override wins; else respect tag env; else prefer local ':latest' when present.
@@ -548,7 +552,8 @@ fn main() -> ExitCode {
     }
 
     // Real execution path: require docker runtime
-    match aifo_coder::build_docker_cmd(agent, &args, &run_image_final, apparmor_profile.as_deref()) {
+    match aifo_coder::build_docker_cmd(agent, &args, &run_image_final, apparmor_profile.as_deref())
+    {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
                 agent,
