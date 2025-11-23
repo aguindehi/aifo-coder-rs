@@ -27,7 +27,7 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
-# Set to 1 to keep apt/procps in final images (local default keeps them; CI overrides to 0)
+# Set to 0 to drop apt/procps in final images (local default keeps them; CI overrides to 0)
 KEEP_APT ?= 1
 
 # In CI pipelines, override to 0 to slim images
@@ -42,10 +42,13 @@ PUSH ?= 0
 CACHE_DIR ?= .buildx-cache
 
 # Nextest arguments
-ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet
+ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
+
+# Nextest niceness
+NICENESS_CARGO_NEXTEST =? -1
 
 # Help
 .PHONY: help banner
@@ -90,7 +93,7 @@ banner:
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
 	@echo ""
 	@echo " ⚠️  Guardrail: Local builds should prefer docker buildx/BuildKit (DOCKER_BUILDKIT=1)."
-	@echo "     Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
+	@echo "    Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 	@echo " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB "
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
@@ -128,7 +131,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-		$(call title_ul,Install paths (for 'make install'):)
+	$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -181,6 +184,7 @@ help: banner
 	@echo "  build-openhands ............. Build only the OpenHands image ($${IMAGE_PREFIX}-openhands:$${TAG})"
 	@echo "  build-opencode .............. Build only the OpenCode image ($${IMAGE_PREFIX}-opencode:$${TAG})"
 	@echo "  build-plandex ............... Build only the Plandex image ($${IMAGE_PREFIX}-plandex:$${TAG})"
+	@echo ""
 	@echo "  build-codex-slim ............ Build only the Codex slim image ($${IMAGE_PREFIX}-codex-slim:$${TAG})"
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
@@ -213,6 +217,7 @@ help: banner
 	@echo "  rebuild-openhands ........... Rebuild only the OpenHands image without cache"
 	@echo "  rebuild-opencode ............ Rebuild only the OpenCode image without cache"
 	@echo "  rebuild-plandex ............. Rebuild only the Plandex image without cache"
+	@echo ""
 	@echo "  rebuild-codex-slim .......... Rebuild only the Codex slim image without cache"
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
@@ -741,7 +746,7 @@ test-macos-cross-image:
 	  $(if $(wildcard $(MIGROS_CA)),-v "$(MIGROS_CA):/run/secrets/migros_root_ca:ro",) \
 	  -w /workspace \
 	  -t -e TERM=xterm-256color -e CARGO_TERM_COLOR=always \
-	  $(MACOS_CROSS_IMAGE) sh -lc 'set -e; CA="/run/secrets/migros_root_ca"; if [ -f "$$CA" ]; then install -m 0644 "$$CA" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; fi; export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; export RUSTC="/usr/local/cargo/bin/rustc"; unset LD; sccache --version || true; sccache --show-stats || true; rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null 2>&1 || true; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --color always --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
+	  $(MACOS_CROSS_IMAGE) sh -lc 'set -e; CA="/run/secrets/migros_root_ca"; if [ -f "$$CA" ]; then install -m 0644 "$$CA" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; fi; export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; export RUSTC="/usr/local/cargo/bin/rustc"; unset LD; sccache --version || true; sccache --show-stats || true; rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null 2>&1 || true; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E "test(/^e2e_macos_cross_/)"'
 
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
@@ -1348,7 +1353,7 @@ lint:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (sidecar) ..."; \
-	  cargo clippy --workspace --all-features -- -D warnings; \
+	  cargo -q clippy --workspace --all-features -- -D warnings; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
@@ -1377,7 +1382,7 @@ lint:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (local cargo) ..."; \
-	  cargo clippy --workspace --all-features -- -D warnings; \
+	  cargo -q clippy --workspace --all-features -- -D warnings; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1405,6 +1410,11 @@ lint-ultra:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
+	if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
+	  LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
+	else \
+	  LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
+	fi; \
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "Running cargo fmt --check (sidecar) ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
@@ -1413,11 +1423,6 @@ lint-ultra:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (sidecar, curated strict + warnings) ..."; \
-	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
-	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
-	  else \
-	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
-	  fi; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v rustup >/dev/null 2>&1; then \
@@ -1425,11 +1430,6 @@ lint-ultra:
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
 	  rustup run stable cargo fmt -- --check || rustup run stable cargo fmt || cargo fmt; \
 	  echo "Running cargo clippy (rustup stable, curated strict + warnings) ..."; \
-	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
-	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
-	  else \
-	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
-	  fi; \
 	  if rustup run stable cargo -V >/dev/null 2>&1; then USE_RUSTUP=1; else USE_RUSTUP=0; fi; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  if [ "$$USE_RUSTUP" -eq 1 ]; then \
@@ -1445,11 +1445,6 @@ lint-ultra:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (local cargo, curated strict + warnings) ..."; \
-	  if [ "$${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
-	    LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
-	  else \
-	    LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
-	  fi; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v docker >/dev/null 2>&1; then \
@@ -1462,11 +1457,6 @@ lint-ultra:
 	    -e AIFO_ULTRA_WARNINGS -e AIFO_ULTRA_INCLUDE_TESTS \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
-	      if [ "${AIFO_ULTRA_WARNINGS:-0}" = "1" ]; then \
-	        LINT_FLAGS="-W warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::print_stdout -W clippy::print_stderr -W clippy::indexing_slicing"; \
-	      else \
-	        LINT_FLAGS="-A warnings -A clippy::all -A clippy::pedantic -A clippy::nursery -A clippy::cargo -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::print_stdout -A clippy::print_stderr -A clippy::indexing_slicing"; \
-	      fi; \
 	      if [ "${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	      cargo -q clippy --workspace --all-features $TARGETS -- $LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock'; \
 	else \
@@ -1766,7 +1756,7 @@ test-acceptance-suite:
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS); \
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS); \
 	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
 	  $(MAKE) test-macos-cross-image; \
@@ -1779,7 +1769,7 @@ test-integration-suite:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
-	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) -j 1 -E "$$EXPR" $(ARGS)
 
 check-e2e:
 	@echo "Running ignored-by-default e2e (acceptance) suite ..."
@@ -1807,18 +1797,18 @@ test-all-junit:
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/divert/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
 	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/divert/null 2>&1; then \
 	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E "$$FEX" $(ARGS); \
 	  else \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored all $(ARGS); \
 	  fi; \
 	else \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
 	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
 	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then \
 	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E "$$FEX" $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E "$$FEX" $(ARGS); \
 	  else \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$$/)' $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E '!test(/_uds/) & !binary(/^e2e_macos_cross(_sccache)?$$/)' $(ARGS); \
 	  fi; \
 	fi
 
@@ -1838,11 +1828,11 @@ test-toolchain-rust:
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
 	  echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running rust sidecar tests (unit/integration) via nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS); \
 	  else \
 	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
 	  fi; \
@@ -1863,7 +1853,7 @@ test-toolchain-rust:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS)"; \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS)"; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -1874,11 +1864,11 @@ test-toolchain-rust-e2e:
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
 	  echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
+	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running rust sidecar E2E tests (ignored by default) via nextest ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS); \
 	  else \
 	    echo "Error: cargo-nextest not found; install it with: cargo install cargo-nextest --locked" >&2; exit 1; \
 	  fi; \
@@ -1899,7 +1889,7 @@ test-toolchain-rust-e2e:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)"; \
+	    $(RUST_BUILDER_IMAGE) sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)"; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
