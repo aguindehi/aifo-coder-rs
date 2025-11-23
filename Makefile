@@ -623,9 +623,9 @@ build-crush:
 	@$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg CRUSH_VERSION="$(CRUSH_VERSION)" --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg CRUSH_VERSION="$(CRUSH_VERSION)" --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-aider:
@@ -2028,9 +2028,9 @@ rebuild-crush:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg CRUSH_VERSION="$(CRUSH_VERSION)" --no-cache --target crush -t $(CRUSH_IMAGE) -t "$${REG}$(CRUSH_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg CRUSH_VERSION="$(CRUSH_VERSION)" --no-cache --target crush -t $(CRUSH_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-aider:
@@ -2046,27 +2046,27 @@ rebuild-openhands:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPENHANDS_CONSTRAINT="$(OPENHANDS_CONSTRAINT)" --no-cache --target openhands -t $(OPENHANDS_IMAGE) -t "$${REG}$(OPENHANDS_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPENHANDS_CONSTRAINT="$(OPENHANDS_CONSTRAINT)" --no-cache --target openhands -t $(OPENHANDS_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-opencode:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPCODE_VERSION="$(OPCODE_VERSION)" --no-cache --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPCODE_VERSION="$(OPCODE_VERSION)" --no-cache --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-plandex:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg PLX_GIT_REF="$(PLX_GIT_REF)" --no-cache --target plandex -t $(PLANDEX_IMAGE) -t "$${REG}$(PLANDEX_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg PLX_GIT_REF="$(PLX_GIT_REF)" --no-cache --target plandex -t $(PLANDEX_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-rust-builder:
