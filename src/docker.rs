@@ -105,6 +105,55 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     env_flags.push(OsString::from("-e"));
     env_flags.push(OsString::from("SHELL=/opt/aifo/bin/sh"));
 
+    // Phase 1: Config clone policy envs (entrypoint will perform the copy)
+    // Always set in-container host config mount path explicitly.
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from(
+        "AIFO_CONFIG_HOST_DIR=/home/coder/.aifo-config-host",
+    ));
+    // Back-compat for images expecting AIFO_CODER_CONFIG_HOST_DIR
+    env_flags.push(OsString::from("-e"));
+    env_flags.push(OsString::from(
+        "AIFO_CODER_CONFIG_HOST_DIR=/home/coder/.aifo-config-host",
+    ));
+    // Optional policy knobs: pass through when set on host.
+    if let Ok(v) = env::var("AIFO_CONFIG_ENABLE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_ENABLE={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_MAX_SIZE") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_MAX_SIZE={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_ALLOW_EXT") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_ALLOW_EXT={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_SECRET_HINTS") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_SECRET_HINTS={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_COPY_ALWAYS") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_COPY_ALWAYS={v}")));
+        }
+    }
+    if let Ok(v) = env::var("AIFO_CONFIG_DST_DIR") {
+        if !v.is_empty() {
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("AIFO_CONFIG_DST_DIR={v}")));
+        }
+    }
+
     // XDG_RUNTIME_DIR (unix only)
     if let Some(uid) = uid_opt {
         env_flags.push(OsString::from("-e"));
@@ -194,6 +243,67 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
+
+    // Transparent host-side auto-migration of legacy Aider files into standardized config dir.
+    // Copies $HOME/.aider.conf.yml and optional .aider.model.settings.yml/.aider.model.metadata.json
+    // into $HOME/.config/aifo-coder/aider so aifo-entrypoint can bridge them inside the container.
+    {
+        let automigrate = env::var("AIFO_CONFIG_AUTOMIGRATE")
+            .ok()
+            .as_deref()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+        if automigrate {
+            // Only create the standardized config dir if at least one legacy Aider file exists in host $HOME.
+            let legacy_names = [
+                ".aider.conf.yml",
+                ".aider.model.settings.yml",
+                ".aider.model.metadata.json",
+            ];
+            let mut have_legacy = false;
+            for name in &legacy_names {
+                if host_home.join(name).is_file() {
+                    have_legacy = true;
+                    break;
+                }
+            }
+            if have_legacy {
+                let cfg_aider = host_home.join(".config").join("aifo-coder").join("aider");
+                let _ = fs::create_dir_all(&cfg_aider);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(&cfg_aider, fs::Permissions::from_mode(0o700));
+                }
+                let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
+                    .ok()
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(262_144);
+
+                for name in &legacy_names {
+                    let src = host_home.join(name);
+                    if src.is_file() {
+                        if let Ok(md) = fs::metadata(&src) {
+                            if md.len() <= max_sz {
+                                let dst = cfg_aider.join(name);
+                                if !dst.exists() {
+                                    let _ = fs::copy(&src, &dst);
+                                    #[cfg(unix)]
+                                    {
+                                        use std::os::unix::fs::PermissionsExt;
+                                        let _ = fs::set_permissions(
+                                            &dst,
+                                            fs::Permissions::from_mode(0o644),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Fork-state mounts or HOME-based mounts
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
@@ -325,23 +435,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     }
 
-    // Aider root-level config files (only for aider agent)
-    if agent == "aider" {
-        for fname in [
-            ".aider.conf.yml",
-            ".aider.model.metadata.json",
-            ".aider.model.settings.yml",
-        ] {
-            let src = host_home.join(fname);
-            ensure_file_exists(&src).ok();
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!(
-                "{}:/home/coder/{}:ro",
-                src.display(),
-                fname
-            )));
-        }
-    }
+    // Aider root-level config files: handled via config clone policy in entrypoint (Phase 1).
+    // No direct bind-mount of original host files here.
 
     // Git config
     let gitconfig = host_home.join(".gitconfig");
@@ -387,6 +482,74 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         "{}:/home/coder/.gnupg-host:ro",
         gnupg_dir.display()
     )));
+
+    // Phase 1: Coding agent config (read-only host mount)
+    // Resolve host config dir: explicit env (AIFO_CONFIG_HOST_DIR or AIFO_CODER_CONFIG_HOST_DIR),
+    // else ~/.config/aifo-coder, else ~/.aifo-coder. Mount policy:
+    // - If an explicit env override is provided and points to an existing directory: always mount.
+    // - If using auto-resolved defaults: mount only when the directory contains at least one file
+    //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
+    let (cfg_host_dir, cfg_is_override) = {
+        if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
+            let p = PathBuf::from(v.trim());
+            if !p.as_os_str().is_empty() && p.is_dir() {
+                (Some(p), true)
+            } else {
+                (None, false)
+            }
+        } else if let Ok(v) = env::var("AIFO_CODER_CONFIG_HOST_DIR") {
+            let p = PathBuf::from(v.trim());
+            if !p.as_os_str().is_empty() && p.is_dir() {
+                (Some(p), true)
+            } else {
+                (None, false)
+            }
+        } else {
+            let p1 = host_home.join(".config").join("aifo-coder");
+            if p1.is_dir() {
+                (Some(p1), false)
+            } else {
+                let p2 = host_home.join(".aifo-coder");
+                if p2.is_dir() {
+                    (Some(p2), false)
+                } else {
+                    (None, false)
+                }
+            }
+        }
+    };
+    if let Some(cfg) = cfg_host_dir {
+        let should_mount = if cfg_is_override {
+            true
+        } else {
+            // Mount only when the host config dir contains at least one regular file
+            // under either "global/" or the agent-specific subdir (e.g., "aider/").
+            let mut any = false;
+            for name in &["global", agent] {
+                let d = cfg.join(name);
+                if let Ok(rd) = fs::read_dir(&d) {
+                    for ent in rd.flatten() {
+                        if ent.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+                            any = true;
+                            break;
+                        }
+                    }
+                }
+                if any {
+                    break;
+                }
+            }
+            any
+        };
+        if should_mount {
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(path_pair(&cfg, "/home/coder/.aifo-config-host:ro"));
+        }
+    } else {
+        crate::warn_print(
+            "coding agent host config dir not found; aider may use API env defaults. Set AIFO_CONFIG_HOST_DIR or create ~/.config/aifo-coder",
+        );
+    }
 
     // Optional shim dir
     if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
@@ -838,7 +1001,7 @@ pub fn build_docker_preview_only(
     let resolved_image = crate::registry::resolve_image(&base_image);
     preview_args.push(resolved_image.clone());
     preview_args.push("/bin/sh".to_string());
-    preview_args.push("-lc".to_string());
+    preview_args.push("-c".to_string());
 
     let sh_cmd = format!(
         "set -e; umask 077; \
@@ -847,6 +1010,7 @@ pub fn build_docker_preview_only(
          uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
          mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
          unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
+         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
          exec {agent_joined}"
     );
     preview_args.push(sh_cmd.clone());
@@ -963,6 +1127,7 @@ pub fn build_docker_cmd(
          unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; \
          gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
          if [ -f \"/var/log/host/apparmor.log\" ]; then (nohup sh -c \"tail -n0 -F /var/log/host/apparmor.log >> \\\"$HOME/.aifo-logs/apparmor.log\\\" 2>&1\" >/dev/null 2>&1 &); fi; \
+         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
          exec {agent_joined}"
     );
 
@@ -1052,9 +1217,9 @@ pub fn build_docker_cmd(
     preview_args.push(effective_image.clone());
 
     // shell and command
-    cmd.arg("/bin/sh").arg("-lc").arg(&sh_cmd);
+    cmd.arg("/bin/sh").arg("-c").arg(&sh_cmd);
     preview_args.push("/bin/sh".to_string());
-    preview_args.push("-lc".to_string());
+    preview_args.push("-c".to_string());
     preview_args.push(sh_cmd.clone());
 
     // Render preview string with conservative shell escaping

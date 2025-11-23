@@ -49,6 +49,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # Pre-install cargo-nextest to speed up tests inside this container
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -148,12 +149,13 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   '  fi' \
   'fi' \
   '' \
-  '# When invoked as sh -c/-lc "cmd", append ; exit so the shell terminates after running the command.' \
+  '# Normalize -lc to -c for dash/posix shells; do not append ; exit.' \
   'if [ "$#" -ge 2 ] && { [ "$1" = "-c" ] || [ "$1" = "-lc" ]; }; then' \
   '  flag="$1"' \
   '  cmd="$2"' \
   '  shift 2' \
-  '  exec /bin/sh "$flag" "$cmd; exit" "$@"' \
+  '  [ "$flag" = "-lc" ] && flag="-c"' \
+  '  exec /bin/sh "$flag" "$cmd" "$@"' \
   'fi' \
   '' \
   'exec /bin/sh "$@"' \
@@ -189,8 +191,205 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  'unset GPG_AGENT_INFO' \
  '# Launch gpg-agent' \
  'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint && \
- chmod +x /usr/local/bin/aifo-entrypoint
+ 'CFG_HOST="${AIFO_CONFIG_HOST_DIR:-$HOME/.aifo-config-host}"' \
+ 'CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"' \
+ 'CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"' \
+ 'CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"' \
+ 'CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"' \
+ 'CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"' \
+ 'CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"' \
+ 'export AIFO_CODER_CONFIG_DIR="$CFG_DST"' \
+ 'if [ "$CFG_ENABLE" = "1" ]; then' \
+ '  install -d -m 0700 "$CFG_DST" || true' \
+ '  if [ -d "$CFG_HOST" ]; then' \
+ '    STAMP="$CFG_DST/.copied"' \
+ '    SHOULD=1' \
+ '    if [ "$CFG_COPY_ALWAYS" != "1" ] && [ -f "$STAMP" ]; then' \
+ '      max_src=0' \
+ '      for f in "$CFG_HOST"/* "$CFG_HOST"/global/* "$CFG_HOST"/*/*; do [ -e "$f" ] || continue; mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"; [ "$mt" -gt "$max_src" ] && max_src="$mt"; done' \
+ '      dst_mt="$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || echo 0)"' \
+ '      if [ "$max_src" -le "$dst_mt" ]; then SHOULD=0; fi' \
+ '    fi' \
+ '    if [ "$SHOULD" = "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: copying files from $CFG_HOST to $CFG_DST"; fi' \
+ '    if [ "$SHOULD" != "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: skip copy (up-to-date)"; fi' \
+ '    if [ "$SHOULD" = "1" ]; then' \
+ '    copy_one() {' \
+ '      src="$1"; base="$(basename "$src")";' \
+ '      case "$base" in' \
+ '        *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $base"; return ;;' \
+ '      esac;' \
+ '      ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")";' \
+ '      ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $base"; return; fi' \
+ '      [ -h "$src" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $base"; return; }; [ -f "$src" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $base"; return; }; sz="$(wc -c < "$src" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $base"; return; fi' \
+ '      mode=0644;' \
+ '      case "$ext_lc" in pem|key|token) mode=0600 ;; esac;' \
+ '      hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")";' \
+ '      IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS;' \
+ '      install -m "$mode" "$src" "$CFG_DST/global/$base" >/dev/null 2>&1 || true' \
+ '    }' \
+ '    if [ -d "$CFG_HOST/global" ]; then install -d -m 0700 "$CFG_DST/global" >/dev/null 2>&1 || true; for f in "$CFG_HOST"/global/.* "$CFG_HOST"/global/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; copy_one "$f"; done; fi' \
+ '    for d in "$CFG_HOST"/*; do [ -d "$d" ] || continue; name="$(basename "$d")"; [ "$name" = "global" ] && continue; install -d -m 0700 "$CFG_DST/$name" >/dev/null 2>&1 || true; for f in "$d"/.* "$d"/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; [ -h "$f" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $f"; continue; }; [ -f "$f" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $f"; continue; }; base="$(basename "$f")"; case "$base" in *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $name/$base"; continue ;; esac; ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"; ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $name/$base"; continue; fi; sz="$(wc -c < "$f" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $name/$base"; continue; fi; mode=0644; case "$ext_lc" in pem|key|token) mode=0600 ;; esac; hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")"; IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS; install -m "$mode" "$f" "$CFG_DST/$name/$base" >/dev/null 2>&1 || true; done; done' \
+ '    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do' \
+ '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
+ '    done' \
+ '    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true' \
+ '    fi' \
+ '  fi' \
+ 'fi' \
+ 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
+ && chmod +x /usr/local/bin/aifo-entrypoint
+
+# --- macOS cross Rust builder (osxcross; no secrets) ---
+FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
+ENV DEBIAN_FRONTEND=noninteractive
+# Minimal packages required to build osxcross and perform smoke checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
+      autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
+# Filename of the Apple SDK tarball; CI places it under ci/osx/ before build (Phase 0)
+ARG OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
+ARG OSXCROSS_REF
+# Optional: pass the exact versioned tarball name (e.g., MacOSX13.3.sdk.tar.xz) for osxcross
+ARG OSXCROSS_SDK_TARBALL
+# Copy SDK from build context (decoded in CI) into osxcross tarballs
+# Use a stable filename to avoid COPY src variable expansion issues in some builders (e.g., Kaniko)
+COPY ci/osx/MacOSX.sdk.tar.xz /tmp/MacOSX.sdk.tar.xz
+# Build osxcross unattended and install into /opt/osxcross
+RUN set -e; \
+    git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
+    if [ -n "${OSXCROSS_REF}" ]; then \
+      cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
+    fi; \
+    SDK_TMP="/tmp/MacOSX.sdk.tar.xz"; \
+    SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
+    if [ -z "$SDK_NAME" ]; then \
+      # Try to derive version from top-level directory inside the tarball: MacOSX<ver>.sdk/
+      TOP="$( (tar -tf "$SDK_TMP" 2>/dev/null || xz -dc "$SDK_TMP" 2>/dev/null | tar -tf - 2>/dev/null) | head -n1 || true)"; \
+      VER="$(printf '%s\n' "$TOP" | sed -n -E 's#^(\./)?MacOSX([0-9][0-9.]*)\.sdk(/.*)?$#\2#p' | tr -d ' \t\r\n')"; \
+      if [ -n "$VER" ]; then SDK_NAME="MacOSX${VER}.sdk.tar.xz"; fi; \
+    fi; \
+    if [ -z "$SDK_NAME" ]; then \
+      echo "warning: could not derive SDK version from ${OSX_SDK_FILENAME}; using original name (osxcross may reject it)"; \
+      SDK_NAME="${OSX_SDK_FILENAME}"; \
+    fi; \
+    mkdir -p osxcross/tarballs; \
+    mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
+    UNATTENDED=1 osxcross/build.sh; \
+    mkdir -p /opt/osxcross/SDK; \
+    printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
+    SDK_DIR="$(ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"; \
+    [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
+# Create stable tool aliases to avoid depending on Darwin minor suffixes
+RUN set -e; cd /opt/osxcross/target/bin; \
+    for t in ar ranlib strip; do \
+      ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
+      ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
+    done; \
+    # Create clang wrappers (always overwrite to ensure presence)
+    printf '%s\n' '#!/bin/sh' \
+      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+      'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
+    chmod 0755 oa64-clang; \
+    printf '%s\n' '#!/bin/sh' \
+      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
+      'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
+    chmod 0755 o64-clang; \
+    # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
+    printf '%s\n' '#!/bin/sh' \
+      'set -e' \
+      'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
+      'HAVE_PV=0; OS_MIN="";' \
+      'for a in "$@"; do' \
+      '  case "$a" in' \
+      '    -platform_version) HAVE_PV=1 ;;' \
+      '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
+      '  esac' \
+      'done' \
+      'if [ "$HAVE_PV" -eq 0 ]; then' \
+      '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
+      '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
+      '  SDK_VER=""' \
+      '  if [ -n "$SDK_DIR" ]; then' \
+      '    base="${SDK_DIR%/}"; base="${base##*/}";' \
+      '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
+      '  fi' \
+      '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
+      '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
+      '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
+      'fi' \
+      'HAVE_SR=0' \
+      'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
+      'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
+      'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+      'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+      'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+      'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
+      > ld; \
+    chmod 0755 ld
+# Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
+# Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
+ENV RUSTUP_HOME="/usr/local/rustup" \
+    CARGO_HOME="/usr/local/cargo" \
+    PATH="/opt/osxcross/target/bin:/usr/local/cargo/bin:/usr/local/rustup/bin:${PATH}" \
+    MACOSX_DEPLOYMENT_TARGET=11.0 \
+    CC_aarch64_apple_darwin=oa64-clang \
+    CXX_aarch64_apple_darwin=oa64-clang++ \
+    AR_aarch64_apple_darwin=aarch64-apple-darwin-ar \
+    RANLIB_aarch64_apple_darwin=aarch64-apple-darwin-ranlib \
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/oa64-clang
+# Enable optional x86_64 macOS cross-compilation as well
+ENV CC_x86_64_apple_darwin=o64-clang \
+    CXX_x86_64_apple_darwin=o64-clang++ \
+    AR_x86_64_apple_darwin=x86_64-apple-darwin-ar \
+    RANLIB_x86_64_apple_darwin=x86_64-apple-darwin-ranlib \
+    CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/opt/osxcross/target/bin/o64-clang
+# Install Rust targets with corporate CA trust (best-effort)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  CAF=/run/secrets/migros_root_ca; \
+  if [ -f "$CAF" ]; then \
+    install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+    export SSL_CERT_DIR=/etc/ssl/certs; \
+    export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    export RUSTUP_USE_CURL=1; \
+  fi; \
+  /usr/local/cargo/bin/rustup target add aarch64-apple-darwin x86_64-apple-darwin || true; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
+# Preinstall nextest to speed up CI test startup (with corp CA; keep image lean)
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
+    CAF=/run/secrets/migros_root_ca; \
+    if [ -f "$CAF" ]; then \
+        install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+        export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; \
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+    fi; \
+    /usr/local/cargo/bin/cargo install cargo-nextest --locked; \
+    strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; \
+    find /usr/local/cargo/registry -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    find /usr/local/cargo/git -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; \
+    if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+        rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+        command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi'
+# Configure sccache wrapper for rustc and prepare cache directory
+ENV RUSTC="/usr/local/cargo/bin/rustc" \
+    RUSTC_WRAPPER="/usr/bin/sccache" \
+    SCCACHE_DIR="/opt/sccache" \
+    SCCACHE_CACHE_SIZE="2G"
+RUN install -d -m 0755 /opt/sccache
 
 
 # --- Base layer: Node image + common OS tools used by all agents ---
@@ -216,7 +415,7 @@ FROM base AS codex
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Codex docs: npm i -g @openai/codex
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
@@ -225,7 +424,7 @@ FROM base AS crush
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Crush docs: npm i -g @charmland/crush
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; ok=0; tries=0; while [ "$tries" -lt 3 ]; do if npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; then ok=1; break; fi; tries=$((tries+1)); sleep 2; npm cache clean --force || true; done; if [ "$ok" -ne 1 ] || [ ! -x /usr/local/bin/crush ]; then arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; case "$arch" in aarch64|arm64) triple="Linux_arm64" ;; x86_64|amd64) triple="Linux_x86_64" ;; *) triple="";; esac; VER="${CRUSH_VERSION:-0.18.4}"; if [ -n "$triple" ]; then url="https://github.com/charmbracelet/crush/releases/download/v${VER}/crush_${VER}_${triple}.tar.gz"; tmp="/tmp/crush.$$"; mkdir -p "$tmp"; if curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused "$url" -o "$tmp/crush.tgz"; then tar -xzf "$tmp/crush.tgz" -C "$tmp" || true; if [ -f "$tmp/crush" ]; then install -m 0755 "$tmp/crush" /usr/local/bin/crush; strip /usr/local/bin/crush 2>/dev/null || true; fi; fi; rm -rf "$tmp"; fi; fi; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
@@ -237,6 +436,7 @@ ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -327,6 +527,7 @@ ARG OPENHANDS_CONSTRAINT=""
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -378,6 +579,7 @@ ARG OPCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -458,8 +660,8 @@ FROM base AS plandex
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-ENV KEEP_APT=${KEEP_APT}
 RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
+RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
     if [ "$KEEP_APT" = "0" ]; then \
       apt-get remove -y procps || true; \
       apt-get autoremove -y; \
@@ -494,15 +696,13 @@ CMD ["bash"]
 FROM base-slim AS codex-slim
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
-# Inherit /opt/aifo/bin PATH from base
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 
 # --- Crush slim image ---
 FROM base-slim AS crush-slim
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; export NPM_CONFIG_CACHE=/tmp/npm-cache; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; rm -rf /tmp/npm-cache /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; rm -rf /tmp/npm-cache /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
-# Inherit /opt/aifo/bin PATH from base
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; ok=0; tries=0; while [ "$tries" -lt 3 ]; do if npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush; then ok=1; break; fi; tries=$((tries+1)); sleep 2; npm cache clean --force || true; done; if [ "$ok" -ne 1 ] || [ ! -x /usr/local/bin/crush ]; then arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; case "$arch" in aarch64|arm64) triple="Linux_arm64" ;; x86_64|amd64) triple="Linux_x86_64" ;; *) triple="";; esac; VER="${CRUSH_VERSION:-0.18.4}"; if [ -n "$triple" ]; then url="https://github.com/charmbracelet/crush/releases/download/v${VER}/crush_${VER}_${triple}.tar.gz"; tmp="/tmp/crush.$$"; mkdir -p "$tmp"; if curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused "$url" -o "$tmp/crush.tgz"; then tar -xzf "$tmp/crush.tgz" -C "$tmp" || true; if [ -f "$tmp/crush" ]; then install -m 0755 "$tmp/crush" /usr/local/bin/crush; strip /usr/local/bin/crush 2>/dev/null || true; fi; fi; rm -rf "$tmp"; fi; fi; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps curl || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
@@ -566,6 +766,7 @@ ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+        export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
         if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
             CAF=/run/secrets/migros_root_ca; \
             if [ -f "$CAF" ]; then \
@@ -654,6 +855,7 @@ ARG OPCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -688,7 +890,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base-slim AS plandex-slim
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 ARG KEEP_APT=0
-RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
+RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
     if [ "$KEEP_APT" = "0" ]; then \
       apt-get remove -y procps curl || true; \
       apt-get autoremove -y; \

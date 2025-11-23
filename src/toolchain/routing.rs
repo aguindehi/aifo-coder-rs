@@ -162,8 +162,8 @@ fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
         let mut cmd = Command::new(&runtime);
         cmd.arg("exec")
             .arg(name)
-            .arg("sh")
-            .arg("-lc")
+            .arg("/bin/sh")
+            .arg("-c")
             .arg(format!("command -v {} >/dev/null 2>&1", tool))
             .stdout(Stdio::null())
             .stderr(Stdio::null());
