@@ -6,9 +6,9 @@ Toolchain kind normalization and image selection.
 - default_toolchain_image_for_version: versioned image selectors
 - is_official_rust_image / official_rust_image_for_version: helpers for rust
 */
+use crate::container_runtime_path;
 use std::env;
 use std::process::{Command, Stdio};
-use crate::container_runtime_path;
 
 /// Local image existence check via docker inspect.
 fn docker_image_exists_local(image: &str) -> bool {
