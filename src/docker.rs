@@ -614,11 +614,32 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
     // Apply env overrides (same as build path)
     let base_image = maybe_override_agent_image(image);
     let resolved_image = crate::registry::resolve_image(&base_image);
-    if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
-        if image_exists_locally(runtime.as_path(), &candidate) {
-            return Ok(candidate);
+
+    // Helper: extract the current tag (suffix after ':' if present, not counting registry host:port)
+    fn image_tag(img: &str) -> Option<&str> {
+        let base = img.split_once('@').map(|(n, _)| n).unwrap_or(img);
+        let last_slash = base.rfind('/');
+        let last_colon = base.rfind(':');
+        match (last_slash, last_colon) {
+            (Some(slash), Some(colon)) if colon > slash => Some(&base[colon + 1..]),
+            (None, Some(colon)) => Some(&base[colon + 1..]),
+            _ => None,
         }
     }
+
+    // Prefer local ":latest" only when we’re on the default tag (release-<pkg>) or already ":latest".
+    let current_tag = image_tag(&resolved_image);
+    let default_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
+    let allow_local_latest = matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
+
+    if allow_local_latest {
+        if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
+            if image_exists_locally(runtime.as_path(), &candidate) {
+                return Ok(candidate);
+            }
+        }
+    }
+
     Ok(resolved_image)
 }
 
