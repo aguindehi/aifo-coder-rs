@@ -789,6 +789,7 @@ publish-multiarch:
     TAG: "$CI_COMMIT_TAG"
     RUST_TOOLCHAIN_TAG: "$CI_COMMIT_TAG"
     NODE_TOOLCHAIN_TAG: "$CI_COMMIT_TAG"
+    CPP_TOOLCHAIN_TAG: "$CI_COMMIT_TAG"
   before_script:
     - docker version || true
     - docker buildx version || true
