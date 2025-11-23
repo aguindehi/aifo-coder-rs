@@ -298,7 +298,6 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
-    // Deprecation notice: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.
     if std::env::var("AIFO_GLOBAL_TAG")
         .ok()
         .filter(|s| !s.trim().is_empty())
