@@ -149,7 +149,7 @@ help: banner
 	@echo "  RUST_BUILDER_WITH_WIN ....... Include mingw in rust-builder on non-Windows (default: auto)"
 	@echo "  COVERAGE_HTML_IMPL .......... Coverage HTML via grcov or genhtml (default: grcov)"
 	@echo "  NICENESS_CARGO_NEXTEST ...... niceness for cargo-nextest runs (default: 0)"
-	@echo "  AIFO_E2E_MACOS_CROSS ........ Include macOS-cross E2E in acceptance (default: 0)"
+	@echo "  AIFO_E2E_MACOS_CROSS ........ Include macOS-cross E2E in acceptance (default: 1)"
 	@echo "  AIFO_CODER_TEST_DISABLE_DOCKER .. Disable docker-requiring tests (default: 0)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
@@ -1862,13 +1862,13 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-1}" = "1" ]; then \
 	    EXPR='test(/^e2e_/)' ; \
 	  else \
 	    EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
 	  fi; \
 	else \
-	  if [ "$${AIFO_E2E_MACOS_CROSS:-0}" = "1" ]; then \
+	  if [ "$${AIFO_E2E_MACOS_CROSS:-1}" = "1" ]; then \
 	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
 	  else \
 	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
