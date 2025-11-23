@@ -667,6 +667,27 @@ How to use:
 
 ## Image build options and package dropping
 
+### Version pins
+
+By default, agent versions are installed at latest. To pin reproducible releases, set these variables when building or publishing:
+- CODEX_VERSION: npm @openai/codex (default: latest)
+- CRUSH_VERSION: npm @charmland/crush (default: latest)
+- AIDER_VERSION: pip aider-chat (default: latest)
+- OPENHANDS_VERSION: pip openhands-ai (default: latest)
+- OPENCODE_VERSION: npm opencode-ai (default: latest)
+- PLANDEX_GIT_REF: git ref for Plandex CLI (default: main)
+
+Examples:
+- make publish-openhands PUSH=1 REGISTRY=... OPENHANDS_VERSION=0.3.1
+- make publish-opencode PUSH=1 REGISTRY=... OPENCODE_VERSION=0.6.0
+- make publish-aider PUSH=1 REGISTRY=... AIDER_VERSION=0.52.0 WITH_PLAYWRIGHT=1
+- make publish-codex PUSH=1 REGISTRY=... CODEX_VERSION=1.2.3
+- make publish-crush PUSH=1 REGISTRY=... CRUSH_VERSION=0.18.4
+- make publish-plandex PUSH=1 REGISTRY=... PLANDEX_GIT_REF=v0.9.0
+
+Notes:
+- Crush fallback to GitHub binary is only attempted when CRUSH_VERSION is pinned to a concrete version; with the default latest, we rely on npm.
+
 During image builds, the final runtime stages drop apt and procps by default to minimize attack surface. You can opt out by setting KEEP_APT=1.
 
 Default removal sequence (applied when KEEP_APT=0):
