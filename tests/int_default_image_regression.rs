@@ -41,9 +41,11 @@ fn int_rust_default_image_prefers_aifo_when_available_or_overridden() {
     // Case 2: with no overrides, if local aifo-coder-toolchain-rust:latest is present (or docker unavailable), prefer it.
     let img2 = aifo_coder::default_toolchain_image("rust");
     if docker_has_image("aifo-coder-toolchain-rust:latest") {
+        // Compare only the repository+tag part (ignore any registry prefix)
+        let last = img2.rsplit('/').next().unwrap_or(img2.as_str());
         assert!(
-            img2.starts_with("aifo-coder-toolchain-rust:"),
-            "expected default to prefer aifo-coder-toolchain-rust:* when available; got {}",
+            last.starts_with("aifo-coder-toolchain-rust:"),
+            "expected default to prefer first-party rust toolchain image when available; got {}",
             img2
         );
     } else {
