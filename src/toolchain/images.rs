@@ -200,24 +200,9 @@ pub fn default_toolchain_image(kind: &str) -> String {
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     let k = normalize_toolchain_kind(kind);
     if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
-        let mut base = fmt.replace("{version}", version);
-        if base.starts_with("aifo-coder-toolchain-") {
-            let ir = crate::preferred_internal_registry_prefix_quiet();
-            if !ir.is_empty() {
-                base = format!("{ir}{base}");
-            }
-        }
-        // Apply qualification for first-party toolchain images without overriding explicit version.
-        if is_first_party(&base) {
-            // Do not override the tag when a specific version was requested; keep {version}.
-            // If unqualified, prefer local; else resolve via internal autodetect (or env).
-            if !base.contains('/') {
-                let explicit_ir = crate::preferred_internal_registry_source() == "env";
-                if explicit_ir || !docker_image_exists_local(&base) {
-                    base = crate::resolve_image(&base);
-                }
-            }
-        }
+        // For explicit version mappings, do not alter/qualify the image:
+        // keep the exact "aifo-coder-toolchain-<kind>:<version>" (or upstream fmt) unprefixed.
+        let base = fmt.replace("{version}", version);
         return base;
     }
     // No version mapping for this kind; fall back to non-versioned default
