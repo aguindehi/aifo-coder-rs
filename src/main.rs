@@ -287,10 +287,7 @@ fn print_verbose_run_info(
         );
         aifo_coder::log_info_stderr(
             use_err,
-            &format!(
-                "aifo-coder: agent image [{}]: {}",
-                agent, image_display
-            ),
+            &format!("aifo-coder: agent image [{}]: {}", agent, image_display),
         );
     }
     if cli_verbose || dry_run {
