@@ -2069,7 +2069,7 @@ rebuild-opencode:
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPENCODE_VERSION="$(OPENCODE_VERSION)" --no-cache --target opencode -t $(OPENCODE_IMAGE) -t "$${REG}$(OPENCODE_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPCODE_VERSION="$(OPCODE_VERSION)" --no-cache --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg OPENCODE_VERSION="$(OPENCODE_VERSION)" --no-cache --target opencode -t $(OPENCODE_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-plandex:
