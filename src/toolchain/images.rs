@@ -34,7 +34,7 @@ fn env_trim(k: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-//// Resolve a tag override for a toolchain kind with precedence:
+/// Resolve a tag override for a toolchain kind with precedence:
 /// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_TAG.
 fn tag_override_for_kind(kind: &str) -> Option<String> {
     match kind {
