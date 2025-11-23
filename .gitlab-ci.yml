@@ -291,7 +291,7 @@ prepare-apple-sdk:
       - ci/osx/${OSX_SDK_FILENAME}.sha256
   rules:
     - if: $CI_COMMIT_TAG
-      when: on_success
+      when: manual
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
@@ -770,7 +770,7 @@ lint-dockerfiles:
 # Multi-arch publish using Docker Buildx (manifest with amd64 + arm64)
 
 publish-multiarch:
-  stage: build
+  stage: release
   image: docker:24
   services:
     - name: docker:24-dind
