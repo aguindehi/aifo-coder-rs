@@ -126,7 +126,8 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
     // Try on-disk cache first to avoid probe flapping across short-lived runs
     if let Some(s) = read_mirror_cache_disk_normalized() {
         let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(s.clone());
-        // Do not set MIRROR_REGISTRY_SOURCE here; keep it "unknown" for disk-seeded values
+        // Mark source as coming from disk cache for consistent reporting
+        let _ = MIRROR_REGISTRY_SOURCE.set("cache".to_string());
         return s;
     }
 
