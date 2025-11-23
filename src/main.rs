@@ -435,7 +435,10 @@ fn main() -> ExitCode {
     }
 
     // Resolve effective image reference (CLI override > environment > computed default)
-    let image = cli.image.clone().unwrap_or_else(|| default_image_for(agent));
+    let image = cli
+        .image
+        .clone()
+        .unwrap_or_else(|| default_image_for(agent));
     // Apply global/agent tag overrides for run when CLI didn't provide an explicit image.
     // Also resolve registry prefix when the tagged image isn't present locally.
     let run_image = if cli.image.is_none() {
@@ -443,10 +446,17 @@ fn main() -> ExitCode {
         let tag = std::env::var("AIFO_CODER_IMAGE_TAG")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .or_else(|| std::env::var("AIFO_TAG").ok().filter(|s| !s.trim().is_empty()));
+            .or_else(|| {
+                std::env::var("AIFO_TAG")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            });
         if let Some(t) = tag {
             // Retag by removing any existing ':tag' suffix (after the last slash) and appending new tag
-            let s = image.split_once('@').map(|(n, _)| n.to_string()).unwrap_or_else(|| image.clone());
+            let s = image
+                .split_once('@')
+                .map(|(n, _)| n.to_string())
+                .unwrap_or_else(|| image.clone());
             let last_slash = s.rfind('/');
             let last_colon = s.rfind(':');
             let without_tag = match (last_slash, last_colon) {
