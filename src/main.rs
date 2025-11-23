@@ -46,6 +46,10 @@ fn apply_cli_globals(cli: &Cli) {
             Flavor::Slim => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim"),
         }
     }
+    // Propagate verbosity to runtime so image pulls can stream progress/output.
+    if cli.verbose {
+        std::env::set_var("AIFO_CODER_VERBOSE", "1");
+    }
 }
 
 fn require_repo_root() -> Result<PathBuf, ExitCode> {
