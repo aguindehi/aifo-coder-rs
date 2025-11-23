@@ -285,8 +285,13 @@ fn print_verbose_run_info(
                 mr_display, mr_src
             ),
         );
-        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image_display));
-        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: coding agent image [{}]: {}",
+                agent, image_display
+            ),
+        );
     }
     if cli_verbose || dry_run {
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));

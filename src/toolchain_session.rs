@@ -105,6 +105,21 @@ impl ToolchainSession {
         }
 
         let (kinds, overrides) = plan_from_cli(cli);
+        // Verbose: print chosen toolchain images per kind
+        if cli.verbose {
+            let use_err = aifo_coder::color_enabled_stderr();
+            for k in &kinds {
+                let img = overrides
+                    .iter()
+                    .find(|(kk, _)| kk == k)
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_else(|| aifo_coder::default_toolchain_image(k));
+                aifo_coder::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: toolchain image [{}]: {}", k, img),
+                );
+            }
+        }
 
         // Optional unix socket (Linux)
         #[cfg(target_os = "linux")]
