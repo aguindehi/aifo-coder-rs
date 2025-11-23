@@ -6,6 +6,7 @@
 //! - Cleans up proxy, sidecars and unix socket dir in Drop unless running inside a fork pane.
 
 use std::io;
+use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -74,6 +75,22 @@ pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
     (kinds, overrides)
 }
 
+// Best-effort: check if a toolchain image exists locally (by ref).
+fn toolchain_image_exists_local(image: &str) -> bool {
+    if let Ok(runtime) = aifo_coder::container_runtime_path() {
+        return Command::new(&runtime)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
+
 /// RAII for toolchain sidecars + proxy. On cleanup, stops proxy and optionally sidecars.
 pub struct ToolchainSession {
     sid: String,
@@ -118,6 +135,22 @@ impl ToolchainSession {
                     use_err,
                     &format!("aifo-coder: toolchain image [{}]: {}", k, img),
                 );
+            }
+        } else {
+            // Non-verbose: print a short notice if a toolchain image will be pulled (not present locally).
+            let use_err = aifo_coder::color_enabled_stderr();
+            for k in &kinds {
+                let img = overrides
+                    .iter()
+                    .find(|(kk, _)| kk == k)
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_else(|| aifo_coder::default_toolchain_image(k));
+                if !toolchain_image_exists_local(&img) {
+                    aifo_coder::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: pulling toolchain image [{}]: {}", k, img),
+                    );
+                }
             }
         }
 
