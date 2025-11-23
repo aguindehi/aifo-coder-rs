@@ -84,28 +84,22 @@ RUN set -eux; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
-    # Install cargo-nextest via prebuilt binary (download-only by default) to avoid compile-time OOM under buildx \
+    # Install cargo-nextest via architecture-specific prebuilt binary when available; compile fallback \
     ok=0; \
-    if curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz; then \
-      mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz || true; \
-      bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-      if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
-      rm -rf /tmp/nextest /tmp/nextest.tgz; \
-    fi; \
-    if [ "$ok" -ne 1 ]; then \
-      arch="$(uname -m)"; \
-      case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
-      if [ -n "$tgt" ]; then \
-        url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
-        if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
-          mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
-          bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-          if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
-          rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
-        fi; \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
+    if [ -n "$tgt" ]; then \
+      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
+      if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+        bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
+        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
       fi; \
     fi; \
-    if [ "$ok" -ne 1 ] && [ "${NEXTEST_FALLBACK_COMPILE:-0}" = "1" ]; then cargo install cargo-nextest --locked; fi; \
+    # Verify cargo-nextest runs; if it fails, try compile fallback \
+    if [ "$ok" -eq 1 ]; then /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 || ok=0; fi; \
+    if [ "$ok" -ne 1 ] && [ "${NEXTEST_FALLBACK_COMPILE:-0}" = "1" ]; then cargo install cargo-nextest --locked; ok=1; fi; \
     cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
