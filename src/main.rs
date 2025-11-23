@@ -255,13 +255,22 @@ fn print_verbose_run_info(
             ),
         );
         // Show internal and mirror registries independently (quiet MR probe; IR from env only)
-        let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+        // Use autodetect for internal registry prefix to reflect resolution in verbose output.
+        let irp = aifo_coder::preferred_internal_registry_prefix_autodetect();
         let ir_display = if irp.is_empty() {
             "(none)".to_string()
         } else {
             irp.trim_end_matches('/').to_string()
         };
-        let ir_src = aifo_coder::preferred_internal_registry_source();
+        // Derive source label: env/env-empty when set, otherwise autodetect/unset.
+        let ir_src_raw = aifo_coder::preferred_internal_registry_source();
+        let ir_src = if irp.is_empty() {
+            "unset".to_string()
+        } else if ir_src_raw == "env" || ir_src_raw == "env-empty" {
+            ir_src_raw
+        } else {
+            "autodetect".to_string()
+        };
 
         let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
         let mr_display = if mrp.is_empty() {
@@ -473,6 +482,25 @@ fn main() -> ExitCode {
         image.clone()
     };
 
+    // Determine if a tag override is present in environment (affects agent run image selection).
+    let tag_env_present = std::env::var("AIFO_CODER_IMAGE_TAG")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("AIFO_TAG").ok().filter(|s| !s.trim().is_empty()))
+        .is_some();
+
+    // Finalize run image: CLI override wins; else respect tag env; else prefer local ':latest' when present.
+    let run_image_final = if cli.image.is_some() {
+        image.clone()
+    } else if tag_env_present {
+        run_image.clone()
+    } else {
+        match aifo_coder::compute_effective_agent_image_for_run(&run_image) {
+            Ok(s) => s,
+            Err(_) => run_image.clone(),
+        }
+    };
+
     // Visual separation before Docker info and previews
     eprintln!();
 
@@ -491,8 +519,8 @@ fn main() -> ExitCode {
     } else if cli.image.is_some() {
         image.clone()
     } else {
-        // Use the run_image we computed (retagged/resolved) for real runs
-        run_image.clone()
+        // Use the final image we computed (matches actual run selection)
+        run_image_final.clone()
     };
 
     // In dry-run, render a preview without requiring docker to be present
@@ -520,7 +548,7 @@ fn main() -> ExitCode {
     }
 
     // Real execution path: require docker runtime
-    match aifo_coder::build_docker_cmd(agent, &args, &run_image, apparmor_profile.as_deref()) {
+    match aifo_coder::build_docker_cmd(agent, &args, &run_image_final, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
                 agent,
