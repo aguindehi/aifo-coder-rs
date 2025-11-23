@@ -298,6 +298,26 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+    // Deprecation notice: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.
+    if std::env::var("AIFO_GLOBAL_TAG")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .is_some()
+        && std::env::var("AIFO_TAG")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .is_none()
+        && std::env::var("AIFO_CODER_SUPPRESS_DEPRECATION")
+            .ok()
+            .as_deref()
+            != Some("1")
+    {
+        let use_err = aifo_coder::color_enabled_stderr();
+        aifo_coder::log_warn_stderr(
+            use_err,
+            "aifo-coder: warning: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.",
+        );
+    }
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
     // Honor --non-interactive by suppressing the LLM credentials prompt
