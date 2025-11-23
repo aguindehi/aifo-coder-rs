@@ -592,7 +592,7 @@ fn pull_image_with_autologin(
             ));
         }
 
-        return Err(io::Error::new(io::ErrorKind::Other, "docker pull failed"));
+        Err(io::Error::other("docker pull failed"))
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
         let msg = if let Some(name) = agent_label {
