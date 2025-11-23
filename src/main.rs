@@ -435,10 +435,33 @@ fn main() -> ExitCode {
     }
 
     // Resolve effective image reference (CLI override > environment > computed default)
-    let image = cli
-        .image
-        .clone()
-        .unwrap_or_else(|| default_image_for(agent));
+    let image = cli.image.clone().unwrap_or_else(|| default_image_for(agent));
+    // Apply global/agent tag overrides for run when CLI didn't provide an explicit image.
+    // Also resolve registry prefix when the tagged image isn't present locally.
+    let run_image = if cli.image.is_none() {
+        // Prefer AIFO_CODER_IMAGE_TAG over AIFO_TAG
+        let tag = std::env::var("AIFO_CODER_IMAGE_TAG")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| std::env::var("AIFO_TAG").ok().filter(|s| !s.trim().is_empty()));
+        if let Some(t) = tag {
+            // Retag by removing any existing ':tag' suffix (after the last slash) and appending new tag
+            let s = image.split_once('@').map(|(n, _)| n.to_string()).unwrap_or_else(|| image.clone());
+            let last_slash = s.rfind('/');
+            let last_colon = s.rfind(':');
+            let without_tag = match (last_slash, last_colon) {
+                (Some(slash), Some(colon)) if colon > slash => s[..colon].to_string(),
+                (None, Some(_colon)) => s.split(':').next().unwrap_or(&s).to_string(),
+                _ => s,
+            };
+            let retagged = format!("{}:{}", without_tag, t.trim());
+            aifo_coder::resolve_image(&retagged)
+        } else {
+            aifo_coder::resolve_image(&image)
+        }
+    } else {
+        image.clone()
+    };
 
     // Visual separation before Docker info and previews
     eprintln!();
@@ -458,10 +481,8 @@ fn main() -> ExitCode {
     } else if cli.image.is_some() {
         image.clone()
     } else {
-        match aifo_coder::compute_effective_agent_image_for_run(&image) {
-            Ok(s) => s,
-            Err(_) => aifo_coder::resolve_agent_image_log_display(&image),
-        }
+        // Use the run_image we computed (retagged/resolved) for real runs
+        run_image.clone()
     };
 
     // In dry-run, render a preview without requiring docker to be present
@@ -489,7 +510,7 @@ fn main() -> ExitCode {
     }
 
     // Real execution path: require docker runtime
-    match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
+    match aifo_coder::build_docker_cmd(agent, &args, &run_image, apparmor_profile.as_deref()) {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
                 agent,
