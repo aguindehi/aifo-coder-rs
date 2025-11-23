@@ -10,7 +10,7 @@
 use std::env;
 use std::process::{Command, Stdio};
 
-use crate::container_runtime_path;
+use aifo_coder::container_runtime_path;
 
 /// Trimmed env getter returning Some when non-empty.
 fn env_trim(k: &str) -> Option<String> {
