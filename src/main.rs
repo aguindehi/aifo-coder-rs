@@ -288,7 +288,7 @@ fn print_verbose_run_info(
         aifo_coder::log_info_stderr(
             use_err,
             &format!(
-                "aifo-coder: coding agent image [{}]: {}",
+                "aifo-coder: agent image [{}]: {}",
                 agent, image_display
             ),
         );
