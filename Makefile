@@ -27,7 +27,7 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
-# Set to 1 to keep apt/procps in final images (local default keeps them; CI overrides to 0)
+# Set to 0 to drop apt/procps in final images (local default keeps them; CI overrides to 0)
 KEEP_APT ?= 1
 
 # In CI pipelines, override to 0 to slim images
@@ -46,6 +46,9 @@ ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
+
+# Nextest niceness
+NICENESS_CARGO_NEXTEST =? -1
 
 # Help
 .PHONY: help banner
@@ -90,7 +93,7 @@ banner:
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
 	@echo ""
 	@echo " ⚠️  Guardrail: Local builds should prefer docker buildx/BuildKit (DOCKER_BUILDKIT=1)."
-	@echo "     Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
+	@echo "    Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 	@echo " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB "
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
@@ -128,7 +131,7 @@ help: banner
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
 	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
 	@echo ""
-		$(call title_ul,Install paths (for 'make install'):)
+	$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
 	@echo "  PREFIX  ..................... Install prefix (/usr/local)"
 	@echo "  DESTDIR ..................... Staging root for packaging ()"
@@ -181,6 +184,7 @@ help: banner
 	@echo "  build-openhands ............. Build only the OpenHands image ($${IMAGE_PREFIX}-openhands:$${TAG})"
 	@echo "  build-opencode .............. Build only the OpenCode image ($${IMAGE_PREFIX}-opencode:$${TAG})"
 	@echo "  build-plandex ............... Build only the Plandex image ($${IMAGE_PREFIX}-plandex:$${TAG})"
+	@echo ""
 	@echo "  build-codex-slim ............ Build only the Codex slim image ($${IMAGE_PREFIX}-codex-slim:$${TAG})"
 	@echo "  build-crush-slim ............ Build only the Crush slim image ($${IMAGE_PREFIX}-crush-slim:$${TAG})"
 	@echo "  build-aider-slim ............ Build only the Aider slim image ($${IMAGE_PREFIX}-aider-slim:$${TAG})"
@@ -213,6 +217,7 @@ help: banner
 	@echo "  rebuild-openhands ........... Rebuild only the OpenHands image without cache"
 	@echo "  rebuild-opencode ............ Rebuild only the OpenCode image without cache"
 	@echo "  rebuild-plandex ............. Rebuild only the Plandex image without cache"
+	@echo ""
 	@echo "  rebuild-codex-slim .......... Rebuild only the Codex slim image without cache"
 	@echo "  rebuild-crush-slim .......... Rebuild only the Crush slim image without cache"
 	@echo "  rebuild-aider-slim .......... Rebuild only the Aider slim image without cache"
