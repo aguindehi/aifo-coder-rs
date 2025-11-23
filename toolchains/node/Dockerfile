@@ -13,7 +13,6 @@ ENV KEEP_APT=${KEEP_APT}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Minimal system deps for modern Node workflows (deno installer requires unzip)
-# hadolint ignore=DL3008
 RUN set -eux; \
     apt-get update; \
     apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends \

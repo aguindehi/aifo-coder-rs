@@ -241,6 +241,7 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -260,7 +261,7 @@ COPY ci/osx/MacOSX.sdk.tar.xz /tmp/MacOSX.sdk.tar.xz
 RUN set -e; \
     git clone --depth=1 https://github.com/tpoechtrager/osxcross.git osxcross; \
     if [ -n "${OSXCROSS_REF}" ]; then \
-      cd osxcross && git fetch --depth=1 origin "${OSXCROSS_REF}" && git checkout FETCH_HEAD && cd ..; \
+      git -C osxcross fetch --depth=1 origin "${OSXCROSS_REF}" && git -C osxcross checkout FETCH_HEAD; \
     fi; \
     SDK_TMP="/tmp/MacOSX.sdk.tar.xz"; \
     SDK_NAME="${OSXCROSS_SDK_TARBALL}"; \
@@ -279,55 +280,61 @@ RUN set -e; \
     UNATTENDED=1 osxcross/build.sh; \
     mkdir -p /opt/osxcross/SDK; \
     printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
-    SDK_DIR="$(ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"; \
+    SDK_DIR="$(find /opt/osxcross/target/SDK -maxdepth 1 -type d -name "MacOSX*.sdk" -print -quit)"; \
     [ -n "$SDK_DIR" ] && printf '%s\n' "$SDK_DIR" > /opt/osxcross/SDK/SDK_DIR.txt || true
 # Create stable tool aliases to avoid depending on Darwin minor suffixes
-RUN set -e; cd /opt/osxcross/target/bin; \
-    for t in ar ranlib strip; do \
-      ln -sf "$(ls aarch64-apple-darwin*-$t 2>/dev/null | head -n1)" aarch64-apple-darwin-$t || true; \
-      ln -sf "$(ls x86_64-apple-darwin*-$t 2>/dev/null | head -n1)"  x86_64-apple-darwin-$t  || true; \
-    done; \
-    # Create clang wrappers (always overwrite to ensure presence)
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > oa64-clang; \
-    chmod 0755 oa64-clang; \
-    printf '%s\n' '#!/bin/sh' \
-      'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || ls -d /opt/osxcross/target/SDK/MacOSX*.sdk 2>/dev/null | head -n1)"' \
-      'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' > o64-clang; \
-    chmod 0755 o64-clang; \
-    # Provide a robust Mach-O-aware linker wrapper as 'ld' (always overwrite)
-    printf '%s\n' '#!/bin/sh' \
-      'set -e' \
-      'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
-      'HAVE_PV=0; OS_MIN="";' \
-      'for a in "$@"; do' \
-      '  case "$a" in' \
-      '    -platform_version) HAVE_PV=1 ;;' \
-      '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
-      '  esac' \
-      'done' \
-      'if [ "$HAVE_PV" -eq 0 ]; then' \
-      '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
-      '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
-      '  SDK_VER=""' \
-      '  if [ -n "$SDK_DIR" ]; then' \
-      '    base="${SDK_DIR%/}"; base="${base##*/}";' \
-      '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
-      '  fi' \
-      '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
-      '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
-      '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
-      'fi' \
-      'HAVE_SR=0' \
-      'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
-      'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
-      'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
-      'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
-      'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
-      'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2; exit 127' \
-      > ld; \
-    chmod 0755 ld
+WORKDIR /opt/osxcross/target/bin
+RUN set -e; \
+  for t in ar ranlib strip; do \
+    aarch="$(find . -maxdepth 1 -type f -name "aarch64-apple-darwin*-$t" -print -quit)"; [ -n "$aarch" ] && ln -sf "$aarch" "aarch64-apple-darwin-$t" || true; \
+    x64="$(find . -maxdepth 1 -type f -name "x86_64-apple-darwin*-$t" -print -quit)"; [ -n "$x64" ] && ln -sf "$x64" "x86_64-apple-darwin-$t" || true; \
+  done
+# hadolint ignore=SC2016
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -maxdepth 1 -type d -name "MacOSX*.sdk" -print -quit)"' \
+  'exec clang -target aarch64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+  > oa64-clang && chmod 0755 oa64-clang
+# hadolint ignore=SC2016
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'SDK="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || find /opt/osxcross/target/SDK -maxdepth 1 -type d -name "MacOSX*.sdk" -print -quit)"' \
+  'exec clang -target x86_64-apple-darwin --sysroot="$SDK" -B/opt/osxcross/target/bin "$@"' \
+  > o64-clang && chmod 0755 o64-clang
+# hadolint ignore=SC2016
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'set -e' \
+  'SDK_DIR="$(cat /opt/osxcross/SDK/SDK_DIR.txt 2>/dev/null || true)"' \
+  'HAVE_PV=0; OS_MIN=""' \
+  'for a in "$@"; do' \
+  '  case "$a" in' \
+  '    -platform_version) HAVE_PV=1 ;;' \
+  '    -mmacosx-version-min=*) OS_MIN="${a#-mmacosx-version-min=}" ;;' \
+  '  esac' \
+  'done' \
+  'if [ "$HAVE_PV" -eq 0 ]; then' \
+  '  [ -n "$OS_MIN" ] || OS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"' \
+  '  case "$OS_MIN" in *.*.*) : ;; *.*) OS_MIN="$OS_MIN.0" ;; *) OS_MIN="$OS_MIN.0.0" ;; esac' \
+  '  SDK_VER=""' \
+  '  if [ -n "$SDK_DIR" ]; then' \
+  '    base="${SDK_DIR%/}"; base="${base##*/}"' \
+  '    case "$base" in MacOSX*) SDK_VER="${base#MacOSX}"; SDK_VER="${SDK_VER%.sdk}";; esac' \
+  '  fi' \
+  '  [ -n "$SDK_VER" ] || SDK_VER="$OS_MIN"' \
+  '  case "$SDK_VER" in *.*.*) : ;; *.*) SDK_VER="$SDK_VER.0" ;; *) SDK_VER="$SDK_VER.0.0" ;; esac' \
+  '  set -- -platform_version macos "$OS_MIN" "$SDK_VER" "$@"' \
+  'fi' \
+  'HAVE_SR=0' \
+  'for a in "$@"; do [ "$a" = "-syslibroot" ] && HAVE_SR=1 && break; done' \
+  'if [ "$HAVE_SR" -eq 0 ] && [ -n "$SDK_DIR" ]; then set -- -syslibroot "$SDK_DIR" "$@"; fi' \
+  'if [ -x "/opt/osxcross/target/bin/ld64" ]; then exec /opt/osxcross/target/bin/ld64 "$@"; fi' \
+  'if command -v ld64.lld >/dev/null 2>&1; then exec "$(command -v ld64.lld)" "$@"; fi' \
+  'if command -v ld.lld   >/dev/null 2>&1; then exec "$(command -v ld.lld)" -flavor darwin "$@"; fi' \
+  'echo "error: Mach-O ld not found (need cctools ld64 or ld64.lld)" >&2' \
+  'exit 127' \
+  > ld && chmod 0755 ld
+WORKDIR /opt
 # Environment for cargo/rustup and macOS arm64 cross-compilation (optional x86_64 below)
 # Include /usr/local/cargo/bin explicitly because using ${PATH} here expands at build-time and can drop Rust's PATH.
 ENV RUSTUP_HOME="/usr/local/rustup" \
@@ -645,18 +652,17 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   git clone https://github.com/plandex-ai/plandex.git .; \
   git -c advice.detachedHead=false checkout "$PLANDEX_GIT_REF" || true; \
   mkdir -p /out; \
-  cd app/cli; \
   export PATH="/usr/local/go/bin:${PATH}"; \
   export CGO_ENABLED=0; \
   export GOFLAGS="${GOFLAGS:- -trimpath -mod=readonly -p=1}"; \
   export GOMAXPROCS="${GOMAXPROCS:-1}"; \
   export GODEBUG="${GODEBUG:-asyncpreemptoff=1}"; \
-  V="$([ -f version.txt ] && cat version.txt || echo dev)"; \
+  V="$([ -f app/cli/version.txt ] && cat app/cli/version.txt || echo dev)"; \
   LDFLAGS="-s -w -X plandex/version.Version=$V"; \
   case "${TARGETOS:-}" in "") GOOS="$(/usr/local/go/bin/go env GOOS)";; *) GOOS="$TARGETOS";; esac; \
   case "${TARGETARCH:-}" in "") GOARCH="$(/usr/local/go/bin/go env GOARCH)";; *) GOARCH="$TARGETARCH";; esac; \
   if [ "$GOARCH" = "amd64" ]; then export GOAMD64="${GOAMD64:-v1}"; fi; \
-  GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go build -ldflags "$LDFLAGS" -o /out/plandex .; \
+  GOOS="$GOOS" GOARCH="$GOARCH" /usr/local/go/bin/go -C app/cli build -ldflags "$LDFLAGS" -o /out/plandex .; \
   rm -rf /root/go/pkg /go/pkg/mod; \
   if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
     rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -667,19 +673,19 @@ FROM base AS plandex
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-RUN chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
-RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
-    if [ "$KEEP_APT" = "0" ]; then \
-      apt-get remove -y procps || true; \
-      apt-get autoremove -y; \
-      apt-get clean; \
-      apt-get remove --purge -y --allow-remove-essential apt || true; \
-      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
-      rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*; \
-      rm -rf /usr/share/locale/*; \
-      rm -rf /var/lib/apt/lists/*; \
-      rm -rf /var/cache/apt/apt-file/; \
-    fi
+RUN sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
+  chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex 2>/dev/null || true; \
+  if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi'
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
@@ -715,6 +721,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider slim builder stage ---
 FROM base-slim AS aider-builder-slim
+# hadolint ignore=DL3008 Reason: slim builder-only Python toolchain; pinning across Debian releases is brittle
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3 python3-venv python3-pip build-essential pkg-config libssl-dev; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 # Python: Aider via uv (PEP 668-safe)
 ARG WITH_PLAYWRIGHT=1
