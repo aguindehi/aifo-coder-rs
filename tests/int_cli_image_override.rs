@@ -30,8 +30,8 @@ fn int_test_cli_image_override_dry_run_uses_override() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("aifo-coder: image: alpine:3.20"),
-        "stderr should show chosen image override; stderr:\n{}",
+        err.contains("aifo-coder: agent image [aider]: alpine:3.20"),
+        "stderr should show chosen image override in verbose output; stderr:\n{}",
         err
     );
     assert!(

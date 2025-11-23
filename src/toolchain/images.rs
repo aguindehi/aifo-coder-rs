@@ -6,7 +6,64 @@ Toolchain kind normalization and image selection.
 - default_toolchain_image_for_version: versioned image selectors
 - is_official_rust_image / official_rust_image_for_version: helpers for rust
 */
+use crate::container_runtime_path;
 use std::env;
+use std::process::{Command, Stdio};
+
+/// Local image existence check via docker inspect.
+fn docker_image_exists_local(image: &str) -> bool {
+    if let Ok(rt) = container_runtime_path() {
+        return Command::new(&rt)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
+
+/// Helper: read an env var, trim, and return Some when non-empty.
+fn env_trim(k: &str) -> Option<String> {
+    env::var(k)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Resolve a tag override for a toolchain kind with precedence:
+/// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_TAG.
+fn tag_override_for_kind(kind: &str) -> Option<String> {
+    match kind {
+        "rust" => env_trim("RUST_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_TAG")),
+        "node" => env_trim("NODE_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_TAG")),
+        "c-cpp" => env_trim("CPP_TOOLCHAIN_TAG")
+            .or_else(|| env_trim("AIFO_TOOLCHAIN_TAG"))
+            .or_else(|| env_trim("AIFO_TAG")),
+        _ => env_trim("AIFO_TOOLCHAIN_TAG").or_else(|| env_trim("AIFO_TAG")),
+    }
+}
+
+/// First-party toolchain images are named "aifo-coder-toolchain-<kind>:<tag>".
+/// This remains true even when prefixed with an internal registry.
+fn is_first_party(image: &str) -> bool {
+    image.contains("aifo-coder-toolchain-")
+}
+
+/// Replace the tag component of an image reference (last ':' split).
+fn replace_tag(image: &str, tag: &str) -> String {
+    let mut parts = image.rsplitn(2, ':');
+    let _old = parts.next().unwrap_or("");
+    let repo = parts.next().unwrap_or(image);
+    format!("{repo}:{tag}")
+}
 
 /// Structured mappings for toolchain normalization and default images
 /// Canonical kind aliases (lhs -> rhs)
@@ -113,14 +170,27 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
     }
-    let base = default_image_for_kind_const(&k)
+    let mut base = default_image_for_kind_const(&k)
         .unwrap_or("node:22-bookworm-slim")
         .to_string();
     // Prepend internal registry for our toolchain images when set; upstream defaults remain unprefixed.
     if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
         let ir = crate::preferred_internal_registry_prefix_quiet();
         if !ir.is_empty() {
-            return format!("{ir}{base}");
+            base = format!("{ir}{base}");
+        }
+    }
+    // Apply tag overrides for first-party toolchain images.
+    if is_first_party(&base) {
+        if let Some(tag) = tag_override_for_kind(&k) {
+            base = replace_tag(&base, &tag);
+        }
+        // If unqualified, prefer local; else resolve via internal autodetect (or env).
+        if !base.contains('/') {
+            let explicit_ir = crate::preferred_internal_registry_source() == "env";
+            if explicit_ir || !docker_image_exists_local(&base) {
+                base = crate::resolve_image(&base);
+            }
         }
     }
     base
@@ -130,13 +200,9 @@ pub fn default_toolchain_image(kind: &str) -> String {
 pub fn default_toolchain_image_for_version(kind: &str, version: &str) -> String {
     let k = normalize_toolchain_kind(kind);
     if let Some(fmt) = default_image_fmt_for_kind_const(&k) {
+        // For explicit version mappings, do not alter/qualify the image:
+        // keep the exact "aifo-coder-toolchain-<kind>:<version>" (or upstream fmt) unprefixed.
         let base = fmt.replace("{version}", version);
-        if base.starts_with("aifo-coder-toolchain-") {
-            let ir = crate::preferred_internal_registry_prefix_quiet();
-            if !ir.is_empty() {
-                return format!("{ir}{base}");
-            }
-        }
         return base;
     }
     // No version mapping for this kind; fall back to non-versioned default

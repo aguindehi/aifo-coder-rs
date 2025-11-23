@@ -8,49 +8,103 @@
 //! These functions do not pull images or perform network I/O; they only compose strings.
 
 use std::env;
+use std::process::{Command, Stdio};
+
+use aifo_coder::container_runtime_path;
+
+/// Trimmed env getter returning Some when non-empty.
+fn env_trim(k: &str) -> Option<String> {
+    env::var(k)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Local image existence check via docker inspect.
+fn docker_image_exists_local(image: &str) -> bool {
+    if let Ok(rt) = container_runtime_path() {
+        return Command::new(&rt)
+            .arg("image")
+            .arg("inspect")
+            .arg(image)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    false
+}
 
 pub(crate) fn default_image_for(agent: &str) -> String {
-    if let Ok(img) = env::var("AIFO_CODER_IMAGE") {
-        if !img.trim().is_empty() {
-            return img;
-        }
+    // Full override wins.
+    if let Some(img) = env_trim("AIFO_CODER_IMAGE") {
+        return img;
     }
+
+    // Compose unqualified image name with tag precedence:
+    // AIFO_CODER_IMAGE_TAG -> AIFO_GLOBAL_TAG -> release-<pkg-version>
     let name_prefix =
         env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
-    let tag = env::var("AIFO_CODER_IMAGE_TAG")
-        .unwrap_or_else(|_| format!("release-{}", env!("CARGO_PKG_VERSION")));
+    let tag = env_trim("AIFO_CODER_IMAGE_TAG")
+        .or_else(|| env_trim("AIFO_TAG"))
+        .unwrap_or_else(|| format!("release-{}", env!("CARGO_PKG_VERSION")));
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
         _ => "",
     };
-    let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_internal_registry_prefix_autodetect();
-    if registry.is_empty() {
-        image_name
-    } else {
-        format!("{registry}{image_name}")
+    let mut image = format!("{name_prefix}-{agent}{suffix}:{tag}");
+
+    // If the image already contains a registry path (prefix in name_prefix), return as-is.
+    if image.contains('/') {
+        return image;
     }
+
+    // Prefer a local image if present and no explicit internal registry env is set.
+    let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
+    if !explicit_ir && docker_image_exists_local(&image) {
+        return image;
+    }
+
+    // Otherwise, qualify with our internal registry prefix if known (env or mirror probe).
+    let ir = aifo_coder::preferred_internal_registry_prefix_autodetect();
+    if !ir.is_empty() {
+        image = format!("{ir}{image}");
+    }
+    image
 }
 
 pub(crate) fn default_image_for_quiet(agent: &str) -> String {
-    if let Ok(img) = env::var("AIFO_CODER_IMAGE") {
-        if !img.trim().is_empty() {
-            return img;
-        }
+    // Full override wins.
+    if let Some(img) = env_trim("AIFO_CODER_IMAGE") {
+        return img;
     }
+
+    // Compose unqualified image with tag precedence:
     let name_prefix =
         env::var("AIFO_CODER_IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
-    let tag = env::var("AIFO_CODER_IMAGE_TAG")
-        .unwrap_or_else(|_| format!("release-{}", env!("CARGO_PKG_VERSION")));
+    let tag = env_trim("AIFO_CODER_IMAGE_TAG")
+        .or_else(|| env_trim("AIFO_TAG"))
+        .unwrap_or_else(|| format!("release-{}", env!("CARGO_PKG_VERSION")));
     let suffix = match env::var("AIFO_CODER_IMAGE_FLAVOR") {
         Ok(v) if v.trim().eq_ignore_ascii_case("slim") => "-slim",
         _ => "",
     };
-    let image_name = format!("{name_prefix}-{agent}{suffix}:{tag}");
-    let registry = aifo_coder::preferred_internal_registry_prefix_autodetect();
-    if registry.is_empty() {
-        image_name
-    } else {
-        format!("{registry}{image_name}")
+    let mut image = format!("{name_prefix}-{agent}{suffix}:{tag}");
+
+    if image.contains('/') {
+        return image;
     }
+
+    // Same local-first and qualification policy as default_image_for()
+    let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
+    if !explicit_ir && docker_image_exists_local(&image) {
+        return image;
+    }
+
+    let ir = aifo_coder::preferred_internal_registry_prefix_autodetect();
+    if !ir.is_empty() {
+        image = format!("{ir}{image}");
+    }
+    image
 }

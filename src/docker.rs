@@ -501,89 +501,183 @@ fn image_exists_locally(runtime: &Path, image: &str) -> bool {
 }
 
 /// Pull image and on auth failure interactively run `docker login` then retry once.
-fn pull_image_with_autologin(runtime: &Path, image: &str, verbose: bool) -> io::Result<()> {
-    if verbose {
-        let use_err = crate::color_enabled_stderr();
+/// Verbose runs stream docker pull output; non-verbose prints a short notice before quiet pull.
+fn pull_image_with_autologin(
+    runtime: &Path,
+    image: &str,
+    verbose: bool,
+    agent_label: Option<&str>,
+) -> io::Result<()> {
+    // Effective verbosity: honor explicit flag or env set by CLI --verbose.
+    let eff_verbose = verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
+
+    // Helper to do a pull with inherited stdio so progress is visible.
+    let pull_inherit = |rt: &Path, img: &str| -> io::Result<bool> {
+        let st = Command::new(rt).arg("pull").arg(img).status()?;
+        Ok(st.success())
+    };
+
+    // Helper to do a pull with captured output so we can parse error text.
+    let pull_captured = |rt: &Path, img: &str| -> io::Result<(bool, String)> {
+        let out = Command::new(rt)
+            .arg("pull")
+            .arg(img)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        let ok = out.status.success();
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+        .to_ascii_lowercase();
+        Ok((ok, combined))
+    };
+
+    let use_err = crate::color_enabled_stderr();
+
+    if eff_verbose {
         crate::log_info_stderr(
             use_err,
             &format!("aifo-coder: docker: docker pull {}", image),
         );
-    }
-    let out = Command::new(runtime)
-        .arg("pull")
-        .arg(image)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()?;
-    if out.status.success() {
-        return Ok(());
-    }
-
-    let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
-    let interactive = atty::is(atty::Stream::Stdin);
-    let combined = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
-    .to_ascii_lowercase();
-    let auth_patterns = [
-        "pull access denied",
-        "permission denied",
-        "authentication required",
-        "unauthorized",
-        "requested access to the resource is denied",
-        "may require 'docker login'",
-        "requires 'docker login'",
-    ];
-    let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
-
-    if auto_enabled && interactive && looks_auth_error {
-        let host = parse_registry_host(image);
-        let use_err = crate::color_enabled_stderr();
-        // Run docker login interactively (inherit stdio)
-        let mut login_cmd = Command::new(runtime);
-        login_cmd.arg("login");
-        if let Some(h) = host.as_deref() {
-            if verbose {
-                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
-            }
-            login_cmd.arg(h);
-        } else if verbose {
-            crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
+        // First, try streaming pull with inherited stdio.
+        if pull_inherit(runtime, image)? {
+            return Ok(());
         }
-        let st = login_cmd.status().map_err(|e| {
-            io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
-        })?;
-        if !st.success() {
+        // If that failed, do a captured pull just to inspect the error text.
+        let (_ok2, combined) = pull_captured(runtime, image)?;
+        // Determine if this looks like an auth error.
+        let auth_patterns = [
+            "pull access denied",
+            "permission denied",
+            "authentication required",
+            "unauthorized",
+            "requested access to the resource is denied",
+            "may require 'docker login'",
+            "requires 'docker login'",
+        ];
+        let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+        let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+        let interactive = atty::is(atty::Stream::Stdin);
+
+        if auto_enabled && interactive && looks_auth_error {
+            // Try interactive docker login for this registry (if any), then retry pull (streaming).
+            let host = parse_registry_host(image);
+            let mut login_cmd = Command::new(runtime);
+            login_cmd.arg("login");
+            if let Some(h) = host.as_deref() {
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
+                login_cmd.arg(h);
+            } else {
+                crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
+            }
+            let st = login_cmd.status().map_err(|e| {
+                io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+            })?;
+            if !st.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "docker login failed",
+                ));
+            }
+            // Retry pull, streaming progress.
+            if pull_inherit(runtime, image)? {
+                return Ok(());
+            }
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                "docker login failed",
+                "docker pull failed after login",
             ));
         }
-        // Retry pull
-        let out2 = Command::new(runtime)
+
+        Err(io::Error::other("docker pull failed"))
+    } else {
+        // Non-verbose: print a short notice before quiet pull so users get feedback.
+        let msg = if let Some(name) = agent_label {
+            format!("aifo-coder: pulling agent image [{}]: {}", name, image)
+        } else {
+            format!("aifo-coder: pulling agent image: {}", image)
+        };
+        crate::log_info_stderr(use_err, &msg);
+
+        let out = Command::new(runtime)
             .arg("pull")
             .arg(image)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()?;
-        if out2.status.success() {
+        if out.status.success() {
             return Ok(());
         }
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "docker pull failed after login",
-        ));
-    }
 
-    Err(io::Error::new(
-        io::ErrorKind::PermissionDenied,
-        format!(
-            "docker pull failed (status {:?})",
-            out.status.code().unwrap_or(-1)
-        ),
-    ))
+        let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+        let interactive = atty::is(atty::Stream::Stdin);
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+        .to_ascii_lowercase();
+        let auth_patterns = [
+            "pull access denied",
+            "permission denied",
+            "authentication required",
+            "unauthorized",
+            "requested access to the resource is denied",
+            "may require 'docker login'",
+            "requires 'docker login'",
+        ];
+        let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+
+        if auto_enabled && interactive && looks_auth_error {
+            let host = parse_registry_host(image);
+            // Short notice for login
+            if let Some(h) = host.as_deref() {
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker login {}", h));
+            } else {
+                crate::log_info_stderr(use_err, "aifo-coder: docker login");
+            }
+            // Run docker login (inherit stdio)
+            let st = Command::new(runtime)
+                .arg("login")
+                .args(host.as_deref().map(|h| vec![h]).unwrap_or_default())
+                .status()
+                .map_err(|e| {
+                    io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+                })?;
+            if !st.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "docker login failed",
+                ));
+            }
+            // Retry pull quietly with short notice
+            crate::log_info_stderr(use_err, "aifo-coder: retrying pull after login");
+            let out2 = Command::new(runtime)
+                .arg("pull")
+                .arg(image)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()?;
+            if out2.status.success() {
+                return Ok(());
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "docker pull failed after login",
+            ));
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "docker pull failed (status {:?})",
+                out.status.code().unwrap_or(-1)
+            ),
+        ))
+    }
 }
 
 /// Derive "local latest" candidate for our agent images from a resolved ref.
@@ -614,11 +708,32 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
     // Apply env overrides (same as build path)
     let base_image = maybe_override_agent_image(image);
     let resolved_image = crate::registry::resolve_image(&base_image);
-    if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
-        if image_exists_locally(runtime.as_path(), &candidate) {
-            return Ok(candidate);
+
+    // Helper: extract the current tag (suffix after ':' if present, not counting registry host:port)
+    fn image_tag(img: &str) -> Option<&str> {
+        let base = img.split_once('@').map(|(n, _)| n).unwrap_or(img);
+        let last_slash = base.rfind('/');
+        let last_colon = base.rfind(':');
+        match (last_slash, last_colon) {
+            (Some(slash), Some(colon)) if colon > slash => Some(&base[colon + 1..]),
+            (None, Some(colon)) => Some(&base[colon + 1..]),
+            _ => None,
         }
     }
+
+    // Prefer local ":latest" only when we’re on the default tag (release-<pkg>) or already ":latest".
+    let current_tag = image_tag(&resolved_image);
+    let default_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
+    let allow_local_latest = matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
+
+    if allow_local_latest {
+        if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
+            if image_exists_locally(runtime.as_path(), &candidate) {
+                return Ok(candidate);
+            }
+        }
+    }
+
     Ok(resolved_image)
 }
 
@@ -930,7 +1045,7 @@ pub fn build_docker_cmd(
     let effective_image = compute_effective_agent_image_for_run(image)?;
     // Pre-pull image and auto-login on permission denied (interactive)
     if !image_exists_locally(runtime.as_path(), &effective_image) {
-        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false);
+        let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false, Some(agent));
     }
 
     cmd.arg(&effective_image);

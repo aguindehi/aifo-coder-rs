@@ -46,6 +46,10 @@ fn apply_cli_globals(cli: &Cli) {
             Flavor::Slim => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim"),
         }
     }
+    // Propagate verbosity to runtime so image pulls can stream progress/output.
+    if cli.verbose {
+        std::env::set_var("AIFO_CODER_VERBOSE", "1");
+    }
 }
 
 fn require_repo_root() -> Result<PathBuf, ExitCode> {
@@ -255,13 +259,22 @@ fn print_verbose_run_info(
             ),
         );
         // Show internal and mirror registries independently (quiet MR probe; IR from env only)
-        let irp = aifo_coder::preferred_internal_registry_prefix_quiet();
+        // Use autodetect for internal registry prefix to reflect resolution in verbose output.
+        let irp = aifo_coder::preferred_internal_registry_prefix_autodetect();
         let ir_display = if irp.is_empty() {
             "(none)".to_string()
         } else {
             irp.trim_end_matches('/').to_string()
         };
-        let ir_src = aifo_coder::preferred_internal_registry_source();
+        // Derive source label: env/env-empty when set, otherwise autodetect/unset.
+        let ir_src_raw = aifo_coder::preferred_internal_registry_source();
+        let ir_src = if irp.is_empty() {
+            "unset".to_string()
+        } else if ir_src_raw == "env" || ir_src_raw == "env-empty" {
+            ir_src_raw
+        } else {
+            "autodetect".to_string()
+        };
 
         let mrp = aifo_coder::preferred_mirror_registry_prefix_quiet();
         let mr_display = if mrp.is_empty() {
@@ -285,8 +298,10 @@ fn print_verbose_run_info(
                 mr_display, mr_src
             ),
         );
-        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: image: {}", image_display));
-        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: agent: {}", agent));
+        aifo_coder::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: agent image [{}]: {}", agent, image_display),
+        );
     }
     if cli_verbose || dry_run {
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
@@ -298,6 +313,25 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+    if std::env::var("AIFO_GLOBAL_TAG")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .is_some()
+        && std::env::var("AIFO_TAG")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .is_none()
+        && std::env::var("AIFO_CODER_SUPPRESS_DEPRECATION")
+            .ok()
+            .as_deref()
+            != Some("1")
+    {
+        let use_err = aifo_coder::color_enabled_stderr();
+        aifo_coder::log_warn_stderr(
+            use_err,
+            "aifo-coder: warning: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.",
+        );
+    }
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
     // Honor --non-interactive by suppressing the LLM credentials prompt
@@ -418,6 +452,62 @@ fn main() -> ExitCode {
         .image
         .clone()
         .unwrap_or_else(|| default_image_for(agent));
+    // Apply global/agent tag overrides for run when CLI didn't provide an explicit image.
+    // Also resolve registry prefix when the tagged image isn't present locally.
+    let run_image = if cli.image.is_none() {
+        // Prefer AIFO_CODER_IMAGE_TAG over AIFO_TAG
+        let tag = std::env::var("AIFO_CODER_IMAGE_TAG")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                std::env::var("AIFO_TAG")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            });
+        if let Some(t) = tag {
+            // Retag by removing any existing ':tag' suffix (after the last slash) and appending new tag
+            let s = image
+                .split_once('@')
+                .map(|(n, _)| n.to_string())
+                .unwrap_or_else(|| image.clone());
+            let last_slash = s.rfind('/');
+            let last_colon = s.rfind(':');
+            let without_tag = match (last_slash, last_colon) {
+                (Some(slash), Some(colon)) if colon > slash => s[..colon].to_string(),
+                (None, Some(_colon)) => s.split(':').next().unwrap_or(&s).to_string(),
+                _ => s,
+            };
+            let retagged = format!("{}:{}", without_tag, t.trim());
+            aifo_coder::resolve_image(&retagged)
+        } else {
+            aifo_coder::resolve_image(&image)
+        }
+    } else {
+        image.clone()
+    };
+
+    // Determine if a tag override is present in environment (affects agent run image selection).
+    let tag_env_present = std::env::var("AIFO_CODER_IMAGE_TAG")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            std::env::var("AIFO_TAG")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+        })
+        .is_some();
+
+    // Finalize run image: CLI override wins; else respect tag env; else prefer local ':latest' when present.
+    let run_image_final = if cli.image.is_some() {
+        image.clone()
+    } else if tag_env_present {
+        run_image.clone()
+    } else {
+        match aifo_coder::compute_effective_agent_image_for_run(&run_image) {
+            Ok(s) => s,
+            Err(_) => run_image.clone(),
+        }
+    };
 
     // Visual separation before Docker info and previews
     eprintln!();
@@ -437,10 +527,8 @@ fn main() -> ExitCode {
     } else if cli.image.is_some() {
         image.clone()
     } else {
-        match aifo_coder::compute_effective_agent_image_for_run(&image) {
-            Ok(s) => s,
-            Err(_) => aifo_coder::resolve_agent_image_log_display(&image),
-        }
+        // Use the final image we computed (matches actual run selection)
+        run_image_final.clone()
     };
 
     // In dry-run, render a preview without requiring docker to be present
@@ -468,7 +556,8 @@ fn main() -> ExitCode {
     }
 
     // Real execution path: require docker runtime
-    match aifo_coder::build_docker_cmd(agent, &args, &image, apparmor_profile.as_deref()) {
+    match aifo_coder::build_docker_cmd(agent, &args, &run_image_final, apparmor_profile.as_deref())
+    {
         Ok((mut cmd, preview)) => {
             print_verbose_run_info(
                 agent,
