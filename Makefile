@@ -262,6 +262,14 @@ help: banner
 	@echo "  publish-opencode-slim ....... Buildx multi-arch and push OpenCode (slim; set PLATFORMS=... PUSH=1)"
 	@echo "  publish-plandex-slim ........ Buildx multi-arch and push Plandex (slim; set PLATFORMS=... PUSH=1)"
 	@echo ""
+	@echo "  publish-release ............. Wrapper: release defaults (multi-arch, push, tags) then run publish"
+	@echo ""
+	@echo "  Convenience:"
+	@echo "    Normal release push: make publish-release"
+	@echo "    Tweak specifics: make publish-release TAG=release-0.6.4"
+	@echo "                     make publish-release REGISTRY=my.registry/prefix/"
+	@echo "                     make publish-release KEEP_APT=1"
+	@echo ""
 	@echo "  Note: set PLATFORMS=linux/amd64,linux/arm64 and PUSH=1 to push multi-arch."
 	@echo "        The Plandex Go builder honors TARGETOS/TARGETARCH for buildx."
 	@echo ""
@@ -452,6 +460,7 @@ else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findst
 endif
 RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
+CPP_TOOLCHAIN_TAG ?= latest
 RUST_BASE_TAG ?= 1-slim-bookworm
 NODE_BASE_TAG ?= 22-bookworm-slim
 # Toolchain repos/images (centralized)
@@ -460,7 +469,7 @@ TC_REPO_NODE ?= aifo-coder-toolchain-node
 TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
 TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG)
 TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG)
-TC_IMAGE_CPP  ?= $(TC_REPO_CPP):latest
+TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(CPP_TOOLCHAIN_TAG)
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
@@ -1189,6 +1198,21 @@ publish-plandex-slim:
 
 .PHONY: publish
 publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim publish-toolchain-rust publish-toolchain-node publish-toolchain-cpp
+
+.PHONY: publish-release
+publish-release:
+	@$(MAKE) \
+	  PLATFORMS=$(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
+	  PUSH=$(if $(PUSH),$(PUSH),1) \
+	  KEEP_APT=$(if $(KEEP_APT),$(KEEP_APT),0) \
+	  REGISTRY=$(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
+	  VER=$(if $(VER),$(VER),$(VERSION)) \
+	  PREFIX=$(if $(PREFIX),$(PREFIX),release) \
+	  TAG=$(if $(TAG),$(TAG),$$(PREFIX)-$$(VER)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
+	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
+	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$$(PREFIX)-$$(VER)) \
+	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
