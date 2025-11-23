@@ -1862,7 +1862,7 @@ test-acceptance-suite:
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
-	  if [ "$${AIFO_E2E_MACOS_CROSS:-1}" = "1" ]; then \
+	  if [ "$${TEST_E2E_MACOS_CROSS:-1}" = "1" ]; then \
 	    EXPR='test(/^e2e_/)' ; \
 	  else \
 	    EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
