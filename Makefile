@@ -43,6 +43,7 @@ CACHE_DIR ?= .buildx-cache
 
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always
+NEXTEST_VERSION ?= 0.9.114
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
@@ -687,9 +688,9 @@ build-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: build-macos-cross-rust-builder rebuild-macos-cross-rust-builder build-launcher-macos-cross build-launcher-macos-cross-arm64 build-launcher-macos-cross-x86_64
@@ -965,9 +966,9 @@ build-toolchain-rust:
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$RP" ]; then echo "Using base image $${RP}rust:$(RUST_BASE_TAG)"; fi; \
 	if [ -n "$$REG" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 rebuild-toolchain-rust:
@@ -976,9 +977,9 @@ rebuild-toolchain-rust:
 	$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) -t "$${REG}$(TC_IMAGE_RUST)" $(RUST_CA_SECRET) .; \
 	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-node rebuild-toolchain-node
@@ -1019,16 +1020,16 @@ publish-toolchain-rust:
 	if [ "$(PUSH)" = "1" ]; then \
 	  if [ -n "$$REG" ]; then \
 	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t "$${REG}$(TC_IMAGE_RUST_REG)" $(RUST_CA_SECRET) .; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t "$${REG}$(TC_IMAGE_RUST_REG)" $(RUST_CA_SECRET) .; \
 	  else \
 	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
 	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/$(TC_REPO_RUST)-$(RUST_REG_TAG).oci.tar $(RUST_CA_SECRET) .; \
+	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile --output type=oci,dest=dist/$(TC_REPO_RUST)-$(RUST_REG_TAG).oci.tar $(RUST_CA_SECRET) .; \
 	    echo "Wrote dist/$(TC_REPO_RUST)-$(RUST_REG_TAG).oci.tar"; \
 	  fi; \
 	else \
 	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
+	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
 .PHONY: build-toolchain-cpp rebuild-toolchain-cpp
@@ -1458,7 +1459,7 @@ build-shim:
 	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
 	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
 	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
-	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.114/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
+	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$(NEXTEST_VERSION)/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
 	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
@@ -1655,7 +1656,7 @@ test:
 	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
 	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
 	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
-	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.114/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
+	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$(NEXTEST_VERSION)/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
 	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
@@ -2129,9 +2130,9 @@ rebuild-rust-builder:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" --target rust-builder -t $(RUST_BUILDER_IMAGE) -t "$${REG}$(RUST_BUILDER_IMAGE)" .; \
 	else \
-	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
+	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg WITH_WIN="$(RUST_BUILDER_WITH_WIN)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" --target rust-builder -t $(RUST_BUILDER_IMAGE) .; \
 	fi
 
 .PHONY: rebuild-slim rebuild-codex-slim rebuild-crush-slim rebuild-aider-slim rebuild-openhands-slim rebuild-opencode-slim rebuild-plandex-slim
