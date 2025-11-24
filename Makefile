@@ -131,6 +131,8 @@ help: banner
 	@echo "  RUST_TOOLCHAIN_TAG .......... Tag for rust toolchain image (default: latest)"
 	@echo "  NODE_TOOLCHAIN_TAG .......... Tag for node toolchain image (default: latest)"
 	@echo "  CPP_TOOLCHAIN_TAG ........... Tag for c-cpp toolchain image (default: latest)"
+	@echo "  RELEASE_PREFIX .............. Tag prefix for publish-release defaults (default: release)"
+	@echo "  RELEASE_POSTFIX ............. Optional suffix for publish-release defaults (e.g., rc1; default: empty)"
 	@echo "  RUST_BASE_TAG ............... Base rust image tag (default: 1-slim-bookworm)"
 	@echo "  NODE_BASE_TAG ............... Base node image tag (default: 22-bookworm-slim)"
 	@echo "  AIFO_CODER_INTERNAL_REGISTRY_PREFIX .. Internal registry to use when REGISTRY unset (optional)"
