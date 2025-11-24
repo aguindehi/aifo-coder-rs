@@ -78,8 +78,11 @@ endif
 title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
-export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG
+export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
+export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+RELEASE_PREFIX ?= release
+RELEASE_POSTFIX ?=
 
 banner:
 	@echo ""
@@ -128,6 +131,8 @@ help: banner
 	@echo "  RUST_TOOLCHAIN_TAG .......... Tag for rust toolchain image (default: latest)"
 	@echo "  NODE_TOOLCHAIN_TAG .......... Tag for node toolchain image (default: latest)"
 	@echo "  CPP_TOOLCHAIN_TAG ........... Tag for c-cpp toolchain image (default: latest)"
+	@echo "  RELEASE_PREFIX .............. Tag prefix for publish-release defaults (default: release)"
+	@echo "  RELEASE_POSTFIX ............. Optional suffix for publish-release defaults (e.g., rc1; default: empty)"
 	@echo "  RUST_BASE_TAG ............... Base rust image tag (default: 1-slim-bookworm)"
 	@echo "  NODE_BASE_TAG ............... Base node image tag (default: 22-bookworm-slim)"
 	@echo "  AIFO_CODER_INTERNAL_REGISTRY_PREFIX .. Internal registry to use when REGISTRY unset (optional)"
@@ -290,6 +295,8 @@ help: banner
 	@echo "                                      Base images support amd64/arm64; use other arches only if upstream supports them."
 	@echo "                                Tweak specifics:"
 	@echo "                                      make publish-release TAG=release-0.6.4"
+	@echo "                                      make publish-release RELEASE_PREFIX=rc"
+	@echo "                                      make publish-release RELEASE_POSTFIX=rc1"
 	@echo "                                      make publish-release REGISTRY=my.registry/prefix/"
 	@echo "                                      make publish-release KEEP_APT=1"
 	@echo ""
@@ -1293,20 +1300,58 @@ publish-plandex-slim:
 	fi
 
 .PHONY: publish
-publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim publish-toolchain-rust publish-toolchain-node publish-toolchain-cpp
+publish:
+	@clear
+	@echo ""
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo "  🚀  Release of the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀 "
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo ""
+	@echo "VERSION                  : $(VERSION)"
+	@echo "RELEASE_PREFIX           : $(RELEASE_PREFIX)"
+	@echo "RELEASE_POSTFIX          : $(RELEASE_POSTFIX)"
+	@echo "TAG (effective)          : $(TAG)"
+	@echo "RUST_TOOLCHAIN_TAG (eff.): $(RUST_TOOLCHAIN_TAG)"
+	@echo "NODE_TOOLCHAIN_TAG (eff.): $(NODE_TOOLCHAIN_TAG)"
+	@echo "CPP_TOOLCHAIN_TAG (eff.) : $(CPP_TOOLCHAIN_TAG)"
+	@echo "PLATFORMS                : $(PLATFORMS)"
+	@echo "PUSH                     : $(PUSH)"
+	@echo "KEEP_APT                 : $(KEEP_APT)"
+	@echo "REGISTRY                 : $(REGISTRY)"
+	@echo ""
+	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo ""
+	@read -r -p "Press Enter to continue and push the release (or press ctrl-c to stop) ... " _
+	@echo ""
+	@$(MAKE) publish-codex
+	@$(MAKE) publish-codex-slim
+	@$(MAKE) publish-crush
+	@$(MAKE) publish-crush-slim
+	@$(MAKE) publish-aider
+	@$(MAKE) publish-aider-slim
+	@$(MAKE) publish-openhands
+	@$(MAKE) publish-openhands-slim
+	@$(MAKE) publish-opencode
+	@$(MAKE) publish-opencode-slim
+	@$(MAKE) publish-plandex
+	@$(MAKE) publish-plandex-slim
+	@$(MAKE) publish-toolchain-rust
+	@$(MAKE) publish-toolchain-node
+	@$(MAKE) publish-toolchain-cpp
 
 .PHONY: publish-release
 publish-release:
 	@$(MAKE) \
-	  PLATFORMS=$(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
-	  PUSH=$(if $(PUSH),$(PUSH),1) \
-	  KEEP_APT=$(if $(KEEP_APT),$(KEEP_APT),0) \
-	  REGISTRY=$(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
-	  PREFIX=$(if $(PREFIX),$(PREFIX),release) \
-	  TAG=$(if $(TAG),$(TAG),$$(PREFIX)-$$(VERSION)) \
-	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
-	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
-	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
+	  PLATFORMS=$(if $(filter command% environment override,$(origin PLATFORMS)),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
+	  PUSH=$(if $(filter command% environment override,$(origin PUSH)),$(PUSH),1) \
+	  KEEP_APT=$(if $(filter command% environment override,$(origin KEEP_APT)),$(KEEP_APT),0) \
+	  REGISTRY=$(if $(strip $(REGISTRY)),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
+	  RELEASE_PREFIX=$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release) \
+	  RELEASE_POSTFIX=$(RELEASE_POSTFIX) \
+	  TAG=$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
+	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
+	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim

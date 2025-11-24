@@ -825,6 +825,7 @@ ARG OPENHANDS_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
     install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -861,7 +862,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     apt-get clean; \
     apt-get remove --purge -y --allow-remove-essential apt || true; \
     npm prune --omit=dev || true; \
-    npm cache clean --force; \
+    npm cache clean --force || true; \
     rm -rf /root/.npm /root/.cache; \
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     rm -rf /var/lib/apt/lists/*; \
