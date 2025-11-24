@@ -4,7 +4,6 @@ ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
 ENV DEBIAN_FRONTEND=noninteractive
 # Minimal packages required to build osxcross and perform smoke checks
-# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
       clang llvm lld make cmake patch xz-utils unzip curl git python3 file ca-certificates sccache \
       autoconf automake libtool pkg-config bison flex zlib1g-dev libxml2-dev libssl-dev \
