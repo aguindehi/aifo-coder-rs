@@ -1334,16 +1334,16 @@ publish:
 .PHONY: publish-release
 publish-release:
 	@$(MAKE) \
-	  PLATFORMS=$(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
-	  PUSH=$(if $(PUSH),$(PUSH),1) \
-	  KEEP_APT=$(if $(KEEP_APT),$(KEEP_APT),0) \
+	  PLATFORMS=$(if $(filter default undefined,$(origin PLATFORMS)),linux/amd64$(COMMA)linux/arm64,$(PLATFORMS)) \
+	  PUSH=$(if $(filter default undefined,$(origin PUSH)),1,$(PUSH)) \
+	  KEEP_APT=$(if $(filter default undefined,$(origin KEEP_APT)),0,$(KEEP_APT)) \
 	  REGISTRY=$(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
-	  RELEASE_PREFIX=$(if $(RELEASE_PREFIX),$(RELEASE_PREFIX),release) \
+	  RELEASE_PREFIX=$(if $(filter default undefined,$(origin RELEASE_PREFIX)),release,$(RELEASE_PREFIX)) \
 	  RELEASE_POSTFIX=$(RELEASE_POSTFIX) \
-	  TAG=$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),)) \
-	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
-	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
-	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
+	  TAG=$(if $(filter default undefined,$(origin TAG)),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),),$(TAG)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(filter default undefined,$(origin RUST_TOOLCHAIN_TAG)),$(if $(filter default undefined,$(origin TAG)),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),),$(TAG)),$(RUST_TOOLCHAIN_TAG)) \
+	  NODE_TOOLCHAIN_TAG=$(if $(filter default undefined,$(origin NODE_TOOLCHAIN_TAG)),$(if $(filter default undefined,$(origin TAG)),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),),$(TAG)),$(NODE_TOOLCHAIN_TAG)) \
+	  CPP_TOOLCHAIN_TAG=$(if $(filter default undefined,$(origin CPP_TOOLCHAIN_TAG)),$(if $(filter default undefined,$(origin TAG)),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),),$(TAG)),$(CPP_TOOLCHAIN_TAG)) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
