@@ -1340,10 +1340,10 @@ publish-release:
 	  REGISTRY=$(if $(strip $(REGISTRY)),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
 	  RELEASE_PREFIX=$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release) \
 	  RELEASE_POSTFIX=$(RELEASE_POSTFIX) \
-	  TAG=$(if $(filter command% environment override,$(origin TAG)),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),)) \
-	  RUST_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
-	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
-	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
+	  TAG=$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
+	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
+	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
