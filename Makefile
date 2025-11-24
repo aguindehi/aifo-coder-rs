@@ -78,8 +78,11 @@ endif
 title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
-export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG
+export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
+export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+RELEASE_PREFIX ?= release
+RELEASE_POSTFIX ?=
 
 banner:
 	@echo ""
@@ -290,6 +293,8 @@ help: banner
 	@echo "                                      Base images support amd64/arm64; use other arches only if upstream supports them."
 	@echo "                                Tweak specifics:"
 	@echo "                                      make publish-release TAG=release-0.6.4"
+	@echo "                                      make publish-release RELEASE_PREFIX=rc"
+	@echo "                                      make publish-release RELEASE_POSTFIX=rc1"
 	@echo "                                      make publish-release REGISTRY=my.registry/prefix/"
 	@echo "                                      make publish-release KEEP_APT=1"
 	@echo ""
@@ -1297,16 +1302,31 @@ publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publi
 
 .PHONY: publish-release
 publish-release:
+	@echo ""
+	@echo "===== aifo-coder publish-release ====="
+	@echo "VERSION                  : $(VERSION)"
+	@echo "RELEASE_PREFIX           : $(RELEASE_PREFIX)"
+	@echo "RELEASE_POSTFIX          : $(RELEASE_POSTFIX)"
+	@echo "TAG (effective)          : $(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),))"
+	@echo "RUST_TOOLCHAIN_TAG (eff.): $(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
+	@echo "NODE_TOOLCHAIN_TAG (eff.): $(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
+	@echo "CPP_TOOLCHAIN_TAG (eff.) : $(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
+	@echo "PLATFORMS                : $(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64)"
+	@echo "PUSH                     : $(if $(PUSH),$(PUSH),1)"
+	@echo "KEEP_APT                 : $(if $(KEEP_APT),$(KEEP_APT),0)"
+	@echo "REGISTRY                 : $(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/)"
+	@echo "======================================"
 	@$(MAKE) \
 	  PLATFORMS=$(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
 	  PUSH=$(if $(PUSH),$(PUSH),1) \
 	  KEEP_APT=$(if $(KEEP_APT),$(KEEP_APT),0) \
 	  REGISTRY=$(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/) \
-	  PREFIX=$(if $(PREFIX),$(PREFIX),release) \
-	  TAG=$(if $(TAG),$(TAG),$$(PREFIX)-$$(VERSION)) \
-	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
-	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
-	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$$(PREFIX)-$$(VERSION)) \
+	  RELEASE_PREFIX=$(if $(RELEASE_PREFIX),$(RELEASE_PREFIX),release) \
+	  RELEASE_POSTFIX=$(RELEASE_POSTFIX) \
+	  TAG=$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),)) \
+	  RUST_TOOLCHAIN_TAG=$(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
+	  NODE_TOOLCHAIN_TAG=$(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
+	  CPP_TOOLCHAIN_TAG=$(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$$(RELEASE_PREFIX)-$$(VERSION)$$(if $$(RELEASE_POSTFIX),-$$(RELEASE_POSTFIX),))) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
