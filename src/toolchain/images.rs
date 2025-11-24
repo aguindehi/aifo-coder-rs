@@ -173,22 +173,24 @@ pub fn default_toolchain_image(kind: &str) -> String {
     let mut base = default_image_for_kind_const(&k)
         .unwrap_or("node:22-bookworm-slim")
         .to_string();
-    // Prepend internal registry for our toolchain images when set; upstream defaults remain unprefixed.
-    if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
-        let ir = crate::preferred_internal_registry_prefix_quiet();
-        if !ir.is_empty() {
-            base = format!("{ir}{base}");
-        }
-    }
-    // Apply tag overrides for first-party toolchain images.
+    // Apply tag overrides first and prefer local unqualified images for our first-party toolchains.
     if is_first_party(&base) {
         if let Some(tag) = tag_override_for_kind(&k) {
             base = replace_tag(&base, &tag);
         }
-        // If unqualified, prefer local; else resolve via internal autodetect (or env).
+        // Prefer local unqualified image unless internal registry is explicitly set via env.
         if !base.contains('/') {
             let explicit_ir = crate::preferred_internal_registry_source() == "env";
-            if explicit_ir || !docker_image_exists_local(&base) {
+            if !explicit_ir && docker_image_exists_local(&base) {
+                return base;
+            }
+        }
+        // If internal registry prefix is available, prepend it; otherwise resolve via autodetect/env when unqualified.
+        if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
+            let ir = crate::preferred_internal_registry_prefix_quiet();
+            if !ir.is_empty() {
+                base = format!("{ir}{base}");
+            } else if !base.contains('/') {
                 base = crate::resolve_image(&base);
             }
         }
