@@ -116,21 +116,27 @@ RUN set -eux; \
       fi; \
     else \
       if [ -n "$tgt_nextest" ]; then \
-        url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt_nextest}.tar.xz"; \
-        if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
-          mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
-          bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-          if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
-          rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
-        fi; \
-        if ! /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && [ -n "$alt_nextest" ]; then \
-          alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${alt_nextest}.tar.xz"; \
-          if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tar.xz; then \
+        for base in cargo-nextest nextest; do \
+          url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/${base}-${tgt_nextest}.tar.xz"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
             mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
             bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
             if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
             rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
           fi; \
+          /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && break; \
+        done; \
+        if ! /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && [ -n "$alt_nextest" ]; then \
+          for base in cargo-nextest nextest; do \
+            alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/${base}-${alt_nextest}.tar.xz"; \
+            if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tar.xz; then \
+              mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+              bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+              if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
+              rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+            fi; \
+            /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && break; \
+          done; \
         fi; \
       fi; \
     fi; \
