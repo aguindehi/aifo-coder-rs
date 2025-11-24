@@ -74,8 +74,12 @@ RUN set -eux; \
 ENV PATH="/home/coder/.cargo/bin:/usr/local/cargo/bin:${PATH}"
 ARG NEXTEST_VERSION=0.9.114
 ARG NEXTEST_FALLBACK_COMPILE=0
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG GRCOV_VERSION=0.9.2
 
-# Preinstall rust components and cargo-nextest (idempotent on rebuild)
+# Preinstall rust components and cargo-nextest + grcov using prebuilt binaries; compile fallback only on native builds
 RUN set -eux; \
     rustup --version; \
     rustc --version; \
@@ -83,23 +87,60 @@ RUN set -eux; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
-    # Install cargo-nextest via architecture-specific prebuilt binary when available; compile fallback \
-    ok=0; \
-    arch="$(uname -m)"; \
-    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
+    CROSS=0; \
+    if [ -n "${BUILDPLATFORM:-}" ] && [ -n "${TARGETPLATFORM:-}" ] && [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
+      CROSS=1; \
+    fi; \
+    if [ -n "${TARGETARCH:-}" ]; then \
+      case "$TARGETARCH" in \
+        amd64) tgt="x86_64-unknown-linux-gnu" ;; \
+        arm64) tgt="aarch64-unknown-linux-gnu" ;; \
+        *)     tgt="" ;; \
+      esac; \
+    else \
+      arch="$(uname -m)"; \
+      case "$arch" in \
+        x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; \
+        aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; \
+        *)             tgt="" ;; \
+      esac; \
+    fi; \
+    ok_nextest=0; \
     if [ -n "$tgt" ]; then \
       url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
       if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
         mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
         bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
         rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
       fi; \
     fi; \
-    # Verify cargo-nextest runs; if it fails, compile-install fallback unconditionally \
-    if [ "$ok" -eq 1 ]; then /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 || ok=0; fi; \
-    if [ "$ok" -ne 1 ]; then cargo install cargo-nextest --locked; ok=1; fi; \
-    cargo install grcov --locked; \
+    /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && ok_nextest=1 || ok_nextest=0; \
+    if [ "$ok_nextest" -ne 1 ] && [ "${NEXTEST_FALLBACK_COMPILE:-0}" = "1" ] && [ "$CROSS" -eq 0 ]; then \
+      cargo install cargo-nextest --locked && ok_nextest=1 || ok_nextest=0; \
+    fi; \
+    if [ "$ok_nextest" -ne 1 ]; then \
+      echo "error: cargo-nextest not installed (prebuilt failed; compile fallback disabled or not possible)"; \
+      exit 12; \
+    fi; \
+    ok_grcov=0; \
+    if [ -n "$tgt" ]; then \
+      g_url="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${tgt}.tar.bz2"; \
+      if curl -fsSL --retry 3 --connect-timeout 5 "$g_url" -o /tmp/grcov.tar.bz2; then \
+        mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
+        gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
+        if [ -n "$gbin" ]; then install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; fi; \
+        rm -rf /tmp/grcov /tmp/grcov.tar.bz2; \
+      fi; \
+    fi; \
+    /usr/local/cargo/bin/grcov --version >/dev/null 2>&1 && ok_grcov=1 || ok_grcov=0; \
+    if [ "$ok_grcov" -ne 1 ] && [ "$CROSS" -eq 0 ]; then \
+      cargo install grcov --locked && ok_grcov=1 || ok_grcov=0; \
+    fi; \
+    if [ "$ok_grcov" -ne 1 ]; then \
+      echo "error: grcov not installed (prebuilt failed; compile fallback disabled or not possible)"; \
+      exit 13; \
+    fi; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
 
