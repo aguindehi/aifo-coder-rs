@@ -1300,24 +1300,39 @@ publish-plandex-slim:
 	fi
 
 .PHONY: publish
-publish: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim publish-toolchain-rust publish-toolchain-node publish-toolchain-cpp
-
-.PHONY: publish-release
-publish-release:
+publish:
 	@echo ""
-	@echo "===== aifo-coder publish-release ====="
+	@echo "===== aifo-coder publish ====="
 	@echo "VERSION                  : $(VERSION)"
 	@echo "RELEASE_PREFIX           : $(RELEASE_PREFIX)"
 	@echo "RELEASE_POSTFIX          : $(RELEASE_POSTFIX)"
-	@echo "TAG (effective)          : $(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),))"
-	@echo "RUST_TOOLCHAIN_TAG (eff.): $(if $(RUST_TOOLCHAIN_TAG),$(RUST_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
-	@echo "NODE_TOOLCHAIN_TAG (eff.): $(if $(NODE_TOOLCHAIN_TAG),$(NODE_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
-	@echo "CPP_TOOLCHAIN_TAG (eff.) : $(if $(CPP_TOOLCHAIN_TAG),$(CPP_TOOLCHAIN_TAG),$(if $(TAG),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(RELEASE_POSTFIX),-$(RELEASE_POSTFIX),)))"
-	@echo "PLATFORMS                : $(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64)"
-	@echo "PUSH                     : $(if $(PUSH),$(PUSH),1)"
-	@echo "KEEP_APT                 : $(if $(KEEP_APT),$(KEEP_APT),0)"
-	@echo "REGISTRY                 : $(if $(REGISTRY),$(REGISTRY),registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/)"
+	@echo "TAG (effective)          : $(TAG)"
+	@echo "RUST_TOOLCHAIN_TAG (eff.): $(RUST_TOOLCHAIN_TAG)"
+	@echo "NODE_TOOLCHAIN_TAG (eff.): $(NODE_TOOLCHAIN_TAG)"
+	@echo "CPP_TOOLCHAIN_TAG (eff.) : $(CPP_TOOLCHAIN_TAG)"
+	@echo "PLATFORMS                : $(PLATFORMS)"
+	@echo "PUSH                     : $(PUSH)"
+	@echo "KEEP_APT                 : $(KEEP_APT)"
+	@echo "REGISTRY                 : $(REGISTRY)"
 	@echo "======================================"
+	@$(MAKE) publish-codex
+	@$(MAKE) publish-codex-slim
+	@$(MAKE) publish-crush
+	@$(MAKE) publish-crush-slim
+	@$(MAKE) publish-aider
+	@$(MAKE) publish-aider-slim
+	@$(MAKE) publish-openhands
+	@$(MAKE) publish-openhands-slim
+	@$(MAKE) publish-opencode
+	@$(MAKE) publish-opencode-slim
+	@$(MAKE) publish-plandex
+	@$(MAKE) publish-plandex-slim
+	@$(MAKE) publish-toolchain-rust
+	@$(MAKE) publish-toolchain-node
+	@$(MAKE) publish-toolchain-cpp
+
+.PHONY: publish-release
+publish-release:
 	@$(MAKE) \
 	  PLATFORMS=$(if $(PLATFORMS),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
 	  PUSH=$(if $(PUSH),$(PUSH),1) \
