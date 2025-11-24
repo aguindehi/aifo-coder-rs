@@ -19,6 +19,16 @@ fn unit_test_normalize_toolchain_kind_aliases() {
 
 #[test]
 fn unit_test_default_toolchain_image_for_version_mapping() {
+    // Isolate registry state to keep expectations unprefixed and deterministic
+    use std::env::{remove_var, set_var};
+    let td = tempfile::tempdir().expect("tmpdir");
+    set_var("XDG_RUNTIME_DIR", td.path());
+    remove_var("AIFO_CODER_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
+    remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
+    aifo_coder::registry_probe_set_override_for_tests(None);
+    aifo_coder::invalidate_registry_cache();
+
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("rust", "1.80"),
         "aifo-coder-toolchain-rust:1.80"

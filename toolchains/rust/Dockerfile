@@ -74,8 +74,12 @@ RUN set -eux; \
 ENV PATH="/home/coder/.cargo/bin:/usr/local/cargo/bin:${PATH}"
 ARG NEXTEST_VERSION=0.9.114
 ARG NEXTEST_FALLBACK_COMPILE=0
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG GRCOV_VERSION=0.10.5
 
-# Preinstall rust components and cargo-nextest (idempotent on rebuild)
+# Preinstall rust components and cargo-nextest + grcov using prebuilt binaries; compile fallback only on native builds
 RUN set -eux; \
     rustup --version; \
     rustc --version; \
@@ -83,23 +87,87 @@ RUN set -eux; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
     rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
-    # Install cargo-nextest via architecture-specific prebuilt binary when available; compile fallback \
-    ok=0; \
-    arch="$(uname -m)"; \
-    case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
-    if [ -n "$tgt" ]; then \
-      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
-      if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
-        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+    CROSS=0; \
+    if [ -n "${BUILDPLATFORM:-}" ] && [ -n "${TARGETPLATFORM:-}" ] && [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
+      CROSS=1; \
+    fi; \
+    # Determine prebuilt targets for nextest (gnu; musl fallback on amd64) and grcov (gnu; musl fallback) \
+    if [ -n "${TARGETARCH:-}" ]; then \
+      case "$TARGETARCH" in \
+        amd64) tgt_nextest="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_grcov="x86_64-unknown-linux-musl" ;; \
+        arm64) tgt_nextest="aarch64-unknown-linux-gnu"; alt_nextest=""; tgt_grcov="aarch64-unknown-linux-gnu"; alt_grcov="aarch64-unknown-linux-musl" ;; \
+        *)     tgt_nextest=""; alt_nextest=""; tgt_grcov=""; alt_grcov="" ;; \
+      esac; \
+    else \
+      arch="$(uname -m)"; \
+      case "$arch" in \
+        x86_64|amd64) tgt_nextest="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_grcov="x86_64-unknown-linux-musl" ;; \
+        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-gnu"; alt_nextest=""; tgt_grcov="aarch64-unknown-linux-gnu"; alt_grcov="aarch64-unknown-linux-musl" ;; \
+        *)             tgt_nextest=""; alt_nextest=""; tgt_grcov=""; alt_grcov="" ;; \
+      esac; \
+    fi; \
+    ok_nextest=0; \
+    if [ "${NEXTEST_VERSION:-}" = "latest" ]; then \
+      if curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
         bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
-        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+        if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
+        rm -rf /tmp/nextest /tmp/nextest.tgz; \
+      fi; \
+    else \
+      if [ -n "$tgt_nextest" ]; then \
+        url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${tgt_nextest}.tar.gz"; \
+        if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tgz; then \
+          mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
+          bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+          [ -n "$bin" ] && install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; \
+          rm -rf /tmp/nextest /tmp/nextest.tgz; \
+        fi; \
+        if ! /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && [ -n "$alt_nextest" ]; then \
+          alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${alt_nextest}.tar.gz"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tgz; then \
+            mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
+            bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+            [ -n "$bin" ] && install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; \
+            rm -rf /tmp/nextest /tmp/nextest.tgz; \
+          fi; \
+        fi; \
       fi; \
     fi; \
-    # Verify cargo-nextest runs; if it fails, compile-install fallback unconditionally \
-    if [ "$ok" -eq 1 ]; then /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 || ok=0; fi; \
-    if [ "$ok" -ne 1 ]; then cargo install cargo-nextest --locked; ok=1; fi; \
-    cargo install grcov --locked; \
+    /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && ok_nextest=1 || ok_nextest=0; \
+    if [ "$ok_nextest" -ne 1 ]; then \
+      echo "error: cargo-nextest not installed (prebuilt failed; compile fallback disabled or not possible)"; \
+      exit 12; \
+    fi; \
+    ok_grcov=0; \
+    if [ -n "$tgt_grcov" ]; then \
+      g_url="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${tgt_grcov}.tar.bz2"; \
+      if curl -fsSL --retry 3 --connect-timeout 5 "$g_url" -o /tmp/grcov.tar.bz2; then \
+        mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
+        gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
+        [ -n "$gbin" ] && install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; \
+        rm -rf /tmp/grcov /tmp/grcov.tar.bz2; \
+      fi; \
+      /usr/local/cargo/bin/grcov --version >/dev/null 2>&1 || { \
+        if [ -n "${alt_grcov:-}" ]; then \
+          g_alt="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${alt_grcov}.tar.bz2"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$g_alt" -o /tmp/grcov.tar.bz2; then \
+            mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
+            gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
+            [ -n "$gbin" ] && install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; \
+            rm -rf /tmp/grcov /tmp/grcov.tar.bz2; \
+          fi; \
+        fi; \
+      }; \
+    fi; \
+    /usr/local/cargo/bin/grcov --version >/dev/null 2>&1 && ok_grcov=1 || ok_grcov=0; \
+    if [ "$ok_grcov" -ne 1 ] && [ "$CROSS" -eq 0 ]; then \
+      cargo install grcov --locked && ok_grcov=1 || ok_grcov=0; \
+    fi; \
+    if [ "$ok_grcov" -ne 1 ]; then \
+      echo "error: grcov not installed (prebuilt failed; compile fallback disabled or not possible)"; \
+      exit 13; \
+    fi; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
 

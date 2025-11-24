@@ -63,15 +63,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     case "$arch" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="" ;; esac; \
     ok=0; \
     if [ -n "$tgt" ]; then \
-      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
-      if curl -fsSL "$url" -o /tmp/nextest.tar.xz; then \
-        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${tgt}.tar.gz"; \
+      if curl -fsSL "$url" -o /tmp/nextest.tgz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
         bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
         if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; strip /usr/local/cargo/bin/cargo-nextest 2>/dev/null || true; ok=1; fi; \
-        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+        rm -rf /tmp/nextest /tmp/nextest.tgz; \
       fi; \
     fi; \
-    if [ "$ok" -ne 1 ]; then /usr/local/cargo/bin/cargo install cargo-nextest --locked; fi; \
+    if [ "$ok" -ne 1 ]; then echo "warning: cargo-nextest prebuilt not installed"; fi; \
     /usr/local/cargo/bin/cargo install grcov --locked; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     if [ "${CLEAN_CARGO:-0}" = "1" ]; then \
