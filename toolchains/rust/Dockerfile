@@ -77,7 +77,7 @@ ARG NEXTEST_FALLBACK_COMPILE=0
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 ARG TARGETARCH
-ARG GRCOV_VERSION=0.9.2
+ARG GRCOV_VERSION=0.10.5
 
 # Preinstall rust components and cargo-nextest + grcov using prebuilt binaries; compile fallback only on native builds
 RUN set -eux; \
@@ -91,19 +91,19 @@ RUN set -eux; \
     if [ -n "${BUILDPLATFORM:-}" ] && [ -n "${TARGETPLATFORM:-}" ] && [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
       CROSS=1; \
     fi; \
-    # Determine prebuilt targets for nextest (musl for arm64, gnu for amd64) and grcov (gnu) \
+    # Determine prebuilt targets for nextest (gnu; musl fallback on amd64) and grcov (gnu; musl fallback) \
     if [ -n "${TARGETARCH:-}" ]; then \
       case "$TARGETARCH" in \
-        amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
-        arm64) tgt_nextest="aarch64-unknown-linux-gnu"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="" ;; \
-        *)     tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
+        amd64) tgt_nextest="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_grcov="x86_64-unknown-linux-musl" ;; \
+        arm64) tgt_nextest="aarch64-unknown-linux-gnu"; alt_nextest=""; tgt_grcov="aarch64-unknown-linux-gnu"; alt_grcov="aarch64-unknown-linux-musl" ;; \
+        *)     tgt_nextest=""; alt_nextest=""; tgt_grcov=""; alt_grcov="" ;; \
       esac; \
     else \
       arch="$(uname -m)"; \
       case "$arch" in \
-        x86_64|amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
-        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-gnu"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="" ;; \
-        *)             tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
+        x86_64|amd64) tgt_nextest="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_grcov="x86_64-unknown-linux-musl" ;; \
+        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-gnu"; alt_nextest=""; tgt_grcov="aarch64-unknown-linux-gnu"; alt_grcov="aarch64-unknown-linux-musl" ;; \
+        *)             tgt_nextest=""; alt_nextest=""; tgt_grcov=""; alt_grcov="" ;; \
       esac; \
     fi; \
     ok_nextest=0; \
@@ -145,9 +145,20 @@ RUN set -eux; \
       if curl -fsSL --retry 3 --connect-timeout 5 "$g_url" -o /tmp/grcov.tar.bz2; then \
         mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
         gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
-        if [ -n "$gbin" ]; then install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; fi; \
+        [ -n "$gbin" ] && install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; \
         rm -rf /tmp/grcov /tmp/grcov.tar.bz2; \
       fi; \
+      /usr/local/cargo/bin/grcov --version >/dev/null 2>&1 || { \
+        if [ -n "${alt_grcov:-}" ]; then \
+          g_alt="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${alt_grcov}.tar.bz2"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$g_alt" -o /tmp/grcov.tar.bz2; then \
+            mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
+            gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
+            [ -n "$gbin" ] && install -m 0755 "$gbin" /usr/local/cargo/bin/grcov; \
+            rm -rf /tmp/grcov /tmp/grcov.tar.bz2; \
+          fi; \
+        fi; \
+      }; \
     fi; \
     /usr/local/cargo/bin/grcov --version >/dev/null 2>&1 && ok_grcov=1 || ok_grcov=0; \
     if [ "$ok_grcov" -ne 1 ] && [ "$CROSS" -eq 0 ]; then \
