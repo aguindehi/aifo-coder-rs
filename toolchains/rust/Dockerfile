@@ -95,14 +95,14 @@ RUN set -eux; \
     if [ -n "${TARGETARCH:-}" ]; then \
       case "$TARGETARCH" in \
         amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
-        arm64) tgt_nextest="aarch64-unknown-linux-musl"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="aarch64-unknown-linux-gnu" ;; \
+        arm64) tgt_nextest="aarch64-unknown-linux-gnu"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="" ;; \
         *)     tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
       esac; \
     else \
       arch="$(uname -m)"; \
       case "$arch" in \
         x86_64|amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
-        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-musl"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="aarch64-unknown-linux-gnu" ;; \
+        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-gnu"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="" ;; \
         *)             tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
       esac; \
     fi; \
@@ -116,34 +116,25 @@ RUN set -eux; \
       fi; \
     else \
       if [ -n "$tgt_nextest" ]; then \
-        for base in cargo-nextest nextest; do \
-          url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/${base}-${tgt_nextest}.tar.xz"; \
-          if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
-            mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
-            bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-            if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
-            rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
-          fi; \
-          /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && break; \
-        done; \
+        url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${tgt_nextest}.tar.gz"; \
+        if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tgz; then \
+          mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
+          bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+          [ -n "$bin" ] && install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; \
+          rm -rf /tmp/nextest /tmp/nextest.tgz; \
+        fi; \
         if ! /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && [ -n "$alt_nextest" ]; then \
-          for base in cargo-nextest nextest; do \
-            alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/${base}-${alt_nextest}.tar.xz"; \
-            if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tar.xz; then \
-              mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
-              bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
-              if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
-              rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
-            fi; \
-            /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && break; \
-          done; \
+          alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${alt_nextest}.tar.gz"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tgz; then \
+            mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
+            bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+            [ -n "$bin" ] && install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; \
+            rm -rf /tmp/nextest /tmp/nextest.tgz; \
+          fi; \
         fi; \
       fi; \
     fi; \
     /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && ok_nextest=1 || ok_nextest=0; \
-    if [ "$ok_nextest" -ne 1 ] && [ "${NEXTEST_FALLBACK_COMPILE:-0}" = "1" ] && [ "$CROSS" -eq 0 ]; then \
-      cargo install cargo-nextest --locked && ok_nextest=1 || ok_nextest=0; \
-    fi; \
     if [ "$ok_nextest" -ne 1 ]; then \
       echo "error: cargo-nextest not installed (prebuilt failed; compile fallback disabled or not possible)"; \
       exit 12; \
