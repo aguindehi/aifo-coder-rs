@@ -91,28 +91,47 @@ RUN set -eux; \
     if [ -n "${BUILDPLATFORM:-}" ] && [ -n "${TARGETPLATFORM:-}" ] && [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
       CROSS=1; \
     fi; \
+    # Determine prebuilt targets for nextest (musl for arm64, gnu for amd64) and grcov (gnu) \
     if [ -n "${TARGETARCH:-}" ]; then \
       case "$TARGETARCH" in \
-        amd64) tgt="x86_64-unknown-linux-gnu" ;; \
-        arm64) tgt="aarch64-unknown-linux-gnu" ;; \
-        *)     tgt="" ;; \
+        amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
+        arm64) tgt_nextest="aarch64-unknown-linux-musl"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="aarch64-unknown-linux-gnu" ;; \
+        *)     tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
       esac; \
     else \
       arch="$(uname -m)"; \
       case "$arch" in \
-        x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; \
-        aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; \
-        *)             tgt="" ;; \
+        x86_64|amd64) tgt_nextest="x86_64-unknown-linux-gnu"; tgt_grcov="x86_64-unknown-linux-gnu"; alt_nextest="x86_64-unknown-linux-musl" ;; \
+        aarch64|arm64) tgt_nextest="aarch64-unknown-linux-musl"; tgt_grcov="aarch64-unknown-linux-gnu"; alt_nextest="aarch64-unknown-linux-gnu" ;; \
+        *)             tgt_nextest=""; tgt_grcov=""; alt_nextest="" ;; \
       esac; \
     fi; \
     ok_nextest=0; \
-    if [ -n "$tgt" ]; then \
-      url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt}.tar.xz"; \
-      if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
-        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+    if [ "${NEXTEST_VERSION:-}" = "latest" ]; then \
+      if curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz; then \
+        mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
         bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
         if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
-        rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+        rm -rf /tmp/nextest /tmp/nextest.tgz; \
+      fi; \
+    else \
+      if [ -n "$tgt_nextest" ]; then \
+        url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${tgt_nextest}.tar.xz"; \
+        if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tar.xz; then \
+          mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+          bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+          if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
+          rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+        fi; \
+        if ! /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && [ -n "$alt_nextest" ]; then \
+          alt="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${alt_nextest}.tar.xz"; \
+          if curl -fsSL --retry 3 --connect-timeout 5 "$alt" -o /tmp/nextest.tar.xz; then \
+            mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz; \
+            bin="$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; \
+            if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
+            rm -rf /tmp/nextest /tmp/nextest.tar.xz; \
+          fi; \
+        fi; \
       fi; \
     fi; \
     /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && ok_nextest=1 || ok_nextest=0; \
@@ -124,8 +143,8 @@ RUN set -eux; \
       exit 12; \
     fi; \
     ok_grcov=0; \
-    if [ -n "$tgt" ]; then \
-      g_url="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${tgt}.tar.bz2"; \
+    if [ -n "$tgt_grcov" ]; then \
+      g_url="https://github.com/mozilla/grcov/releases/download/v${GRCOV_VERSION}/grcov-${tgt_grcov}.tar.bz2"; \
       if curl -fsSL --retry 3 --connect-timeout 5 "$g_url" -o /tmp/grcov.tar.bz2; then \
         mkdir -p /tmp/grcov && tar -C /tmp/grcov -xjf /tmp/grcov.tar.bz2; \
         gbin="$(find /tmp/grcov -maxdepth 2 -type f -name grcov -print -quit)"; \
