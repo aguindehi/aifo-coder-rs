@@ -244,19 +244,27 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
-    // Transparent host-side auto-migration of legacy Aider files into standardized config dir.
-    // Copies $HOME/.aider.conf.yml and optional .aider.model.settings.yml/.aider.model.metadata.json
-    // into $HOME/.config/aifo-coder/aider so aifo-entrypoint can bridge them inside the container.
+    // Transparent host-side auto-migration of legacy Aider and other agent config files into
+    // standardized config dirs under ~/.config/aifo-coder/<agent>-PID so aifo-entrypoint can
+    // bridge them inside the container without mounting large state/caches.
+    //
+    // Aider keeps its own special-case block for dotfiles; other agents use the generic
+    // per-agent staging below.
     {
-        // Always stage latest Aider dotfiles into a per-run directory (~/.config/aifo-coder/aider-<PID>)
+        // Always stage latest Aider dotfiles into a canonical per-agent directory (~/.config/aifo-coder/aider)
         let legacy_names = [
             ".aider.conf.yml",
             ".aider.model.settings.yml",
             ".aider.model.metadata.json",
         ];
         let cfg_root = host_home.join(".config").join("aifo-coder");
-        let pid = std::process::id();
-        let staging = cfg_root.join(format!("aider-{}", pid));
+        let _ = fs::create_dir_all(&cfg_root);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&cfg_root, fs::Permissions::from_mode(0o700));
+        }
+        let staging = cfg_root.join("aider");
         let _ = fs::create_dir_all(&staging);
         #[cfg(unix)]
         {
@@ -279,7 +287,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                         #[cfg(unix)]
                         {
                             use std::os::unix::fs::PermissionsExt;
-                            let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o644));
+                            // Treat Aider configs as potentially sensitive; default to 0600
+                            let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o600));
                         }
                         staged_any = true;
                     }
@@ -287,11 +296,14 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             }
         }
         if staged_any {
-            // Expose the staging dir for cleanup and overlay-mount it to expected container path
-            env::set_var(
-                "AIFO_AIDER_STAGING_DIR",
-                staging.to_string_lossy().to_string(),
-            );
+            // Track staged dir for cleanup and overlay-mount it to expected container path
+            let mut staged = env::var("AIFO_CONFIG_STAGING_DIRS").unwrap_or_default();
+            if !staged.is_empty() {
+                staged.push(':');
+            }
+            staged.push_str(&staging.to_string_lossy());
+            env::set_var("AIFO_CONFIG_STAGING_DIRS", staged);
+
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(OsString::from(format!(
                 "{}:/home/coder/.aifo-config-host/aider:ro",
@@ -300,7 +312,189 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     }
 
-    // Fork-state mounts or HOME-based mounts
+    // Per-agent small config staging (top-level regular files; whitelisted ext/size).
+    {
+        let cfg_root = host_home.join(".config").join("aifo-coder");
+        let _ = fs::create_dir_all(&cfg_root);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&cfg_root, fs::Permissions::from_mode(0o700));
+        }
+        let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(262_144);
+        let exts_env = env::var("AIFO_CONFIG_ALLOW_EXT")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "json,toml,yaml,yml,ini,conf,crt,pem,key,token".to_string());
+        let allowed_exts: Vec<String> = exts_env
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        fn should_keep_file(
+            path: &Path,
+            max_sz: u64,
+            allowed_exts: &[String],
+            verbose: bool,
+            agent: &str,
+        ) -> bool {
+            let name = match path.file_name().and_then(|s| s.to_str()) {
+                Some(n) => n,
+                None => return false,
+            };
+            // Reject names with suspicious characters
+            if name.is_empty()
+                || name.chars().any(|c| {
+                    !c.is_ascii() || (!c.is_alphanumeric() && !['.', '-', '_'].contains(&c))
+                })
+            {
+                if verbose {
+                    eprintln!(
+                        "aifo-entrypoint: config: skip invalid name for agent {}: {}",
+                        agent, name
+                    );
+                }
+                return false;
+            }
+            let md = match fs::metadata(path) {
+                Ok(m) => m,
+                Err(_) => return false,
+            };
+            if !md.is_file() || md.len() > max_sz {
+                return false;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            if !allowed_exts.contains(&ext) {
+                return false;
+            }
+            true
+        }
+
+        fn stage_top_level_files(
+            agent: &str,
+            src_dir: &Path,
+            cfg_root: &Path,
+            max_sz: u64,
+            allowed_exts: &[String],
+        ) -> Option<PathBuf> {
+            if !src_dir.is_dir() {
+                return None;
+            }
+            // Use a stable per-agent directory name so entrypoint can consume CFG_DST/<agent>
+            let staging = cfg_root.join(agent);
+            let _ = fs::create_dir_all(&staging);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&staging, fs::Permissions::from_mode(0o700));
+            }
+            let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
+            let mut staged_any = false;
+            if let Ok(rd) = fs::read_dir(src_dir) {
+                for ent in rd.flatten() {
+                    let p = ent.path();
+                    if !should_keep_file(&p, max_sz, allowed_exts, verbose, agent) {
+                        continue;
+                    }
+                    let name = match p.file_name() {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    let dst = staging.join(name);
+                    let _ = fs::copy(&p, &dst);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o600));
+                    }
+                    staged_any = true;
+                }
+            }
+            if staged_any {
+                Some(staging)
+            } else {
+                None
+            }
+        }
+
+        let mut staged_dirs: Vec<PathBuf> = Vec::new();
+
+        match agent {
+            "crush" => {
+                let src = host_home.join(".crush");
+                if let Some(p) =
+                    stage_top_level_files("crush", &src, &cfg_root, max_sz, &allowed_exts)
+                {
+                    staged_dirs.push(p);
+                }
+            }
+            "openhands" => {
+                let src = host_home.join(".openhands");
+                if let Some(p) =
+                    stage_top_level_files("openhands", &src, &cfg_root, max_sz, &allowed_exts)
+                {
+                    staged_dirs.push(p);
+                }
+            }
+            "opencode" => {
+                let src = host_home.join(".config").join("opencode");
+                if let Some(p) =
+                    stage_top_level_files("opencode", &src, &cfg_root, max_sz, &allowed_exts)
+                {
+                    staged_dirs.push(p);
+                }
+            }
+            "plandex" => {
+                let src = host_home.join(".plandex-home");
+                if let Some(p) =
+                    stage_top_level_files("plandex", &src, &cfg_root, max_sz, &allowed_exts)
+                {
+                    staged_dirs.push(p);
+                }
+            }
+            _ => {}
+        }
+
+        if !staged_dirs.is_empty() {
+            let mut staged_env = env::var("AIFO_CONFIG_STAGING_DIRS").unwrap_or_default();
+            for dir in &staged_dirs {
+                if !staged_env.is_empty() {
+                    staged_env.push(':');
+                }
+                staged_env.push_str(&dir.to_string_lossy());
+            }
+            env::set_var("AIFO_CONFIG_STAGING_DIRS", staged_env);
+
+            for dir in &staged_dirs {
+                let sub = match agent {
+                    "codex" => "codex",
+                    "crush" => "crush",
+                    "openhands" => "openhands",
+                    "opencode" => "opencode",
+                    "plandex" => "plandex",
+                    _ => continue,
+                };
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(OsString::from(format!(
+                    "{}:/home/coder/.aifo-config-host/{}:ro",
+                    dir.display(),
+                    sub
+                )));
+            }
+        }
+    }
+
+    // Fork-state mounts (when enabled) or HOME-based mounts.
+    // When AIFO_CODER_FORK_STATE_DIR is non-empty, use repo-scoped fork state roots exclusively.
+    // Otherwise, always fall back to HOME-based mounts regardless of config staging.
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
         let sd = state_dir.trim();
         if !sd.is_empty() {
@@ -330,11 +524,12 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(path_pair(&src, dst));
             }
-        } else {
-            // fallthrough to HOME-based below
+            // When using fork state, skip HOME-based mounts entirely.
+            return volume_flags;
         }
     }
-    if volume_flags.is_empty() {
+
+    {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
         #[cfg(windows)]
@@ -478,7 +673,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         gnupg_dir.display()
     )));
 
-    // Phase 1: Coding agent config (read-only host mount)
+    // Phase 1: Coding agent config root (read-only host mount) for global or explicit configs.
     // Resolve host config dir: explicit env (AIFO_CONFIG_HOST_DIR or AIFO_CODER_CONFIG_HOST_DIR),
     // else ~/.config/aifo-coder, else ~/.aifo-coder. Mount policy:
     // - If an explicit env override is provided and points to an existing directory: always mount.
@@ -519,6 +714,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         } else {
             // Mount only when the host config dir contains at least one regular file
             // under either "global/" or the agent-specific subdir (e.g., "aider/").
+            // Per-run staged dirs (aider-PID, codex-PID, etc.) are already mounted
+            // explicitly above and do not influence this check.
             let mut any = false;
             for name in &["global", agent] {
                 let d = cfg.join(name);
@@ -542,7 +739,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     } else {
         crate::warn_print(
-            "coding agent host config dir not found; aider may use API env defaults. Set AIFO_CONFIG_HOST_DIR or create ~/.config/aifo-coder",
+            "coding agent host config dir not found; agents may use API env defaults. Set AIFO_CONFIG_HOST_DIR or create ~/.config/aifo-coder",
         );
     }
 
@@ -1229,12 +1426,35 @@ pub fn build_docker_cmd(
     Ok((cmd, preview))
 }
 
-/// Remove per-run staged Aider config directory recorded in AIFO_AIDER_STAGING_DIR.
+fn split_paths_env(v: &str) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if v.is_empty() {
+        return out;
+    }
+    // Use ':' as separator across platforms; paths are under ~/.config/aifo-coder so this is safe.
+    for part in v.split(':') {
+        let trimmed = part.trim();
+        if !trimmed.is_empty() {
+            out.push(PathBuf::from(trimmed));
+        }
+    }
+    out
+}
+
+/// Remove per-run staged config directories recorded in AIFO_CONFIG_STAGING_DIRS and
+/// the legacy AIFO_AIDER_STAGING_DIR (best-effort).
 pub fn cleanup_aider_staging_from_env() {
+    // Legacy single-dir env (pre-multi-agent staging)
     if let Ok(p) = env::var("AIFO_AIDER_STAGING_DIR") {
         let path = PathBuf::from(p);
         let _ = fs::remove_dir_all(&path);
-        // Best-effort: unset the env to avoid leaking state into subsequent runs
         std::env::remove_var("AIFO_AIDER_STAGING_DIR");
+    }
+
+    if let Ok(v) = env::var("AIFO_CONFIG_STAGING_DIRS") {
+        for p in split_paths_env(&v) {
+            let _ = fs::remove_dir_all(&p);
+        }
+        std::env::remove_var("AIFO_CONFIG_STAGING_DIRS");
     }
 }
