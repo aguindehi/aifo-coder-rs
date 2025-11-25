@@ -232,6 +232,78 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  '    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do' \
  '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
  '    done' \
+ '    # Per-agent in-container install for other coding agents (codex, crush, openhands, opencode, plandex)' \
+ '    if [ -d "$CFG_DST/codex" ]; then' \
+ '      install -d -m 0700 "$HOME/.codex" >/dev/null 2>&1 || true' \
+ '      for f in "$CFG_DST/codex"/.* "$CFG_DST/codex"/*; do' \
+ '        [ -e "$f" ] || continue' \
+ '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
+ '        [ -h "$f" ] && continue' \
+ '        [ -f "$f" ] || continue' \
+ '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
+ '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
+ '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
+ '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
+ '        install -m "$mode" "$f" "$HOME/.codex/$b" >/dev/null 2>&1 || true' \
+ '      done' \
+ '    fi' \
+ '    if [ -d "$CFG_DST/crush" ]; then' \
+ '      install -d -m 0700 "$HOME/.crush" >/dev/null 2>&1 || true' \
+ '      for f in "$CFG_DST/crush"/.* "$CFG_DST/crush"/*; do' \
+ '        [ -e "$f" ] || continue' \
+ '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
+ '        [ -h "$f" ] && continue' \
+ '        [ -f "$f" ] || continue' \
+ '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
+ '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
+ '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
+ '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
+ '        install -m "$mode" "$f" "$HOME/.crush/$b" >/dev/null 2>&1 || true' \
+ '      done' \
+ '    fi' \
+ '    if [ -d "$CFG_DST/openhands" ]; then' \
+ '      install -d -m 0700 "$HOME/.openhands" >/dev/null 2>&1 || true' \
+ '      for f in "$CFG_DST/openhands"/.* "$CFG_DST/openhands"/*; do' \
+ '        [ -e "$f" ] || continue' \
+ '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
+ '        [ -h "$f" ] && continue' \
+ '        [ -f "$f" ] || continue' \
+ '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
+ '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
+ '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
+ '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
+ '        install -m "$mode" "$f" "$HOME/.openhands/$b" >/dev/null 2>&1 || true' \
+ '      done' \
+ '    fi' \
+ '    if [ -d "$CFG_DST/opencode" ]; then' \
+ '      install -d -m 0700 "$HOME/.config" >/dev/null 2>&1 || true' \
+ '      install -d -m 0700 "$HOME/.config/opencode" >/dev/null 2>&1 || true' \
+ '      for f in "$CFG_DST/opencode"/.* "$CFG_DST/opencode"/*; do' \
+ '        [ -e "$f" ] || continue' \
+ '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
+ '        [ -h "$f" ] && continue' \
+ '        [ -f "$f" ] || continue' \
+ '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
+ '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
+ '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
+ '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
+ '        install -m "$mode" "$f" "$HOME/.config/opencode/$b" >/dev/null 2>&1 || true' \
+ '      done' \
+ '    fi' \
+ '    if [ -d "$CFG_DST/plandex" ]; then' \
+ '      install -d -m 0700 "$HOME/.plandex-home" >/dev/null 2>&1 || true' \
+ '      for f in "$CFG_DST/plandex"/.* "$CFG_DST/plandex"/*; do' \
+ '        [ -e "$f" ] || continue' \
+ '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
+ '        [ -h "$f" ] && continue' \
+ '        [ -f "$f" ] || continue' \
+ '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
+ '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
+ '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
+ '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
+ '        install -m "$mode" "$f" "$HOME/.plandex-home/$b" >/dev/null 2>&1 || true' \
+ '      done' \
+ '    fi' \
  '    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true' \
  '    fi' \
  '  fi' \
