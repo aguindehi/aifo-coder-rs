@@ -483,6 +483,20 @@ ENV KEEP_APT=${KEEP_APT}
 # Codex docs: npm i -g @openai/codex
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex@${CODEX_VERSION}; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
+# Create OpenHands wrapper safely in its own RUN (only if not already linked)
+RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
+  exec "$VENVP" -m openhands "$@"
+elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+  exec "$VENVP" -m agent_server "$@"
+else
+  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  exit 127
+fi
+SH
+RUN chmod 0755 /usr/local/bin/openhands
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Crush image (adds only Crush CLI on top of base) ---
@@ -621,22 +635,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  else \
-    printf '%s\n' \
-      '#!/bin/sh' \
-      'VENVP="/opt/venv-openhands/bin/python"' \
-      'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then' \
-      '  exec "$VENVP" -m openhands "$@"' \
-      'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then' \
-      '  exec "$VENVP" -m agent_server "$@"' \
-      'else' \
-      '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2' \
-      '  exit 127' \
-      'fi' \
-      > /usr/local/bin/openhands; \
-    chmod 0755 /usr/local/bin/openhands; \
   fi; \
-  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -920,22 +919,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  else \
-    printf '%s\n' \
-      '#!/bin/sh' \
-      'VENVP="/opt/venv-openhands/bin/python"' \
-      'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then' \
-      '  exec "$VENVP" -m openhands "$@"' \
-      'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then' \
-      '  exec "$VENVP" -m agent_server "$@"' \
-      'else' \
-      '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2' \
-      '  exit 127' \
-      'fi' \
-      > /usr/local/bin/openhands; \
-    chmod 0755 /usr/local/bin/openhands; \
   fi; \
-  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -959,6 +943,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
+# Create OpenHands wrapper safely in its own RUN (only if not already linked)
+RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
+  exec "$VENVP" -m openhands "$@"
+elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+  exec "$VENVP" -m agent_server "$@"
+else
+  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  exit 127
+fi
+SH
+RUN chmod 0755 /usr/local/bin/openhands
 # --- OpenCode slim image (npm install; shims-first PATH) ---
 FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
