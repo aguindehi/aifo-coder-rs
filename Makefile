@@ -275,6 +275,7 @@ help: banner
 	@echo "  rebuild-toolchain ........... Rebuild all toolchain sidecar images without cache"
 	@echo "  rebuild-toolchain-rust ...... Rebuild only the Rust toolchain image without cache"
 	@echo "  rebuild-toolchain-node ...... Rebuild only the Node toolchain image without cache"
+	@echo "  rebuild-toolchain-ts ........ Rebuild only the TypeScript toolchain image without cache"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the C-CPP toolchain image without cache"
 	@echo ""
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
@@ -2825,6 +2826,7 @@ lint-docker:
 	  if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi; \
+	  if [ -f toolchains/ts/Dockerfile ]; then hadolint toolchains/ts/Dockerfile || true; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo; \
 	  echo "hadolint not found; using hadolint/hadolint container ..."; \
@@ -2832,6 +2834,7 @@ lint-docker:
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
+	  if [ -f toolchains/ts/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/ts/Dockerfile || true; fi; \
 	else \
 	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
 	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
