@@ -492,7 +492,9 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
     }
 
-    // Fork-state mounts or HOME-based mounts
+    // Fork-state mounts (when enabled) or HOME-based mounts.
+    // When AIFO_CODER_FORK_STATE_DIR is non-empty, use repo-scoped fork state roots exclusively.
+    // Otherwise, always fall back to HOME-based mounts regardless of config staging.
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
         let sd = state_dir.trim();
         if !sd.is_empty() {
@@ -522,11 +524,12 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(path_pair(&src, dst));
             }
-        } else {
-            // fallthrough to HOME-based below
+            // When using fork state, skip HOME-based mounts entirely.
+            return volume_flags;
         }
     }
-    if volume_flags.is_empty() {
+
+    {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
         #[cfg(windows)]
