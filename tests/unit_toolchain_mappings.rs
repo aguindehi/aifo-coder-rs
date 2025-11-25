@@ -2,8 +2,8 @@
 fn unit_test_normalize_toolchain_kind_aliases() {
     assert_eq!(aifo_coder::normalize_toolchain_kind("rust"), "rust");
     assert_eq!(aifo_coder::normalize_toolchain_kind("node"), "node");
-    assert_eq!(aifo_coder::normalize_toolchain_kind("ts"), "node");
-    assert_eq!(aifo_coder::normalize_toolchain_kind("TypeScript"), "node");
+    assert_eq!(aifo_coder::normalize_toolchain_kind("ts"), "typescript");
+    assert_eq!(aifo_coder::normalize_toolchain_kind("TypeScript"), "typescript");
     assert_eq!(aifo_coder::normalize_toolchain_kind("py"), "python");
     assert_eq!(aifo_coder::normalize_toolchain_kind("python"), "python");
     assert_eq!(aifo_coder::normalize_toolchain_kind("c"), "c-cpp");
@@ -39,7 +39,7 @@ fn unit_test_default_toolchain_image_for_version_mapping() {
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("typescript", "20"),
-        "aifo-coder-toolchain-node:20"
+        "aifo-coder-toolchain-ts:20"
     );
     assert_eq!(
         aifo_coder::default_toolchain_image_for_version("python", "3.12"),
