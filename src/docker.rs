@@ -372,7 +372,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_ascii_lowercase())
                 .unwrap_or_default();
-            if !allowed_exts.iter().any(|e| *e == ext) {
+            if !allowed_exts.contains(&ext) {
                 return false;
             }
             true
