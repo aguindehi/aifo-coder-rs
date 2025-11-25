@@ -57,6 +57,7 @@ CRUSH_VERSION ?= latest
 AIDER_VERSION ?= latest
 OPENHANDS_VERSION ?= latest
 OPENCODE_VERSION ?= latest
+WITH_PLAYWRIGHT ?= 1
 
 # Source refs (git/tag/commit)
 PLANDEX_GIT_REF ?= main
