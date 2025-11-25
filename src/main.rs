@@ -552,6 +552,7 @@ fn main() -> ExitCode {
             use_err,
             "aifo-coder: dry-run requested; not executing Docker.",
         );
+        aifo_coder::cleanup_aider_staging_from_env();
         return ExitCode::from(0);
     }
 
@@ -589,6 +590,8 @@ fn main() -> ExitCode {
             if let Some(lock) = maybe_lock {
                 drop(lock);
             }
+            // Remove per-run staged Aider configs (best effort)
+            aifo_coder::cleanup_aider_staging_from_env();
 
             // Toolchain session cleanup handled by Drop on ToolchainSession
 
@@ -599,6 +602,8 @@ fn main() -> ExitCode {
                 let use_err = aifo_coder::color_enabled_stderr();
                 aifo_coder::log_error_stderr(use_err, &e.to_string());
             }
+            // Remove per-run staged Aider configs (best effort)
+            aifo_coder::cleanup_aider_staging_from_env();
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             let code = aifo_coder::exit_code_for_io_error(&e);
             ExitCode::from(code)

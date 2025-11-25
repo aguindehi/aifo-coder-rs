@@ -248,60 +248,55 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     // Copies $HOME/.aider.conf.yml and optional .aider.model.settings.yml/.aider.model.metadata.json
     // into $HOME/.config/aifo-coder/aider so aifo-entrypoint can bridge them inside the container.
     {
-        let automigrate = env::var("AIFO_CONFIG_AUTOMIGRATE")
+        // Always stage latest Aider dotfiles into a per-run directory (~/.config/aifo-coder/aider-<PID>)
+        let legacy_names = [
+            ".aider.conf.yml",
+            ".aider.model.settings.yml",
+            ".aider.model.metadata.json",
+        ];
+        let cfg_root = host_home.join(".config").join("aifo-coder");
+        let pid = std::process::id();
+        let staging = cfg_root.join(format!("aider-{}", pid));
+        let _ = fs::create_dir_all(&staging);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&staging, fs::Permissions::from_mode(0o700));
+        }
+        let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
             .ok()
-            .as_deref()
-            .map(|s| s != "0")
-            .unwrap_or(true);
-        if automigrate {
-            // Only create the standardized config dir if at least one legacy Aider file exists in host $HOME.
-            let legacy_names = [
-                ".aider.conf.yml",
-                ".aider.model.settings.yml",
-                ".aider.model.metadata.json",
-            ];
-            let mut have_legacy = false;
-            for name in &legacy_names {
-                if host_home.join(name).is_file() {
-                    have_legacy = true;
-                    break;
-                }
-            }
-            if have_legacy {
-                let cfg_aider = host_home.join(".config").join("aifo-coder").join("aider");
-                let _ = fs::create_dir_all(&cfg_aider);
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ = fs::set_permissions(&cfg_aider, fs::Permissions::from_mode(0o700));
-                }
-                let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
-                    .ok()
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(262_144);
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(262_144);
 
-                for name in &legacy_names {
-                    let src = host_home.join(name);
-                    if src.is_file() {
-                        if let Ok(md) = fs::metadata(&src) {
-                            if md.len() <= max_sz {
-                                let dst = cfg_aider.join(name);
-                                if !dst.exists() {
-                                    let _ = fs::copy(&src, &dst);
-                                    #[cfg(unix)]
-                                    {
-                                        use std::os::unix::fs::PermissionsExt;
-                                        let _ = fs::set_permissions(
-                                            &dst,
-                                            fs::Permissions::from_mode(0o644),
-                                        );
-                                    }
-                                }
-                            }
+        let mut staged_any = false;
+        for name in &legacy_names {
+            let src = host_home.join(name);
+            if src.is_file() {
+                if let Ok(md) = fs::metadata(&src) {
+                    if md.len() <= max_sz {
+                        let dst = staging.join(name);
+                        let _ = fs::copy(&src, &dst);
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt;
+                            let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o644));
                         }
+                        staged_any = true;
                     }
                 }
             }
+        }
+        if staged_any {
+            // Expose the staging dir for cleanup and overlay-mount it to expected container path
+            env::set_var(
+                "AIFO_AIDER_STAGING_DIR",
+                staging.to_string_lossy().to_string(),
+            );
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!(
+                "{}:/home/coder/.aifo-config-host/aider:ro",
+                staging.display()
+            )));
         }
     }
 
@@ -1232,4 +1227,14 @@ pub fn build_docker_cmd(
     };
 
     Ok((cmd, preview))
+}
+
+/// Remove per-run staged Aider config directory recorded in AIFO_AIDER_STAGING_DIR.
+pub fn cleanup_aider_staging_from_env() {
+    if let Ok(p) = env::var("AIFO_AIDER_STAGING_DIR") {
+        let path = PathBuf::from(p);
+        let _ = fs::remove_dir_all(&path);
+        // Best-effort: unset the env to avoid leaking state into subsequent runs
+        std::env::remove_var("AIFO_AIDER_STAGING_DIR");
+    }
 }
