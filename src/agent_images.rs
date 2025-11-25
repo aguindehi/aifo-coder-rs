@@ -36,6 +36,20 @@ fn docker_image_exists_local(image: &str) -> bool {
     false
 }
 
+/// Derive a ":latest" candidate for a given image reference by replacing the tag.
+/// E.g., "aifo-coder-aider:release-0.6.3" -> "aifo-coder-aider:latest".
+fn local_latest_candidate(image: &str) -> String {
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    let last_slash = base.rfind('/');
+    let last_colon = base.rfind(':');
+    let without_tag = match (last_slash, last_colon) {
+        (Some(slash), Some(colon)) if colon > slash => &base[..colon],
+        (None, Some(colon)) => &base[..colon],
+        _ => base,
+    };
+    format!("{without_tag}:latest")
+}
+
 pub(crate) fn default_image_for(agent: &str) -> String {
     // Full override wins.
     if let Some(img) = env_trim("AIFO_CODER_IMAGE") {
@@ -62,8 +76,15 @@ pub(crate) fn default_image_for(agent: &str) -> String {
 
     // Prefer a local image if present and no explicit internal registry env is set.
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
-    if !explicit_ir && docker_image_exists_local(&image) {
-        return image;
+    if !explicit_ir {
+        if docker_image_exists_local(&image) {
+            return image;
+        }
+        // Fallback: try a local ":latest" tag for the same repository name.
+        let latest = local_latest_candidate(&image);
+        if docker_image_exists_local(&latest) {
+            return latest;
+        }
     }
 
     // Otherwise, qualify with our internal registry prefix if known (env or mirror probe).
@@ -98,8 +119,15 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
 
     // Same local-first and qualification policy as default_image_for()
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
-    if !explicit_ir && docker_image_exists_local(&image) {
-        return image;
+    if !explicit_ir {
+        if docker_image_exists_local(&image) {
+            return image;
+        }
+        // Fallback: try a local ":latest" tag for the same repository name.
+        let latest = local_latest_candidate(&image);
+        if docker_image_exists_local(&latest) {
+            return latest;
+        }
     }
 
     let ir = aifo_coder::preferred_internal_registry_prefix_autodetect();
