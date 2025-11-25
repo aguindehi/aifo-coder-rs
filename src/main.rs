@@ -209,7 +209,12 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
 fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
     match &cli.command {
         Agent::Doctor => Some(crate::commands::run_doctor_command(cli)),
-        Agent::Support { all, base, deep, combo } => {
+        Agent::Support {
+            all,
+            base,
+            deep,
+            combo,
+        } => {
             // Default to --all when no specific mode flags are provided
             let run_all = *all || (!*base && !*deep && !*combo);
             if run_all {
@@ -229,7 +234,8 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
                     // Deep-only
                     std::env::set_var("AIFO_SUPPORT_DEEP", "1");
                     std::env::set_var("AIFO_SUPPORT_COMBO", "0");
-                    let code = crate::support::run_support(cli.verbose, true /* suppress banner */);
+                    let code =
+                        crate::support::run_support(cli.verbose, true /* suppress banner */);
                     if code != ExitCode::SUCCESS {
                         any_fail = true;
                     }
@@ -238,7 +244,8 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
                     // Combo-only
                     std::env::set_var("AIFO_SUPPORT_DEEP", "0");
                     std::env::set_var("AIFO_SUPPORT_COMBO", "1");
-                    let code = crate::support::run_support(cli.verbose, true /* suppress banner */);
+                    let code =
+                        crate::support::run_support(cli.verbose, true /* suppress banner */);
                     if code != ExitCode::SUCCESS {
                         any_fail = true;
                     }
