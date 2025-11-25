@@ -595,7 +595,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
-ARG OPENHANDS_VERSION=latest
+ARG OPENHANDS_VERSION=1.0.7-cli
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
@@ -879,7 +879,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
-ARG OPENHANDS_VERSION=latest
+ARG OPENHANDS_VERSION=1.0.7-cli
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
