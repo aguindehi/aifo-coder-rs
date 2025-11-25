@@ -564,9 +564,11 @@ fn run_version_check(
 /// - Resolve images via default_image_for_quiet/default_toolchain_image.
 /// - Initialize RNG seed from env or time; log effective seed when verbose.
 /// - Compute widths and render initial matrix with PENDING cells (TTY only when animation enabled).
-pub fn run_support(verbose: bool) -> ExitCode {
+pub fn run_support(verbose: bool, suppress_banner: bool) -> ExitCode {
     // Print startup header (version/host lines)
-    print_startup_banner();
+    if !suppress_banner {
+        print_startup_banner();
+    }
 
     // Require docker runtime; print prominent red line and exit 1 on missing
     let runtime = match aifo_coder::container_runtime_path() {
@@ -1080,7 +1082,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
 ///  1) Baseline: shallow presence checks only (agent CLIs + basic toolchain binaries).
 ///  2) Deep: additionally compile/run tiny "hello world" style programs in toolchain images.
 ///  3) Combo: from inside each agent image, check whether toolchain commands are reachable on PATH.
-pub fn run_support_all(verbose: bool) -> ExitCode {
+pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
     // Snapshot env settings we will modify
     let orig_deep = env::var("AIFO_SUPPORT_DEEP").ok();
     let orig_combo = env::var("AIFO_SUPPORT_COMBO").ok();
@@ -1101,7 +1103,7 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         use_err,
         "Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present.",
     );
-    let code1 = run_support(verbose);
+    let code1 = run_support(verbose, suppress_first_banner);
     if code1 != ExitCode::SUCCESS {
         any_fail = true;
     }
@@ -1115,7 +1117,7 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         use_err,
         "Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style).",
     );
-    let code2 = run_support(verbose);
+    let code2 = run_support(verbose, true);
     if code2 != ExitCode::SUCCESS {
         any_fail = true;
     }
@@ -1129,7 +1131,7 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         use_err,
         "Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH.",
     );
-    let code3 = run_support(verbose);
+    let code3 = run_support(verbose, true);
     if code3 != ExitCode::SUCCESS {
         any_fail = true;
     }
