@@ -1431,8 +1431,6 @@ pub fn build_docker_cmd(
     Ok((cmd, preview))
 }
 
-use std::path::Path;
-
 fn split_paths_env(v: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if v.is_empty() {
