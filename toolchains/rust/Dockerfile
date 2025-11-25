@@ -132,7 +132,6 @@ RUN set -eux; \
             rm -rf /tmp/nextest /tmp/nextest.tgz; \
           fi; \
         fi; \
-      fi; \
     fi; \
     /usr/local/cargo/bin/cargo-nextest -V >/dev/null 2>&1 && ok_nextest=1 || ok_nextest=0; \
     if [ "$ok_nextest" -ne 1 ]; then \
