@@ -29,6 +29,47 @@ use crate::banner::print_startup_banner;
 struct CursorGuard {
     hide: bool,
 }
+
+/// Build an optional deep compiler/run probe for a given toolchain kind.
+/// These are small "hello world" style checks that compile or execute minimal code.
+fn pm_deep_cmd_for(kind: &str) -> Option<String> {
+    match kind {
+        "rust" => Some(
+            "printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin && /tmp/aifo-support-rust-bin"
+                .to_string(),
+        ),
+        "node" => Some("node -e 'process.exit(0)'".to_string()),
+        "typescript" => Some(
+            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#.to_string(),
+        ),
+        "python" => Some("python3 - <<'EOF'\nimport sys\nsys.exit(0)\nEOF".to_string()),
+        "c-cpp" => Some(
+            "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c && /tmp/aifo-support-c"
+                .to_string(),
+        ),
+        "go" => Some(
+            "cat <<'EOF' >/tmp/aifo-support-go.go\npackage main\nfunc main() {}\nEOF\ngo run /tmp/aifo-support-go.go"
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+/// Build an optional agent+toolchain combo probe command to run inside the agent image.
+/// This verifies that, with the agent's PATH, the primary tool for the given kind is reachable.
+fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
+    let pathv = agent_path_for(agent);
+    let tool_cmd = match kind {
+        "rust" => "rustc --version",
+        "node" => "node --version || nodejs --version",
+        "typescript" => "tsc --version || tsserver --version || (node --version && (npm -v || corepack -v || pnpm -v || yarn -v))",
+        "python" => "python3 --version || python --version",
+        "c-cpp" => "gcc --version || clang --version || cc --version || make --version",
+        "go" => "go version",
+        _ => return None,
+    };
+    Some(format!("export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"))
+}
 impl CursorGuard {
     fn new(hide: bool) -> Self {
         if hide {
@@ -192,6 +233,8 @@ fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
         &["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]
     }
 }
+
+static DEFAULT_SUPPORT_TIMEOUT_SECS: u64 = 0;
 
 /// Support mode event channel messages
 enum Event {
@@ -439,6 +482,7 @@ fn run_version_check(
     image: &str,
     cmd: &str,
     no_pull: bool,
+    timeout_secs: u64,
 ) -> Result<(), String> {
     use std::process::{Command, Stdio};
     if no_pull {
@@ -455,6 +499,7 @@ fn run_version_check(
             return Err("not-present".to_string());
         }
     }
+
     let mut child = Command::new(rt)
         .arg("run")
         .arg("--rm")
@@ -467,11 +512,45 @@ fn run_version_check(
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
-    let st = child.wait().map_err(|e| e.to_string())?;
-    if st.success() {
-        Ok(())
+
+    if timeout_secs == 0 {
+        let st = child.wait().map_err(|e| e.to_string())?;
+        if st.success() {
+            Ok(())
+        } else {
+            Err(format!("exit={}", st.code().unwrap_or(1)))
+        }
     } else {
-        Err(format!("exit={}", st.code().unwrap_or(1)))
+        let timeout = Duration::from_secs(timeout_secs);
+        let start = SystemTime::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    if st.success() {
+                        return Ok(());
+                    } else {
+                        return Err(format!("exit={}", st.code().unwrap_or(1)));
+                    }
+                }
+                Ok(None) => {
+                    if SystemTime::now()
+                        .duration_since(start)
+                        .unwrap_or_else(|_| Duration::from_secs(0))
+                        >= timeout
+                    {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err("timeout".to_string());
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(e.to_string());
+                }
+            }
+        }
     }
 }
 
@@ -600,6 +679,18 @@ pub fn run_support(verbose: bool) -> ExitCode {
         .and_then(|s| s.parse::<u64>().ok())
         .map(|v| v.clamp(40, 250))
         .unwrap_or(80);
+    let timeout_secs: u64 = std::env::var("AIFO_SUPPORT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SUPPORT_TIMEOUT_SECS);
+    let deep_enabled = std::env::var("AIFO_SUPPORT_DEEP")
+        .ok()
+        .as_deref()
+        == Some("1");
+    let combo_enabled = std::env::var("AIFO_SUPPORT_COMBO")
+        .ok()
+        .as_deref()
+        == Some("1");
 
     // Build shuffled worklist of (agent_idx, kind_idx)
     let mut worklist: Vec<(usize, usize)> = Vec::new();
@@ -624,6 +715,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
         let tc_imgs = toolchain_images.clone();
         let rt = runtime.clone();
         let tx_cl = tx.clone();
+        let timeout_secs_cl = timeout_secs;
+        let deep_enabled_cl = deep_enabled;
+        let combo_enabled_cl = combo_enabled;
         std::thread::spawn(move || {
             let mut agent_ok: Vec<Option<bool>> = vec![None; agents_cl.len()];
             for (ai, ki) in worklist.into_iter() {
@@ -643,7 +737,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
 
                 if agent_ok[ai].is_none() {
                     let cmd = agent_check_cmd(&agents_cl[ai]);
-                    let res = run_version_check(&rt, agent_img, &cmd, no_pull);
+                    let res = run_version_check(&rt, agent_img, &cmd, no_pull, timeout_secs_cl);
                     let ok = res.is_ok();
                     agent_ok[ai] = Some(ok);
                     let _ = tx_cl.send(Event::AgentCached {
@@ -652,9 +746,30 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         reason: res.err(),
                     });
                 }
-                let cmd = pm_cmd_for(&kinds_cl[ki]);
-                let pm_res = run_version_check(&rt, tc_img, &cmd, no_pull);
-                let pm_ok = pm_res.is_ok();
+
+                // Optional combo probe: run from agent image with agent PATH to see toolchain visibility
+                let mut combo_ok = true;
+                if combo_enabled_cl {
+                    if let Some(combo_cmd) = combo_probe_cmd(&agents_cl[ai], &kinds_cl[ki]) {
+                        let combo_res =
+                            run_version_check(&rt, agent_img, &combo_cmd, no_pull, timeout_secs_cl);
+                        combo_ok = combo_res.is_ok();
+                    }
+                }
+
+                let pm_cmd = pm_cmd_for(&kinds_cl[ki]);
+                let pm_res = run_version_check(&rt, tc_img, &pm_cmd, no_pull, timeout_secs_cl);
+                let mut pm_ok = pm_res.is_ok();
+
+                // Optional deep probe in the toolchain image
+                if deep_enabled_cl {
+                    if let Some(deep_cmd) = pm_deep_cmd_for(&kinds_cl[ki]) {
+                        let deep_res =
+                            run_version_check(&rt, tc_img, &deep_cmd, no_pull, timeout_secs_cl);
+                        pm_ok = pm_ok && deep_res.is_ok();
+                    }
+                }
+
                 let aok = agent_ok[ai].unwrap_or(false);
                 let status = if aok && pm_ok {
                     "PASS"
