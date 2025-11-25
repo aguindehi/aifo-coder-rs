@@ -771,7 +771,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
                 }
 
                 let aok = agent_ok[ai].unwrap_or(false);
-                let status = if aok && pm_ok {
+                // Integrate combo probe into status semantics
+                let status = if aok && pm_ok && combo_ok {
                     "PASS"
                 } else if aok || pm_ok {
                     "WARN"
