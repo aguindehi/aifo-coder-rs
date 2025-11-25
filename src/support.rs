@@ -1102,7 +1102,8 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present.",
     );
     let code1 = run_support(verbose);
-    overall_code = overall_code.max(code1.code().unwrap_or(1));
+    let c1: u8 = code1.into();
+    overall_code = overall_code.max(c1);
 
     eprintln!();
 
@@ -1114,7 +1115,8 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style).",
     );
     let code2 = run_support(verbose);
-    overall_code = overall_code.max(code2.code().unwrap_or(1));
+    let c2: u8 = code2.into();
+    overall_code = overall_code.max(c2);
 
     eprintln!();
 
@@ -1126,7 +1128,8 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH.",
     );
     let code3 = run_support(verbose);
-    overall_code = overall_code.max(code3.code().unwrap_or(1));
+    let c3: u8 = code3.into();
+    overall_code = overall_code.max(c3);
 
     // Restore env
     match orig_deep {
