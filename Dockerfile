@@ -622,7 +622,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   elif [ -x /opt/venv-openhands/bin/agent-server ]; then \
-    printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/agent-server "$@"' > /usr/local/bin/openhands; \
+    { echo '#!/bin/sh'; echo 'exec /opt/venv-openhands/bin/agent-server "$@"'; } > /usr/local/bin/openhands; \
     chmod 0755 /usr/local/bin/openhands; \
   else \
     ls -la /opt/venv-openhands/bin; echo "error: missing OpenHands CLI (expected openhands or agent-server)"; exit 3; \
@@ -912,7 +912,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   elif [ -x /opt/venv-openhands/bin/agent-server ]; then \
-    printf '%s\n' '#!/bin/sh' 'exec /opt/venv-openhands/bin/agent-server "$@"' > /usr/local/bin/openhands; \
+    { echo '#!/bin/sh'; echo 'exec /opt/venv-openhands/bin/agent-server "$@"'; } > /usr/local/bin/openhands; \
     chmod 0755 /usr/local/bin/openhands; \
   else \
     ls -la /opt/venv-openhands/bin; echo "error: missing OpenHands CLI (expected openhands or agent-server)"; exit 3; \
