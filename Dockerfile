@@ -232,21 +232,7 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  '    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do' \
  '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
  '    done' \
- '    # Per-agent in-container install for other coding agents (codex, crush, openhands, opencode, plandex)' \
- '    if [ -d "$CFG_DST/codex" ]; then' \
- '      install -d -m 0700 "$HOME/.codex" >/dev/null 2>&1 || true' \
- '      for f in "$CFG_DST/codex"/.* "$CFG_DST/codex"/*; do' \
- '        [ -e "$f" ] || continue' \
- '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
- '        [ -h "$f" ] && continue' \
- '        [ -f "$f" ] || continue' \
- '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
- '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
- '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
- '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
- '        install -m "$mode" "$f" "$HOME/.codex/$b" >/dev/null 2>&1 || true' \
- '      done' \
- '    fi' \
+ '    # Per-agent in-container install for other coding agents (crush, openhands, opencode, plandex)' \
  '    if [ -d "$CFG_DST/crush" ]; then' \
  '      install -d -m 0700 "$HOME/.crush" >/dev/null 2>&1 || true' \
  '      for f in "$CFG_DST/crush"/.* "$CFG_DST/crush"/*; do' \
