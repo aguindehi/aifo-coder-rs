@@ -428,14 +428,6 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         let mut staged_dirs: Vec<PathBuf> = Vec::new();
 
         match agent {
-            "codex" => {
-                let src = host_home.join(".codex");
-                if let Some(p) =
-                    stage_top_level_files("codex", &src, &cfg_root, max_sz, &allowed_exts)
-                {
-                    staged_dirs.push(p);
-                }
-            }
             "crush" => {
                 let src = host_home.join(".crush");
                 if let Some(p) =
