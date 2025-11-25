@@ -20,10 +20,10 @@ Layout and tokens
 - Agent column ~16 chars; cell ~6 chars; compresses to single-letter tokens on narrow terminals.
 - Status tokens: PASS (green), WARN (yellow), FAIL (red), PENDING/spinner (dim gray).
 "#]
+use std::env;
 use std::io::Write as _;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
-use std::env;
 
 use crate::banner::print_startup_banner;
 
@@ -69,7 +69,9 @@ fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
         "go" => "go version",
         _ => return None,
     };
-    Some(format!("export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"))
+    Some(format!(
+        "export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"
+    ))
 }
 impl CursorGuard {
     fn new(hide: bool) -> Self {
@@ -684,14 +686,8 @@ pub fn run_support(verbose: bool) -> ExitCode {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(DEFAULT_SUPPORT_TIMEOUT_SECS);
-    let deep_enabled = std::env::var("AIFO_SUPPORT_DEEP")
-        .ok()
-        .as_deref()
-        == Some("1");
-    let combo_enabled = std::env::var("AIFO_SUPPORT_COMBO")
-        .ok()
-        .as_deref()
-        == Some("1");
+    let deep_enabled = std::env::var("AIFO_SUPPORT_DEEP").ok().as_deref() == Some("1");
+    let combo_enabled = std::env::var("AIFO_SUPPORT_COMBO").ok().as_deref() == Some("1");
 
     // Build shuffled worklist of (agent_idx, kind_idx)
     let mut worklist: Vec<(usize, usize)> = Vec::new();
