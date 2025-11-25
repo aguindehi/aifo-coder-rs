@@ -512,6 +512,7 @@ RUST_TOOLCHAIN_TAG ?= latest
 NODE_TOOLCHAIN_TAG ?= latest
 CPP_TOOLCHAIN_TAG ?= latest
 TS_TOOLCHAIN_TAG ?= latest
+TS_TOOLCHAIN_TAG_EFF := $(if $(strip $(TS_TOOLCHAIN_TAG)),$(TS_TOOLCHAIN_TAG),latest)
 RUST_BASE_TAG ?= 1-slim-bookworm
 NODE_BASE_TAG ?= 22-bookworm-slim
 # Toolchain repos/images (centralized)
@@ -522,7 +523,7 @@ TC_REPO_TS   ?= aifo-coder-toolchain-ts
 TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG)
 TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG)
 TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(CPP_TOOLCHAIN_TAG)
-TC_IMAGE_TS   ?= $(TC_REPO_TS):$(TS_TOOLCHAIN_TAG)
+TC_IMAGE_TS   ?= $(TC_REPO_TS):$(TS_TOOLCHAIN_TAG_EFF)
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
@@ -569,9 +570,9 @@ ifeq ($(ADD_ARCH_IN_TAG)$(SINGLE_PLAT),11)
   CPP_REG_TAG := $(CPP_TOOLCHAIN_TAG)-$(ARCH_SUFFIX)
 endif
 
-TS_REG_TAG := $(TS_TOOLCHAIN_TAG)
+TS_REG_TAG := $(TS_TOOLCHAIN_TAG_EFF)
 ifeq ($(ADD_ARCH_IN_TAG)$(SINGLE_PLAT),11)
-  TS_REG_TAG := $(TS_TOOLCHAIN_TAG)-$(ARCH_SUFFIX)
+  TS_REG_TAG := $(TS_TOOLCHAIN_TAG_EFF)-$(ARCH_SUFFIX)
 endif
 
 # Registry-tagged image names (used only for push/archive); local tags remain unchanged
