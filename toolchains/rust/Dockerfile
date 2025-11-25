@@ -114,8 +114,7 @@ RUN set -eux; \
         if [ -n "$bin" ]; then install -m 0755 "$bin" /usr/local/cargo/bin/cargo-nextest; fi; \
         rm -rf /tmp/nextest /tmp/nextest.tgz; \
       fi; \
-    else \
-      if [ -n "$tgt_nextest" ]; then \
+    elif [ -n "$tgt_nextest" ]; then \
         url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-${tgt_nextest}.tar.gz"; \
         if curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /tmp/nextest.tgz; then \
           mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; \
