@@ -1092,7 +1092,7 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
     }
 
     let use_err = aifo_coder::color_enabled_stderr();
-    let mut overall_code: u8 = 0;
+    let mut any_fail = false;
 
     // Mode 1: baseline (no deep, no combo)
     env::set_var("AIFO_SUPPORT_DEEP", "0");
@@ -1102,8 +1102,9 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present.",
     );
     let code1 = run_support(verbose);
-    let c1 = code1.exit_code();
-    overall_code = overall_code.max(c1);
+    if code1 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
 
     eprintln!();
 
@@ -1115,8 +1116,9 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style).",
     );
     let code2 = run_support(verbose);
-    let c2 = code2.exit_code();
-    overall_code = overall_code.max(c2);
+    if code2 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
 
     eprintln!();
 
@@ -1128,8 +1130,9 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         "Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH.",
     );
     let code3 = run_support(verbose);
-    let c3 = code3.exit_code();
-    overall_code = overall_code.max(c3);
+    if code3 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
 
     // Restore env
     match orig_deep {
@@ -1145,5 +1148,9 @@ pub fn run_support_all(verbose: bool) -> ExitCode {
         None => env::remove_var("AIFO_SUPPORT_ANIMATE"),
     }
 
-    ExitCode::from(overall_code)
+    if any_fail {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
