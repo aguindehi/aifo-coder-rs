@@ -621,11 +621,18 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  elif [ -x /opt/venv-openhands/bin/agent-server ]; then \
-    { echo '#!/bin/sh'; echo 'exec /opt/venv-openhands/bin/agent-server "$@"'; } > /usr/local/bin/openhands; \
-    chmod 0755 /usr/local/bin/openhands; \
   else \
-    ls -la /opt/venv-openhands/bin; echo "error: missing OpenHands CLI (expected openhands or agent-server)"; exit 3; \
+    { echo '#!/bin/sh'; \
+      echo 'VENVP="/opt/venv-openhands/bin/python"'; \
+      echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then'; \
+      echo '  exec "$VENVP" -m openhands "$@"'; \
+      echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then'; \
+      echo '  exec "$VENVP" -m agent_server "$@"'; \
+      echo 'else'; \
+      echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2'; \
+      echo '  exit 127'; \
+      echo 'fi'; } > /usr/local/bin/openhands; \
+    chmod 0755 /usr/local/bin/openhands; \
   fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
@@ -911,11 +918,18 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  elif [ -x /opt/venv-openhands/bin/agent-server ]; then \
-    { echo '#!/bin/sh'; echo 'exec /opt/venv-openhands/bin/agent-server "$@"'; } > /usr/local/bin/openhands; \
-    chmod 0755 /usr/local/bin/openhands; \
   else \
-    ls -la /opt/venv-openhands/bin; echo "error: missing OpenHands CLI (expected openhands or agent-server)"; exit 3; \
+    { echo '#!/bin/sh'; \
+      echo 'VENVP="/opt/venv-openhands/bin/python"'; \
+      echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then'; \
+      echo '  exec "$VENVP" -m openhands "$@"'; \
+      echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then'; \
+      echo '  exec "$VENVP" -m agent_server "$@"'; \
+      echo 'else'; \
+      echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2'; \
+      echo '  exit 127'; \
+      echo 'fi'; } > /usr/local/bin/openhands; \
+    chmod 0755 /usr/local/bin/openhands; \
   fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
