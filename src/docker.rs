@@ -251,7 +251,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     // Aider keeps its own special-case block for dotfiles; other agents use the generic
     // per-agent staging below.
     {
-        // Always stage latest Aider dotfiles into a per-run directory (~/.config/aifo-coder/aider-<PID>)
+        // Always stage latest Aider dotfiles into a canonical per-agent directory (~/.config/aifo-coder/aider)
         let legacy_names = [
             ".aider.conf.yml",
             ".aider.model.settings.yml",
@@ -264,8 +264,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(&cfg_root, fs::Permissions::from_mode(0o700));
         }
-        let pid = std::process::id();
-        let staging = cfg_root.join(format!("aider-{}", pid));
+        let staging = cfg_root.join("aider");
         let _ = fs::create_dir_all(&staging);
         #[cfg(unix)]
         {
@@ -288,7 +287,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                         #[cfg(unix)]
                         {
                             use std::os::unix::fs::PermissionsExt;
-                            let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o644));
+                            // Treat Aider configs as potentially sensitive; default to 0600
+                            let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o600));
                         }
                         staged_any = true;
                     }
@@ -388,8 +388,8 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             if !src_dir.is_dir() {
                 return None;
             }
-            let pid = std::process::id();
-            let staging = cfg_root.join(format!("{agent}-{pid}"));
+            // Use a stable per-agent directory name so entrypoint can consume CFG_DST/<agent>
+            let staging = cfg_root.join(agent);
             let _ = fs::create_dir_all(&staging);
             #[cfg(unix)]
             {
