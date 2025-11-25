@@ -666,7 +666,19 @@ exec /usr/local/bin/openhands "$@" \
   || exec "$VENVP" -m agent_server "$@"
 SH
 RUN chmod 0755 /opt/venv-openhands/bin/openhands
-RUN [ -x /usr/local/bin/openhands ] || ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands
+RUN cat >/usr/local/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
+  exec "$VENVP" -m openhands "$@"
+elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+  exec "$VENVP" -m agent_server "$@"
+else
+  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  exit 127
+fi
+SH
+RUN chmod 0755 /usr/local/bin/openhands
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- OpenCode image (npm install; shims-first PATH) ---
