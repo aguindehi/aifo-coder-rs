@@ -622,16 +622,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   else \
-    { echo '#!/bin/sh'; \
-      echo 'VENVP="/opt/venv-openhands/bin/python"'; \
-      echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then'; \
-      echo '  exec "$VENVP" -m openhands "$@"'; \
-      echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then'; \
-      echo '  exec "$VENVP" -m agent_server "$@"'; \
-      echo 'else'; \
-      echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2'; \
-      echo '  exit 127'; \
-      echo 'fi'; } > /usr/local/bin/openhands; \
+    echo '#!/bin/sh' > /usr/local/bin/openhands; \
+    echo 'VENVP="/opt/venv-openhands/bin/python"' >> /usr/local/bin/openhands; \
+    echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then' >> /usr/local/bin/openhands; \
+    echo '  exec "$VENVP" -m openhands "$@"' >> /usr/local/bin/openhands; \
+    echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then' >> /usr/local/bin/openhands; \
+    echo '  exec "$VENVP" -m agent_server "$@"' >> /usr/local/bin/openhands; \
+    echo 'else' >> /usr/local/bin/openhands; \
+    echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2' >> /usr/local/bin/openhands; \
+    echo '  exit 127' >> /usr/local/bin/openhands; \
+    echo 'fi' >> /usr/local/bin/openhands; \
     chmod 0755 /usr/local/bin/openhands; \
   fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
@@ -919,16 +919,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   if [ -x /opt/venv-openhands/bin/openhands ]; then \
     ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
   else \
-    { echo '#!/bin/sh'; \
-      echo 'VENVP="/opt/venv-openhands/bin/python"'; \
-      echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then'; \
-      echo '  exec "$VENVP" -m openhands "$@"'; \
-      echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then'; \
-      echo '  exec "$VENVP" -m agent_server "$@"'; \
-      echo 'else'; \
-      echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2'; \
-      echo '  exit 127'; \
-      echo 'fi'; } > /usr/local/bin/openhands; \
+    echo '#!/bin/sh' > /usr/local/bin/openhands; \
+    echo 'VENVP="/opt/venv-openhands/bin/python"' >> /usr/local/bin/openhands; \
+    echo 'if "$VENVP" -c "import openhands" >/dev/null 2>&1; then' >> /usr/local/bin/openhands; \
+    echo '  exec "$VENVP" -m openhands "$@"' >> /usr/local/bin/openhands; \
+    echo 'elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then' >> /usr/local/bin/openhands; \
+    echo '  exec "$VENVP" -m agent_server "$@"' >> /usr/local/bin/openhands; \
+    echo 'else' >> /usr/local/bin/openhands; \
+    echo '  echo "error: OpenHands CLI not found (no openhands or agent_server module)" >&2' >> /usr/local/bin/openhands; \
+    echo '  exit 127' >> /usr/local/bin/openhands; \
+    echo 'fi' >> /usr/local/bin/openhands; \
     chmod 0755 /usr/local/bin/openhands; \
   fi; \
   if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
