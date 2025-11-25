@@ -209,7 +209,13 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
 fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
     match &cli.command {
         Agent::Doctor => Some(crate::commands::run_doctor_command(cli)),
-        Agent::Support => Some(crate::support::run_support(cli.verbose)),
+        Agent::Support { all } => {
+            if *all {
+                Some(crate::support::run_support_all(cli.verbose))
+            } else {
+                Some(crate::support::run_support(cli.verbose))
+            }
+        }
         Agent::Images => Some(crate::commands::run_images(cli)),
         Agent::CacheClear => Some(crate::commands::run_cache_clear(cli)),
         Agent::ToolchainCacheClear => Some(crate::commands::run_toolchain_cache_clear(cli)),

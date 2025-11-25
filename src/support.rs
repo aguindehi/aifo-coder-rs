@@ -23,6 +23,7 @@ Layout and tokens
 use std::io::Write as _;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
+use std::env;
 
 use crate::banner::print_startup_banner;
 
@@ -1075,4 +1076,75 @@ pub fn run_support(verbose: bool) -> ExitCode {
     }
 
     ExitCode::from(0)
+}
+
+/// Run all support modes (baseline, deep, combo) in sequence, with prose explanations.
+///
+/// Modes:
+///  1) Baseline: shallow presence checks only (agent CLIs + basic toolchain binaries).
+///  2) Deep: additionally compile/run tiny "hello world" style programs in toolchain images.
+///  3) Combo: from inside each agent image, check whether toolchain commands are reachable on PATH.
+pub fn run_support_all(verbose: bool) -> ExitCode {
+    // Snapshot env settings we will modify
+    let orig_deep = env::var("AIFO_SUPPORT_DEEP").ok();
+    let orig_combo = env::var("AIFO_SUPPORT_COMBO").ok();
+    let orig_animate = env::var("AIFO_SUPPORT_ANIMATE").ok();
+
+    // For stacked matrices, default to no animation unless user forced it explicitly
+    if orig_animate.is_none() {
+        env::set_var("AIFO_SUPPORT_ANIMATE", "0");
+    }
+
+    let use_err = aifo_coder::color_enabled_stderr();
+    let mut overall_code: u8 = 0;
+
+    // Mode 1: baseline (no deep, no combo)
+    env::set_var("AIFO_SUPPORT_DEEP", "0");
+    env::set_var("AIFO_SUPPORT_COMBO", "0");
+    aifo_coder::log_info_stderr(
+        use_err,
+        "Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present.",
+    );
+    let code1 = run_support(verbose);
+    overall_code = overall_code.max(code1.code().unwrap_or(1));
+
+    eprintln!();
+
+    // Mode 2: deep toolchain probes only
+    env::set_var("AIFO_SUPPORT_DEEP", "1");
+    env::set_var("AIFO_SUPPORT_COMBO", "0");
+    aifo_coder::log_info_stderr(
+        use_err,
+        "Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style).",
+    );
+    let code2 = run_support(verbose);
+    overall_code = overall_code.max(code2.code().unwrap_or(1));
+
+    eprintln!();
+
+    // Mode 3: combo probes only (agent+toolchain PATH), no deep
+    env::set_var("AIFO_SUPPORT_DEEP", "0");
+    env::set_var("AIFO_SUPPORT_COMBO", "1");
+    aifo_coder::log_info_stderr(
+        use_err,
+        "Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH.",
+    );
+    let code3 = run_support(verbose);
+    overall_code = overall_code.max(code3.code().unwrap_or(1));
+
+    // Restore env
+    match orig_deep {
+        Some(v) => env::set_var("AIFO_SUPPORT_DEEP", v),
+        None => env::remove_var("AIFO_SUPPORT_DEEP"),
+    }
+    match orig_combo {
+        Some(v) => env::set_var("AIFO_SUPPORT_COMBO", v),
+        None => env::remove_var("AIFO_SUPPORT_COMBO"),
+    }
+    match orig_animate {
+        Some(v) => env::set_var("AIFO_SUPPORT_ANIMATE", v),
+        None => env::remove_var("AIFO_SUPPORT_ANIMATE"),
+    }
+
+    ExitCode::from(overall_code)
 }

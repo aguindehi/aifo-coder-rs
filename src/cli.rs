@@ -108,7 +108,11 @@ pub(crate) enum Agent {
     Doctor,
 
     /// Run support matrix for coder/toolchains
-    Support,
+    Support {
+        /// Run all support matrix modes (baseline, deep, combo) in sequence
+        #[arg(long = "all")]
+        all: bool,
+    },
 
     /// Show effective image references (including flavor/registry)
     Images,
