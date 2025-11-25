@@ -288,7 +288,10 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         }
         if staged_any {
             // Expose the staging dir for cleanup and overlay-mount it to expected container path
-            env::set_var("AIFO_AIDER_STAGING_DIR", staging.to_string_lossy().to_string());
+            env::set_var(
+                "AIFO_AIDER_STAGING_DIR",
+                staging.to_string_lossy().to_string(),
+            );
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(OsString::from(format!(
                 "{}:/home/coder/.aifo-config-host/aider:ro",
