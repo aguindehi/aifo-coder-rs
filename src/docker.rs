@@ -347,7 +347,11 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                 None => return false,
             };
             // Reject names with suspicious characters
-            if name.is_empty() || name.chars().any(|c| !c.is_ascii() || (!c.is_alphanumeric() && !['.', '-', '_'].contains(&c))) {
+            if name.is_empty()
+                || name.chars().any(|c| {
+                    !c.is_ascii() || (!c.is_alphanumeric() && !['.', '-', '_'].contains(&c))
+                })
+            {
                 if verbose {
                     eprintln!(
                         "aifo-entrypoint: config: skip invalid name for agent {}: {}",
@@ -414,7 +418,11 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
                     staged_any = true;
                 }
             }
-            if staged_any { Some(staging) } else { None }
+            if staged_any {
+                Some(staging)
+            } else {
+                None
+            }
         }
 
         let mut staged_dirs: Vec<PathBuf> = Vec::new();
