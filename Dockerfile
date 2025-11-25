@@ -657,6 +657,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
+# Create venv-level OpenHands wrapper with exec fallbacks (handles both endpoints in runtime command)
+RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+exec /usr/local/bin/openhands "$@" \
+  || exec "$VENVP" -m openhands "$@" \
+  || exec "$VENVP" -m agent_server "$@"
+SH
+RUN chmod 0755 /opt/venv-openhands/bin/openhands
+RUN [ -x /usr/local/bin/openhands ] || ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- OpenCode image (npm install; shims-first PATH) ---
@@ -957,6 +967,15 @@ else
 fi
 SH
 RUN chmod 0755 /usr/local/bin/openhands
+# Also create venv-level OpenHands wrapper with exec fallbacks for direct path callers
+RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+exec /usr/local/bin/openhands "$@" \
+  || exec "$VENVP" -m openhands "$@" \
+  || exec "$VENVP" -m agent_server "$@"
+SH
+RUN chmod 0755 /opt/venv-openhands/bin/openhands
 # --- OpenCode slim image (npm install; shims-first PATH) ---
 FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
