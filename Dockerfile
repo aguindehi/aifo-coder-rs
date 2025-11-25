@@ -657,24 +657,44 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Create venv-level OpenHands wrapper with exec fallbacks (handles both endpoints in runtime command)
+# Create venv-level OpenHands wrapper with detection-based fallbacks to avoid executing non-existent modules
 RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-exec /usr/local/bin/openhands "$@" \
-  || exec "$VENVP" -m openhands "$@" \
-  || exec "$VENVP" -m agent_server "$@"
+# Delegate to the top-level wrapper when available
+if [ -x "/usr/local/bin/openhands" ]; then
+  exec /usr/local/bin/openhands "$@"
+fi
+# Fallbacks with detection to avoid executing non-existent modules
+if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server.__main__") else 1)'; then
+  exec "$VENVP" -m agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)'; then
+  exec "$VENVP" -m openhands.cli "$@"
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)'; then
+  exec "$VENVP" -m openhands "$@"
+else
+  echo "error: OpenHands CLI not found (no agent_server/cli entrypoint)" 1>&2
+  exit 127
+fi
 SH
 RUN chmod 0755 /opt/venv-openhands/bin/openhands
 RUN cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
-  exec "$VENVP" -m openhands "$@"
-elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+# Prefer agent_server CLI; it is the documented entrypoint
+if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server.__main__") else 1)'; then
   exec "$VENVP" -m agent_server "$@"
+# Use installed console script if present
+elif [ -x "/opt/venv-openhands/bin/openhands" ]; then
+  exec /opt/venv-openhands/bin/openhands "$@"
+# Fall back to openhands CLI module if available
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)'; then
+  exec "$VENVP" -m openhands.cli "$@"
+# Finally, only if openhands has a __main__
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)'; then
+  exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  echo "error: OpenHands CLI not found (no agent_server/cli entrypoint)" 1>&2
   exit 127
 fi
 SH
@@ -969,23 +989,43 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
-  exec "$VENVP" -m openhands "$@"
-elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+# Prefer agent_server CLI; it is the documented entrypoint
+if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server.__main__") else 1)'; then
   exec "$VENVP" -m agent_server "$@"
+# Use installed console script if present
+elif [ -x "/opt/venv-openhands/bin/openhands" ]; then
+  exec /opt/venv-openhands/bin/openhands "$@"
+# Fall back to openhands CLI module if available
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)'; then
+  exec "$VENVP" -m openhands.cli "$@"
+# Finally, only if openhands has a __main__
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)'; then
+  exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  echo "error: OpenHands CLI not found (no agent_server/cli entrypoint)" 1>&2
   exit 127
 fi
 SH
 RUN chmod 0755 /usr/local/bin/openhands
-# Also create venv-level OpenHands wrapper with exec fallbacks for direct path callers
+# Also create venv-level OpenHands wrapper with detection-based fallbacks for direct path callers
 RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-exec /usr/local/bin/openhands "$@" \
-  || exec "$VENVP" -m openhands "$@" \
-  || exec "$VENVP" -m agent_server "$@"
+# Delegate to the top-level wrapper when available
+if [ -x "/usr/local/bin/openhands" ]; then
+  exec /usr/local/bin/openhands "$@"
+fi
+# Fallbacks with detection to avoid executing non-existent modules
+if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server.__main__") else 1)'; then
+  exec "$VENVP" -m agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)'; then
+  exec "$VENVP" -m openhands.cli "$@"
+elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)'; then
+  exec "$VENVP" -m openhands "$@"
+else
+  echo "error: OpenHands CLI not found (no agent_server/cli entrypoint)" 1>&2
+  exit 127
+fi
 SH
 RUN chmod 0755 /opt/venv-openhands/bin/openhands
 # --- OpenCode slim image (npm install; shims-first PATH) ---
