@@ -1617,7 +1617,7 @@ lint:
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
-	      cargo clippy --workspace --all-features -- -D warnings'; \
+	      cargo -q clippy --workspace --all-features -- -D warnings'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
 	  exit 1; \
@@ -1708,6 +1708,8 @@ test:
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
 	     esac ;; \
 	esac; \
+	echo; \
+	echo "Running unit test suite via cargo nextest ..."; \
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
