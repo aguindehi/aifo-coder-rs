@@ -582,6 +582,8 @@ pub fn run_support(verbose: bool, suppress_banner: bool, preface: Option<&str>) 
 
     // Header line for the matrix
 
+    
+
     if let Some(p) = preface {
         aifo_coder::log_info_stderr(use_err, p);
     }
