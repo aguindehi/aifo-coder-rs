@@ -108,7 +108,21 @@ pub(crate) enum Agent {
     Doctor,
 
     /// Run support matrix for coder/toolchains
-    Support,
+    Support {
+        /// Run baseline checks only
+        #[arg(long = "base")]
+        base: bool,
+        /// Run deep checks only
+        #[arg(long = "deep")]
+        deep: bool,
+        /// Run combo checks only
+        #[arg(long = "combo")]
+        combo: bool,
+        /// Run all support matrix modes (baseline, deep, combo) in sequence
+        /// Default when no --base/--deep/--combo are provided
+        #[arg(long = "all")]
+        all: bool,
+    },
 
     /// Show effective image references (including flavor/registry)
     Images,
@@ -224,6 +238,10 @@ pub(crate) struct Cli {
     /// Print detailed execution info
     #[arg(long)]
     pub(crate) verbose: bool,
+
+    /// Suppress startup banner output
+    #[arg(long, short = 'q')]
+    pub(crate) quiet: bool,
 
     /// Choose image flavor: full or slim (overrides AIFO_CODER_IMAGE_FLAVOR)
     #[arg(long, value_enum)]

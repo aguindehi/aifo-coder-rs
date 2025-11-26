@@ -20,6 +20,7 @@ Layout and tokens
 - Agent column ~16 chars; cell ~6 chars; compresses to single-letter tokens on narrow terminals.
 - Status tokens: PASS (green), WARN (yellow), FAIL (red), PENDING/spinner (dim gray).
 "#]
+use std::env;
 use std::io::Write as _;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
@@ -28,6 +29,49 @@ use crate::banner::print_startup_banner;
 
 struct CursorGuard {
     hide: bool,
+}
+
+/// Build an optional deep compiler/run probe for a given toolchain kind.
+/// These are small "hello world" style checks that compile or execute minimal code.
+fn pm_deep_cmd_for(kind: &str) -> Option<String> {
+    match kind {
+        "rust" => Some(
+            "printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin && /tmp/aifo-support-rust-bin"
+                .to_string(),
+        ),
+        "node" => Some("node -e 'process.exit(0)'".to_string()),
+        "typescript" => Some(
+            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#.to_string(),
+        ),
+        "python" => Some("python3 - <<'EOF'\nimport sys\nsys.exit(0)\nEOF".to_string()),
+        "c-cpp" => Some(
+            "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c && /tmp/aifo-support-c"
+                .to_string(),
+        ),
+        "go" => Some(
+            "cat <<'EOF' >/tmp/aifo-support-go.go\npackage main\nfunc main() {}\nEOF\ngo run /tmp/aifo-support-go.go"
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+/// Build an optional agent+toolchain combo probe command to run inside the agent image.
+/// This verifies that, with the agent's PATH, the primary tool for the given kind is reachable.
+fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
+    let pathv = agent_path_for(agent);
+    let tool_cmd = match kind {
+        "rust" => "command -v rustc",
+        "node" => "command -v node || command -v nodejs",
+        "typescript" => "command -v tsc || command -v tsserver || ((command -v node || command -v nodejs) && (command -v npm || command -v corepack || command -v pnpm || command -v yarn))",
+        "python" => "command -v python3 || command -v python",
+        "c-cpp" => "command -v gcc || command -v clang || command -v cc || command -v make",
+        "go" => "command -v go",
+        _ => return None,
+    };
+    Some(format!(
+        "export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"
+    ))
 }
 impl CursorGuard {
     fn new(hide: bool) -> Self {
@@ -192,6 +236,8 @@ fn pending_spinner_frames(ascii: bool) -> &'static [&'static str] {
         &["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]
     }
 }
+
+static DEFAULT_SUPPORT_TIMEOUT_SECS: u64 = 0;
 
 /// Support mode event channel messages
 enum Event {
@@ -439,6 +485,7 @@ fn run_version_check(
     image: &str,
     cmd: &str,
     no_pull: bool,
+    timeout_secs: u64,
 ) -> Result<(), String> {
     use std::process::{Command, Stdio};
     if no_pull {
@@ -455,6 +502,7 @@ fn run_version_check(
             return Err("not-present".to_string());
         }
     }
+
     let mut child = Command::new(rt)
         .arg("run")
         .arg("--rm")
@@ -467,11 +515,45 @@ fn run_version_check(
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
-    let st = child.wait().map_err(|e| e.to_string())?;
-    if st.success() {
-        Ok(())
+
+    if timeout_secs == 0 {
+        let st = child.wait().map_err(|e| e.to_string())?;
+        if st.success() {
+            Ok(())
+        } else {
+            Err(format!("exit={}", st.code().unwrap_or(1)))
+        }
     } else {
-        Err(format!("exit={}", st.code().unwrap_or(1)))
+        let timeout = Duration::from_secs(timeout_secs);
+        let start = SystemTime::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    if st.success() {
+                        return Ok(());
+                    } else {
+                        return Err(format!("exit={}", st.code().unwrap_or(1)));
+                    }
+                }
+                Ok(None) => {
+                    if SystemTime::now()
+                        .duration_since(start)
+                        .unwrap_or_else(|_| Duration::from_secs(0))
+                        >= timeout
+                    {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err("timeout".to_string());
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(e.to_string());
+                }
+            }
+        }
     }
 }
 
@@ -482,9 +564,11 @@ fn run_version_check(
 /// - Resolve images via default_image_for_quiet/default_toolchain_image.
 /// - Initialize RNG seed from env or time; log effective seed when verbose.
 /// - Compute widths and render initial matrix with PENDING cells (TTY only when animation enabled).
-pub fn run_support(verbose: bool) -> ExitCode {
+pub fn run_support(verbose: bool, suppress_banner: bool, preface: Option<&str>) -> ExitCode {
     // Print startup header (version/host lines)
-    print_startup_banner();
+    if !suppress_banner {
+        print_startup_banner();
+    }
 
     // Require docker runtime; print prominent red line and exit 1 on missing
     let runtime = match aifo_coder::container_runtime_path() {
@@ -497,8 +581,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
     };
 
     // Header line for the matrix
-    eprintln!();
     let use_err = aifo_coder::color_enabled_stderr();
+
+    if let Some(p) = preface {
+        aifo_coder::log_info_stderr(use_err, p);
+    }
+    eprintln!();
     aifo_coder::log_info_stderr(use_err, "Support matrix:");
     eprintln!();
 
@@ -600,6 +688,12 @@ pub fn run_support(verbose: bool) -> ExitCode {
         .and_then(|s| s.parse::<u64>().ok())
         .map(|v| v.clamp(40, 250))
         .unwrap_or(80);
+    let timeout_secs: u64 = std::env::var("AIFO_SUPPORT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SUPPORT_TIMEOUT_SECS);
+    let deep_enabled = std::env::var("AIFO_SUPPORT_DEEP").ok().as_deref() == Some("1");
+    let combo_enabled = std::env::var("AIFO_SUPPORT_COMBO").ok().as_deref() == Some("1");
 
     // Build shuffled worklist of (agent_idx, kind_idx)
     let mut worklist: Vec<(usize, usize)> = Vec::new();
@@ -624,6 +718,9 @@ pub fn run_support(verbose: bool) -> ExitCode {
         let tc_imgs = toolchain_images.clone();
         let rt = runtime.clone();
         let tx_cl = tx.clone();
+        let timeout_secs_cl = timeout_secs;
+        let deep_enabled_cl = deep_enabled;
+        let combo_enabled_cl = combo_enabled;
         std::thread::spawn(move || {
             let mut agent_ok: Vec<Option<bool>> = vec![None; agents_cl.len()];
             for (ai, ki) in worklist.into_iter() {
@@ -643,7 +740,7 @@ pub fn run_support(verbose: bool) -> ExitCode {
 
                 if agent_ok[ai].is_none() {
                     let cmd = agent_check_cmd(&agents_cl[ai]);
-                    let res = run_version_check(&rt, agent_img, &cmd, no_pull);
+                    let res = run_version_check(&rt, agent_img, &cmd, no_pull, timeout_secs_cl);
                     let ok = res.is_ok();
                     agent_ok[ai] = Some(ok);
                     let _ = tx_cl.send(Event::AgentCached {
@@ -652,11 +749,33 @@ pub fn run_support(verbose: bool) -> ExitCode {
                         reason: res.err(),
                     });
                 }
-                let cmd = pm_cmd_for(&kinds_cl[ki]);
-                let pm_res = run_version_check(&rt, tc_img, &cmd, no_pull);
-                let pm_ok = pm_res.is_ok();
+
+                // Optional combo probe: run from agent image with agent PATH to see toolchain visibility
+                let mut combo_ok = true;
+                if combo_enabled_cl {
+                    if let Some(combo_cmd) = combo_probe_cmd(&agents_cl[ai], &kinds_cl[ki]) {
+                        let combo_res =
+                            run_version_check(&rt, agent_img, &combo_cmd, no_pull, timeout_secs_cl);
+                        combo_ok = combo_res.is_ok();
+                    }
+                }
+
+                let pm_cmd = pm_cmd_for(&kinds_cl[ki]);
+                let pm_res = run_version_check(&rt, tc_img, &pm_cmd, no_pull, timeout_secs_cl);
+                let mut pm_ok = pm_res.is_ok();
+
+                // Optional deep probe in the toolchain image
+                if deep_enabled_cl {
+                    if let Some(deep_cmd) = pm_deep_cmd_for(&kinds_cl[ki]) {
+                        let deep_res =
+                            run_version_check(&rt, tc_img, &deep_cmd, no_pull, timeout_secs_cl);
+                        pm_ok = pm_ok && deep_res.is_ok();
+                    }
+                }
+
                 let aok = agent_ok[ai].unwrap_or(false);
-                let status = if aok && pm_ok {
+                // Integrate combo probe into status semantics
+                let status = if aok && pm_ok && combo_ok {
                     "PASS"
                 } else if aok || pm_ok {
                     "WARN"
@@ -959,4 +1078,69 @@ pub fn run_support(verbose: bool) -> ExitCode {
     }
 
     ExitCode::from(0)
+}
+
+/// Run all support modes (baseline, deep, combo) in sequence, with prose explanations.
+///
+/// Modes:
+///  1) Baseline: shallow presence checks only (agent CLIs + basic toolchain binaries).
+///  2) Deep: additionally compile/run tiny "hello world" style programs in toolchain images.
+///  3) Combo: from inside each agent image, check whether toolchain commands are reachable on PATH.
+pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
+    // Snapshot env settings we will modify
+    let orig_deep = env::var("AIFO_SUPPORT_DEEP").ok();
+    let orig_combo = env::var("AIFO_SUPPORT_COMBO").ok();
+    let orig_animate = env::var("AIFO_SUPPORT_ANIMATE").ok();
+
+    // Animation kept enabled by default; do not override AIFO_SUPPORT_ANIMATE here.
+
+    let mut any_fail = false;
+
+    // Mode 1: baseline (no deep, no combo)
+    env::set_var("AIFO_SUPPORT_DEEP", "0");
+    env::set_var("AIFO_SUPPORT_COMBO", "0");
+    let code1 = run_support(verbose, suppress_first_banner, Some("Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present."));
+    if code1 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
+
+    eprintln!();
+
+    // Mode 2: deep toolchain probes only
+    env::set_var("AIFO_SUPPORT_DEEP", "1");
+    env::set_var("AIFO_SUPPORT_COMBO", "0");
+    let code2 = run_support(verbose, true, Some("Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style)."));
+    if code2 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
+
+    eprintln!();
+
+    // Mode 3: combo probes only (agent+toolchain PATH), no deep
+    env::set_var("AIFO_SUPPORT_DEEP", "0");
+    env::set_var("AIFO_SUPPORT_COMBO", "1");
+    let code3 = run_support(verbose, true, Some("Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH."));
+    if code3 != ExitCode::SUCCESS {
+        any_fail = true;
+    }
+
+    // Restore env
+    match orig_deep {
+        Some(v) => env::set_var("AIFO_SUPPORT_DEEP", v),
+        None => env::remove_var("AIFO_SUPPORT_DEEP"),
+    }
+    match orig_combo {
+        Some(v) => env::set_var("AIFO_SUPPORT_COMBO", v),
+        None => env::remove_var("AIFO_SUPPORT_COMBO"),
+    }
+    match orig_animate {
+        Some(v) => env::set_var("AIFO_SUPPORT_ANIMATE", v),
+        None => env::remove_var("AIFO_SUPPORT_ANIMATE"),
+    }
+
+    if any_fail {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }

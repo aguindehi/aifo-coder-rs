@@ -209,7 +209,60 @@ fn handle_fork_maintenance(cli: &Cli) -> Option<ExitCode> {
 fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
     match &cli.command {
         Agent::Doctor => Some(crate::commands::run_doctor_command(cli)),
-        Agent::Support => Some(crate::support::run_support(cli.verbose)),
+        Agent::Support {
+            all,
+            base,
+            deep,
+            combo,
+        } => {
+            // Default to --all when no specific mode flags are provided
+            let run_all = *all || (!*base && !*deep && !*combo);
+            if run_all {
+                Some(crate::support::run_support_all(cli.verbose, cli.quiet))
+            } else {
+                let mut any_fail = false;
+                if *base {
+                    // Baseline: no deep/combo
+                    std::env::set_var("AIFO_SUPPORT_DEEP", "0");
+                    std::env::set_var("AIFO_SUPPORT_COMBO", "0");
+                    let code = crate::support::run_support(cli.verbose, cli.quiet, None);
+                    if code != ExitCode::SUCCESS {
+                        any_fail = true;
+                    }
+                }
+                if *deep {
+                    // Deep-only
+                    std::env::set_var("AIFO_SUPPORT_DEEP", "1");
+                    std::env::set_var("AIFO_SUPPORT_COMBO", "0");
+                    let code = crate::support::run_support(
+                        cli.verbose,
+                        true, /* suppress banner */
+                        None,
+                    );
+                    if code != ExitCode::SUCCESS {
+                        any_fail = true;
+                    }
+                }
+                if *combo {
+                    // Combo-only
+                    std::env::set_var("AIFO_SUPPORT_DEEP", "0");
+                    std::env::set_var("AIFO_SUPPORT_COMBO", "1");
+                    let code = crate::support::run_support(
+                        cli.verbose,
+                        true, /* suppress banner */
+                        None,
+                    );
+                    if code != ExitCode::SUCCESS {
+                        any_fail = true;
+                    }
+                }
+                Some(if any_fail {
+                    ExitCode::FAILURE
+                } else {
+                    ExitCode::SUCCESS
+                })
+            }
+        }
         Agent::Images => Some(crate::commands::run_images(cli)),
         Agent::CacheClear => Some(crate::commands::run_cache_clear(cli)),
         Agent::ToolchainCacheClear => Some(crate::commands::run_toolchain_cache_clear(cli)),
@@ -372,7 +425,9 @@ fn main() -> ExitCode {
     };
 
     // Print startup banner before any further diagnostics
-    print_startup_banner();
+    if !cli.quiet {
+        print_startup_banner();
+    }
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines

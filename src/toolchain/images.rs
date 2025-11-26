@@ -70,8 +70,9 @@ fn replace_tag(image: &str, tag: &str) -> String {
 const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
     ("rust", "rust"),
     ("node", "node"),
-    ("ts", "node"),
-    ("typescript", "node"),
+    // Keep TypeScript as its own canonical kind so we can use a dedicated toolchain image
+    ("ts", "typescript"),
+    ("typescript", "typescript"),
     ("python", "python"),
     ("py", "python"),
     ("c", "c-cpp"),
@@ -87,6 +88,7 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-coder-toolchain-rust:latest"),
     ("node", "aifo-coder-toolchain-node:latest"),
+    ("typescript", "aifo-coder-toolchain-ts:latest"),
     ("python", "python:3.12-slim"),
     ("c-cpp", "aifo-coder-toolchain-cpp:latest"),
     ("go", "golang:1.22-bookworm"),
@@ -96,6 +98,7 @@ const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
 const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-coder-toolchain-rust:{version}"),
     ("node", "aifo-coder-toolchain-node:{version}"),
+    ("typescript", "aifo-coder-toolchain-ts:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
     // c-cpp has no versioned mapping; falls back to non-versioned default
