@@ -5,7 +5,7 @@ stages:
   - release
 
 include:
-  - component: $CI_SERVER_FQDN/devops-services-public/infrastructure-as-code/cicd-components/container/build@0.14.0
+  - component: $CI_SERVER_FQDN/devops-services-public/infrastructure-as-code/cicd-components/container/build@0.18.0
     inputs:
       image_tag_custom: $CI_COMMIT_SHA
 
