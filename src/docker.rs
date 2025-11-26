@@ -1114,8 +1114,8 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
         .is_some();
     let tag_overridden = agent_image_override || agent_tag_override || global_tag_override;
 
-    let allow_local_latest = !tag_overridden
-        && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
+    let allow_local_latest =
+        !tag_overridden && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
 
     if allow_local_latest {
         if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
