@@ -294,6 +294,22 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
  '    fi' \
  '  fi' \
  'fi' \
+ '# Normalize OpenHands LLM settings from AIFO_* env for Azure' \
+ 'if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then' \
+ '  V="${AIFO_API_VERSION:-}"' \
+ '  B="${AIFO_API_BASE:-}"' \
+ '  K="${AIFO_API_KEY:-}"' \
+ '  if [ -n "$V" ]; then' \
+ '    export LITELLM_AZURE_API_VERSION="$V"' \
+ '    export AZURE_OPENAI_RESPONSES_API_VERSION="$V"' \
+ '  fi' \
+ '  SETTINGS="$HOME/.openhands/agent_settings.json"' \
+ '  if [ -f "$SETTINGS" ]; then' \
+ '    [ -n "$V" ] && sed -i -E "s/\\"api_version\\"[[:space:]]*:[[:space:]]*\\"[^\\"]*\\"/\\"api_version\\": \\"$V\\"/g" "$SETTINGS"' \
+ '    [ -n "$B" ] && sed -i -E "s/\\"base_url\\"[[:space:]]*:[[:space:]]*\\"[^\\"]*\\"/\\"base_url\\": \\"$B\\"/g" "$SETTINGS"' \
+ '    [ -n "$K" ] && sed -i -E "s/\\"api_key\\"[[:space:]]*:[[:space:]]*\\"[^\\"]*\\"/\\"api_key\\": \\"$K\\"/g" "$SETTINGS"' \
+ '  fi' \
+ 'fi' \
  'exec "$@"' > /usr/local/bin/aifo-entrypoint \
  && chmod +x /usr/local/bin/aifo-entrypoint
 
