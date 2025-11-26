@@ -1018,7 +1018,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 FROM base-slim AS plandex-slim
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 ARG KEEP_APT=0
-RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
+RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex 2>/dev/null || true; \
     if [ "$KEEP_APT" = "0" ]; then \
       apt-get remove -y procps curl || true; \
       apt-get autoremove -y; \
