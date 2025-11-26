@@ -1088,10 +1088,7 @@ pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
     let orig_combo = env::var("AIFO_SUPPORT_COMBO").ok();
     let orig_animate = env::var("AIFO_SUPPORT_ANIMATE").ok();
 
-    // For stacked matrices, default to no animation unless user forced it explicitly
-    if orig_animate.is_none() {
-        env::set_var("AIFO_SUPPORT_ANIMATE", "0");
-    }
+    // Animation kept enabled by default; do not override AIFO_SUPPORT_ANIMATE here.
 
     let use_err = aifo_coder::color_enabled_stderr();
     let mut any_fail = false;
