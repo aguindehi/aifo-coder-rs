@@ -229,7 +229,7 @@ fn int_support_matrix_is_fully_green() {
 
     let bin = find_aifo_binary();
     let mut cmd = Command::new(bin);
-    cmd.arg("support");
+    cmd.arg("support").arg("--combo");
     // Test the full default matrix; disable animation; avoid ANSI for parsing
     cmd.env("AIFO_SUPPORT_ANIMATE", "0");
     cmd.env("NO_COLOR", "1");
