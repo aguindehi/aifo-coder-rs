@@ -37,6 +37,7 @@ RUN set -eux; \
     chmod -R 0777 /home/coder || true
 
 # Install TypeScript (and keep image lean)
+# hadolint ignore=DL3016
 RUN set -eux; \
     npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional typescript; \
     npm cache clean --force; \
