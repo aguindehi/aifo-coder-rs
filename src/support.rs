@@ -61,12 +61,12 @@ fn pm_deep_cmd_for(kind: &str) -> Option<String> {
 fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
     let pathv = agent_path_for(agent);
     let tool_cmd = match kind {
-        "rust" => "rustc --version",
-        "node" => "node --version || nodejs --version",
-        "typescript" => "tsc --version || tsserver --version || (node --version && (npm -v || corepack -v || pnpm -v || yarn -v))",
-        "python" => "python3 --version || python --version",
-        "c-cpp" => "gcc --version || clang --version || cc --version || make --version",
-        "go" => "go version",
+        "rust" => "command -v rustc",
+        "node" => "command -v node || command -v nodejs",
+        "typescript" => "command -v tsc || command -v tsserver || ((command -v node || command -v nodejs) && (command -v npm || command -v corepack || command -v pnpm || command -v yarn))",
+        "python" => "command -v python3 || command -v python",
+        "c-cpp" => "command -v gcc || command -v clang || command -v cc || command -v make",
+        "go" => "command -v go",
         _ => return None,
     };
     Some(format!(
