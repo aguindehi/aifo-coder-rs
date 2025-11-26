@@ -101,7 +101,7 @@ const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
     ("typescript", "aifo-coder-toolchain-ts:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
-    // c-cpp has no versioned mapping; falls back to non-versioned default
+    ("c-cpp", "aifo-coder-toolchain-cpp:{version}"),
 ];
 
 fn default_image_for_kind_const(kind: &str) -> Option<&'static str> {

@@ -314,6 +314,7 @@ if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
 fi
 exec "$@"
 SH
+
 RUN chmod +x /usr/local/bin/aifo-entrypoint
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
@@ -502,21 +503,6 @@ ENV KEEP_APT=${KEEP_APT}
 # Codex docs: npm i -g @openai/codex
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex@${CODEX_VERSION}; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
-# Create OpenHands wrapper safely in its own RUN (only if not already linked)
-RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
-#!/bin/sh
-VENVP="/opt/venv-openhands/bin/python"
-if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
-  exec "$VENVP" -m openhands "$@"
-elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
-  exec "$VENVP" -m agent_server "$@"
-else
-  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
-  exit 127
-fi
-SH
-RUN chmod 0755 /usr/local/bin/openhands
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Crush image (adds only Crush CLI on top of base) ---
 FROM base AS crush
@@ -526,7 +512,6 @@ ENV KEEP_APT=${KEEP_APT}
 # Crush docs: npm i -g @charmland/crush
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; ok=0; tries=0; while [ "$tries" -lt 3 ]; do if npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @charmland/crush@${CRUSH_VERSION}; then ok=1; break; fi; tries=$((tries+1)); sleep 2; npm cache clean --force || true; done; if [ "$ok" -ne 1 ] || [ ! -x /usr/local/bin/crush ]; then if [ "${CRUSH_VERSION}" != "latest" ]; then arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; case "$arch" in aarch64|arm64) triple="Linux_arm64" ;; x86_64|amd64) triple="Linux_x86_64" ;; *) triple="";; esac; VER="${CRUSH_VERSION}"; if [ -n "$triple" ]; then url="https://github.com/charmbracelet/crush/releases/download/v${VER}/crush_${VER}_${triple}.tar.gz"; tmp="/tmp/crush.$$"; mkdir -p "$tmp"; if curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused "$url" -o "$tmp/crush.tgz"; then tar -xzf "$tmp/crush.tgz" -C "$tmp" || true; if [ -f "$tmp/crush" ]; then install -m 0755 "$tmp/crush" /usr/local/bin/crush; strip /usr/local/bin/crush 2>/dev/null || true; fi; fi; rm -rf "$tmp"; fi; fi; fi; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Aider builder stage (with build tools, not shipped in final) ---
 FROM base AS aider-builder
@@ -624,7 +609,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
     fi'
-# Cleanup merged into Playwright install RUN above (conditional via KEEP_APT)
 
 # --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
@@ -685,7 +669,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Inherit /opt/aifo/bin PATH from base
 # OpenHands CLI is provided by uv tool shim; no custom venv wrapper needed
 # Using uv tool shim in /opt/uv-home/.local/bin/openhands (symlinked to /usr/local/bin/openhands)
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- OpenCode image (npm install; shims-first PATH) ---
 FROM base AS opencode
@@ -722,7 +705,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Plandex builder (Go) ---
 FROM --platform=$BUILDPLATFORM ${REGISTRY_PREFIX}golang:1.23-bookworm AS plandex-builder
@@ -917,7 +899,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
                 rm -rf /opt/yarn-v1.22.22; \
         fi'
-# Cleanup merged into Playwright install RUN above (conditional via KEEP_APT)
 
 # --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
@@ -973,7 +954,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # Using uv tool shim; no custom /usr/local/bin/openhands wrapper needed
 # Using uv tool shim; compatibility symlink created at /opt/venv-openhands/bin/openhands
@@ -1012,20 +992,22 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Plandex slim image (copy binary; shims-first PATH) ---
 FROM base-slim AS plandex-slim
 COPY --from=plandex-builder /out/plandex /usr/local/bin/plandex
 ARG KEEP_APT=0
-RUN export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; chmod 0755 /usr/local/bin/plandex; strip /usr/local/bin/plandex || true; \
-    if [ "$KEEP_APT" = "0" ]; then \
-      apt-get remove -y procps curl || true; \
-      apt-get autoremove -y; \
-      apt-get clean; \
-      apt-get remove --purge -y --allow-remove-essential apt || true; \
-      rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
-      rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
-      rm -rf /var/lib/apt/lists/*; \
-      rm -rf /var/cache/apt/apt-file/; \
-    fi
+RUN sh -lc 'set -e; \
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
+  chmod 0755 /usr/local/bin/plandex; \
+  strip /usr/local/bin/plandex 2>/dev/null || true; \
+  if [ "$KEEP_APT" = "0" ]; then \
+    apt-get remove -y procps curl || true; \
+    apt-get autoremove -y; \
+    apt-get clean; \
+    apt-get remove --purge -y --allow-remove-essential apt || true; \
+    rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf /var/cache/apt/apt-file/; \
+  fi'

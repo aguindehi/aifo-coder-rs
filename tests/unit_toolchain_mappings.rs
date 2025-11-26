@@ -52,9 +52,9 @@ fn unit_test_default_toolchain_image_for_version_mapping() {
         aifo_coder::default_toolchain_image_for_version("go", "1.22"),
         "golang:1.22-bookworm"
     );
-    // c-cpp does not support versions and stays at latest toolchain image
+    // c-cpp now mirrors other first-party toolchains and supports explicit versions
     assert_eq!(
-        aifo_coder::default_toolchain_image_for_version("c-cpp", "any"),
-        "aifo-coder-toolchain-cpp:latest"
+        aifo_coder::default_toolchain_image_for_version("c-cpp", "1.0"),
+        "aifo-coder-toolchain-cpp:1.0"
     );
 }
