@@ -581,6 +581,7 @@ pub fn run_support(verbose: bool, suppress_banner: bool, preface: Option<&str>) 
     };
 
     // Header line for the matrix
+    let use_err = aifo_coder::color_enabled_stderr();
 
     if let Some(p) = preface {
         aifo_coder::log_info_stderr(use_err, p);
@@ -1093,7 +1094,6 @@ pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
 
     // Animation kept enabled by default; do not override AIFO_SUPPORT_ANIMATE here.
 
-    let use_err = aifo_coder::color_enabled_stderr();
     let mut any_fail = false;
 
     // Mode 1: baseline (no deep, no combo)
