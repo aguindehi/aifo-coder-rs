@@ -628,11 +628,13 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   install -d -m 0755 /opt/uv-home; \
-  # Install OpenHands CLI via uv tool install; strip "-cli" suffix for pin if present \
+  # Ensure a stable Python toolchain (3.12) to avoid building packages from source under 3.14 \
+  HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
+  # Pin OpenHands CLI via uv tool using @version (strip "-cli" suffix), and force UV_PYTHON=3.12 \
   VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
-  PKG="openhands"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then PKG="openhands==${VER_PIN}"; fi; \
-  HOME=/opt/uv-home uv tool install "$PKG" || HOME=/opt/uv-home uv tool install openhands; \
+  SPEC="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then SPEC="openhands@${VER_PIN}"; fi; \
+  HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install "$SPEC" || HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install openhands; \
   # Link uv-installed tool into PATH and provide compatibility path expected by launcher \
   ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
   install -d -m 0755 /opt/venv-openhands/bin; \
@@ -915,10 +917,11 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
   install -d -m 0755 /opt/uv-home; \
+  HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
   VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
-  PKG="openhands"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then PKG="openhands==${VER_PIN}"; fi; \
-  HOME=/opt/uv-home uv tool install "$PKG" || HOME=/opt/uv-home uv tool install openhands; \
+  SPEC="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then SPEC="openhands@${VER_PIN}"; fi; \
+  HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install "$SPEC" || HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install openhands; \
   ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
   install -d -m 0755 /opt/venv-openhands/bin; \
   ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
