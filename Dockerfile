@@ -665,15 +665,17 @@ VENVP="/opt/venv-openhands/bin/python"
 if [ -x "/usr/local/bin/openhands" ]; then
   exec /usr/local/bin/openhands "$@"
 fi
-# Local fallbacks with silent detection to avoid tracebacks
-if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)' 2>/dev/null; then
+# Local fallbacks with silent detection. Order: openhands.cli, openhands.agent_server, agent_server, openhands.__main__
+if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
   exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands.cli or agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
   exit 127
 fi
 SH
@@ -681,15 +683,21 @@ RUN chmod 0755 /opt/venv-openhands/bin/openhands
 RUN cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Prefer the CLI module, then server, then package __main__
-if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)' 2>/dev/null; then
+# Prefer real pip console script if it looks like a Python entrypoint
+if [ -x "/opt/venv-openhands/bin/openhands" ] && head -n1 "/opt/venv-openhands/bin/openhands" | grep -qi "python"; then
+  exec /opt/venv-openhands/bin/openhands "$@"
+fi
+# Try modules: openhands.cli, openhands.agent_server, agent_server, then openhands.__main__
+if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
   exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands.cli or agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
   exit 127
 fi
 SH
@@ -984,15 +992,21 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Prefer the CLI module, then server, then package __main__
-if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)' 2>/dev/null; then
+# Prefer real pip console script if it looks like a Python entrypoint
+if [ -x "/opt/venv-openhands/bin/openhands" ] && head -n1 "/opt/venv-openhands/bin/openhands" | grep -qi "python"; then
+  exec /opt/venv-openhands/bin/openhands "$@"
+fi
+# Try modules: openhands.cli, openhands.agent_server, agent_server, then openhands.__main__
+if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
   exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands.cli or agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
   exit 127
 fi
 SH
@@ -1005,15 +1019,17 @@ VENVP="/opt/venv-openhands/bin/python"
 if [ -x "/usr/local/bin/openhands" ]; then
   exec /usr/local/bin/openhands "$@"
 fi
-# Local fallbacks with silent detection to avoid tracebacks
-if "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.cli") else 1)' 2>/dev/null; then
+# Local fallbacks with silent detection. Order: openhands.cli, openhands.agent_server, agent_server, openhands.__main__
+if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("agent_server") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.agent_server "$@"
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
   exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (no openhands.cli or agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
   exit 127
 fi
 SH
