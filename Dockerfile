@@ -639,6 +639,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
   install -d -m 0755 /opt/venv-openhands/bin; \
   ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
+  # Pre-create Jinja2 cache dir under site-packages to avoid permission errors at runtime
+  for d in $(find /opt/uv-home/.local/share/uv/tools/openhands -type d -path "*/site-packages/openhands/sdk/agent/prompts" 2>/dev/null); do \
+    install -d -m 0777 "$d/.jinja_cache"; \
+  done; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -925,6 +929,10 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
   install -d -m 0755 /opt/venv-openhands/bin; \
   ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
+  # Pre-create Jinja2 cache dir under site-packages to avoid permission errors at runtime
+  for d in $(find /opt/uv-home/.local/share/uv/tools/openhands -type d -path "*/site-packages/openhands/sdk/agent/prompts" 2>/dev/null); do \
+    install -d -m 0777 "$d/.jinja_cache"; \
+  done; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
