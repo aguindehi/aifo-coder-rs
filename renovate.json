@@ -1,11 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base"
+    "config:base",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMultipleMajor"
   ],
   "labels": [
     "mgb-renovate"
   ],
+  "assignees": [
+    "amir.guindehi@mgb.ch"
+  ],
+  "rebaseWhen": "conflicted",
+  "stabilityDays": 1,
+  "prConcurrentLimit": 5,
   "packageRules": [
     {
       "assignAutomerge": false,
@@ -20,6 +29,10 @@
         "digest",
         "minor",
         "patch"
+      ],
+      "labels": [
+        "mgb-renovate",
+        "gitlab-ci"
       ]
     },
     {
@@ -35,11 +48,51 @@
         "digest",
         "minor",
         "patch"
+      ],
+      "labels": [
+        "mgb-renovate",
+        "pre-commit"
+      ]
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "patch"
+      ],
+      "groupName": "cargo_patch_updates",
+      "automerge": true,
+      "labels": [
+        "mgb-renovate",
+        "cargo"
+      ]
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "gha_minor_patch",
+      "automerge": true,
+      "labels": [
+        "mgb-renovate",
+        "github-actions"
       ]
     }
   ],
   "pre-commit": {
     "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 4am on monday"
+    ]
   },
   "schedule": [
     "after 8pm and before 7am"
