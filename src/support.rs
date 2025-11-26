@@ -564,7 +564,7 @@ fn run_version_check(
 /// - Resolve images via default_image_for_quiet/default_toolchain_image.
 /// - Initialize RNG seed from env or time; log effective seed when verbose.
 /// - Compute widths and render initial matrix with PENDING cells (TTY only when animation enabled).
-pub fn run_support(verbose: bool, suppress_banner: bool) -> ExitCode {
+pub fn run_support(verbose: bool, suppress_banner: bool, preface: Option<&str>) -> ExitCode {
     // Print startup header (version/host lines)
     if !suppress_banner {
         print_startup_banner();
@@ -581,8 +581,11 @@ pub fn run_support(verbose: bool, suppress_banner: bool) -> ExitCode {
     };
 
     // Header line for the matrix
-    eprintln!();
     let use_err = aifo_coder::color_enabled_stderr();
+    if let Some(p) = preface {
+        aifo_coder::log_info_stderr(use_err, p);
+    }
+    eprintln!();
     aifo_coder::log_info_stderr(use_err, "Support matrix:");
     eprintln!();
 
@@ -1096,11 +1099,7 @@ pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
     // Mode 1: baseline (no deep, no combo)
     env::set_var("AIFO_SUPPORT_DEEP", "0");
     env::set_var("AIFO_SUPPORT_COMBO", "0");
-    aifo_coder::log_info_stderr(
-        use_err,
-        "Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present.",
-    );
-    let code1 = run_support(verbose, suppress_first_banner);
+    let code1 = run_support(verbose, suppress_first_banner, Some("Mode 1: baseline matrix – checks that agent CLIs exist and that basic toolchain binaries/responders are present."));
     if code1 != ExitCode::SUCCESS {
         any_fail = true;
     }
@@ -1110,11 +1109,7 @@ pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
     // Mode 2: deep toolchain probes only
     env::set_var("AIFO_SUPPORT_DEEP", "1");
     env::set_var("AIFO_SUPPORT_COMBO", "0");
-    aifo_coder::log_info_stderr(
-        use_err,
-        "Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style).",
-    );
-    let code2 = run_support(verbose, true);
+    let code2 = run_support(verbose, true, Some("Mode 2: deep matrix – additionally compiles and runs tiny programs in each toolchain image (hello-world style)."));
     if code2 != ExitCode::SUCCESS {
         any_fail = true;
     }
@@ -1124,11 +1119,7 @@ pub fn run_support_all(verbose: bool, suppress_first_banner: bool) -> ExitCode {
     // Mode 3: combo probes only (agent+toolchain PATH), no deep
     env::set_var("AIFO_SUPPORT_DEEP", "0");
     env::set_var("AIFO_SUPPORT_COMBO", "1");
-    aifo_coder::log_info_stderr(
-        use_err,
-        "Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH.",
-    );
-    let code3 = run_support(verbose, true);
+    let code3 = run_support(verbose, true, Some("Mode 3: combo matrix – from inside each agent image, checks whether the relevant toolchain commands are reachable on PATH."));
     if code3 != ExitCode::SUCCESS {
         any_fail = true;
     }

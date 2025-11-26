@@ -225,7 +225,7 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
                     // Baseline: no deep/combo
                     std::env::set_var("AIFO_SUPPORT_DEEP", "0");
                     std::env::set_var("AIFO_SUPPORT_COMBO", "0");
-                    let code = crate::support::run_support(cli.verbose, cli.quiet);
+                    let code = crate::support::run_support(cli.verbose, cli.quiet, None);
                     if code != ExitCode::SUCCESS {
                         any_fail = true;
                     }
@@ -235,7 +235,7 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
                     std::env::set_var("AIFO_SUPPORT_DEEP", "1");
                     std::env::set_var("AIFO_SUPPORT_COMBO", "0");
                     let code =
-                        crate::support::run_support(cli.verbose, true /* suppress banner */);
+                        crate::support::run_support(cli.verbose, true /* suppress banner */, None);
                     if code != ExitCode::SUCCESS {
                         any_fail = true;
                     }
@@ -245,7 +245,7 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
                     std::env::set_var("AIFO_SUPPORT_DEEP", "0");
                     std::env::set_var("AIFO_SUPPORT_COMBO", "1");
                     let code =
-                        crate::support::run_support(cli.verbose, true /* suppress banner */);
+                        crate::support::run_support(cli.verbose, true /* suppress banner */, None);
                     if code != ExitCode::SUCCESS {
                         any_fail = true;
                     }
