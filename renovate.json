@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base"
+  ],
+  "labels": [
+    "mgb-renovate"
+  ],
+  "packageRules": [
+    {
+      "assignAutomerge": false,
+      "automerge": true,
+      "commitMessagePrefix": "[automerge]",
+      "gitLabIgnoreApprovals": true,
+      "groupName": "gitlab_ci_yaml_dependencies_automerge",
+      "matchPackageNames": [
+        "devops-services-public/gitlab-ci-templates"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "assignAutomerge": false,
+      "automerge": true,
+      "commitMessagePrefix": "[automerge]",
+      "gitLabIgnoreApprovals": true,
+      "groupName": "precommit_dependencies_automerge",
+      "matchFileNames": [
+        ".pre-commit-config.yaml"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "minor",
+        "patch"
+      ]
+    }
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "schedule": [
+    "after 8pm and before 7am"
+  ],
+  "timezone": "Europe/Zurich"
+}
