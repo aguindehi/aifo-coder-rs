@@ -657,25 +657,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Create venv-level OpenHands wrapper with detection-based fallbacks to avoid executing non-existent modules
-RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
+# Force venv-level OpenHands wrapper to run CLI only (never start HTTP server)
+RUN cat >/opt/venv-openhands/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Delegate to the top-level wrapper when available
-if [ -x "/usr/local/bin/openhands" ]; then
-  exec /usr/local/bin/openhands "$@"
-fi
-# Local fallbacks with silent detection. Order: openhands.cli, openhands.agent_server, agent_server, openhands.__main__
-if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
+# CLI-only launcher: never start the HTTP server
+if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.cli_app "$@"
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
+  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
   exit 127
 fi
 SH
@@ -683,21 +678,16 @@ RUN chmod 0755 /opt/venv-openhands/bin/openhands
 RUN cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Prefer real pip console script if it looks like a Python entrypoint
-if [ -x "/opt/venv-openhands/bin/openhands" ] && head -n1 "/opt/venv-openhands/bin/openhands" | grep -qi "python"; then
-  exec /opt/venv-openhands/bin/openhands "$@"
-fi
-# Try modules: openhands.cli, openhands.agent_server, agent_server, then openhands.__main__
-if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
+# CLI-only wrapper: never start the HTTP server here
+if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.cli_app "$@"
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
+  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
   exit 127
 fi
 SH
@@ -992,44 +982,34 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Prefer real pip console script if it looks like a Python entrypoint
-if [ -x "/opt/venv-openhands/bin/openhands" ] && head -n1 "/opt/venv-openhands/bin/openhands" | grep -qi "python"; then
-  exec /opt/venv-openhands/bin/openhands "$@"
-fi
-# Try modules: openhands.cli, openhands.agent_server, agent_server, then openhands.__main__
-if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
+# CLI-only wrapper: never start the HTTP server here
+if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.cli_app "$@"
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
+  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
   exit 127
 fi
 SH
 RUN chmod 0755 /usr/local/bin/openhands
-# Also create venv-level OpenHands wrapper with detection-based fallbacks for direct path callers
-RUN [ -x /opt/venv-openhands/bin/openhands ] || cat >/opt/venv-openhands/bin/openhands <<'SH'
+# Also create venv-level OpenHands wrapper that forces CLI-only execution for direct path callers
+RUN cat >/opt/venv-openhands/bin/openhands <<'SH'
 #!/bin/sh
 VENVP="/opt/venv-openhands/bin/python"
-# Delegate to the top-level wrapper when available
-if [ -x "/usr/local/bin/openhands" ]; then
-  exec /usr/local/bin/openhands "$@"
-fi
-# Local fallbacks with silent detection. Order: openhands.cli, openhands.agent_server, agent_server, openhands.__main__
-if "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.cli") else 1)' 2>/dev/null; then
+# CLI-only launcher: never start the HTTP server
+if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("agent_server") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m agent_server "$@"
-elif "$VENVP" -c 'import importlib.util,sys; s=importlib.util.find_spec; sys.exit(0 if s("openhands.__main__") else 1)' 2>/dev/null; then
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
+  exec "$VENVP" -m openhands.cli_app "$@"
+elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
   exec "$VENVP" -m openhands "$@"
 else
-  echo "error: OpenHands CLI not found (tried openhands.cli, openhands.agent_server, agent_server)" 1>&2
+  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
+  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
   exit 127
 fi
 SH
