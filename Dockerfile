@@ -314,7 +314,7 @@ if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
 fi
 exec "$@"
 SH
-  chmod +x /usr/local/bin/aifo-entrypoint
+RUN chmod +x /usr/local/bin/aifo-entrypoint
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
