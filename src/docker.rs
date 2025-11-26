@@ -202,6 +202,13 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
             env_flags.push(OsString::from(format!("AZURE_OPENAI_API_VERSION={v}")));
             env_flags.push(OsString::from("-e"));
             env_flags.push(OsString::from(format!("AZURE_API_VERSION={v}")));
+            // Ensure litellm/OpenHands use the same Azure Responses API version
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!("LITELLM_AZURE_API_VERSION={v}")));
+            env_flags.push(OsString::from("-e"));
+            env_flags.push(OsString::from(format!(
+                "AZURE_OPENAI_RESPONSES_API_VERSION={v}"
+            )));
         }
     }
     if let Ok(v) = env::var("AIFO_TOOLEEXEC_URL") {

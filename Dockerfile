@@ -164,138 +164,157 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
   for t in cargo rustc node npm npx yarn pnpm deno tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
   install -d -m 0755 /usr/local/bin && \
-  printf '%s\n' '#!/bin/sh' 'set -e' \
- 'if [ -z "$HOME" ]; then export HOME="/home/coder"; fi' \
- 'if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi' \
- 'if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi' \
- 'mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true' \
- '# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable' \
- 'if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi' \
- 'mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true' \
- '# Copy keyrings from mounted host dir if present and not already in place' \
- 'if [ -d "$HOME/.gnupg-host" ]; then' \
- '  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do' \
- '    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi' \
- '  done' \
- '  for d in private-keys-v1.d openpgp-revocs.d; do' \
- '    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi' \
- '  done' \
- 'fi' \
- '# Configure pinentry if not set' \
- 'if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi' \
- 'grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"' \
- 'grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"' \
- '# Prefer a TTY for pinentry' \
- 'if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi' \
- 'unset GPG_AGENT_INFO' \
- '# Launch gpg-agent' \
- 'if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi' \
- 'CFG_HOST="${AIFO_CONFIG_HOST_DIR:-$HOME/.aifo-config-host}"' \
- 'CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"' \
- 'CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"' \
- 'CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"' \
- 'CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"' \
- 'CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"' \
- 'CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"' \
- 'export AIFO_CODER_CONFIG_DIR="$CFG_DST"' \
- 'if [ "$CFG_ENABLE" = "1" ]; then' \
- '  install -d -m 0700 "$CFG_DST" || true' \
- '  if [ -d "$CFG_HOST" ]; then' \
- '    STAMP="$CFG_DST/.copied"' \
- '    SHOULD=1' \
- '    if [ "$CFG_COPY_ALWAYS" != "1" ] && [ -f "$STAMP" ]; then' \
- '      max_src=0' \
- '      for f in "$CFG_HOST"/* "$CFG_HOST"/global/* "$CFG_HOST"/*/*; do [ -e "$f" ] || continue; mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"; [ "$mt" -gt "$max_src" ] && max_src="$mt"; done' \
- '      dst_mt="$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || echo 0)"' \
- '      if [ "$max_src" -le "$dst_mt" ]; then SHOULD=0; fi' \
- '    fi' \
- '    if [ "$SHOULD" = "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: copying files from $CFG_HOST to $CFG_DST"; fi' \
- '    if [ "$SHOULD" != "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: skip copy (up-to-date)"; fi' \
- '    if [ "$SHOULD" = "1" ]; then' \
- '    copy_one() {' \
- '      src="$1"; base="$(basename "$src")";' \
- '      case "$base" in' \
- '        *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $base"; return ;;' \
- '      esac;' \
- '      ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")";' \
- '      ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $base"; return; fi' \
- '      [ -h "$src" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $base"; return; }; [ -f "$src" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $base"; return; }; sz="$(wc -c < "$src" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $base"; return; fi' \
- '      mode=0644;' \
- '      case "$ext_lc" in pem|key|token) mode=0600 ;; esac;' \
- '      hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")";' \
- '      IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS;' \
- '      install -m "$mode" "$src" "$CFG_DST/global/$base" >/dev/null 2>&1 || true' \
- '    }' \
- '    if [ -d "$CFG_HOST/global" ]; then install -d -m 0700 "$CFG_DST/global" >/dev/null 2>&1 || true; for f in "$CFG_HOST"/global/.* "$CFG_HOST"/global/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; copy_one "$f"; done; fi' \
- '    for d in "$CFG_HOST"/*; do [ -d "$d" ] || continue; name="$(basename "$d")"; [ "$name" = "global" ] && continue; install -d -m 0700 "$CFG_DST/$name" >/dev/null 2>&1 || true; for f in "$d"/.* "$d"/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; [ -h "$f" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $f"; continue; }; [ -f "$f" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $f"; continue; }; base="$(basename "$f")"; case "$base" in *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $name/$base"; continue ;; esac; ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"; ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $name/$base"; continue; fi; sz="$(wc -c < "$f" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $name/$base"; continue; fi; mode=0644; case "$ext_lc" in pem|key|token) mode=0600 ;; esac; hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")"; IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS; install -m "$mode" "$f" "$CFG_DST/$name/$base" >/dev/null 2>&1 || true; done; done' \
- '    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do' \
- '      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi' \
- '    done' \
- '    # Per-agent in-container install for other coding agents (crush, openhands, opencode, plandex)' \
- '    if [ -d "$CFG_DST/crush" ]; then' \
- '      install -d -m 0700 "$HOME/.crush" >/dev/null 2>&1 || true' \
- '      for f in "$CFG_DST/crush"/.* "$CFG_DST/crush"/*; do' \
- '        [ -e "$f" ] || continue' \
- '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
- '        [ -h "$f" ] && continue' \
- '        [ -f "$f" ] || continue' \
- '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
- '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
- '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
- '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
- '        install -m "$mode" "$f" "$HOME/.crush/$b" >/dev/null 2>&1 || true' \
- '      done' \
- '    fi' \
- '    if [ -d "$CFG_DST/openhands" ]; then' \
- '      install -d -m 0700 "$HOME/.openhands" >/dev/null 2>&1 || true' \
- '      for f in "$CFG_DST/openhands"/.* "$CFG_DST/openhands"/*; do' \
- '        [ -e "$f" ] || continue' \
- '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
- '        [ -h "$f" ] && continue' \
- '        [ -f "$f" ] || continue' \
- '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
- '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
- '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
- '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
- '        install -m "$mode" "$f" "$HOME/.openhands/$b" >/dev/null 2>&1 || true' \
- '      done' \
- '    fi' \
- '    if [ -d "$CFG_DST/opencode" ]; then' \
- '      install -d -m 0700 "$HOME/.config" >/dev/null 2>&1 || true' \
- '      install -d -m 0700 "$HOME/.config/opencode" >/dev/null 2>&1 || true' \
- '      for f in "$CFG_DST/opencode"/.* "$CFG_DST/opencode"/*; do' \
- '        [ -e "$f" ] || continue' \
- '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
- '        [ -h "$f" ] && continue' \
- '        [ -f "$f" ] || continue' \
- '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
- '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
- '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
- '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
- '        install -m "$mode" "$f" "$HOME/.config/opencode/$b" >/dev/null 2>&1 || true' \
- '      done' \
- '    fi' \
- '    if [ -d "$CFG_DST/plandex" ]; then' \
- '      install -d -m 0700 "$HOME/.plandex-home" >/dev/null 2>&1 || true' \
- '      for f in "$CFG_DST/plandex"/.* "$CFG_DST/plandex"/*; do' \
- '        [ -e "$f" ] || continue' \
- '        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue' \
- '        [ -h "$f" ] && continue' \
- '        [ -f "$f" ] || continue' \
- '        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"' \
- '        case "$ext_lc" in pem|key|token) mode=0600 ;; esac' \
- '        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"' \
- '        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS' \
- '        install -m "$mode" "$f" "$HOME/.plandex-home/$b" >/dev/null 2>&1 || true' \
- '      done' \
- '    fi' \
- '    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true' \
- '    fi' \
- '  fi' \
- 'fi' \
- 'exec "$@"' > /usr/local/bin/aifo-entrypoint \
- && chmod +x /usr/local/bin/aifo-entrypoint
+  cat >/usr/local/bin/aifo-entrypoint <<'SH'
+#!/bin/sh
+set -e
+if [ -z "$HOME" ]; then export HOME="/home/coder"; fi
+if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi
+if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi
+mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true
+# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable
+if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi
+mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true
+# Copy keyrings from mounted host dir if present and not already in place
+if [ -d "$HOME/.gnupg-host" ]; then
+  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do
+    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi
+  done
+  for d in private-keys-v1.d openpgp-revocs.d; do
+    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi
+  done
+fi
+# Configure pinentry if not set
+if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi
+grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"
+grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"
+# Prefer a TTY for pinentry
+if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi
+unset GPG_AGENT_INFO
+# Launch gpg-agent
+if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi
+CFG_HOST="${AIFO_CONFIG_HOST_DIR:-$HOME/.aifo-config-host}"
+CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"
+CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"
+CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"
+CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"
+CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"
+CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"
+export AIFO_CODER_CONFIG_DIR="$CFG_DST"
+if [ "$CFG_ENABLE" = "1" ]; then
+  install -d -m 0700 "$CFG_DST" || true
+  if [ -d "$CFG_HOST" ]; then
+    STAMP="$CFG_DST/.copied"
+    SHOULD=1
+    if [ "$CFG_COPY_ALWAYS" != "1" ] && [ -f "$STAMP" ]; then
+      max_src=0
+      for f in "$CFG_HOST"/* "$CFG_HOST"/global/* "$CFG_HOST"/*/*; do [ -e "$f" ] || continue; mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"; [ "$mt" -gt "$max_src" ] && max_src="$mt"; done
+      dst_mt="$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || echo 0)"
+      if [ "$max_src" -le "$dst_mt" ]; then SHOULD=0; fi
+    fi
+    if [ "$SHOULD" = "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: copying files from $CFG_HOST to $CFG_DST"; fi
+    if [ "$SHOULD" != "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: skip copy (up-to-date)"; fi
+    if [ "$SHOULD" = "1" ]; then
+    copy_one() {
+      src="$1"; base="$(basename "$src")";
+      case "$base" in
+        *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $base"; return ;;
+      esac;
+      ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")";
+      ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $base"; return; fi
+      [ -h "$src" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $base"; return; }; [ -f "$src" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $base"; return; }; sz="$(wc -c < "$src" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $base"; return; fi
+      mode=0644;
+      case "$ext_lc" in pem|key|token) mode=0600 ;; esac;
+      hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")";
+      IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS;
+      install -m "$mode" "$src" "$CFG_DST/global/$base" >/dev/null 2>&1 || true
+    }
+    if [ -d "$CFG_HOST/global" ]; then install -d -m 0700 "$CFG_DST/global" >/dev/null 2>&1 || true; for f in "$CFG_HOST"/global/.* "$CFG_HOST"/global/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; copy_one "$f"; done; fi
+    for d in "$CFG_HOST"/*; do [ -d "$d" ] || continue; name="$(basename "$d")"; [ "$name" = "global" ] && continue; install -d -m 0700 "$CFG_DST/$name" >/dev/null 2>&1 || true; for f in "$d"/.* "$d"/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; [ -h "$f" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $f"; continue; }; [ -f "$f" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $f"; continue; }; base="$(basename "$f")"; case "$base" in *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $name/$base"; continue ;; esac; ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"; ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $name/$base"; continue; fi; sz="$(wc -c < "$f" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $name/$base"; continue; fi; mode=0644; case "$ext_lc" in pem|key|token) mode=0600 ;; esac; hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")"; IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS; install -m "$mode" "$f" "$CFG_DST/$name/$base" >/dev/null 2>&1 || true; done; done
+    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do
+      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi
+    done
+    # Per-agent in-container install for other coding agents (crush, openhands, opencode, plandex)
+    if [ -d "$CFG_DST/crush" ]; then
+      install -d -m 0700 "$HOME/.crush" >/dev/null 2>&1 || true
+      for f in "$CFG_DST/crush"/.* "$CFG_DST/crush"/*; do
+        [ -e "$f" ] || continue
+        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
+        [ -h "$f" ] && continue
+        [ -f "$f" ] || continue
+        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
+        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
+        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
+        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
+        install -m "$mode" "$f" "$HOME/.crush/$b" >/dev/null 2>&1 || true
+      done
+    fi
+    if [ -d "$CFG_DST/openhands" ]; then
+      install -d -m 0700 "$HOME/.openhands" >/dev/null 2>&1 || true
+      for f in "$CFG_DST/openhands"/.* "$CFG_DST/openhands"/*; do
+        [ -e "$f" ] || continue
+        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
+        [ -h "$f" ] && continue
+        [ -f "$f" ] || continue
+        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
+        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
+        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
+        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
+        install -m "$mode" "$f" "$HOME/.openhands/$b" >/dev/null 2>&1 || true
+      done
+    fi
+    if [ -d "$CFG_DST/opencode" ]; then
+      install -d -m 0700 "$HOME/.config" >/dev/null 2>&1 || true
+      install -d -m 0700 "$HOME/.config/opencode" >/dev/null 2>&1 || true
+      for f in "$CFG_DST/opencode"/.* "$CFG_DST/opencode"/*; do
+        [ -e "$f" ] || continue
+        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
+        [ -h "$f" ] && continue
+        [ -f "$f" ] || continue
+        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
+        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
+        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
+        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
+        install -m "$mode" "$f" "$HOME/.config/opencode/$b" >/dev/null 2>&1 || true
+      done
+    fi
+    if [ -d "$CFG_DST/plandex" ]; then
+      install -d -m 0700 "$HOME/.plandex-home" >/dev/null 2>&1 || true
+      for f in "$CFG_DST/plandex"/.* "$CFG_DST/plandex"/*; do
+        [ -e "$f" ] || continue
+        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
+        [ -h "$f" ] && continue
+        [ -f "$f" ] || continue
+        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
+        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
+        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
+        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
+        install -m "$mode" "$f" "$HOME/.plandex-home/$b" >/dev/null 2>&1 || true
+      done
+    fi
+    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+# Normalize OpenHands LLM settings from AIFO_* env for Azure
+if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
+  V="${AIFO_API_VERSION:-}"
+  B="${AIFO_API_BASE:-}"
+  K="${AIFO_API_KEY:-}"
+  if [ -n "$V" ]; then
+    export LITELLM_AZURE_API_VERSION="$V"
+    export AZURE_OPENAI_RESPONSES_API_VERSION="$V"
+  fi
+  SETTINGS="$HOME/.openhands/agent_settings.json"
+  if [ -f "$SETTINGS" ]; then
+    [ -n "$V" ] && sed -i -E "s|\"api_version\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_version\": \"$V\"|g" "$SETTINGS"
+    [ -n "$B" ] && sed -i -E "s|\"base_url\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"base_url\": \"$B\"|g" "$SETTINGS"
+    [ -n "$K" ] && sed -i -E "s|\"api_key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_key\": \"$K\"|g" "$SETTINGS"
+  fi
+fi
+exec "$@"
+SH
+RUN chmod +x /usr/local/bin/aifo-entrypoint
 
 # --- macOS cross Rust builder (osxcross; no secrets) ---
 FROM ${REGISTRY_PREFIX}rust:1-bookworm AS macos-cross-rust-builder
@@ -483,6 +502,20 @@ ENV KEEP_APT=${KEEP_APT}
 # Codex docs: npm i -g @openai/codex
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; CAF=/run/secrets/migros_root_ca; if [ -f "$CAF" ]; then install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export NODE_EXTRA_CA_CERTS="$CAF"; export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; fi; npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @openai/codex@${CODEX_VERSION}; npm cache clean --force; rm -rf /root/.npm /root/.cache; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; if [ "$KEEP_APT" = "0" ]; then apt-get remove -y procps || true; apt-get autoremove -y; apt-get clean; apt-get remove --purge -y --allow-remove-essential apt || true; npm prune --omit=dev || true; npm cache clean --force; rm -rf /root/.npm /root/.cache; rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; rm -rf /var/lib/apt/lists/*; rm -rf /var/cache/apt/apt-file/; rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; rm -rf /opt/yarn-v1.22.22; fi'
 # Inherit /opt/aifo/bin PATH from base
+# Create OpenHands wrapper safely in its own RUN (only if not already linked)
+RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
+#!/bin/sh
+VENVP="/opt/venv-openhands/bin/python"
+if "$VENVP" -c "import openhands" >/dev/null 2>&1; then
+  exec "$VENVP" -m openhands "$@"
+elif "$VENVP" -c "import agent_server" >/dev/null 2>&1; then
+  exec "$VENVP" -m agent_server "$@"
+else
+  echo "error: OpenHands CLI not found (no openhands or agent_server module)" 1>&2
+  exit 127
+fi
+SH
+RUN chmod 0755 /usr/local/bin/openhands
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- Crush image (adds only Crush CLI on top of base) ---
@@ -595,7 +628,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- OpenHands image (uv tool install; shims-first PATH) ---
 FROM base AS openhands
-ARG OPENHANDS_VERSION=latest
+ARG OPENHANDS_VERSION=1.0.7-cli
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
@@ -613,15 +646,22 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands-ai"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ]; then PKG="openhands-ai==${OPENHANDS_VERSION}"; fi; \
   install -d -m 0755 /opt/uv-home; \
-  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
-  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  # Ensure a stable Python toolchain (3.12) to avoid building packages from source under 3.14 \
+  HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
+  # Pin OpenHands CLI via uv tool using @version (strip "-cli" suffix), and force UV_PYTHON=3.12 \
+  VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
+  SPEC="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then SPEC="openhands@${VER_PIN}"; fi; \
+  HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install "$SPEC" || HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install openhands; \
+  # Link uv-installed tool into PATH and provide compatibility path expected by launcher \
+  ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
+  install -d -m 0755 /opt/venv-openhands/bin; \
+  ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
+  # Pre-create Jinja2 cache dir under site-packages to avoid permission errors at runtime
+  for d in $(find /opt/uv-home/.local/share/uv/tools/openhands -type d -path "*/site-packages/openhands/sdk/agent/prompts" 2>/dev/null); do \
+    install -d -m 0777 "$d/.jinja_cache"; \
+  done; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -643,6 +683,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
+# OpenHands CLI is provided by uv tool shim; no custom venv wrapper needed
+# Using uv tool shim in /opt/uv-home/.local/bin/openhands (symlinked to /usr/local/bin/openhands)
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- OpenCode image (npm install; shims-first PATH) ---
@@ -879,7 +921,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- OpenHands slim image (uv tool install; shims-first PATH) ---
 FROM base-slim AS openhands-slim
-ARG OPENHANDS_VERSION=latest
+ARG OPENHANDS_VERSION=1.0.7-cli
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
@@ -897,15 +939,19 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands-ai"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ]; then PKG="openhands-ai==${OPENHANDS_VERSION}"; fi; \
   install -d -m 0755 /opt/uv-home; \
-  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  if [ ! -x /opt/venv-openhands/bin/openhands ]; then ls -la /opt/venv-openhands/bin; echo "error: missing openhands console script"; exit 3; fi; \
-  if [ ! -x /usr/local/bin/openhands ]; then ls -la /usr/local/bin; echo "error: missing openhands wrapper"; exit 2; fi; \
+  HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
+  VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
+  SPEC="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then SPEC="openhands@${VER_PIN}"; fi; \
+  HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install "$SPEC" || HOME=/opt/uv-home UV_PYTHON=3.12 uv tool install openhands; \
+  ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
+  install -d -m 0755 /opt/venv-openhands/bin; \
+  ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
+  # Pre-create Jinja2 cache dir under site-packages to avoid permission errors at runtime
+  for d in $(find /opt/uv-home/.local/share/uv/tools/openhands -type d -path "*/site-packages/openhands/sdk/agent/prompts" 2>/dev/null); do \
+    install -d -m 0777 "$d/.jinja_cache"; \
+  done; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -929,6 +975,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
+# Using uv tool shim; no custom /usr/local/bin/openhands wrapper needed
+# Using uv tool shim; compatibility symlink created at /opt/venv-openhands/bin/openhands
 # --- OpenCode slim image (npm install; shims-first PATH) ---
 FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
