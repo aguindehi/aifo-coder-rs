@@ -824,13 +824,22 @@ fn set_image_tag(image: &str, new_tag: &str) -> String {
 
 /// Helper: apply agent image overrides from environment.
 fn maybe_override_agent_image(image: &str) -> String {
+    // Highest precedence: explicit full image override
     if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
         let t = v.trim();
         if !t.is_empty() {
             return t.to_string();
         }
     }
+    // Next: per-agent tag override
     if let Ok(tag) = env::var("AIFO_CODER_AGENT_TAG") {
+        let t = tag.trim();
+        if !t.is_empty() {
+            return set_image_tag(image, t);
+        }
+    }
+    // Global tag override applies when no agent-specific override is set
+    if let Ok(tag) = env::var("AIFO_TAG") {
         let t = tag.trim();
         if !t.is_empty() {
             return set_image_tag(image, t);
@@ -1083,10 +1092,30 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
         }
     }
 
-    // Prefer local ":latest" only when we’re on the default tag (release-<pkg>) or already ":latest".
+    // Prefer local ":latest" only when we’re on the default tag (release-<pkg>) or already ":latest",
+    // and no explicit tag override (agent-specific or global) is in effect.
     let current_tag = image_tag(&resolved_image);
     let default_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
-    let allow_local_latest = matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
+
+    let agent_image_override = env::var("AIFO_CODER_AGENT_IMAGE")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .is_some();
+    let agent_tag_override = env::var("AIFO_CODER_AGENT_TAG")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .is_some();
+    let global_tag_override = env::var("AIFO_TAG")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .is_some();
+    let tag_overridden = agent_image_override || agent_tag_override || global_tag_override;
+
+    let allow_local_latest =
+        !tag_overridden && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
 
     if allow_local_latest {
         if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
