@@ -290,9 +290,9 @@ prepare-apple-sdk:
       - ci/osx/${OSX_SDK_FILENAME}
       - ci/osx/${OSX_SDK_FILENAME}.sha256
   rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
-    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_TAG && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "schedule" && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($APPLE_SDK_URL || $APPLE_SDK_BASE64)
       when: on_success
@@ -314,7 +314,7 @@ prepare-apple-sdk-skip-note:
     - if: $APPLE_SDK_URL || $APPLE_SDK_BASE64
       when: never
     - if: $CI_COMMIT_TAG
-      when: never
+      when: on_success
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
