@@ -627,15 +627,16 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands-ai"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ]; then PKG="openhands-ai==${OPENHANDS_VERSION}"; fi; \
   install -d -m 0755 /opt/uv-home; \
-  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
-  HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  if [ -x /opt/venv-openhands/bin/openhands ]; then \
-    ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  fi; \
+  # Install OpenHands CLI via uv tool install; strip "-cli" suffix for pin if present \
+  VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
+  PKG="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then PKG="openhands==${VER_PIN}"; fi; \
+  HOME=/opt/uv-home uv tool install "$PKG" || HOME=/opt/uv-home uv tool install openhands; \
+  # Link uv-installed tool into PATH and provide compatibility path expected by launcher \
+  ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
+  install -d -m 0755 /opt/venv-openhands/bin; \
+  ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -657,41 +658,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     rm -rf /var/cache/apt/apt-file/; \
   fi'
 # Inherit /opt/aifo/bin PATH from base
-# Force venv-level OpenHands wrapper to run CLI only (never start HTTP server)
-RUN cat >/opt/venv-openhands/bin/openhands <<'SH'
-#!/bin/sh
-VENVP="/opt/venv-openhands/bin/python"
-# CLI-only launcher: never start the HTTP server
-if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli_app "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands "$@"
-else
-  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
-  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
-  exit 127
-fi
-SH
-RUN chmod 0755 /opt/venv-openhands/bin/openhands
-RUN cat >/usr/local/bin/openhands <<'SH'
-#!/bin/sh
-VENVP="/opt/venv-openhands/bin/python"
-# CLI-only wrapper: never start the HTTP server here
-if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli_app "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands "$@"
-else
-  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
-  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
-  exit 127
-fi
-SH
-RUN chmod 0755 /usr/local/bin/openhands
+# OpenHands CLI is provided by uv tool shim; no custom venv wrapper needed
+# Using uv tool shim in /opt/uv-home/.local/bin/openhands (symlinked to /usr/local/bin/openhands)
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
 # --- OpenCode image (npm install; shims-first PATH) ---
@@ -946,15 +914,14 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
-  PKG="openhands-ai"; \
-  if [ "${OPENHANDS_VERSION}" != "latest" ]; then PKG="openhands-ai==${OPENHANDS_VERSION}"; fi; \
   install -d -m 0755 /opt/uv-home; \
-  HOME=/opt/uv-home uv venv -p 3.12 /opt/venv-openhands; \
-  HOME=/opt/uv-home uv pip install --native-tls --python /opt/venv-openhands/bin/python --upgrade pip; \
-  HOME=/opt/uv-home uv pip install --pre --native-tls --python /opt/venv-openhands/bin/python "$PKG"; \
-  if [ -x /opt/venv-openhands/bin/openhands ]; then \
-    ln -sf /opt/venv-openhands/bin/openhands /usr/local/bin/openhands; \
-  fi; \
+  VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
+  PKG="openhands"; \
+  if [ "${OPENHANDS_VERSION}" != "latest" ] && [ -n "$VER_PIN" ]; then PKG="openhands==${VER_PIN}"; fi; \
+  HOME=/opt/uv-home uv tool install "$PKG" || HOME=/opt/uv-home uv tool install openhands; \
+  ln -sf /opt/uv-home/.local/bin/openhands /usr/local/bin/openhands; \
+  install -d -m 0755 /opt/venv-openhands/bin; \
+  ln -sf /opt/uv-home/.local/bin/openhands /opt/venv-openhands/bin/openhands; \
   # Ensure non-root can traverse uv-managed Python under /opt/uv-home (shebang interpreter resolution)
   find /opt/uv-home/.local/share/uv/python -type d -exec chmod 0755 {} + 2>/dev/null || true; \
   find /opt/uv-home/.local/share/uv/python -type f -name "python*" -exec chmod 0755 {} + 2>/dev/null || true; \
@@ -978,42 +945,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 # Inherit /opt/aifo/bin PATH from base
 # Cleanup merged into install RUN above (conditional via KEEP_APT)
 
-# Create OpenHands wrapper safely in its own RUN (only if not already linked)
-RUN [ -x /usr/local/bin/openhands ] || cat >/usr/local/bin/openhands <<'SH'
-#!/bin/sh
-VENVP="/opt/venv-openhands/bin/python"
-# CLI-only wrapper: never start the HTTP server here
-if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli_app "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands "$@"
-else
-  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
-  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
-  exit 127
-fi
-SH
-RUN chmod 0755 /usr/local/bin/openhands
-# Also create venv-level OpenHands wrapper that forces CLI-only execution for direct path callers
-RUN cat >/opt/venv-openhands/bin/openhands <<'SH'
-#!/bin/sh
-VENVP="/opt/venv-openhands/bin/python"
-# CLI-only launcher: never start the HTTP server
-if "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.cli_app") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands.cli_app "$@"
-elif "$VENVP" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("openhands.__main__") else 1)' 2>/dev/null; then
-  exec "$VENVP" -m openhands "$@"
-else
-  echo "error: OpenHands CLI not found (no openhands.cli/cli_app/__main__)" 1>&2
-  echo "hint: ensure a CLI-capable package/version is installed" 1>&2
-  exit 127
-fi
-SH
-RUN chmod 0755 /opt/venv-openhands/bin/openhands
+# Using uv tool shim; no custom /usr/local/bin/openhands wrapper needed
+# Using uv tool shim; compatibility symlink created at /opt/venv-openhands/bin/openhands
 # --- OpenCode slim image (npm install; shims-first PATH) ---
 FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
