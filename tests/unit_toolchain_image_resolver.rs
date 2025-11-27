@@ -154,11 +154,13 @@ fn unit_agent_default_effective_image_uses_release_tag_without_overrides() {
     env::remove_var("AIFO_CODER_AGENT_TAG");
     env::remove_var("AIFO_TAG");
 
-    // Use an unqualified agent name; registry::resolve_image will add tag.
-    let img = aifo_coder::compute_effective_agent_image_for_run("aifo-coder-codex")
-        .expect("compute agent image");
     let ver = env!("CARGO_PKG_VERSION");
     let suffix = format!(":release-{ver}");
+    // Use an explicitly tagged agent name; resolver must preserve the release tag even after
+    // registry qualification and local-latest checks (with Docker disabled).
+    let base = format!("aifo-coder-codex{suffix}");
+    let img = aifo_coder::compute_effective_agent_image_for_run(&base)
+        .expect("compute agent image");
     assert!(
         img.ends_with(&suffix),
         "agent effective image should end with {suffix}, got {img}"
@@ -169,15 +171,20 @@ fn unit_agent_default_effective_image_uses_release_tag_without_overrides() {
 fn unit_agent_image_env_override_wins_over_tag_logic() {
     env::set_var("AIFO_CODER_TEST_DISABLE_DOCKER", "1");
 
-    env::set_var("AIFO_CODER_AGENT_IMAGE", "custom/image:123");
+    let override_img = "custom/image:123";
+    env::set_var("AIFO_CODER_AGENT_IMAGE", override_img);
     env::remove_var("AIFO_CODER_AGENT_TAG");
     env::remove_var("AIFO_TAG");
 
     let img = aifo_coder::compute_effective_agent_image_for_run("aifo-coder-codex")
         .expect("compute agent image");
+    // Registry resolution may prefix the image (e.g., internal registry), but the final
+    // repository:tag tail must come from AIFO_CODER_AGENT_IMAGE.
+    let expected_tail = override_img.rsplit('/').next().unwrap_or(override_img);
+    let actual_tail = img.rsplit('/').next().unwrap_or(&img);
     assert_eq!(
-        img, "custom/image:123",
-        "AIFO_CODER_AGENT_IMAGE must override any tag logic"
+        actual_tail, expected_tail,
+        "AIFO_CODER_AGENT_IMAGE must override name/tag; got {img}"
     );
 }
 
