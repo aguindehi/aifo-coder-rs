@@ -26,7 +26,7 @@ fn docker_image_exists_local(image: &str) -> bool {
     false
 }
 
- /// Helper: read an env var, trim, and return Some when non-empty.
+/// Helper: read an env var, trim, and return Some when non-empty.
 fn env_trim(k: &str) -> Option<String> {
     env::var(k)
         .ok()
