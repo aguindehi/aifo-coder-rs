@@ -20,7 +20,7 @@ fn have_docker() -> bool {
 /// over the default release-<VER> tag when present.
 #[test]
 #[ignore]
-fn integration_toolchain_rust_prefers_local_latest_when_present() {
+fn int_toolchain_rust_prefers_local_latest_when_present() {
     if !have_docker() {
         eprintln!("skipping: docker not available");
         return;
@@ -64,7 +64,7 @@ fn integration_toolchain_rust_prefers_local_latest_when_present() {
 /// over the default release-<VER> tag when present.
 #[test]
 #[ignore]
-fn integration_agent_prefers_local_latest_when_present() {
+fn int_agent_prefers_local_latest_when_present() {
     if !have_docker() {
         eprintln!("skipping: docker not available");
         return;
