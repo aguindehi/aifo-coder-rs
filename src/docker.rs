@@ -1081,11 +1081,7 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
     let runtime = match container_runtime_path() {
         Ok(p) => Some(p),
         Err(e) => {
-            if env::var("AIFO_CODER_TEST_DISABLE_DOCKER")
-                .ok()
-                .as_deref()
-                == Some("1")
-            {
+            if env::var("AIFO_CODER_TEST_DISABLE_DOCKER").ok().as_deref() == Some("1") {
                 None
             } else {
                 return Err(e);
@@ -1135,9 +1131,10 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
         !tag_overridden && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
 
     if allow_local_latest {
-        if let (Some(rt), Some(candidate)) =
-            (runtime.as_ref(), derive_local_latest_candidate(&resolved_image))
-        {
+        if let (Some(rt), Some(candidate)) = (
+            runtime.as_ref(),
+            derive_local_latest_candidate(&resolved_image),
+        ) {
             if image_exists_locally(rt.as_path(), &candidate) {
                 return Ok(candidate);
             }

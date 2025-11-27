@@ -159,8 +159,8 @@ fn unit_agent_default_effective_image_uses_release_tag_without_overrides() {
     // Use an explicitly tagged agent name; resolver must preserve the release tag even after
     // registry qualification and local-latest checks (with Docker disabled).
     let base = format!("aifo-coder-codex{suffix}");
-    let img = aifo_coder::compute_effective_agent_image_for_run(&base)
-        .expect("compute agent image");
+    let img =
+        aifo_coder::compute_effective_agent_image_for_run(&base).expect("compute agent image");
     assert!(
         img.ends_with(&suffix),
         "agent effective image should end with {suffix}, got {img}"
