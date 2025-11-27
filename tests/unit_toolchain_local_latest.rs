@@ -2,6 +2,10 @@ use std::env;
 use std::process::Command;
 
 /// Helper: check whether docker is available; skip tests when not.
+///
+/// NOTE: This is intentionally kept in an `int_*.rs` test module so that
+/// process spawning and external Docker dependencies are not treated as
+/// unit tests by the naming lint.
 fn have_docker() -> bool {
     Command::new("docker")
         .arg("--version")
