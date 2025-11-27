@@ -34,6 +34,24 @@ fn env_trim(k: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Derive a local ':latest' candidate for first-party toolchain images.
+fn derive_local_latest_candidate_toolchain(image: &str) -> Option<String> {
+    // Strip any digest
+    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
+    // Last path component
+    let last = base.rsplit('/').next().unwrap_or(base);
+    // Strip tag (if present)
+    let name_no_tag = match last.rfind(':') {
+        Some(colon) => &last[..colon],
+        None => last,
+    };
+    if name_no_tag.starts_with("aifo-coder-toolchain-") {
+        Some(format!("{name_no_tag}:latest"))
+    } else {
+        None
+    }
+}
+
 /// Resolve a tag override for a toolchain kind with precedence:
 /// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_TAG.
 fn tag_override_for_kind(kind: &str) -> Option<String> {
@@ -86,11 +104,35 @@ const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
 
 /// Default images by normalized kind
 const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
-    ("rust", "aifo-coder-toolchain-rust:latest"),
-    ("node", "aifo-coder-toolchain-node:latest"),
-    ("typescript", "aifo-coder-toolchain-ts:latest"),
+    (
+        "rust",
+        concat!(
+            "aifo-coder-toolchain-rust:release-",
+            env!("CARGO_PKG_VERSION")
+        ),
+    ),
+    (
+        "node",
+        concat!(
+            "aifo-coder-toolchain-node:release-",
+            env!("CARGO_PKG_VERSION")
+        ),
+    ),
+    (
+        "typescript",
+        concat!(
+            "aifo-coder-toolchain-ts:release-",
+            env!("CARGO_PKG_VERSION")
+        ),
+    ),
     ("python", "python:3.12-slim"),
-    ("c-cpp", "aifo-coder-toolchain-cpp:latest"),
+    (
+        "c-cpp",
+        concat!(
+            "aifo-coder-toolchain-cpp:release-",
+            env!("CARGO_PKG_VERSION")
+        ),
+    ),
     ("go", "golang:1.22-bookworm"),
 ];
 
@@ -178,9 +220,29 @@ pub fn default_toolchain_image(kind: &str) -> String {
         .to_string();
     // Apply tag overrides first and prefer local unqualified images for our first-party toolchains.
     if is_first_party(&base) {
+        // Track whether a tag override was applied for this kind
+        let mut override_used = false;
         if let Some(tag) = tag_override_for_kind(&k) {
             base = replace_tag(&base, &tag);
+            override_used = true;
         }
+
+        // Prefer a local ':latest' toolchain image when:
+        // - no per-kind/global tag override was used, and
+        // - current tag is either 'latest' or 'release-<VER>'.
+        let default_rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
+        let current_tag = base.rsplit(':').nth(1);
+        let allow_local_latest = !override_used
+            && matches!(current_tag, Some(t) if t == "latest" || t == default_rel_tag);
+
+        if allow_local_latest {
+            if let Some(candidate) = derive_local_latest_candidate_toolchain(&base) {
+                if docker_image_exists_local(&candidate) {
+                    return candidate;
+                }
+            }
+        }
+
         // Prefer local unqualified image unless internal registry is explicitly set via env.
         if !base.contains('/') {
             let explicit_ir = crate::preferred_internal_registry_source() == "env";
