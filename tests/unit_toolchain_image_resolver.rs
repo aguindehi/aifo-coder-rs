@@ -24,8 +24,9 @@ fn unit_toolchain_default_uses_release_tag_without_overrides() {
         rust_img.ends_with(&suffix),
         "rust default image should end with {suffix}, got {rust_img}"
     );
+    let rust_name = rust_img.rsplit('/').next().unwrap_or(&rust_img);
     assert!(
-        rust_img.starts_with("aifo-coder-toolchain-rust"),
+        rust_name.starts_with("aifo-coder-toolchain-rust"),
         "rust default image should be first-party, got {rust_img}"
     );
 
@@ -34,8 +35,9 @@ fn unit_toolchain_default_uses_release_tag_without_overrides() {
         node_img.ends_with(&suffix),
         "node default image should end with {suffix}, got {node_img}"
     );
+    let node_name = node_img.rsplit('/').next().unwrap_or(&node_img);
     assert!(
-        node_img.starts_with("aifo-coder-toolchain-node"),
+        node_name.starts_with("aifo-coder-toolchain-node"),
         "node default image should be first-party, got {node_img}"
     );
 
@@ -44,8 +46,9 @@ fn unit_toolchain_default_uses_release_tag_without_overrides() {
         cpp_img.ends_with(&suffix),
         "c-cpp default image should end with {suffix}, got {cpp_img}"
     );
+    let cpp_name = cpp_img.rsplit('/').next().unwrap_or(&cpp_img);
     assert!(
-        cpp_img.starts_with("aifo-coder-toolchain-cpp"),
+        cpp_name.starts_with("aifo-coder-toolchain-cpp"),
         "c-cpp default image should be first-party, got {cpp_img}"
     );
 }

@@ -1075,7 +1075,24 @@ fn derive_local_latest_candidate(image: &str) -> Option<String> {
 /// - Resolve registry/namespace,
 /// - Prefer local "<name>:latest" when present.
 pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> {
-    let runtime = container_runtime_path()?;
+    // Allow tests to exercise tag logic without requiring Docker by honoring
+    // AIFO_CODER_TEST_DISABLE_DOCKER: when set, skip local existence checks
+    // and simply return the resolved image reference.
+    let runtime = match container_runtime_path() {
+        Ok(p) => Some(p),
+        Err(e) => {
+            if env::var("AIFO_CODER_TEST_DISABLE_DOCKER")
+                .ok()
+                .as_deref()
+                == Some("1")
+            {
+                None
+            } else {
+                return Err(e);
+            }
+        }
+    };
+
     // Apply env overrides (same as build path)
     let base_image = maybe_override_agent_image(image);
     let resolved_image = crate::registry::resolve_image(&base_image);
@@ -1118,8 +1135,10 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
         !tag_overridden && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
 
     if allow_local_latest {
-        if let Some(candidate) = derive_local_latest_candidate(&resolved_image) {
-            if image_exists_locally(runtime.as_path(), &candidate) {
+        if let (Some(rt), Some(candidate)) =
+            (runtime.as_ref(), derive_local_latest_candidate(&resolved_image))
+        {
+            if image_exists_locally(rt.as_path(), &candidate) {
                 return Ok(candidate);
             }
         }
