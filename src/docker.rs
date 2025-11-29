@@ -1167,9 +1167,15 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
 
     // Tail repository name (drop any registry/namespace and tag)
     let tail_repo = {
-        let base = base_image.split_once('@').map(|(n, _)| n).unwrap_or(base_image.as_str());
+        let base = base_image
+            .split_once('@')
+            .map(|(n, _)| n)
+            .unwrap_or(base_image.as_str());
         let last = base.rsplit('/').next().unwrap_or(base);
-        last.split_once(':').map(|(n, _)| n).unwrap_or(last).to_string()
+        last.split_once(':')
+            .map(|(n, _)| n)
+            .unwrap_or(last)
+            .to_string()
     };
     let rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
     let internal = crate::preferred_internal_registry_prefix_quiet();
