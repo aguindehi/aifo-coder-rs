@@ -998,6 +998,11 @@ fn pull_image_with_autologin(
                 )));
             }
         }
+        // If we get here, all attempts in verbose mode failed; return a generic error.
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "docker pull failed",
+        ));
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
         let msg = if let Some(name) = agent_label {
