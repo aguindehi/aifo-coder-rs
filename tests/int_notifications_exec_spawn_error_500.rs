@@ -28,8 +28,12 @@ fn int_test_notifications_exec_spawn_error_500() {
 
     // Write a config that sets an absolute non-existent executable to force spawn failure.
     // Keep 'say' on the allowlist (default allowlist also includes 'say').
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let cfg_path = std::path::Path::new(&home).join(".aider.conf.yml");
+    // Isolate HOME to avoid touching the real ~/.aider.conf.yml on the host.
+    let old_home = std::env::var("HOME").ok();
+    let td_home = tempfile::tempdir().expect("tmpdir-home");
+    let new_home = td_home.path().to_path_buf();
+    std::env::set_var("HOME", &new_home);
+    let cfg_path = new_home.join(".aider.conf.yml");
     let cfg = r#"notifications-command: "/no/such/say"
 notifications:
   allowlist:
@@ -83,4 +87,10 @@ notifications:
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
     std::env::remove_var("AIFO_NOTIFICATIONS_NOAUTH");
+    // Restore HOME
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    } else {
+        std::env::remove_var("HOME");
+    }
 }

@@ -13,8 +13,12 @@ fn int_test_notifications_policy_error_403() {
 
     // Write a minimal allowlist config; current policy path returns 403 "not found"
     // when notifications-command is not present/allowed by the configured allowlist.
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let cfg_path = std::path::Path::new(&home).join(".aider.conf.yml");
+    // Isolate HOME so we don't touch the user's real ~/.aider.conf.yml.
+    let old_home = std::env::var("HOME").ok();
+    let td_home = tempfile::tempdir().expect("tmpdir-home");
+    let new_home = td_home.path().to_path_buf();
+    std::env::set_var("HOME", &new_home);
+    let cfg_path = new_home.join(".aider.conf.yml");
     let cfg = "notifications:\n  allowlist:\n    - say\n";
     let _ = std::fs::write(&cfg_path, cfg);
 
@@ -68,4 +72,10 @@ fn int_test_notifications_policy_error_403() {
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
     std::env::remove_var("AIFO_NOTIFICATIONS_NOAUTH");
+    // Restore HOME
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    } else {
+        std::env::remove_var("HOME");
+    }
 }
