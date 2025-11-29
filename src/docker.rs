@@ -1127,7 +1127,6 @@ fn pull_image_with_autologin(
     }
 }
 
-
 /// Compute the effective agent image for real run:
 /// - Apply env overrides (AIFO_CODER_AGENT_IMAGE/TAG),
 /// - Resolve registry/namespace,
