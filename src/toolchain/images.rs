@@ -34,23 +34,6 @@ fn env_trim(k: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-/// Derive a local ':latest' candidate for first-party toolchain images.
-fn derive_local_latest_candidate_toolchain(image: &str) -> Option<String> {
-    // Strip any digest
-    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
-    // Last path component
-    let last = base.rsplit('/').next().unwrap_or(base);
-    // Strip tag (if present)
-    let name_no_tag = match last.rfind(':') {
-        Some(colon) => &last[..colon],
-        None => last,
-    };
-    if name_no_tag.starts_with("aifo-coder-toolchain-") {
-        Some(format!("{name_no_tag}:latest"))
-    } else {
-        None
-    }
-}
 
 /// Resolve a tag override for a toolchain kind with precedence:
 /// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_TAG.
@@ -75,13 +58,6 @@ fn is_first_party(image: &str) -> bool {
     image.contains("aifo-coder-toolchain-")
 }
 
-/// Replace the tag component of an image reference (last ':' split).
-fn replace_tag(image: &str, tag: &str) -> String {
-    let mut parts = image.rsplitn(2, ':');
-    let _old = parts.next().unwrap_or("");
-    let repo = parts.next().unwrap_or(image);
-    format!("{repo}:{tag}")
-}
 
 /// Structured mappings for toolchain normalization and default images
 /// Canonical kind aliases (lhs -> rhs)

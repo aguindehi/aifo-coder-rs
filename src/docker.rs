@@ -999,10 +999,10 @@ fn pull_image_with_autologin(
             }
         }
         // If we get here, all attempts in verbose mode failed; return a generic error.
-        return Err(io::Error::new(
+        Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "docker pull failed",
-        ));
+        ))
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
         let msg = if let Some(name) = agent_label {
@@ -1107,42 +1107,26 @@ fn pull_image_with_autologin(
                     .stderr(Stdio::piped())
                     .output()?;
                 if out_hub.status.success() {
-                    return Ok(());
+                    Ok(())
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!("docker pull failed; tried: {}, {}", image, unqual),
+                    ))
                 }
-                return Err(io::Error::new(
+            } else {
+                Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
-                    format!("docker pull failed; tried: {}, {}", image, unqual),
-                ));
+                    format!(
+                        "docker pull failed (status {:?})",
+                        out.status.code().unwrap_or(-1)
+                    ),
+                ))
             }
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!(
-                    "docker pull failed (status {:?})",
-                    out.status.code().unwrap_or(-1)
-                ),
-            ));
         }
     }
 }
 
-/// Derive "local latest" candidate for our agent images from a resolved ref.
-/// E.g., "registry.intern.../aifo-coder-codex:release-0.6.3" -> "aifo-coder-codex:latest".
-fn derive_local_latest_candidate(image: &str) -> Option<String> {
-    // Strip digest
-    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
-    // Last path component: repository/name
-    let last = base.rsplit('/').next().unwrap_or(base);
-    // Strip tag (if present)
-    let name_no_tag = match last.rfind(':') {
-        Some(colon) => &last[..colon],
-        None => last,
-    };
-    if name_no_tag.starts_with("aifo-coder-") {
-        Some(format!("{}:latest", name_no_tag))
-    } else {
-        None
-    }
-}
 
 /// Compute the effective agent image for real run:
 /// - Apply env overrides (AIFO_CODER_AGENT_IMAGE/TAG),
