@@ -34,24 +34,6 @@ fn env_trim(k: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-/// Derive a local ':latest' candidate for first-party toolchain images.
-fn derive_local_latest_candidate_toolchain(image: &str) -> Option<String> {
-    // Strip any digest
-    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
-    // Last path component
-    let last = base.rsplit('/').next().unwrap_or(base);
-    // Strip tag (if present)
-    let name_no_tag = match last.rfind(':') {
-        Some(colon) => &last[..colon],
-        None => last,
-    };
-    if name_no_tag.starts_with("aifo-coder-toolchain-") {
-        Some(format!("{name_no_tag}:latest"))
-    } else {
-        None
-    }
-}
-
 /// Resolve a tag override for a toolchain kind with precedence:
 /// per-kind tag -> AIFO_TOOLCHAIN_TAG -> AIFO_TAG.
 fn tag_override_for_kind(kind: &str) -> Option<String> {
@@ -73,14 +55,6 @@ fn tag_override_for_kind(kind: &str) -> Option<String> {
 /// This remains true even when prefixed with an internal registry.
 fn is_first_party(image: &str) -> bool {
     image.contains("aifo-coder-toolchain-")
-}
-
-/// Replace the tag component of an image reference (last ':' split).
-fn replace_tag(image: &str, tag: &str) -> String {
-    let mut parts = image.rsplitn(2, ':');
-    let _old = parts.next().unwrap_or("");
-    let repo = parts.next().unwrap_or(image);
-    format!("{repo}:{tag}")
 }
 
 /// Structured mappings for toolchain normalization and default images
@@ -177,31 +151,27 @@ pub fn normalize_toolchain_kind(kind: &str) -> String {
 
 pub fn default_toolchain_image(kind: &str) -> String {
     let k = normalize_toolchain_kind(kind);
+    // Explicit image overrides still win outright.
     if k == "rust" {
-        // Explicit override takes precedence
         if let Ok(img) = env::var("AIFO_RUST_TOOLCHAIN_IMAGE") {
             let img = img.trim();
             if !img.is_empty() {
                 return img.to_string();
             }
         }
-        // Force official rust image when requested; prefer versioned tag if provided
         if env::var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL").ok().as_deref() == Some("1") {
             let ver = env::var("AIFO_RUST_TOOLCHAIN_VERSION").ok();
             let v_opt = ver.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
             return official_rust_image_for_version(v_opt);
         }
-        // Prefer our first-party toolchain image; versioned when requested.
         if let Ok(ver) = env::var("AIFO_RUST_TOOLCHAIN_VERSION") {
             let v = ver.trim();
             if !v.is_empty() {
                 return format!("aifo-coder-toolchain-rust:{v}");
             }
         }
-        // fall through to default constant
     }
     if k == "node" {
-        // Symmetric overrides for Node toolchain image and version
         if let Ok(img) = env::var("AIFO_NODE_TOOLCHAIN_IMAGE") {
             let img = img.trim();
             if !img.is_empty() {
@@ -215,52 +185,51 @@ pub fn default_toolchain_image(kind: &str) -> String {
             }
         }
     }
-    let mut base = default_image_for_kind_const(&k)
+
+    // Base first-party image (unqualified) for this kind.
+    let default_base = default_image_for_kind_const(&k)
         .unwrap_or("node:22-bookworm-slim")
         .to_string();
-    // Apply tag overrides first and prefer local unqualified images for our first-party toolchains.
-    if is_first_party(&base) {
-        // Track whether a tag override was applied for this kind
-        let mut override_used = false;
-        if let Some(tag) = tag_override_for_kind(&k) {
-            base = replace_tag(&base, &tag);
-            override_used = true;
-        }
+    if !is_first_party(&default_base) {
+        return default_base;
+    }
 
-        // Prefer a local ':latest' toolchain image when:
-        // - no per-kind/global tag override was used, and
-        // - current tag is either 'latest' or 'release-<VER>'.
-        let default_rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
-        let current_tag = base.rsplit(':').nth(1);
-        let allow_local_latest = !override_used
-            && matches!(current_tag, Some(t) if t == "latest" || t == default_rel_tag);
+    // Repository name without tag
+    let repo = default_base
+        .split_once(':')
+        .map(|(n, _)| n)
+        .unwrap_or(default_base.as_str())
+        .to_string();
+    let rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
+    let internal = crate::preferred_internal_registry_prefix_quiet();
 
-        if allow_local_latest {
-            if let Some(candidate) = derive_local_latest_candidate_toolchain(&base) {
-                if docker_image_exists_local(&candidate) {
-                    return candidate;
-                }
-            }
-        }
-
-        // Prefer local unqualified image unless internal registry is explicitly set via env.
-        if !base.contains('/') {
-            let explicit_ir = crate::preferred_internal_registry_source() == "env";
-            if !explicit_ir && docker_image_exists_local(&base) {
-                return base;
-            }
-        }
-        // If internal registry prefix is available, prepend it; otherwise resolve via autodetect/env when unqualified.
-        if !is_official_rust_image(&base) && base.starts_with("aifo-coder-toolchain-") {
-            let ir = crate::preferred_internal_registry_prefix_quiet();
-            if !ir.is_empty() {
-                base = format!("{ir}{base}");
-            } else if !base.contains('/') {
-                base = crate::resolve_image(&base);
-            }
+    // 1) local :latest, 2) local :release-<pkg>, 3) local internal-qualified :latest, 4) local internal-qualified :release-<pkg>
+    let candidates_local = [
+        format!("{repo}:latest"),
+        format!("{repo}:{rel_tag}"),
+        if internal.is_empty() {
+            String::new()
+        } else {
+            format!("{internal}{repo}:latest")
+        },
+        if internal.is_empty() {
+            String::new()
+        } else {
+            format!("{internal}{repo}:{rel_tag}")
+        },
+    ];
+    for c in candidates_local.iter().filter(|s| !s.is_empty()) {
+        if docker_image_exists_local(c) {
+            return c.to_string();
         }
     }
-    base
+
+    // Remote preference: apply per-kind/global tag override when present, else release-<pkg>.
+    let tag = tag_override_for_kind(&k).unwrap_or(rel_tag);
+    if !internal.is_empty() {
+        return format!("{internal}{repo}:{tag}");
+    }
+    format!("{repo}:{tag}")
 }
 
 /// Compute default image from kind@version (best-effort).

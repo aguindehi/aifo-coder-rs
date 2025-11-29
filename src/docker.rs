@@ -963,7 +963,46 @@ fn pull_image_with_autologin(
             ));
         }
 
-        Err(io::Error::other("docker pull failed"))
+        // Fallback: try pulling unqualified tail repo:tag from Docker Hub when image is qualified
+        {
+            fn current_tag(img: &str) -> Option<String> {
+                let base = img.split_once('@').map(|(n, _)| n).unwrap_or(img);
+                let last_slash = base.rfind('/');
+                let last_colon = base.rfind(':');
+                match (last_slash, last_colon) {
+                    (Some(s), Some(c)) if c > s => Some(base[c + 1..].to_string()),
+                    (None, Some(c)) => Some(base[c + 1..].to_string()),
+                    _ => None,
+                }
+            }
+            if let Some(_host) = parse_registry_host(image) {
+                let tag = current_tag(image).unwrap_or_else(|| "latest".to_string());
+                let tail = image.rsplit('/').next().unwrap_or(image);
+                let unqual = format!(
+                    "{}:{}",
+                    tail.split_once(':').map(|(n, _)| n).unwrap_or(tail),
+                    tag
+                );
+                if eff_verbose {
+                    crate::log_info_stderr(
+                        use_err,
+                        &format!("aifo-coder: docker: docker pull {}", unqual),
+                    );
+                }
+                if pull_inherit(runtime, &unqual)? {
+                    return Ok(());
+                }
+                return Err(io::Error::other(format!(
+                    "docker pull failed; tried: {}, {}",
+                    image, unqual
+                )));
+            }
+        }
+        // If we get here, all attempts in verbose mode failed; return a generic error.
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "docker pull failed",
+        ))
     } else {
         // Non-verbose: print a short notice before quiet pull so users get feedback.
         let msg = if let Some(name) = agent_label {
@@ -1041,32 +1080,50 @@ fn pull_image_with_autologin(
             ));
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            format!(
-                "docker pull failed (status {:?})",
-                out.status.code().unwrap_or(-1)
-            ),
-        ))
-    }
-}
-
-/// Derive "local latest" candidate for our agent images from a resolved ref.
-/// E.g., "registry.intern.../aifo-coder-codex:release-0.6.3" -> "aifo-coder-codex:latest".
-fn derive_local_latest_candidate(image: &str) -> Option<String> {
-    // Strip digest
-    let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
-    // Last path component: repository/name
-    let last = base.rsplit('/').next().unwrap_or(base);
-    // Strip tag (if present)
-    let name_no_tag = match last.rfind(':') {
-        Some(colon) => &last[..colon],
-        None => last,
-    };
-    if name_no_tag.starts_with("aifo-coder-") {
-        Some(format!("{}:latest", name_no_tag))
-    } else {
-        None
+        {
+            // Fallback: try pulling unqualified tail repo:tag from Docker Hub when image is qualified
+            fn current_tag(img: &str) -> Option<String> {
+                let base = img.split_once('@').map(|(n, _)| n).unwrap_or(img);
+                let last_slash = base.rfind('/');
+                let last_colon = base.rfind(':');
+                match (last_slash, last_colon) {
+                    (Some(s), Some(c)) if c > s => Some(base[c + 1..].to_string()),
+                    (None, Some(c)) => Some(base[c + 1..].to_string()),
+                    _ => None,
+                }
+            }
+            if let Some(_host) = parse_registry_host(image) {
+                let tag = current_tag(image).unwrap_or_else(|| "latest".to_string());
+                let tail = image.rsplit('/').next().unwrap_or(image);
+                let unqual = format!(
+                    "{}:{}",
+                    tail.split_once(':').map(|(n, _)| n).unwrap_or(tail),
+                    tag
+                );
+                let out_hub = Command::new(runtime)
+                    .arg("pull")
+                    .arg(&unqual)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()?;
+                if out_hub.status.success() {
+                    Ok(())
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!("docker pull failed; tried: {}, {}", image, unqual),
+                    ))
+                }
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "docker pull failed (status {:?})",
+                        out.status.code().unwrap_or(-1)
+                    ),
+                ))
+            }
+        }
     }
 }
 
@@ -1076,8 +1133,7 @@ fn derive_local_latest_candidate(image: &str) -> Option<String> {
 /// - Prefer local "<name>:latest" when present.
 pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> {
     // Allow tests to exercise tag logic without requiring Docker by honoring
-    // AIFO_CODER_TEST_DISABLE_DOCKER: when set, skip local existence checks
-    // and simply return the resolved image reference.
+    // AIFO_CODER_TEST_DISABLE_DOCKER: when set, skip local existence checks.
     let runtime = match container_runtime_path() {
         Ok(p) => Some(p),
         Err(e) => {
@@ -1091,56 +1147,50 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
 
     // Apply env overrides (same as build path)
     let base_image = maybe_override_agent_image(image);
-    let resolved_image = crate::registry::resolve_image(&base_image);
 
-    // Helper: extract the current tag (suffix after ':' if present, not counting registry host:port)
-    fn image_tag(img: &str) -> Option<&str> {
-        let base = img.split_once('@').map(|(n, _)| n).unwrap_or(img);
-        let last_slash = base.rfind('/');
-        let last_colon = base.rfind(':');
-        match (last_slash, last_colon) {
-            (Some(slash), Some(colon)) if colon > slash => Some(&base[colon + 1..]),
-            (None, Some(colon)) => Some(&base[colon + 1..]),
-            _ => None,
-        }
-    }
+    // Tail repository name (drop any registry/namespace and tag)
+    let tail_repo = {
+        let base = base_image
+            .split_once('@')
+            .map(|(n, _)| n)
+            .unwrap_or(base_image.as_str());
+        let last = base.rsplit('/').next().unwrap_or(base);
+        last.split_once(':')
+            .map(|(n, _)| n)
+            .unwrap_or(last)
+            .to_string()
+    };
+    let rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
+    let internal = crate::preferred_internal_registry_prefix_quiet();
 
-    // Prefer local ":latest" only when we’re on the default tag (release-<pkg>) or already ":latest",
-    // and no explicit tag override (agent-specific or global) is in effect.
-    let current_tag = image_tag(&resolved_image);
-    let default_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
-
-    let agent_image_override = env::var("AIFO_CODER_AGENT_IMAGE")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .is_some();
-    let agent_tag_override = env::var("AIFO_CODER_AGENT_TAG")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .is_some();
-    let global_tag_override = env::var("AIFO_TAG")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .is_some();
-    let tag_overridden = agent_image_override || agent_tag_override || global_tag_override;
-
-    let allow_local_latest =
-        !tag_overridden && matches!(current_tag, Some(t) if t == "latest" || t == default_tag);
-
-    if allow_local_latest {
-        if let (Some(rt), Some(candidate)) = (
-            runtime.as_ref(),
-            derive_local_latest_candidate(&resolved_image),
-        ) {
-            if image_exists_locally(rt.as_path(), &candidate) {
-                return Ok(candidate);
+    // Prefer local images in this order:
+    // 1) unqualified :latest, 2) unqualified :release-<pkg>,
+    // 3) internal-qualified :latest, 4) internal-qualified :release-<pkg>.
+    if let Some(rt) = runtime.as_ref() {
+        let candidates = [
+            format!("{tail_repo}:latest"),
+            format!("{tail_repo}:{rel_tag}"),
+            if internal.is_empty() {
+                String::new()
+            } else {
+                format!("{internal}{tail_repo}:latest")
+            },
+            if internal.is_empty() {
+                String::new()
+            } else {
+                format!("{internal}{tail_repo}:{rel_tag}")
+            },
+        ];
+        for c in candidates.iter().filter(|s| !s.is_empty()) {
+            if image_exists_locally(rt.as_path(), c) {
+                return Ok(c.to_string());
             }
         }
     }
 
+    // Remote resolution: prefer internal registry via resolve_image (may qualify),
+    // otherwise return unqualified (Docker Hub) reference.
+    let resolved_image = crate::registry::resolve_image(&base_image);
     Ok(resolved_image)
 }
 
