@@ -34,9 +34,7 @@ pub fn build_file_metrics_provider(resource: Resource, _path: PathBuf) -> SdkMet
     // Best-effort: build a stdout metrics exporter. The crate handles the actual
     // writer target; our main constraint is to never touch stdout in default runs,
     // so this dev exporter is intended for explicitly opt-in scenarios only.
-    let exporter = MetricsExporterBuilder::default()
-        .build()
-        .expect("stdout metrics exporter");
+    let exporter = MetricsExporterBuilder::default().build();
 
     let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
         exporter,
