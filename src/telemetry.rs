@@ -240,16 +240,21 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let mut registry = tracing_subscriber::registry().with(otel_layer);
+    // Build subscriber in one expression to avoid type-mismatch on reassignment.
+    let subscriber = {
+        let base = tracing_subscriber::registry().with(otel_layer);
 
-    if env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1") {
-        let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
-        let env_filter = tracing_subscriber::EnvFilter::new(filter);
-        let fmt_layer = tracing_subscriber::fmt::layer();
-        registry = registry.with(env_filter).with(fmt_layer);
-    }
+        if env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1") {
+            let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
+            let env_filter = tracing_subscriber::EnvFilter::new(filter);
+            let fmt_layer = tracing_subscriber::fmt::layer();
+            base.with(env_filter).with(fmt_layer)
+        } else {
+            base
+        }
+    };
 
-    if registry.try_init().is_err() {
+    if subscriber.try_init().is_err() {
         eprintln!("aifo-coder: telemetry init skipped (global subscriber already set)");
         return None;
     }
