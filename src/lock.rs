@@ -5,9 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "otel")]
-use tracing::{instrument, Span};
-#[cfg(feature = "otel")]
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing::instrument;
 
 /// Repository/user-scoped lock guard that removes the lock file on drop.
 #[derive(Debug)]
@@ -71,9 +69,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     #[cfg(feature = "otel")]
                     {
-                        Span::current().set_status(opentelemetry::trace::Status::error(
-                            "lock held by another process",
-                        ));
+                        tracing::error!("lock acquisition failed: lock held by another process");
                     }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
@@ -105,9 +101,9 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
         msg.push_str(&format!(" (last error: {e})"));
         #[cfg(feature = "otel")]
         {
-            // Avoid embedding raw paths in the status; use a salted hash instead.
+            // Avoid embedding raw paths directly; log a concise hashed summary instead.
             let status_msg = crate::telemetry::hash_string_hex(&msg);
-            Span::current().set_status(opentelemetry::trace::Status::error(status_msg));
+            tracing::error!("lock acquisition failed: {}", status_msg);
         }
     }
     Err(io::Error::other(crate::display_for_fork_error(
@@ -144,9 +140,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                 #[cfg(feature = "otel")]
                 {
-                    Span::current().set_status(opentelemetry::trace::Status::error(
-                        "lock held by another process",
-                    ));
+                    tracing::error!("lock acquisition failed at specific path: lock held by another process");
                 }
                 Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(
