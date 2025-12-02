@@ -132,25 +132,27 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
         .truncate(true)
         .open(p)
     {
-        Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(RepoLock {
-                file: f,
-                path: p.to_path_buf(),
-            }),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                #[cfg(feature = "otel")]
-                {
-                    tracing::error!("lock acquisition failed at specific path: lock held by another process");
-                }
-                Err(io::Error::other(crate::display_for_fork_error(
+        Ok(f) => {
+            match f.try_lock_exclusive() {
+                Ok(_) => Ok(RepoLock {
+                    file: f,
+                    path: p.to_path_buf(),
+                }),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    #[cfg(feature = "otel")]
+                    {
+                        tracing::error!("lock acquisition failed at specific path: lock held by another process");
+                    }
+                    Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(
                         "Another coding agent is already running (lock held). Please try again later."
                             .to_string(),
                     ),
                 )))
+                }
+                Err(e) => Err(e),
             }
-            Err(e) => Err(e),
-        },
+        }
         Err(e) => Err(e),
     }
 }
