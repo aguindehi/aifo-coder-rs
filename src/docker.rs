@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use which::which;
 
+#[cfg(feature = "otel")]
+use tracing::instrument;
+
 // Pass-through environment variables to the containerized agent
 static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
@@ -1194,6 +1197,14 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
     Ok(resolved_image)
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        skip(passthrough, image, apparmor_profile),
+        fields(agent = %agent)
+    )
+)]
 /// Build a docker run preview string without requiring docker in PATH (used for dry-run).
 pub fn build_docker_preview_only(
     agent: &str,
@@ -1316,6 +1327,14 @@ pub fn build_docker_preview_only(
     parts.join(" ")
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        skip(passthrough, image, apparmor_profile),
+        fields(agent = %agent)
+    )
+)]
 /// Build the docker run command for the given agent invocation, and return a preview string.
 pub fn build_docker_cmd(
     agent: &str,
