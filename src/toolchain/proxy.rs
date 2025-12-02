@@ -22,6 +22,10 @@ use std::fs;
 use std::io;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+#[cfg(feature = "otel")]
+use tracing::{info_span, instrument};
+#[cfg(feature = "otel")]
+use crate::telemetry::hash_string_hex;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
@@ -443,6 +447,15 @@ fn build_exec_args_with_wrapper(
     spawn_args
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(verbose),
+        fields(session_id = %session_id, verbose = %verbose)
+    )
+)]
 pub fn toolexec_start_proxy(
     session_id: &str,
     verbose: bool,
@@ -1135,6 +1148,21 @@ fn handle_connection<S: Read + Write>(
     }
 
     let name = sidecar::sidecar_container_name(kind, session);
+
+    #[cfg(feature = "otel")]
+    let _proxy_span_guard = {
+        let cwd_hash = hash_string_hex(&cwd);
+        info_span!(
+            "proxy_request",
+            tool = %tool,
+            kind = %kind,
+            arg_count = argv.len(),
+            cwd_hash = %cwd_hash,
+            session_id = %session
+        )
+        .entered()
+    };
+
     if !container_exists(&name) {
         let msg = format!(
             "\r\ntool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",

@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+#[cfg(feature = "otel")]
+use tracing::instrument;
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
@@ -36,6 +39,14 @@ pub(crate) fn sidecar_network_name(id: &str) -> String {
     format!("aifo-net-{id}")
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        skip(runtime),
+        fields(network = %name, verbose = %verbose)
+    )
+)]
 pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
     let use_err = crate::color_enabled_stderr();
     // Fast path: already exists
@@ -93,6 +104,14 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
     false
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "debug",
+        skip(runtime),
+        fields(network = %name, verbose = %verbose)
+    )
+)]
 pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
     let use_err = crate::color_enabled_stderr();
     // Only attempt removal if network exists to avoid noisy errors
@@ -713,6 +732,20 @@ mod bootstrap_guard_tests {
 
 /// Run a tool in a toolchain sidecar; returns exit code.
 /// Obeys --no-toolchain-cache and image overrides; prints docker previews when verbose/dry-run.
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(args, image_override),
+        fields(
+            kind = %kind_in,
+            no_cache = %no_cache,
+            verbose = %verbose,
+            dry_run = %dry_run
+        )
+    )
+)]
 pub fn toolchain_run(
     kind_in: &str,
     args: &[String],
@@ -903,6 +936,15 @@ pub fn toolchain_run(
 /// Note: When invoked stand-alone (without ToolchainSession), callers that rely on the
 /// AIFO_RUST_OFFICIAL_BOOTSTRAP marker during exec should create a BootstrapGuard
 /// themselves around the session lifecycle to keep the marker set across preview+exec.
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(overrides),
+        fields(kinds = ?kinds, no_cache = %no_cache, verbose = %verbose)
+    )
+)]
 pub fn toolchain_start_session(
     kinds: &[String],
     overrides: &[(String, String)],
@@ -1087,6 +1129,10 @@ pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
 }
 
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "info", err, skip(), fields(verbose = %verbose))
+)]
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
     let use_err = crate::color_enabled_stderr();
@@ -1113,6 +1159,15 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
 }
 
 /// Bootstrap: install a global typescript in the node sidecar (best-effort).
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(verbose),
+        fields(session_id = %session_id, verbose = %verbose)
+    )
+)]
 pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
     let use_err = crate::color_enabled_stderr();

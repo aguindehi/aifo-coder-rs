@@ -11,6 +11,9 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use which::which;
 
+#[cfg(feature = "otel")]
+use tracing::instrument;
+
 // Mirror registry: in-process cache and source
 static MIRROR_REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 static MIRROR_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
@@ -86,6 +89,15 @@ pub fn invalidate_registry_cache() {
 }
 
 /// Mirror registry (quiet): probe via curl then TCP; cache OnceCell + on-disk.
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "debug",
+        err,
+        skip(),
+        fields(source = "mirror_quiet")
+    )
+)]
 pub fn preferred_mirror_registry_prefix_quiet() -> String {
     if let Some(mode) = *REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock") {
         return match mode {
@@ -173,6 +185,10 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
 }
 
 /// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(source = "mirror_source"))
+)]
 pub fn preferred_mirror_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
         .lock()
@@ -198,6 +214,15 @@ pub fn preferred_mirror_registry_source() -> String {
 }
 
 /// Internal registry (env-only; no probe, no disk cache)
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "debug",
+        err,
+        skip(),
+        fields(source = "internal_quiet")
+    )
+)]
 pub fn preferred_internal_registry_prefix_quiet() -> String {
     if let Some(v) = INTERNAL_REGISTRY_PREFIX_CACHE.get() {
         return v.clone();
@@ -228,6 +253,10 @@ pub fn preferred_internal_registry_prefix_quiet() -> String {
 }
 
 /// Internal registry source: "env" | "env-empty" | "unset"
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(source = "internal_source"))
+)]
 pub fn preferred_internal_registry_source() -> String {
     INTERNAL_REGISTRY_SOURCE
         .get()
@@ -291,6 +320,15 @@ fn internal_registry_reachable() -> bool {
 /// - Env AIFO_CODER_INTERNAL_REGISTRY_PREFIX wins (normalized trailing '/')
 /// - Else if registry.intern.migros.net reachable, compose "<host>/<namespace>/"
 /// - Else empty (Docker Hub fallback)
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "debug",
+        err,
+        skip(),
+        fields(kind = "internal_autodetect")
+    )
+)]
 pub fn preferred_internal_registry_prefix_autodetect() -> String {
     if let Ok(val) = env::var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX") {
         let trimmed = val.trim();
@@ -312,6 +350,10 @@ pub fn preferred_internal_registry_prefix_autodetect() -> String {
     String::new()
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(image = %image))
+)]
 pub fn resolve_image(image: &str) -> String {
     // Detect if image already specifies an explicit registry
     if let Some((first, _rest)) = image.split_once('/') {
@@ -354,6 +396,10 @@ fn retag_image(image: &str, new_tag: &str) -> String {
 }
 
 /// Compute the effective agent image for logging: applies env overrides and registry resolution.
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(image = %image))
+)]
 pub fn resolve_agent_image_log_display(image: &str) -> String {
     // Full image override takes precedence; used verbatim (then resolved for registry/namespace).
     if let Ok(v) = env::var("AIFO_CODER_AGENT_IMAGE") {
