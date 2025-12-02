@@ -14,6 +14,8 @@ use std::time::Duration;
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
+#[cfg(feature = "otel")]
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
