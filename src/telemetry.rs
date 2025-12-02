@@ -37,7 +37,7 @@ fn telemetry_enabled_env() -> bool {
 }
 
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
-fn telemetry_pii_enabled() -> bool {
+pub fn telemetry_pii_enabled() -> bool {
     env::var("AIFO_CODER_OTEL_PII").ok().as_deref() == Some("1")
 }
 

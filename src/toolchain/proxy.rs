@@ -14,7 +14,7 @@ Implements v3 signal propagation and timeout model:
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
 */
 #[cfg(feature = "otel")]
-use crate::telemetry::hash_string_hex;
+use crate::telemetry::{hash_string_hex, telemetry_pii_enabled};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -1151,13 +1151,17 @@ fn handle_connection<S: Read + Write>(
 
     #[cfg(feature = "otel")]
     let _proxy_span_guard = {
-        let cwd_hash = hash_string_hex(&cwd);
+        let cwd_field = if telemetry_pii_enabled() {
+            cwd.clone()
+        } else {
+            hash_string_hex(&cwd)
+        };
         info_span!(
             "proxy_request",
             tool = %tool,
             kind = %kind,
             arg_count = argv.len(),
-            cwd_hash = %cwd_hash,
+            cwd = %cwd_field,
             session_id = %session
         )
         .entered()
