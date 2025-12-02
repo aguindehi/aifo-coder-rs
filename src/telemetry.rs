@@ -277,10 +277,11 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
                 .with_endpoint(endpoint)
                 .with_timeout(timeout)
                 .build_metrics_exporter(
-                    Box::<opentelemetry_sdk::metrics::reader::DefaultAggregationSelector>::default(),
-                    Box::<opentelemetry_sdk::metrics::reader::DefaultTemporalitySelector>::default(),
-                )
-            {
+                    Box::<opentelemetry_sdk::metrics::reader::DefaultAggregationSelector>::default(
+                    ),
+                    Box::<opentelemetry_sdk::metrics::reader::DefaultTemporalitySelector>::default(
+                    ),
+                ) {
                 Ok(exp) => exp,
                 Err(e) => {
                     eprintln!(

@@ -70,7 +70,14 @@ impl Drop for FileMetricsFlushGuard {
 
         let mut buf = Vec::<u8>::new();
         let mut result = opentelemetry_sdk::metrics::data::ResourceMetrics::default();
-        if self.reader.collect(&mut result, &opentelemetry_sdk::metrics::reader::CollectOptions::default()).is_ok() {
+        if self
+            .reader
+            .collect(
+                &mut result,
+                &opentelemetry_sdk::metrics::reader::CollectOptions::default(),
+            )
+            .is_ok()
+        {
             for scope in result.scope_metrics {
                 let scope_name = scope.scope.name;
                 for metric in scope.metrics {
@@ -203,18 +210,12 @@ fn registry_probe_duration_hist() -> Histogram<f64> {
 
 pub fn record_run(agent: &str) {
     let c = runs_total();
-    c.add(
-        1,
-        &[KeyValue::new("agent", agent.to_string())],
-    );
+    c.add(1, &[KeyValue::new("agent", agent.to_string())]);
 }
 
 pub fn record_docker_invocation(kind: &str) {
     let c = docker_invocations_total();
-    c.add(
-        1,
-        &[KeyValue::new("kind", kind.to_string())],
-    );
+    c.add(1, &[KeyValue::new("kind", kind.to_string())]);
 }
 
 pub fn record_proxy_request(tool: &str, result: &str) {
@@ -230,40 +231,25 @@ pub fn record_proxy_request(tool: &str, result: &str) {
 
 pub fn record_sidecar_started(kind: &str) {
     let c = sidecars_started_total();
-    c.add(
-        1,
-        &[KeyValue::new("kind", kind.to_string())],
-    );
+    c.add(1, &[KeyValue::new("kind", kind.to_string())]);
 }
 
 pub fn record_sidecar_stopped(kind: &str) {
     let c = sidecars_stopped_total();
-    c.add(
-        1,
-        &[KeyValue::new("kind", kind.to_string())],
-    );
+    c.add(1, &[KeyValue::new("kind", kind.to_string())]);
 }
 
 pub fn record_docker_run_duration(agent: &str, secs: f64) {
     let h = docker_run_duration_hist();
-    h.record(
-        secs,
-        &[KeyValue::new("agent", agent.to_string())],
-    );
+    h.record(secs, &[KeyValue::new("agent", agent.to_string())]);
 }
 
 pub fn record_proxy_exec_duration(tool: &str, secs: f64) {
     let h = proxy_exec_duration_hist();
-    h.record(
-        secs,
-        &[KeyValue::new("tool", tool.to_string())],
-    );
+    h.record(secs, &[KeyValue::new("tool", tool.to_string())]);
 }
 
 pub fn record_registry_probe_duration(source: &str, secs: f64) {
     let h = registry_probe_duration_hist();
-    h.record(
-        secs,
-        &[KeyValue::new("source", source.to_string())],
-    );
+    h.record(secs, &[KeyValue::new("source", source.to_string())]);
 }
