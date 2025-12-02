@@ -14,8 +14,6 @@ use std::time::Duration;
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
-#[cfg(feature = "otel")]
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -906,13 +904,6 @@ pub fn toolchain_run(
             exec_cmd.arg(a);
         }
         let status = exec_cmd.status().map_err(|e| {
-            #[cfg(feature = "otel")]
-            {
-                // Mark span as error on exec spawn failure
-                tracing::Span::current().set_status(opentelemetry::trace::Status::error(
-                    "failed to exec in sidecar",
-                ));
-            }
             io::Error::new(
                 e.kind(),
                 crate::display_for_toolchain_error(&ToolchainError::Message(format!(
@@ -921,16 +912,6 @@ pub fn toolchain_run(
             )
         })?;
         exit_code = status.code().unwrap_or(1);
-        #[cfg(feature = "otel")]
-        {
-            if !status.success() {
-                // Surface non-zero exit code as span error for tracing backends
-                tracing::Span::current().set_status(opentelemetry::trace::Status::error(format!(
-                    "sidecar exec exited with code {:?}",
-                    status.code()
-                )));
-            }
-        }
     }
     // BootstrapGuard will clear marker on Drop
 

@@ -33,9 +33,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 #[cfg(feature = "otel")]
-use tracing::{info_span, instrument, Span};
-#[cfg(feature = "otel")]
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing::{info_span, instrument};
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -1271,12 +1269,6 @@ fn handle_connection<S: Read + Write>(
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
-                #[cfg(feature = "otel")]
-                {
-                    Span::current().set_status(opentelemetry::trace::Status::error(
-                        "proxy spawn failed (streaming)",
-                    ));
-                }
                 let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
                 b.push(b'\n');
                 log_request_result(verbose, &tool, kind, 86, &started);
@@ -1748,12 +1740,6 @@ fn handle_connection<S: Read + Write>(
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            #[cfg(feature = "otel")]
-            {
-                Span::current().set_status(opentelemetry::trace::Status::error(
-                    "proxy spawn failed (buffered)",
-                ));
-            }
             let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
             b.push(b'\n');
             log_request_result(verbose, &tool, kind, 86, &started);
