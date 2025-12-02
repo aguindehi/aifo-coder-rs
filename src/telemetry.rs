@@ -2,6 +2,7 @@
 
 use std::env;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
@@ -80,87 +81,80 @@ fn build_resource() -> Resource {
     Resource::new(attrs)
 }
 
+#[cfg(feature = "otel-otlp")]
 fn build_tracer(
     resource: &Resource,
     use_otlp: bool,
-) -> (
-    sdktrace::TracerProvider,
-    #[cfg(feature = "otel-otlp")] Option<tokio::runtime::Runtime>,
-) {
+) -> (sdktrace::TracerProvider, Option<tokio::runtime::Runtime>) {
     if use_otlp {
-        #[cfg(feature = "otel-otlp")]
-        {
-            use opentelemetry_otlp::WithExportConfig;
+        use opentelemetry_otlp::WithExportConfig;
 
-            let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
-            let endpoint = endpoint.trim();
-            if endpoint.is_empty() {
-                return build_stdout_tracer(resource);
-            }
-
-            let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
-                .ok()
-                .and_then(|s| humantime::parse_duration(&s).ok())
-                .unwrap_or_else(|| Duration::from_secs(5));
-
-            let rt_result = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("aifo-otel-worker")
-                .build();
-
-            let rt = match rt_result {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!(
-                        "aifo-coder: telemetry: failed to create OTLP runtime: {e}; falling back to stderr exporter"
-                    );
-                    return build_stderr_tracer(resource);
-                }
-            };
-
-            let provider_result = rt.block_on(async move {
-                let exporter = opentelemetry_otlp::new_exporter()
-                    .tonic()
-                    .with_endpoint(endpoint)
-                    .with_timeout(timeout);
-
-                let mut builder =
-                    opentelemetry_otlp::new_pipeline().tracing().with_exporter(exporter);
-
-                builder = builder.with_trace_config(
-                    sdktrace::Config::default().with_resource(resource.clone()),
-                );
-
-                builder.install_batch(opentelemetry_sdk::runtime::Tokio)
-            });
-
-            match provider_result {
-                Ok(provider) => (provider, Some(rt)),
-                Err(e) => {
-                    eprintln!(
-                        "aifo-coder: telemetry: failed to install OTLP tracer: {e}; falling back to stderr exporter"
-                    );
-                    build_stderr_tracer(resource)
-                }
-            }
+        let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
+        let endpoint = endpoint.trim();
+        if endpoint.is_empty() {
+            let provider = build_stderr_tracer(resource);
+            return (provider, None);
         }
 
-        #[cfg(not(feature = "otel-otlp"))]
-        {
-            eprintln!("aifo-coder: telemetry: OTLP endpoint set but otel-otlp feature not enabled; falling back to stderr exporter");
-            build_stderr_tracer(resource)
+        let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
+            .ok()
+            .and_then(|s| humantime::parse_duration(&s).ok())
+            .unwrap_or_else(|| Duration::from_secs(5));
+
+        let rt_result = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("aifo-otel-worker")
+            .build();
+
+        let rt = match rt_result {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!(
+                    "aifo-coder: telemetry: failed to create OTLP runtime: {e}; falling back to stderr exporter"
+                );
+                let provider = build_stderr_tracer(resource);
+                return (provider, None);
+            }
+        };
+
+        let provider_result = rt.block_on(async move {
+            let exporter = opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(endpoint)
+                .with_timeout(timeout);
+
+            let mut builder =
+                opentelemetry_otlp::new_pipeline().tracing().with_exporter(exporter);
+
+            builder = builder.with_trace_config(
+                sdktrace::Config::default().with_resource(resource.clone()),
+            );
+
+            builder.install_batch(opentelemetry_sdk::runtime::Tokio)
+        });
+
+        match provider_result {
+            Ok(provider) => (provider, Some(rt)),
+            Err(e) => {
+                eprintln!(
+                    "aifo-coder: telemetry: failed to install OTLP tracer: {e}; falling back to stderr exporter"
+                );
+                let provider = build_stderr_tracer(resource);
+                (provider, None)
+            }
         }
     } else {
-        build_stderr_tracer(resource)
+        let provider = build_stderr_tracer(resource);
+        (provider, None)
     }
 }
 
-fn build_stderr_tracer(
-    resource: &Resource,
-) -> (
-    sdktrace::TracerProvider,
-    #[cfg(feature = "otel-otlp")] Option<tokio::runtime::Runtime>,
-) {
+#[cfg(not(feature = "otel-otlp"))]
+fn build_tracer(resource: &Resource, _use_otlp: bool) -> sdktrace::TracerProvider {
+    build_stderr_tracer(resource)
+}
+
+fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
     struct StderrSpanExporter;
 
     impl opentelemetry::sdk::export::trace::SpanExporter for StderrSpanExporter {
@@ -185,19 +179,10 @@ fn build_stderr_tracer(
     }
 
     let exporter = StderrSpanExporter;
-    let provider = sdktrace::TracerProvider::builder()
+    sdktrace::TracerProvider::builder()
         .with_simple_exporter(exporter)
         .with_config(sdktrace::Config::default().with_resource(resource.clone()))
-        .build();
-
-    #[cfg(feature = "otel-otlp")]
-    {
-        (provider, None)
-    }
-    #[cfg(not(feature = "otel-otlp"))]
-    {
-        (provider, None)
-    }
+        .build()
 }
 
 fn build_metrics_provider(
@@ -293,7 +278,11 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             .map(|s| !s.trim().is_empty())
             .unwrap_or(false);
 
+    #[cfg(feature = "otel-otlp")]
     let (tracer_provider, runtime) = build_tracer(&resource, use_otlp);
+
+    #[cfg(not(feature = "otel-otlp"))]
+    let tracer_provider = build_tracer(&resource, use_otlp);
     let tracer = tracer_provider.tracer("aifo-coder");
 
     let meter_provider = build_metrics_provider(&resource, use_otlp);
@@ -324,11 +313,18 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
     let _ = INIT.set(());
 
-    Some(TelemetryGuard {
-        meter_provider,
-        #[cfg(feature = "otel-otlp")]
-        runtime,
-    })
+    #[cfg(feature = "otel-otlp")]
+    {
+        Some(TelemetryGuard {
+            meter_provider,
+            runtime,
+        })
+    }
+
+    #[cfg(not(feature = "otel-otlp"))]
+    {
+        Some(TelemetryGuard { meter_provider })
+    }
 }
 
 impl Drop for TelemetryGuard {
