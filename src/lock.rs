@@ -107,8 +107,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
         {
             // Avoid embedding raw paths in the status; use a salted hash instead.
             let status_msg = crate::telemetry::hash_string_hex(&msg);
-            Span::current()
-                .set_status(opentelemetry::trace::Status::error(status_msg));
+            Span::current().set_status(opentelemetry::trace::Status::error(status_msg));
         }
     }
     Err(io::Error::other(crate::display_for_fork_error(

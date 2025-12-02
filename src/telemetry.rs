@@ -9,13 +9,13 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
-use tracing::{debug, error, info, instrument};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
+use tracing::{debug, error, info, instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::prelude::*;
 
 pub struct TelemetryGuard {
