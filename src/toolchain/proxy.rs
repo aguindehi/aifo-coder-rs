@@ -1681,8 +1681,8 @@ fn handle_connection<S: Read + Write>(
             } else {
                 "err"
             };
-            aifo_coder::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
-            aifo_coder::telemetry::metrics::record_proxy_request(&tool, result);
+            crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+            crate::telemetry::metrics::record_proxy_request(&tool, result);
         }
         if verbose {
             logger.boundary_log(&format!(
@@ -1889,8 +1889,8 @@ fn handle_connection<S: Read + Write>(
         } else {
             "err"
         };
-        aifo_coder::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
-        aifo_coder::telemetry::metrics::record_proxy_request(&tool, result);
+        crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+        crate::telemetry::metrics::record_proxy_request(&tool, result);
     }
     // If watcher timed out (on initial INT), map to 504 with exit code 124
     if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {

@@ -7,10 +7,11 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+use opentelemetry::metrics::MeterProvider as _;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
-use opentelemetry_sdk::metrics::{MeterProvider as _, SdkMeterProvider};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
@@ -275,7 +276,10 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
                 .tonic()
                 .with_endpoint(endpoint)
                 .with_timeout(timeout)
-                .build_metrics_exporter()
+                .build_metrics_exporter(
+                    Box::<opentelemetry_sdk::metrics::reader::DefaultAggregationSelector>::default(),
+                    Box::<opentelemetry_sdk::metrics::reader::DefaultTemporalitySelector>::default(),
+                )
             {
                 Ok(exp) => exp,
                 Err(e) => {
@@ -289,9 +293,12 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
             let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
                 .with_resource(resource.clone());
 
-            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
-                .with_interval(interval)
-                .build();
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
+                exporter,
+                opentelemetry_sdk::runtime::Tokio,
+            )
+            .with_interval(interval)
+            .build();
 
             provider_builder = provider_builder.with_reader(reader);
 

@@ -1409,8 +1409,8 @@ pub fn build_docker_cmd(
     // Record a docker "run" invocation metric for this agent.
     #[cfg(feature = "otel")]
     {
-        aifo_coder::telemetry::metrics::record_docker_invocation("run");
-        aifo_coder::telemetry::metrics::record_run(agent);
+        crate::telemetry::metrics::record_docker_invocation("run");
+        crate::telemetry::metrics::record_run(agent);
     }
 
     // Shell command inside container

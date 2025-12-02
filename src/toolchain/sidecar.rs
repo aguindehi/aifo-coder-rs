@@ -917,8 +917,8 @@ pub fn toolchain_run(
         #[cfg(feature = "otel")]
         {
             let secs = started.elapsed().as_secs_f64();
-            aifo_coder::telemetry::metrics::record_docker_run_duration(kind_in, secs);
-            aifo_coder::telemetry::metrics::record_docker_invocation("exec");
+            crate::telemetry::metrics::record_docker_run_duration(kind_in, secs);
+            crate::telemetry::metrics::record_docker_invocation("exec");
         }
     }
     // BootstrapGuard will clear marker on Drop
@@ -934,7 +934,7 @@ pub fn toolchain_run(
 
         #[cfg(feature = "otel")]
         {
-            aifo_coder::telemetry::metrics::record_sidecar_stopped(sidecar_kind.as_str());
+            crate::telemetry::metrics::record_sidecar_stopped(sidecar_kind.as_str());
         }
 
         if let Some(net_name) = net_for_run {
@@ -1078,7 +1078,7 @@ pub fn toolchain_start_session(
 
         #[cfg(feature = "otel")]
         {
-            aifo_coder::telemetry::metrics::record_sidecar_started(kind.as_str());
+            crate::telemetry::metrics::record_sidecar_started(kind.as_str());
         }
     }
     Ok(session_id)

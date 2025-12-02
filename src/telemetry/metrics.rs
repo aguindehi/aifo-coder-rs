@@ -1,17 +1,15 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::OnceCell;
-use opentelemetry::metrics::{Counter, Histogram, Unit};
+use opentelemetry::metrics::{Counter, Histogram, Meter, MeterProvider as _};
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::metrics::{
-    reader::AggregationSelector, reader::DefaultAggregationSelector, InstrumentKind, ManualReader,
-    MeterProvider, PeriodicReader, SdkMeterProvider,
-};
+use opentelemetry_sdk::metrics::reader::MetricReader;
+use opentelemetry_sdk::metrics::ManualReader;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::resource::Resource;
-use opentelemetry_sdk::InstrumentationScope;
 
 /// Compute the dev metrics file path:
 /// - ${AIFO_CODER_OTEL_METRICS_FILE} if set and non-empty
@@ -35,15 +33,15 @@ pub fn dev_metrics_path() -> PathBuf {
 ///
 /// This writer never targets stdout; it appends JSONL lines to the provided path.
 pub fn build_file_metrics_provider(resource: Resource, path: PathBuf) -> SdkMeterProvider {
-    let file_path = path.clone();
+    let file_path = path;
     let reader = ManualReader::builder().build();
 
     let provider = SdkMeterProvider::builder()
-        .with_reader(reader.clone())
+        .with_reader(reader.clone_boxed())
         .with_resource(resource)
         .build();
 
-    // Register aatexit-style flush hook via OnceCell to ensure samples are written.
+    // Register a best-effort flush hook via OnceCell to ensure samples are written.
     static FLUSH_GUARD: OnceCell<FileMetricsFlushGuard> = OnceCell::new();
     let _ = FLUSH_GUARD.set(FileMetricsFlushGuard {
         reader,
@@ -71,11 +69,11 @@ impl Drop for FileMetricsFlushGuard {
         };
 
         let mut buf = Vec::<u8>::new();
-        if let Ok(metrics) = self.reader.collect() {
-            for rm in metrics.scope_metrics {
-                let scope: &InstrumentationScope = &rm.scope;
-                let scope_name = scope.name.clone();
-                for metric in rm.metrics {
+        let mut result = opentelemetry_sdk::metrics::data::ResourceMetrics::default();
+        if self.reader.collect(&mut result, &opentelemetry_sdk::metrics::reader::CollectOptions::default()).is_ok() {
+            for scope in result.scope_metrics {
+                let scope_name = scope.scope.name;
+                for metric in scope.metrics {
                     let ts = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .map(|d| d.as_secs_f64())
@@ -109,7 +107,7 @@ static DOCKER_RUN_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static PROXY_EXEC_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static REGISTRY_PROBE_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 
-fn meter() -> opentelemetry::metrics::Meter {
+fn meter() -> Meter {
     opentelemetry::global::meter("aifo-coder")
 }
 
@@ -118,7 +116,6 @@ fn runs_total() -> Counter<u64> {
         .get_or_init(|| {
             meter()
                 .u64_counter("aifo_runs_total")
-                .with_unit(Unit::new("1"))
                 .with_description("Total aifo-coder CLI runs")
                 .init()
         })
@@ -130,7 +127,6 @@ fn docker_invocations_total() -> Counter<u64> {
         .get_or_init(|| {
             meter()
                 .u64_counter("docker_invocations_total")
-                .with_unit(Unit::new("1"))
                 .with_description("Total Docker CLI invocations by kind")
                 .init()
         })
@@ -142,7 +138,6 @@ fn proxy_requests_total() -> Counter<u64> {
         .get_or_init(|| {
             meter()
                 .u64_counter("proxy_requests_total")
-                .with_unit(Unit::new("1"))
                 .with_description("Total proxy tool requests by result")
                 .init()
         })
@@ -154,7 +149,6 @@ fn sidecars_started_total() -> Counter<u64> {
         .get_or_init(|| {
             meter()
                 .u64_counter("toolchain_sidecars_started_total")
-                .with_unit(Unit::new("1"))
                 .with_description("Total toolchain sidecars started by kind")
                 .init()
         })
@@ -166,7 +160,6 @@ fn sidecars_stopped_total() -> Counter<u64> {
         .get_or_init(|| {
             meter()
                 .u64_counter("toolchain_sidecars_stopped_total")
-                .with_unit(Unit::new("1"))
                 .with_description("Total toolchain sidecars stopped by kind")
                 .init()
         })
@@ -178,8 +171,7 @@ fn docker_run_duration_hist() -> Histogram<f64> {
         .get_or_init(|| {
             meter()
                 .f64_histogram("docker_run_duration")
-                .with_unit(Unit::new("s"))
-                .with_description("Duration of docker run invocations by agent")
+                .with_description("Duration of docker run invocations by agent (s)")
                 .init()
         })
         .clone()
@@ -190,8 +182,7 @@ fn proxy_exec_duration_hist() -> Histogram<f64> {
         .get_or_init(|| {
             meter()
                 .f64_histogram("proxy_exec_duration")
-                .with_unit(Unit::new("s"))
-                .with_description("Duration of proxy exec per tool")
+                .with_description("Duration of proxy exec per tool (s)")
                 .init()
         })
         .clone()
@@ -202,8 +193,7 @@ fn registry_probe_duration_hist() -> Histogram<f64> {
         .get_or_init(|| {
             meter()
                 .f64_histogram("registry_probe_duration")
-                .with_unit(Unit::new("s"))
-                .with_description("Duration of registry probe by source")
+                .with_description("Duration of registry probe by source (s)")
                 .init()
         })
         .clone()
@@ -213,12 +203,18 @@ fn registry_probe_duration_hist() -> Histogram<f64> {
 
 pub fn record_run(agent: &str) {
     let c = runs_total();
-    c.add(1, &[KeyValue::new("agent", agent)]);
+    c.add(
+        1,
+        &[KeyValue::new("agent", agent.to_string())],
+    );
 }
 
 pub fn record_docker_invocation(kind: &str) {
     let c = docker_invocations_total();
-    c.add(1, &[KeyValue::new("kind", kind)]);
+    c.add(
+        1,
+        &[KeyValue::new("kind", kind.to_string())],
+    );
 }
 
 pub fn record_proxy_request(tool: &str, result: &str) {
@@ -234,25 +230,40 @@ pub fn record_proxy_request(tool: &str, result: &str) {
 
 pub fn record_sidecar_started(kind: &str) {
     let c = sidecars_started_total();
-    c.add(1, &[KeyValue::new("kind", kind)]);
+    c.add(
+        1,
+        &[KeyValue::new("kind", kind.to_string())],
+    );
 }
 
 pub fn record_sidecar_stopped(kind: &str) {
     let c = sidecars_stopped_total();
-    c.add(1, &[KeyValue::new("kind", kind)]);
+    c.add(
+        1,
+        &[KeyValue::new("kind", kind.to_string())],
+    );
 }
 
 pub fn record_docker_run_duration(agent: &str, secs: f64) {
     let h = docker_run_duration_hist();
-    h.record(secs, &[KeyValue::new("agent", agent)]);
+    h.record(
+        secs,
+        &[KeyValue::new("agent", agent.to_string())],
+    );
 }
 
 pub fn record_proxy_exec_duration(tool: &str, secs: f64) {
     let h = proxy_exec_duration_hist();
-    h.record(secs, &[KeyValue::new("tool", tool.to_string())]);
+    h.record(
+        secs,
+        &[KeyValue::new("tool", tool.to_string())],
+    );
 }
 
 pub fn record_registry_probe_duration(source: &str, secs: f64) {
     let h = registry_probe_duration_hist();
-    h.record(secs, &[KeyValue::new("source", source.to_string())]);
+    h.record(
+        secs,
+        &[KeyValue::new("source", source.to_string())],
+    );
 }
