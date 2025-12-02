@@ -9,6 +9,8 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
+use tracing::{debug, error, info, instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -24,6 +26,7 @@ pub struct TelemetryGuard {
 
 static INIT: OnceCell<()> = OnceCell::new();
 static INSTANCE_ID: OnceCell<String> = OnceCell::new();
+static HASH_SALT: OnceCell<u64> = OnceCell::new();
 
 fn telemetry_enabled_env() -> bool {
     let aifo = env::var("AIFO_CODER_OTEL").ok().as_deref() == Some("1");
@@ -33,6 +36,36 @@ fn telemetry_enabled_env() -> bool {
         .filter(|s| !s.is_empty())
         .is_some();
     aifo || endpoint
+}
+
+/// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
+fn telemetry_pii_enabled() -> bool {
+    env::var("AIFO_CODER_OTEL_PII").ok().as_deref() == Some("1")
+}
+
+/// Compute or retrieve a per-process FNV-1a salt derived from pid and start time.
+fn hash_salt() -> u64 {
+    *HASH_SALT.get_or_init(|| {
+        let pid = std::process::id() as u64;
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        pid ^ nanos.wrapping_mul(0x9e3779b97f4a7c15)
+    })
+}
+
+/// Simple 64-bit FNV-1a hash of a string with a per-process salt; returns 16-hex lowercase id.
+pub fn hash_string_hex(s: &str) -> String {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 1099511628211;
+
+    let mut h: u64 = FNV_OFFSET ^ hash_salt();
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(FNV_PRIME);
+    }
+    format!("{:016x}", h)
 }
 
 fn build_resource() -> Resource {
