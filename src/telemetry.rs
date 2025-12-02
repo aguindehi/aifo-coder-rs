@@ -8,16 +8,20 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::metrics::ExportResult as MetricsExportResult;
-use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
+use opentelemetry_sdk::export::metrics::MetricsExporter;
+use opentelemetry_sdk::export::trace::{
+    ExportResult as TraceExportResult, SpanData, SpanExporter,
+};
 use opentelemetry_sdk::metrics as sdkmetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
 pub struct TelemetryGuard {
-    meter_provider: Option<sdkmetrics::MeterProvider>,
+    meter_provider: Option<SdkMeterProvider>,
     #[cfg(feature = "otel-otlp")]
     runtime: Option<tokio::runtime::Runtime>,
 }
@@ -159,21 +163,33 @@ fn build_tracer(resource: &Resource, _use_otlp: bool) -> sdktrace::TracerProvide
 }
 
 fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
+    #[derive(Debug)]
     struct StderrSpanExporter;
 
     impl SpanExporter for StderrSpanExporter {
-        fn export(&mut self, batch: Vec<SpanData>) -> TraceExportResult {
-            let mut stderr = std::io::stderr();
-            for span in batch {
-                let name = span.name;
-                let span_id = span.span_context.span_id().to_string();
-                let trace_id = span.span_context.trace_id().to_string();
-                let _ = writeln!(
-                    stderr,
-                    "otel-span name={name} trace_id={trace_id} span_id={span_id}"
-                );
-            }
-            TraceExportResult::Success
+        fn export(
+            &mut self,
+            batch: Vec<SpanData>,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = TraceExportResult>
+                    + Send
+                    + 'static,
+            >,
+        > {
+            Box::pin(async move {
+                let mut stderr = std::io::stderr();
+                for span in batch {
+                    let name = span.name;
+                    let span_id = span.span_context.span_id().to_string();
+                    let trace_id = span.span_context.trace_id().to_string();
+                    let _ = writeln!(
+                        stderr,
+                        "otel-span name={name} trace_id={trace_id} span_id={span_id}"
+                    );
+                }
+                TraceExportResult::Success
+            })
         }
 
         fn shutdown(&mut self) {
@@ -191,7 +207,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
 fn build_metrics_provider(
     resource: &Resource,
     use_otlp: bool,
-) -> Option<sdkmetrics::MeterProvider> {
+) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }
@@ -213,7 +229,7 @@ fn build_metrics_provider(
             let reader =
                 sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2)).build();
 
-            let provider = sdkmetrics::MeterProvider::builder()
+            let provider = SdkMeterProvider::builder()
                 .with_resource(resource.clone())
                 .with_reader(reader)
                 .build();
@@ -228,7 +244,7 @@ fn build_metrics_provider(
     } else {
         struct StderrMetricsExporter;
 
-        impl opentelemetry_sdk::export::metrics::MetricsExporter for StderrMetricsExporter {
+        impl MetricsExporter for StderrMetricsExporter {
             fn export(
                 &self,
                 _resource: &opentelemetry_sdk::Resource,
@@ -250,7 +266,7 @@ fn build_metrics_provider(
         let exporter = StderrMetricsExporter;
         let reader = sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2)).build();
 
-        let provider = sdkmetrics::MeterProvider::builder()
+        let provider = SdkMeterProvider::builder()
             .with_resource(resource.clone())
             .with_reader(reader)
             .build();
