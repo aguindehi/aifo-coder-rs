@@ -7,10 +7,7 @@ use std::time::SystemTime;
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::export::metrics::{AggregationSelector, ExportKindFor, MetricsExporter};
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
-use opentelemetry_sdk::metrics as sdkmetrics;
-use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
@@ -196,77 +193,15 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         .build()
 }
 
-fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(_resource: &Resource, _use_otlp: bool) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }
 
-    if use_otlp {
-        #[cfg(feature = "otel-otlp")]
-        {
-            use opentelemetry_otlp::WithExportConfig;
-
-            let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
-            let endpoint = endpoint.trim();
-            if endpoint.is_empty() {
-                return None;
-            }
-
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_endpoint(endpoint);
-            let reader =
-                sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2)).build();
-
-            let provider = SdkMeterProvider::builder()
-                .with_resource(resource.clone())
-                .with_reader(reader)
-                .build();
-
-            Some(provider)
-        }
-
-        #[cfg(not(feature = "otel-otlp"))]
-        {
-            None
-        }
-    } else {
-        struct StderrMetricsExporter;
-
-        impl MetricsExporter for StderrMetricsExporter {
-            fn export(
-                &self,
-                _resource: &opentelemetry_sdk::Resource,
-                _scope_metrics: &[ScopeMetrics<'_>],
-            ) -> MetricsExportResult {
-                // For Phase 1, keep metrics off stdout; real dev sink comes in Phase 4.
-                MetricsExportResult::Success
-            }
-
-            fn force_flush(&self, _timeout: Option<std::time::Duration>) -> MetricsExportResult {
-                MetricsExportResult::Success
-            }
-
-            fn shutdown(&self) -> MetricsExportResult {
-                MetricsExportResult::Success
-            }
-
-            fn export_kind(&self) -> ExportKindFor {
-                ExportKindFor::Cumulative
-            }
-        }
-
-        let exporter = StderrMetricsExporter;
-        let reader = sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2)).build();
-
-        let provider = SdkMeterProvider::builder()
-            .with_resource(resource.clone())
-            .with_reader(reader)
-            .with_aggregation_selector(AggregationSelector::new())
-            .build();
-
-        Some(provider)
-    }
+    // Phase 1: metrics scaffolding only. To avoid stdout/file complexities and API churn,
+    // metrics are effectively disabled even when the env flag is set. A future Phase 4
+    // implementation can provide real exporters and readers here.
+    None
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {
