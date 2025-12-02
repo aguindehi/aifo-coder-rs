@@ -3,10 +3,12 @@
 use std::env;
 use std::time::Duration;
 use std::time::SystemTime;
+use std::io::Write;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -177,7 +179,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
                         "otel-span name={name} trace_id={trace_id} span_id={span_id}"
                     );
                 }
-                TraceExportResult::Success
+                Ok(())
             })
         }
 
