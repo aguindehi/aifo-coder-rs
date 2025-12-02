@@ -32,6 +32,8 @@ mod color;
 mod docker;
 mod errors;
 mod fork;
+#[cfg(feature = "otel")]
+mod telemetry;
 #[path = "fork/meta.rs"]
 pub mod fork_meta;
 #[path = "fork/strategy.rs"]
@@ -66,3 +68,11 @@ pub use util::docker_security::{docker_security_options_parse, DockerSecurityOpt
 pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::id::create_session_id;
 pub use util::*;
+
+#[cfg(feature = "otel")]
+pub use telemetry::{telemetry_init, TelemetryGuard};
+
+#[cfg(not(feature = "otel"))]
+pub fn telemetry_init() -> Option<()> {
+    None
+}

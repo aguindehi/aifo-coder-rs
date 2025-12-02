@@ -366,6 +366,10 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+
+    // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
+    // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
+    let _telemetry_guard = aifo_coder::telemetry_init();
     if std::env::var("AIFO_GLOBAL_TAG")
         .ok()
         .filter(|s| !s.trim().is_empty())

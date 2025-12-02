@@ -23,10 +23,33 @@ dotenvy = "0.15"
 fs2 = "0.4"
 getrandom = "0.2"
 serde_yaml = "0.9"
+tracing = { version = "0.1", features = ["std"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
+opentelemetry = { version = "0.24", optional = true }
+opentelemetry_sdk = { version = "0.24", optional = true }
+tracing-opentelemetry = { version = "0.25", optional = true }
+opentelemetry-stdout = { version = "0.4", optional = true }
+opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 
 [dev-dependencies]
 urlencoding = "2"
 tempfile = "3"
+
+[features]
+otel = [
+    "tracing",
+    "tracing-subscriber",
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "tracing-opentelemetry",
+    "opentelemetry-stdout",
+]
+otel-otlp = [
+    "otel",
+    "opentelemetry-otlp",
+    "tokio",
+]
 
 [profile.release]
 opt-level = "z"
