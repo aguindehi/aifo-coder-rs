@@ -9,9 +9,7 @@ use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::metrics::ExportResult as MetricsExportResult;
 use opentelemetry_sdk::export::metrics::MetricsExporter;
-use opentelemetry_sdk::export::trace::{
-    ExportResult as TraceExportResult, SpanData, SpanExporter,
-};
+use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics as sdkmetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
@@ -170,13 +168,8 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         fn export(
             &mut self,
             batch: Vec<SpanData>,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = TraceExportResult>
-                    + Send
-                    + 'static,
-            >,
-        > {
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceExportResult> + Send + 'static>>
+        {
             Box::pin(async move {
                 let mut stderr = std::io::stderr();
                 for span in batch {
@@ -204,10 +197,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         .build()
 }
 
-fn build_metrics_provider(
-    resource: &Resource,
-    use_otlp: bool,
-) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }
