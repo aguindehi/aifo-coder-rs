@@ -155,7 +155,7 @@ fn build_stdout_tracer(
     }
     #[cfg(not(feature = "otel-otlp"))]
     {
-        (provider, )
+        (provider, None)
     }
 }
 
