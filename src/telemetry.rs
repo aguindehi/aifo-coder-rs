@@ -240,21 +240,25 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    // Build subscriber in one expression to avoid type-mismatch on reassignment.
-    let subscriber = {
-        let base = tracing_subscriber::registry().with(otel_layer);
+    // Base subscriber: registry + OpenTelemetry layer only.
+    let base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
-        if env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1") {
-            let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
-            let env_filter = tracing_subscriber::EnvFilter::new(filter);
-            let fmt_layer = tracing_subscriber::fmt::layer();
-            base.with(env_filter).with(fmt_layer)
-        } else {
-            base
+    let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    if fmt_enabled {
+        let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
+        let env_filter = tracing_subscriber::EnvFilter::new(filter);
+        let fmt_layer = tracing_subscriber::fmt::layer();
+        let fmt_subscriber = base_subscriber.with(env_filter).with(fmt_layer);
+
+        if fmt_subscriber.try_init().is_err() {
+            eprintln!("aifo-coder: telemetry init skipped (global subscriber already set)");
+            return None;
         }
-    };
-
-    if subscriber.try_init().is_err() {
+    } else if base_subscriber.try_init().is_err() {
         eprintln!("aifo-coder: telemetry init skipped (global subscriber already set)");
         return None;
     }
