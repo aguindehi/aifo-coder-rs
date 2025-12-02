@@ -32,8 +32,6 @@ mod color;
 mod docker;
 mod errors;
 mod fork;
-#[cfg(feature = "otel")]
-mod telemetry;
 #[path = "fork/meta.rs"]
 pub mod fork_meta;
 #[path = "fork/strategy.rs"]
@@ -43,6 +41,8 @@ mod fork_strategy;
 mod fork_windows_helpers;
 mod lock;
 mod registry;
+#[cfg(feature = "otel")]
+mod telemetry;
 mod toolchain;
 mod ui;
 mod util;

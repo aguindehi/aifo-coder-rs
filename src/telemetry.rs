@@ -123,12 +123,12 @@ fn build_tracer(
                 .with_endpoint(endpoint)
                 .with_timeout(timeout);
 
-            let mut builder =
-                opentelemetry_otlp::new_pipeline().tracing().with_exporter(exporter);
+            let mut builder = opentelemetry_otlp::new_pipeline()
+                .tracing()
+                .with_exporter(exporter);
 
-            builder = builder.with_trace_config(
-                sdktrace::Config::default().with_resource(resource.clone()),
-            );
+            builder = builder
+                .with_trace_config(sdktrace::Config::default().with_resource(resource.clone()));
 
             builder.install_batch(opentelemetry_sdk::runtime::Tokio)
         });
@@ -204,9 +204,11 @@ fn build_metrics_provider(
                 return None;
             }
 
-            let exporter = opentelemetry_otlp::new_exporter().tonic().with_endpoint(endpoint);
-            let reader = sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2))
-                .build();
+            let exporter = opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(endpoint);
+            let reader =
+                sdkmetrics::PeriodicReader::builder(exporter, Duration::from_secs(2)).build();
 
             let provider = sdkmetrics::MeterProvider::builder()
                 .with_resource(resource.clone())
@@ -240,9 +242,7 @@ fn build_metrics_provider(
                 opentelemetry::sdk::export::metrics::ExportResult::Success
             }
 
-            fn shutdown(
-                &self,
-            ) -> opentelemetry::sdk::export::metrics::ExportResult {
+            fn shutdown(&self) -> opentelemetry::sdk::export::metrics::ExportResult {
                 opentelemetry::sdk::export::metrics::ExportResult::Success
             }
         }
@@ -295,11 +295,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
     let mut registry = tracing_subscriber::registry().with(otel_layer);
 
-    if env::var("AIFO_CODER_TRACING_FMT")
-        .ok()
-        .as_deref()
-        == Some("1")
-    {
+    if env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1") {
         let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
         let env_filter = tracing_subscriber::EnvFilter::new(filter);
         let fmt_layer = tracing_subscriber::fmt::layer();
