@@ -13,6 +13,8 @@ Implements v3 signal propagation and timeout model:
 - Notifications policy per spec with independent short timeout.
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
 */
+#[cfg(feature = "otel")]
+use crate::telemetry::hash_string_hex;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,10 +24,6 @@ use std::fs;
 use std::io;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-#[cfg(feature = "otel")]
-use tracing::{info_span, instrument};
-#[cfg(feature = "otel")]
-use crate::telemetry::hash_string_hex;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
@@ -34,6 +32,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
+#[cfg(feature = "otel")]
+use tracing::{info_span, instrument};
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
