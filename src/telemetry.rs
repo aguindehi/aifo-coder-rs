@@ -312,7 +312,8 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
     #[cfg(feature = "otel")]
     {
         let path = crate::telemetry::metrics::dev_metrics_path();
-        let provider = crate::telemetry::metrics::build_file_metrics_provider(resource.clone(), path);
+        let provider =
+            crate::telemetry::metrics::build_file_metrics_provider(resource.clone(), path);
         return Some(provider);
     }
 

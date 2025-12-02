@@ -3,15 +3,15 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use once_cell::sync::OnceCell;
 use opentelemetry::metrics::{Counter, Histogram, Unit};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::{
-    reader::AggregationSelector, reader::DefaultAggregationSelector, InstrumentKind,
-    ManualReader, MeterProvider, PeriodicReader, SdkMeterProvider,
+    reader::AggregationSelector, reader::DefaultAggregationSelector, InstrumentKind, ManualReader,
+    MeterProvider, PeriodicReader, SdkMeterProvider,
 };
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::InstrumentationScope;
-use once_cell::sync::OnceCell;
 
 /// Compute the dev metrics file path:
 /// - ${AIFO_CODER_OTEL_METRICS_FILE} if set and non-empty
@@ -223,10 +223,13 @@ pub fn record_docker_invocation(kind: &str) {
 
 pub fn record_proxy_request(tool: &str, result: &str) {
     let c = proxy_requests_total();
-    c.add(1, &[
-        KeyValue::new("tool", tool.to_string()),
-        KeyValue::new("result", result.to_string()),
-    ]);
+    c.add(
+        1,
+        &[
+            KeyValue::new("tool", tool.to_string()),
+            KeyValue::new("result", result.to_string()),
+        ],
+    );
 }
 
 pub fn record_sidecar_started(kind: &str) {
