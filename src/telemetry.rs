@@ -243,10 +243,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     // Base subscriber: registry + OpenTelemetry layer only.
     let base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
-    let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT")
-        .ok()
-        .as_deref()
-        == Some("1");
+    let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1");
 
     if fmt_enabled {
         let filter = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
