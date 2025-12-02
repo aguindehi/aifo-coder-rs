@@ -7,8 +7,7 @@ use std::time::SystemTime;
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::export::metrics::ExportResult as MetricsExportResult;
-use opentelemetry_sdk::export::metrics::MetricsExporter;
+use opentelemetry_sdk::export::metrics::{ExportKindFor, ExportResult as MetricsExportResult, MetricsExporter};
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics as sdkmetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
@@ -250,6 +249,10 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
 
             fn shutdown(&self) -> MetricsExportResult {
                 MetricsExportResult::Success
+            }
+
+            fn export_kind(&self) -> ExportKindFor {
+                ExportKindFor::Cumulative
             }
         }
 
