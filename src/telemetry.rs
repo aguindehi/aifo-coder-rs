@@ -6,10 +6,14 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::propagation::TraceContextPropagator;
-use opentelemetry::sdk::resource::Resource;
-use opentelemetry::sdk::{metrics as sdkmetrics, trace as sdktrace};
 use opentelemetry::KeyValue;
+use opentelemetry_sdk::export::metrics::ExportResult as MetricsExportResult;
+use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
+use opentelemetry_sdk::metrics::data::ScopeMetrics;
+use opentelemetry_sdk::metrics as sdkmetrics;
+use opentelemetry_sdk::propagation::TraceContextPropagator;
+use opentelemetry_sdk::resource::Resource;
+use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
 pub struct TelemetryGuard {
@@ -157,11 +161,8 @@ fn build_tracer(resource: &Resource, _use_otlp: bool) -> sdktrace::TracerProvide
 fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
     struct StderrSpanExporter;
 
-    impl opentelemetry::sdk::export::trace::SpanExporter for StderrSpanExporter {
-        fn export(
-            &mut self,
-            batch: Vec<opentelemetry::sdk::export::trace::SpanData>,
-        ) -> opentelemetry::sdk::export::trace::ExportResult {
+    impl SpanExporter for StderrSpanExporter {
+        fn export(&mut self, batch: Vec<SpanData>) -> TraceExportResult {
             let mut stderr = std::io::stderr();
             for span in batch {
                 let name = span.name;
@@ -172,10 +173,12 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
                     "otel-span name={name} trace_id={trace_id} span_id={span_id}"
                 );
             }
-            opentelemetry::sdk::export::trace::ExportResult::Success
+            TraceExportResult::Success
         }
 
-        fn shutdown(&mut self) {}
+        fn shutdown(&mut self) {
+            // nothing to do for stderr exporter
+        }
     }
 
     let exporter = StderrSpanExporter;
@@ -225,25 +228,25 @@ fn build_metrics_provider(
     } else {
         struct StderrMetricsExporter;
 
-        impl opentelemetry::sdk::export::metrics::MetricsExporter for StderrMetricsExporter {
+        impl opentelemetry_sdk::export::metrics::MetricsExporter for StderrMetricsExporter {
             fn export(
                 &self,
-                _resource: &opentelemetry::sdk::Resource,
-                _scope_metrics: &[opentelemetry::sdk::metrics::data::ScopeMetrics<'_>],
-            ) -> opentelemetry::sdk::export::metrics::ExportResult {
-                // For Phase 1, keep metrics disabled from stdout; a real dev sink comes in Phase 4.
-                opentelemetry::sdk::export::metrics::ExportResult::Success
+                _resource: &opentelemetry_sdk::Resource,
+                _scope_metrics: &[ScopeMetrics<'_>],
+            ) -> MetricsExportResult {
+                // For Phase 1, keep metrics off stdout; real dev sink comes in Phase 4.
+                MetricsExportResult::Success
             }
 
             fn force_flush(
                 &self,
                 _timeout: Option<std::time::Duration>,
-            ) -> opentelemetry::sdk::export::metrics::ExportResult {
-                opentelemetry::sdk::export::metrics::ExportResult::Success
+            ) -> MetricsExportResult {
+                MetricsExportResult::Success
             }
 
-            fn shutdown(&self) -> opentelemetry::sdk::export::metrics::ExportResult {
-                opentelemetry::sdk::export::metrics::ExportResult::Success
+            fn shutdown(&self) -> MetricsExportResult {
+                MetricsExportResult::Success
             }
         }
 

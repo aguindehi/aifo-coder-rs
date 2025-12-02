@@ -26,11 +26,13 @@ serde_yaml = "0.9"
 tracing = { version = "0.1", features = ["std"], optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
 opentelemetry = { version = "0.24", optional = true }
-opentelemetry_sdk = { version = "0.24", optional = true }
+opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"], optional = true }
 tracing-opentelemetry = { version = "0.25", optional = true }
 opentelemetry-stdout = { version = "0.4", optional = true }
 opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
+hostname = { version = "0.3", optional = true }
+humantime = { version = "2.1", optional = true }
 
 [dev-dependencies]
 urlencoding = "2"
@@ -44,6 +46,8 @@ otel = [
     "opentelemetry_sdk",
     "tracing-opentelemetry",
     "opentelemetry-stdout",
+    "hostname",
+    "humantime",
 ]
 otel-otlp = [
     "otel",
