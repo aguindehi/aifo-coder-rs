@@ -7,7 +7,6 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::metrics::MeterProvider as _;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
@@ -18,7 +17,7 @@ use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel")]
-mod metrics;
+pub mod metrics;
 
 pub struct TelemetryGuard {
     meter_provider: Option<SdkMeterProvider>,

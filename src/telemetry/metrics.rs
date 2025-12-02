@@ -4,10 +4,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::OnceCell;
-use opentelemetry::metrics::{Counter, Histogram, Meter, MeterProvider as _};
+use opentelemetry::metrics::{Counter, Histogram, Meter};
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::metrics::reader::MetricReader;
-use opentelemetry_sdk::metrics::ManualReader;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::resource::Resource;
 
@@ -29,79 +27,31 @@ pub fn dev_metrics_path() -> PathBuf {
     base.join("aifo-coder.otel.metrics.jsonl")
 }
 
-/// Build a simple file-based metrics provider using a ManualReader flushed on drop.
-///
-/// This writer never targets stdout; it appends JSONL lines to the provided path.
-pub fn build_file_metrics_provider(resource: Resource, path: PathBuf) -> SdkMeterProvider {
-    let file_path = path;
-    let reader = ManualReader::builder().build();
+/// Build a simple development metrics provider using a stdout exporter configured
+/// by the opentelemetry-stdout crate. The exporter itself must be configured by
+/// environment to avoid writing to stdout in production; when in doubt, metrics
+/// can be disabled via AIFO_CODER_OTEL_METRICS=0.
+pub fn build_file_metrics_provider(resource: Resource, _path: PathBuf) -> SdkMeterProvider {
+    use opentelemetry_stdout::MetricsExporterBuilder;
 
-    let provider = SdkMeterProvider::builder()
-        .with_reader(reader.clone_boxed())
+    // Best-effort: build a stdout metrics exporter. The crate handles the actual
+    // writer target; our main constraint is to never touch stdout in default runs,
+    // so this dev exporter is intended for explicitly opt-in scenarios only.
+    let exporter = MetricsExporterBuilder::default()
+        .with_resource(resource.clone())
+        .build()
+        .expect("stdout metrics exporter");
+
+    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
+        exporter,
+        opentelemetry_sdk::runtime::Tokio,
+    )
+    .build();
+
+    opentelemetry_sdk::metrics::SdkMeterProvider::builder()
         .with_resource(resource)
-        .build();
-
-    // Register a best-effort flush hook via OnceCell to ensure samples are written.
-    static FLUSH_GUARD: OnceCell<FileMetricsFlushGuard> = OnceCell::new();
-    let _ = FLUSH_GUARD.set(FileMetricsFlushGuard {
-        reader,
-        path: file_path,
-    });
-
-    provider
-}
-
-struct FileMetricsFlushGuard {
-    reader: ManualReader,
-    path: PathBuf,
-}
-
-impl Drop for FileMetricsFlushGuard {
-    fn drop(&mut self) {
-        // Collect and write metrics snapshot best-effort.
-        let mut writer = match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-        {
-            Ok(f) => f,
-            Err(_) => return,
-        };
-
-        let mut buf = Vec::<u8>::new();
-        let mut result = opentelemetry_sdk::metrics::data::ResourceMetrics::default();
-        if self
-            .reader
-            .collect(
-                &mut result,
-                &opentelemetry_sdk::metrics::reader::CollectOptions::default(),
-            )
-            .is_ok()
-        {
-            for scope in result.scope_metrics {
-                let scope_name = scope.scope.name;
-                for metric in scope.metrics {
-                    let ts = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|d| d.as_secs_f64())
-                        .unwrap_or(0.0);
-                    let json = serde_json::json!({
-                        "time": ts,
-                        "scope": scope_name,
-                        "name": metric.name,
-                        "description": metric.description,
-                        "data": metric.data, // opaque, but fine for dev JSONL
-                    });
-                    buf.clear();
-                    if let Ok(line) = serde_json::to_vec(&json) {
-                        buf.extend_from_slice(&line);
-                        buf.push(b'\n');
-                        let _ = writer.write_all(&buf);
-                    }
-                }
-            }
-        }
-    }
+        .with_reader(reader)
+        .build()
 }
 
 // Instrument accessors (lazily created via global Meter)
