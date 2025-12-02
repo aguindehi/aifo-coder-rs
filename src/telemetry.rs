@@ -9,8 +9,8 @@ use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::metrics::ExportResult as MetricsExportResult;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
-use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use opentelemetry_sdk::metrics as sdkmetrics;
+use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
@@ -238,10 +238,7 @@ fn build_metrics_provider(
                 MetricsExportResult::Success
             }
 
-            fn force_flush(
-                &self,
-                _timeout: Option<std::time::Duration>,
-            ) -> MetricsExportResult {
+            fn force_flush(&self, _timeout: Option<std::time::Duration>) -> MetricsExportResult {
                 MetricsExportResult::Success
             }
 
