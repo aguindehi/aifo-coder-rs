@@ -8,7 +8,7 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::metrics::{
-    AggregationSelector, ExportKindFor, ExportResult as MetricsExportResult, MetricsExporter,
+    AggregationSelector, ExportKindFor, MetricsExporter,
 };
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics as sdkmetrics;
