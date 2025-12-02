@@ -124,9 +124,12 @@ fn build_tracer(
     if use_otlp {
         use opentelemetry_otlp::WithExportConfig;
 
-        let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
-        let endpoint = endpoint.trim();
+        let endpoint_raw = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
+        let endpoint = endpoint_raw.trim().to_string();
         if endpoint.is_empty() {
+            eprintln!(
+                "aifo-coder: telemetry: OTEL_EXPORTER_OTLP_ENDPOINT is empty; falling back to stderr exporter"
+            );
             let provider = build_stderr_tracer(resource);
             return (provider, None);
         }
@@ -162,6 +165,7 @@ fn build_tracer(
                 .tracing()
                 .with_exporter(exporter);
 
+            // Use default Config which respects OTEL_TRACES_SAMPLER / OTEL_TRACES_SAMPLER_ARG
             builder = builder
                 .with_trace_config(sdktrace::Config::default().with_resource(resource.clone()));
 
@@ -185,11 +189,17 @@ fn build_tracer(
 }
 
 #[cfg(not(feature = "otel-otlp"))]
-fn build_tracer(resource: &Resource, _use_otlp: bool) -> sdktrace::TracerProvider {
+fn build_tracer(resource: &Resource, use_otlp: bool) -> sdktrace::TracerProvider {
+    if use_otlp {
+        eprintln!(
+            "aifo-coder: telemetry: OTLP endpoint configured but otel-otlp feature is disabled; falling back to stderr exporter"
+        );
+    }
     build_stderr_tracer(resource)
 }
 
 fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
+    // Development-only stderr exporter: emits compact span summaries to stderr.
     #[derive(Debug)]
     struct StderrSpanExporter;
 
@@ -220,6 +230,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
     }
 
     let exporter = StderrSpanExporter;
+    // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
     sdktrace::TracerProvider::builder()
         .with_simple_exporter(exporter)
         .with_config(sdktrace::Config::default().with_resource(resource.clone()))
