@@ -1,7 +1,4 @@
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::OnceCell;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
@@ -38,7 +35,6 @@ pub fn build_file_metrics_provider(resource: Resource, _path: PathBuf) -> SdkMet
     // writer target; our main constraint is to never touch stdout in default runs,
     // so this dev exporter is intended for explicitly opt-in scenarios only.
     let exporter = MetricsExporterBuilder::default()
-        .with_resource(resource.clone())
         .build()
         .expect("stdout metrics exporter");
 
