@@ -1406,6 +1406,13 @@ pub fn build_docker_cmd(
     agent_cmd.extend(passthrough.iter().cloned());
     let agent_joined = crate::shell_join(&agent_cmd);
 
+    // Record a docker "run" invocation metric for this agent.
+    #[cfg(feature = "otel")]
+    {
+        aifo_coder::telemetry::metrics::record_docker_invocation("run");
+        aifo_coder::telemetry::metrics::record_run(agent);
+    }
+
     // Shell command inside container
     let sh_cmd = format!(
         "set -e; umask 077; \

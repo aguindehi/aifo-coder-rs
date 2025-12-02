@@ -1669,6 +1669,21 @@ fn handle_connection<S: Read + Write>(
             let _ = rs.remove(&exec_id);
         }
         log_request_result(verbose, &tool, kind, code, &started);
+
+        #[cfg(feature = "otel")]
+        {
+            let secs = started.elapsed().as_secs_f64();
+            let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                "timeout"
+            } else if code == 0 {
+                "ok"
+            } else {
+                "err"
+            };
+            aifo_coder::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+            aifo_coder::telemetry::metrics::record_proxy_request(&tool, result);
+        }
         if verbose {
             logger.boundary_log(&format!(
                 "aifo-coder: proxy stream: totals bytes={} chunks={}",
@@ -1863,6 +1878,20 @@ fn handle_connection<S: Read + Write>(
     }
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
+
+    #[cfg(feature = "otel")]
+    {
+        let secs = started.elapsed().as_secs_f64();
+        let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+            "timeout"
+        } else if code == 0 {
+            "ok"
+        } else {
+            "err"
+        };
+        aifo_coder::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+        aifo_coder::telemetry::metrics::record_proxy_request(&tool, result);
+    }
     // If watcher timed out (on initial INT), map to 504 with exit code 124
     if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
         respond_plain(stream, "504 Gateway Timeout", 124, b"timeout\n");

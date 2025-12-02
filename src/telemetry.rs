@@ -16,6 +16,9 @@ use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
+#[cfg(feature = "otel")]
+mod metrics;
+
 pub struct TelemetryGuard {
     meter_provider: Option<SdkMeterProvider>,
     #[cfg(feature = "otel-otlp")]
@@ -305,9 +308,18 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
         }
     }
 
-    // Dev fallback: metrics are disabled when OTLP is not in use; future phases may add
-    // a stderr/file-based exporter if/when supported by the SDK.
-    None
+    // Dev fallback: JSONL file-based exporter, never writes to stdout.
+    #[cfg(feature = "otel")]
+    {
+        let path = crate::telemetry::metrics::dev_metrics_path();
+        let provider = crate::telemetry::metrics::build_file_metrics_provider(resource.clone(), path);
+        return Some(provider);
+    }
+
+    #[cfg(not(feature = "otel"))]
+    {
+        None
+    }
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {

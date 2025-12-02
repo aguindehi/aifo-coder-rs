@@ -370,6 +370,13 @@ fn main() -> ExitCode {
     // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
     // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
     let _telemetry_guard = aifo_coder::telemetry_init();
+
+    // Record a single run metric when telemetry+metrics are enabled (agent known later).
+    #[cfg(feature = "otel")]
+    {
+        // Tag will be refined once the concrete agent is known; this initial run has no agent label.
+        // Call sites with agent label live in docker.rs metrics hooks.
+    }
     if std::env::var("AIFO_GLOBAL_TAG")
         .ok()
         .filter(|s| !s.trim().is_empty())

@@ -138,6 +138,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
         return s;
     }
 
+    let started = std::time::Instant::now();
     if which("curl").is_ok() {
         let status = Command::new("curl")
             .args([
@@ -157,12 +158,26 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
                 let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
                 let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
                 write_registry_cache_disk(&v);
+
+                #[cfg(feature = "otel")]
+                {
+                    let secs = started.elapsed().as_secs_f64();
+                    crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
+                }
+
                 return v;
             } else {
                 let v = String::new();
                 let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
                 let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
                 write_registry_cache_disk(&v);
+
+                #[cfg(feature = "otel")]
+                {
+                    let secs = started.elapsed().as_secs_f64();
+                    crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
+                }
+
                 return v;
             }
         }
@@ -176,6 +191,13 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
     let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
     let _ = MIRROR_REGISTRY_SOURCE.set("tcp".to_string());
     write_registry_cache_disk(&v);
+
+    #[cfg(feature = "otel")]
+    {
+        let secs = started.elapsed().as_secs_f64();
+        crate::telemetry::metrics::record_registry_probe_duration("tcp", secs);
+    }
+
     v
 }
 

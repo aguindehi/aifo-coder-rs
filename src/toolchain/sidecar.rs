@@ -899,6 +899,7 @@ pub fn toolchain_run(
     let mut exit_code: i32 = 0;
 
     if !dry_run {
+        let started = std::time::Instant::now();
         let mut exec_cmd = Command::new(&runtime);
         for a in &exec_preview_args[1..] {
             exec_cmd.arg(a);
@@ -912,6 +913,13 @@ pub fn toolchain_run(
             )
         })?;
         exit_code = status.code().unwrap_or(1);
+
+        #[cfg(feature = "otel")]
+        {
+            let secs = started.elapsed().as_secs_f64();
+            aifo_coder::telemetry::metrics::record_docker_run_duration(kind_in, secs);
+            aifo_coder::telemetry::metrics::record_docker_invocation("exec");
+        }
     }
     // BootstrapGuard will clear marker on Drop
 
@@ -923,6 +931,11 @@ pub fn toolchain_run(
             stop_cmd.stdout(Stdio::null()).stderr(Stdio::null());
         }
         let _ = stop_cmd.status();
+
+        #[cfg(feature = "otel")]
+        {
+            aifo_coder::telemetry::metrics::record_sidecar_stopped(sidecar_kind.as_str());
+        }
 
         if let Some(net_name) = net_for_run {
             remove_network(&runtime, &net_name, verbose);
@@ -1061,6 +1074,11 @@ pub fn toolchain_start_session(
                     )));
                 }
             }
+        }
+
+        #[cfg(feature = "otel")]
+        {
+            aifo_coder::telemetry::metrics::record_sidecar_started(kind.as_str());
         }
     }
     Ok(session_id)
