@@ -8,7 +8,7 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::metrics::{
-    ExportKindFor, ExportResult as MetricsExportResult, MetricsExporter,
+    AggregationSelector, ExportKindFor, ExportResult as MetricsExportResult, MetricsExporter,
 };
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics as sdkmetrics;
@@ -264,6 +264,7 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
         let provider = SdkMeterProvider::builder()
             .with_resource(resource.clone())
             .with_reader(reader)
+            .with_aggregation_selector(AggregationSelector::new())
             .build();
 
         Some(provider)
