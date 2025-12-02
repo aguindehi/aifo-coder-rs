@@ -907,9 +907,9 @@ pub fn toolchain_run(
             #[cfg(feature = "otel")]
             {
                 // Mark span as error on exec spawn failure
-                tracing::Span::current().set_status(
-                    opentelemetry::trace::Status::error("failed to exec in sidecar"),
-                );
+                tracing::Span::current().set_status(opentelemetry::trace::Status::error(
+                    "failed to exec in sidecar",
+                ));
             }
             io::Error::new(
                 e.kind(),
@@ -923,9 +923,10 @@ pub fn toolchain_run(
         {
             if !status.success() {
                 // Surface non-zero exit code as span error for tracing backends
-                tracing::Span::current().set_status(opentelemetry::trace::Status::error(
-                    format!("sidecar exec exited with code {:?}", status.code()),
-                ));
+                tracing::Span::current().set_status(opentelemetry::trace::Status::error(format!(
+                    "sidecar exec exited with code {:?}",
+                    status.code()
+                )));
             }
         }
     }
