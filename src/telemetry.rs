@@ -10,7 +10,7 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
-use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::metrics::{MeterProvider as _, SdkMeterProvider};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
@@ -237,14 +237,76 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         .build()
 }
 
-fn build_metrics_provider(_resource: &Resource, _use_otlp: bool) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }
 
-    // Phase 1: metrics scaffolding only. To avoid stdout/file complexities and API churn,
-    // metrics are effectively disabled even when the env flag is set. A future Phase 4
-    // implementation can provide real exporters and readers here.
+    #[cfg(feature = "otel-otlp")]
+    {
+        if use_otlp {
+            // OTLP metrics exporter with PeriodicReader (1–2s interval).
+            use opentelemetry_otlp::WithExportConfig;
+
+            let endpoint_raw = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
+            let endpoint = endpoint_raw.trim().to_string();
+            if endpoint.is_empty() {
+                eprintln!(
+                    "aifo-coder: telemetry: OTEL_EXPORTER_OTLP_ENDPOINT is empty for metrics; disabling metrics exporter"
+                );
+                return None;
+            }
+
+            let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
+                .ok()
+                .and_then(|s| humantime::parse_duration(&s).ok())
+                .unwrap_or_else(|| Duration::from_secs(5));
+
+            // Default to a 2s export interval when OTEL_METRICS_EXPORT_INTERVAL is unset.
+            let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
+                .ok()
+                .and_then(|s| humantime::parse_duration(&s).ok())
+                .unwrap_or_else(|| Duration::from_secs(2));
+
+            let exporter = match opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(endpoint)
+                .with_timeout(timeout)
+                .build_metrics_exporter()
+            {
+                Ok(exp) => exp,
+                Err(e) => {
+                    eprintln!(
+                        "aifo-coder: telemetry: failed to create OTLP metrics exporter: {e}; disabling metrics exporter"
+                    );
+                    return None;
+                }
+            };
+
+            let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+                .with_resource(resource.clone());
+
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+                .with_interval(interval)
+                .build();
+
+            provider_builder = provider_builder.with_reader(reader);
+
+            return Some(provider_builder.build());
+        }
+    }
+
+    #[cfg(not(feature = "otel-otlp"))]
+    {
+        if use_otlp {
+            eprintln!(
+                "aifo-coder: telemetry: OTLP endpoint configured for metrics but otel-otlp feature is disabled; metrics exporter will not be installed"
+            );
+        }
+    }
+
+    // Dev fallback: metrics are disabled when OTLP is not in use; future phases may add
+    // a stderr/file-based exporter if/when supported by the SDK.
     None
 }
 
