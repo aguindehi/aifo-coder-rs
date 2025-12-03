@@ -28,8 +28,8 @@ v9 is an evolution of v8 with different defaults and stronger assumptions:
 Compile‑time behavior:
 - v8: Telemetry code is compile‑time optional via Cargo features `otel` and `otel-otlp`. Default build has telemetry compiled out.
 - v9: Telemetry dependencies are controlled via Cargo features as in v8, but the **default build enables them**:
-  - `otel` and `otel-otlp` are enabled by default (e.g., via Cargo features or `CARGO_FLAGS` in Makefile/wrappers).
-  - Users who want to build **without** telemetry can compile the crate without these features (e.g., `cargo build` without extra `--features`), and all telemetry code will be compiled out as before.
+  - `otel` and `otel-otlp` are enabled by default (for example via `CARGO_FLAGS ?= --features otel-otlp` in the Makefile and wrapper).
+  - Developers who want to build **without** telemetry can compile the crate without these features (for example `cargo build` with no `--features otel*`), and all telemetry code will be compiled out as in v8.
 
 Runtime defaults:
 - v8: Telemetry is runtime‑opt‑in: only enabled when `AIFO_CODER_OTEL=1` or `OTEL_EXPORTER_OTLP_ENDPOINT` is non‑empty. Default CLI behavior does not emit telemetry and does not install any exporters.
