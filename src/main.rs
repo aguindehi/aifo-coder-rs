@@ -367,6 +367,14 @@ fn main() -> ExitCode {
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
 
+    // Parse command-line arguments into structured CLI options
+    let cli = Cli::parse();
+
+    // Propagate CLI verbosity to telemetry so init can emit concise OTEL logs when requested.
+    if cli.verbose {
+        std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
+    }
+
     // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
     // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
     let _telemetry_guard = aifo_coder::telemetry_init();
@@ -395,13 +403,6 @@ fn main() -> ExitCode {
             use_err,
             "aifo-coder: warning: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.",
         );
-    }
-    // Parse command-line arguments into structured CLI options
-    let cli = Cli::parse();
-
-    // Propagate CLI verbosity to telemetry so init can emit concise OTEL logs when requested.
-    if cli.verbose {
-        std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
     }
     // Honor --non-interactive by suppressing the LLM credentials prompt
     if cli.non_interactive {
