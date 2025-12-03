@@ -318,7 +318,6 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
     // Dev fallback: non-OTLP metrics exporter using stderr or a JSONL file sink.
     // Prefer stderr; if AIFO_CODER_OTEL_METRICS_FILE is set (or XDG_RUNTIME_DIR is available),
     // write JSONL to that path. Never write to stdout.
-    use std::io::Write as _;
     let file_sink_path_opt = env::var("AIFO_CODER_OTEL_METRICS_FILE")
         .ok()
         .map(|s| s.trim().to_string())
@@ -343,20 +342,14 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
             .append(true)
             .open(&path)
         {
-            Ok(f) => opentelemetry_stdout::MetricsExporterBuilder::new()
-                .with_writer(f)
-                .build(),
+            Ok(f) => opentelemetry_stdout::MetricsExporter::new(f),
             Err(_) => {
                 // Fallback: stderr
-                opentelemetry_stdout::MetricsExporterBuilder::new()
-                    .with_writer(std::io::stderr())
-                    .build()
+                opentelemetry_stdout::MetricsExporter::new(std::io::stderr())
             }
         }
     } else {
-        opentelemetry_stdout::MetricsExporterBuilder::new()
-            .with_writer(std::io::stderr())
-            .build()
+        opentelemetry_stdout::MetricsExporter::new(std::io::stderr())
     };
 
     // Use a PeriodicReader with ~2s export interval.
