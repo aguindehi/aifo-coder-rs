@@ -1301,10 +1301,7 @@ fn handle_connection<S: Read + Write>(
             let propagator = global::get_text_map_propagator(|p| p.clone());
             // Create a temporary header map and inject current span context.
             let mut headers = std::collections::HashMap::<String, String>::new();
-            propagator.inject_context(
-                &Context::current(),
-                &mut HeaderInjector(&mut headers),
-            );
+            propagator.inject_context(&Context::current(), &mut HeaderInjector(&mut headers));
             if let Some(traceparent_val) = headers
                 .get("traceparent")
                 .cloned()
