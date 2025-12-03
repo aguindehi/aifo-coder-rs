@@ -1,8 +1,12 @@
 # OpenTelemetry support in aifo-coder
 
-This document describes how to build, enable and test the optional OpenTelemetry integration for
-`aifo-coder`. Telemetry is fully opt-in at both compile time (cargo features) and runtime
-(environment variables) and must not change the default CLI stdout, stderr or exit codes.
+This document describes how to build, enable and test the OpenTelemetry integration for
+`aifo-coder`. Telemetry is:
+
+- **compile-time optional** for developers (via Cargo features), and
+- **enabled by default at runtime** in feature-enabled builds when `AIFO_CODER_OTEL` is unset.
+
+Telemetry must not change the default CLI stdout or exit codes.
 
 ## 1. Build-time features
 
