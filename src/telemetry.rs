@@ -29,14 +29,26 @@ static INIT: OnceCell<()> = OnceCell::new();
 static INSTANCE_ID: OnceCell<String> = OnceCell::new();
 static HASH_SALT: OnceCell<u64> = OnceCell::new();
 
+const DEFAULT_OTLP_ENDPOINT: &str = "http://alloy-collector-az.service.dev.migros.cloud";
+
 fn telemetry_enabled_env() -> bool {
-    let aifo = env::var("AIFO_CODER_OTEL").ok().as_deref() == Some("1");
-    let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .is_some();
-    aifo || endpoint
+    match env::var("AIFO_CODER_OTEL") {
+        Ok(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            matches!(v.as_str(), "1" | "true" | "yes")
+        }
+        Err(_) => true,
+    }
+}
+
+fn effective_otlp_endpoint() -> Option<String> {
+    if let Ok(v) = env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return Some(t.to_string());
+        }
+    }
+    Some(DEFAULT_OTLP_ENDPOINT.to_string())
 }
 
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
@@ -127,15 +139,18 @@ fn build_tracer(
     if use_otlp {
         use opentelemetry_otlp::WithExportConfig;
 
-        let endpoint_raw = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
-        let endpoint = endpoint_raw.trim().to_string();
-        if endpoint.is_empty() {
-            eprintln!(
-                "aifo-coder: telemetry: OTEL_EXPORTER_OTLP_ENDPOINT is empty; falling back to stderr exporter"
-            );
-            let provider = build_stderr_tracer(resource);
-            return (provider, None);
-        }
+        let endpoint = match effective_otlp_endpoint() {
+            Some(ep) => ep,
+            None => {
+                if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "aifo-coder: telemetry: no OTLP endpoint available; falling back to stderr exporter"
+                    );
+                }
+                let provider = build_stderr_tracer(resource);
+                return (provider, None);
+            }
+        };
 
         let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
             .ok()
@@ -256,14 +271,17 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
             // OTLP metrics exporter with PeriodicReader (1–2s interval).
             use opentelemetry_otlp::WithExportConfig;
 
-            let endpoint_raw = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();
-            let endpoint = endpoint_raw.trim().to_string();
-            if endpoint.is_empty() {
-                eprintln!(
-                    "aifo-coder: telemetry: OTEL_EXPORTER_OTLP_ENDPOINT is empty for metrics; disabling metrics exporter"
-                );
-                return None;
-            }
+            let endpoint = match effective_otlp_endpoint() {
+                Some(ep) => ep,
+                None => {
+                    if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "aifo-coder: telemetry: no OTLP endpoint available for metrics; disabling metrics exporter"
+                        );
+                    }
+                    return None;
+                }
+            };
 
             let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
                 .ok()
@@ -401,11 +419,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
     let resource = build_resource();
 
-    let use_otlp = cfg!(feature = "otel-otlp")
-        && env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-            .ok()
-            .map(|s| !s.trim().is_empty())
-            .unwrap_or(false);
+    let use_otlp = cfg!(feature = "otel-otlp") && effective_otlp_endpoint().is_some();
 
     // Verbose OTEL mode: driven by env, set by main when CLI --verbose is active.
     let verbose_otel = env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1");

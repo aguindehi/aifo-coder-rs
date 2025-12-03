@@ -21,20 +21,6 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*|Windows_NT) EXE=".exe" ;;
 esac
 
-# OpenTelemetry runtime defaults (non-blocking, safe timeouts; never stdout).
-# These are best-effort defaults and can be overridden by the user/CI.
-set_otel_defaults() {
-  : "${AIFO_CODER_OTEL:=1}"
-  : "${OTEL_EXPORTER_OTLP_ENDPOINT:=http://alloy-collector-az.service.dev.migros.cloud}"
-  : "${OTEL_EXPORTER_OTLP_TIMEOUT:=1s}"
-  : "${OTEL_BSP_EXPORT_TIMEOUT:=1s}"
-  : "${OTEL_BSP_SCHEDULE_DELAY:=2s}"
-  : "${OTEL_BSP_MAX_QUEUE_SIZE:=2048}"
-  : "${OTEL_TRACES_SAMPLER:=parentbased_traceidratio}"
-  : "${OTEL_TRACES_SAMPLER_ARG:=0.1}"
-  : "${AIFO_CODER_TRACING_FMT:=0}"
-}
-
 # Default compile-time flags (kept in sync with Makefile CARGO_FLAGS).
 : "${CARGO_FLAGS:=--features otel-otlp}"
 
@@ -93,7 +79,6 @@ can_run() {
 SYS_BIN="$(command -v aifo-coder 2>/dev/null || true)"
 THIS_BIN="$(command -v -- "$0" 2>/dev/null || echo "$0")"
 if [ -n "$SYS_BIN" ] && [ "$SYS_BIN" != "$THIS_BIN" ] && can_run "$SYS_BIN"; then
-  set_otel_defaults
   exec "$SYS_BIN" "$@"
 fi
 
@@ -119,7 +104,6 @@ if command -v cargo >/dev/null 2>&1; then
 fi
 
 if [ -x "$BIN" ] && can_run "$BIN"; then
-  set_otel_defaults
   exec "$BIN" "$@"
 fi
 
@@ -128,7 +112,6 @@ if command -v cargo >/dev/null 2>&1; then
   CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build $CARGO_FLAGS --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
   BIN="$PROJECT_ROOT/target/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
-    set_otel_defaults
     exec "$BIN" "$@"
   fi
 fi
