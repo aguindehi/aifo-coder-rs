@@ -899,7 +899,7 @@ pub fn toolchain_run(
     let mut exit_code: i32 = 0;
 
     if !dry_run {
-        let started = std::time::Instant::now();
+        let _started = std::time::Instant::now();
         let mut exec_cmd = Command::new(&runtime);
         for a in &exec_preview_args[1..] {
             exec_cmd.arg(a);
@@ -916,7 +916,7 @@ pub fn toolchain_run(
 
         #[cfg(feature = "otel")]
         {
-            let secs = started.elapsed().as_secs_f64();
+            let secs = _started.elapsed().as_secs_f64();
             crate::telemetry::metrics::record_docker_run_duration(kind_in, secs);
             crate::telemetry::metrics::record_docker_invocation("exec");
         }
