@@ -1309,6 +1309,7 @@ fn handle_connection<S: Read + Write>(
         if verbose {
             log_compact(&format!("aifo-coder: proxy stream: use_tty={}", use_tty));
         }
+        #[cfg_attr(not(feature = "otel"), allow(unused_mut))]
         let mut spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
 
         // Inject W3C traceparent into shim environment for downstream propagation.
