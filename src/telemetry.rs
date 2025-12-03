@@ -342,14 +342,22 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
             .append(true)
             .open(&path)
         {
-            Ok(f) => opentelemetry_stdout::MetricsExporter::new(f),
+            Ok(f) => {
+                opentelemetry_stdout::MetricsExporterBuilder::default()
+                    .with_writer(f)
+                    .build()
+            }
             Err(_) => {
                 // Fallback: stderr
-                opentelemetry_stdout::MetricsExporter::new(std::io::stderr())
+                opentelemetry_stdout::MetricsExporterBuilder::default()
+                    .with_writer(std::io::stderr())
+                    .build()
             }
         }
     } else {
-        opentelemetry_stdout::MetricsExporter::new(std::io::stderr())
+        opentelemetry_stdout::MetricsExporterBuilder::default()
+            .with_writer(std::io::stderr())
+            .build()
     };
 
     // Use a PeriodicReader with ~2s export interval.
