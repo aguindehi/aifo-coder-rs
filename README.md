@@ -148,6 +148,36 @@ PATH policy:
 - codex, crush: node-first
 - aider: adds /opt/venv/bin before system paths
 
+## Telemetry (OpenTelemetry) (optional)
+
+aifo-coder includes optional OpenTelemetry-based tracing and metrics behind Cargo features and
+environment variables. Telemetry is disabled by default and never required for normal use.
+
+- Build-time features:
+  - `otel`: enables tracing and local dev exporters (stderr/file sinks).
+  - `otel-otlp`: adds OTLP/gRPC export on top of `otel`.
+- Runtime enablement (when built with `otel`):
+  - `AIFO_CODER_OTEL=1` or a non-empty `OTEL_EXPORTER_OTLP_ENDPOINT` enables telemetry.
+  - `AIFO_CODER_TRACING_FMT=1` opts into a fmt logging layer on stderr (honors `RUST_LOG`,
+    default filter `warn`).
+  - `AIFO_CODER_OTEL_METRICS=1` enables metrics instruments and exporter.
+- Privacy:
+  - By default, sensitive values (paths/args) are recorded as counts and salted hashes.
+  - Setting `AIFO_CODER_OTEL_PII=1` allows raw values for debugging; do not use this in production.
+
+Examples:
+
+```bash
+# Traces to stderr via dev exporter, no extra fmt logging
+AIFO_CODER_OTEL=1 cargo run --features otel -- --help
+
+# Traces with fmt logging and RUST_LOG control
+AIFO_CODER_OTEL=1 AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
+  cargo run --features otel -- --help
+```
+
+For more details (samplers, OTLP, metrics sinks, CI checks), see `docs/otel.md`.
+
 # The aifo-coder
 
 Containerized launcher and Docker images bundling six terminal AI coding agents:
