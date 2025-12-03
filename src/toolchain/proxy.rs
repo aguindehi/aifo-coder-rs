@@ -16,6 +16,12 @@ Implements v3 signal propagation and timeout model:
 #[cfg(feature = "otel")]
 use crate::telemetry::{hash_string_hex, telemetry_pii_enabled};
 use once_cell::sync::Lazy;
+use opentelemetry::global;
+use opentelemetry::propagation::TextMapPropagator;
+use opentelemetry::Context;
+use opentelemetry::KeyValue;
+use opentelemetry_http::HeaderExtractor;
+use opentelemetry_http::HeaderInjector;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env as std_env;
@@ -24,6 +30,7 @@ use std::fs;
 use std::io;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::ops::Deref;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
@@ -49,6 +56,24 @@ use super::{
     log_parsed_request, log_request_result, random_token, ERR_BAD_REQUEST, ERR_FORBIDDEN,
     ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
 };
+
+struct RequestHeaders<'a> {
+    headers: &'a std::collections::HashMap<String, String>,
+}
+
+impl<'a> RequestHeaders<'a> {
+    fn new(headers: &'a std::collections::HashMap<String, String>) -> Self {
+        Self { headers }
+    }
+
+    fn as_injector(&self) -> HeaderInjector<&std::collections::HashMap<String, String>> {
+        HeaderInjector(self.headers)
+    }
+
+    fn as_extractor(&self) -> HeaderExtractor<&std::collections::HashMap<String, String>> {
+        HeaderExtractor(self.headers)
+    }
+}
 
 struct ProxyCtx {
     runtime: PathBuf,
@@ -814,6 +839,13 @@ fn handle_connection<S: Read + Write>(
     // Auth/proto centralized
     let auth_res = auth::validate_auth_and_proto(&req.headers, token);
 
+    // Extract incoming trace context (if any) for propagation into shim/tool execs.
+    #[cfg(feature = "otel")]
+    let parent_cx = {
+        let propagator = global::get_text_map_propagator(|p| p.clone());
+        propagator.extract(&RequestHeaders::new(&req.headers).as_extractor())
+    };
+
     // Merge form/query
     let form = String::from_utf8_lossy(&req.body).to_string();
     let mut tool = String::new();
@@ -1149,6 +1181,7 @@ fn handle_connection<S: Read + Write>(
 
     let name = sidecar::sidecar_container_name(kind, session);
 
+    // Build OpenTelemetry span for this proxy request (after routing is known).
     #[cfg(feature = "otel")]
     let _proxy_span_guard = {
         let cwd_field = if telemetry_pii_enabled() {
@@ -1164,6 +1197,7 @@ fn handle_connection<S: Read + Write>(
             cwd = %cwd_field,
             session_id = %session
         )
+        .set_parent(parent_cx)
         .entered()
     };
 
@@ -1259,7 +1293,38 @@ fn handle_connection<S: Read + Write>(
         if verbose {
             log_compact(&format!("aifo-coder: proxy stream: use_tty={}", use_tty));
         }
-        let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
+        let mut spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
+
+        // Inject W3C traceparent into shim environment for downstream propagation.
+        #[cfg(feature = "otel")]
+        {
+            let propagator = global::get_text_map_propagator(|p| p.clone());
+            // Create a temporary header map and inject current span context.
+            let mut headers = std::collections::HashMap::<String, String>::new();
+            propagator.inject_context(
+                &Context::current(),
+                &mut HeaderInjector(&mut headers),
+            );
+            if let Some(traceparent_val) = headers
+                .get("traceparent")
+                .cloned()
+                .or_else(|| headers.get("Traceparent").cloned())
+            {
+                // Ensure we pass it through as environment to the shim.
+                // The wrapper always uses "docker exec ... sh -c <script>", so we can prefix
+                // an export of TRACEPARENT before the main script.
+                if let Some(last) = spawn_args.last_mut() {
+                    let original_script = last.clone();
+                    let injected = format!(
+                        "export TRACEPARENT={q}{v}{q}; {orig}",
+                        q = "'",
+                        v = traceparent_val,
+                        orig = original_script,
+                    );
+                    *last = injected;
+                }
+            }
+        }
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
             cmd.arg(a);
