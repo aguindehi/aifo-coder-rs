@@ -6,8 +6,8 @@ use opentelemetry::KeyValue;
 static RUNS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static DOCKER_INVOCATIONS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static PROXY_REQUESTS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
-static SIDEcars_STARTED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
-static SIDEcars_STOPPED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
+static SIDECARS_STARTED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
+static SIDECARS_STOPPED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static DOCKER_RUN_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static PROXY_EXEC_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static REGISTRY_PROBE_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
@@ -50,7 +50,7 @@ fn proxy_requests_total() -> Counter<u64> {
 }
 
 fn sidecars_started_total() -> Counter<u64> {
-    SIDEcars_STARTED_TOTAL
+    SIDECARS_STARTED_TOTAL
         .get_or_init(|| {
             meter()
                 .u64_counter("toolchain_sidecars_started_total")
@@ -61,7 +61,7 @@ fn sidecars_started_total() -> Counter<u64> {
 }
 
 fn sidecars_stopped_total() -> Counter<u64> {
-    SIDEcars_STOPPED_TOTAL
+    SIDECARS_STOPPED_TOTAL
         .get_or_init(|| {
             meter()
                 .u64_counter("toolchain_sidecars_stopped_total")
