@@ -138,7 +138,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
         return s;
     }
 
-    let started = std::time::Instant::now();
+    let _started = std::time::Instant::now();
     if which("curl").is_ok() {
         let status = Command::new("curl")
             .args([
@@ -161,7 +161,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
 
                 #[cfg(feature = "otel")]
                 {
-                    let secs = started.elapsed().as_secs_f64();
+                    let secs = _started.elapsed().as_secs_f64();
                     crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
                 }
 
@@ -174,7 +174,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
 
                 #[cfg(feature = "otel")]
                 {
-                    let secs = started.elapsed().as_secs_f64();
+                    let secs = _started.elapsed().as_secs_f64();
                     crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
                 }
 
@@ -194,7 +194,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
 
     #[cfg(feature = "otel")]
     {
-        let secs = started.elapsed().as_secs_f64();
+        let secs = _started.elapsed().as_secs_f64();
         crate::telemetry::metrics::record_registry_probe_duration("tcp", secs);
     }
 
