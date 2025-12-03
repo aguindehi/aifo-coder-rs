@@ -44,6 +44,7 @@ CACHE_DIR ?= .buildx-cache
 # Nextest arguments
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always
 NEXTEST_VERSION ?= 0.9.114
+CARGO_FLAGS ?= --features otel-otlp
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
@@ -1484,7 +1485,7 @@ build-launcher:
 	    *) TGT="" ;; \
 	  esac; \
 	  if [ -n "$$TGT" ]; then \
-	    if command -v rustup >/dev/null 2>&1; then rustup run stable cargo build --release --target "$$TGT"; else cargo build --release --target "$$TGT"; fi; \
+	    if command -v rustup >/dev/null 2>&1; then rustup run stable cargo build $(CARGO_FLAGS) --release --target "$$TGT"; else cargo build $(CARGO_FLAGS) --release --target "$$TGT"; fi; \
 	  else \
 	    echo "Unsupported macOS architecture: $$ARCH" >&2; exit 1; \
 	  fi; \
@@ -1504,7 +1505,7 @@ build-launcher:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) cargo build --release --target "$$TGT"; \
+	    $(RUST_BUILDER_IMAGE) cargo build $(CARGO_FLAGS) --release --target "$$TGT"; \
 	fi
 
 .PHONY: build-shim build-shim-with-builder
@@ -1514,7 +1515,7 @@ build-shim:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
 	  else \
 	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
 	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
@@ -1525,10 +1526,10 @@ build-shim:
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Building aifo-shim with rustup (stable) ..."; \
-	  rustup run stable cargo build --release --bin aifo-shim; \
+	  rustup run stable cargo build $(CARGO_FLAGS) --release --bin aifo-shim; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Building aifo-shim with local cargo ..."; \
-	  cargo build --release --bin aifo-shim; \
+	  cargo build $(CARGO_FLAGS) --release --bin aifo-shim; \
 	else \
 	  echo "Error: cargo not found; use 'make build-shim-with-builder' to build inside Docker." >&2; \
 	  exit 1; \
@@ -1553,7 +1554,7 @@ build-shim-with-builder:
 	  -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	  -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	  -v "$$PWD/target:/workspace/target" \
-	  $(RUST_BUILDER_IMAGE) cargo build --release --bin aifo-shim; \
+	  $(RUST_BUILDER_IMAGE) cargo build $(CARGO_FLAGS) --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
 .PHONY: lint check check-unit test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
@@ -1725,10 +1726,10 @@ test:
 	elif command -v rustup >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
 	  elif rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
 	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1736,10 +1737,10 @@ test:
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not available; falling back to cargo test ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
@@ -1755,7 +1756,7 @@ test:
 	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
 	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(ARGS); \
+	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
 	  fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
@@ -1764,7 +1765,7 @@ test:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS)'; \
 	else \
 	  echo "Error: neither cargo-nextest/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -1795,7 +1796,7 @@ test-cargo:
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo test'; \
+	    $(RUST_BUILDER_IMAGE) sh -lc 'export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo test $(CARGO_FLAGS)'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
