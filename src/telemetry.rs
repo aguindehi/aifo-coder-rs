@@ -315,19 +315,8 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
         }
     }
 
-    // Dev fallback: JSONL file-based exporter, never writes to stdout.
-    #[cfg(feature = "otel")]
-    {
-        let path = crate::telemetry::metrics::dev_metrics_path();
-        let provider =
-            crate::telemetry::metrics::build_file_metrics_provider(resource.clone(), path);
-        return Some(provider);
-    }
-
-    #[cfg(not(feature = "otel"))]
-    {
-        None
-    }
+    // Dev fallback: when OTLP is not in use, metrics are disabled (no-op).
+    None
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {

@@ -1,52 +1,6 @@
-use std::path::PathBuf;
-
 use once_cell::sync::OnceCell;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::resource::Resource;
-
-/// Compute the dev metrics file path:
-/// - ${AIFO_CODER_OTEL_METRICS_FILE} if set and non-empty
-/// - else ${XDG_RUNTIME_DIR:-/tmp}/aifo-coder.otel.metrics.jsonl
-pub fn dev_metrics_path() -> PathBuf {
-    if let Ok(p) = std::env::var("AIFO_CODER_OTEL_METRICS_FILE") {
-        let t = p.trim();
-        if !t.is_empty() {
-            return PathBuf::from(t);
-        }
-    }
-    let base = std::env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    base.join("aifo-coder.otel.metrics.jsonl")
-}
-
-/// Build a simple development metrics provider using a stdout exporter configured
-/// by the opentelemetry-stdout crate. The exporter itself must be configured by
-/// environment to avoid writing to stdout in production; when in doubt, metrics
-/// can be disabled via AIFO_CODER_OTEL_METRICS=0.
-pub fn build_file_metrics_provider(resource: Resource, _path: PathBuf) -> SdkMeterProvider {
-    use opentelemetry_stdout::MetricsExporterBuilder;
-
-    // Best-effort: build a stdout metrics exporter. The crate handles the actual
-    // writer target; our main constraint is to never touch stdout in default runs,
-    // so this dev exporter is intended for explicitly opt-in scenarios only.
-    let exporter = MetricsExporterBuilder::default().build();
-
-    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
-        exporter,
-        opentelemetry_sdk::runtime::Tokio,
-    )
-    .build();
-
-    opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-        .with_resource(resource)
-        .with_reader(reader)
-        .build()
-}
 
 // Instrument accessors (lazily created via global Meter)
 static RUNS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
