@@ -45,6 +45,18 @@ CACHE_DIR ?= .buildx-cache
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always
 NEXTEST_VERSION ?= 0.9.114
 CARGO_FLAGS ?= --features otel-otlp
+
+# OpenTelemetry runtime defaults (non-blocking, safe timeouts; never stdout)
+export AIFO_CODER_OTEL=1
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy-collector-az.service.dev.migros.cloud
+export OTEL_EXPORTER_OTLP_TIMEOUT=1s
+export OTEL_BSP_EXPORT_TIMEOUT=1s
+export OTEL_BSP_SCHEDULE_DELAY=2s
+export OTEL_BSP_MAX_QUEUE_SIZE=2048
+export OTEL_TRACES_SAMPLER=parentbased_traceidratio
+export OTEL_TRACES_SAMPLER_ARG=0.1
+export AIFO_CODER_TRACING_FMT=0
+
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
