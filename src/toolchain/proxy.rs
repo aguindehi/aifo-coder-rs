@@ -1358,10 +1358,10 @@ fn handle_connection<S: Read + Write>(
                 b.push(b'\n');
                 #[cfg(feature = "otel")]
                 {
-                    use opentelemetry::trace::Status;
+                    use opentelemetry::trace::{Status, TraceContextExt};
                     use tracing_opentelemetry::OpenTelemetrySpanExt;
-                    let sp = tracing::Span::current();
-                    sp.set_status(Status::error("spawn_failed"));
+                    let cx = tracing::Span::current().context();
+                    cx.span().set_status(Status::error("spawn_failed"));
                 }
                 log_request_result(verbose, &tool, kind, 86, &started);
                 respond_plain(stream, "500 Internal Server Error", 86, &b);
@@ -1764,7 +1764,7 @@ fn handle_connection<S: Read + Write>(
 
         #[cfg(feature = "otel")]
         {
-            use opentelemetry::trace::Status;
+            use opentelemetry::trace::{Status, TraceContextExt};
             use tracing_opentelemetry::OpenTelemetrySpanExt;
             let secs = started.elapsed().as_secs_f64();
             let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst)
@@ -1776,11 +1776,11 @@ fn handle_connection<S: Read + Write>(
                 "err"
             };
             // Set span status on errors/timeouts (concise message).
-            let sp = tracing::Span::current();
+            let cx = tracing::Span::current().context();
             if result == "timeout" {
-                sp.set_status(Status::error("proxy_timeout"));
+                cx.span().set_status(Status::error("proxy_timeout"));
             } else if result == "err" {
-                sp.set_status(Status::error(format!("exit_code={}", code)));
+                cx.span().set_status(Status::error(format!("exit_code={}", code)));
             }
             crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
             crate::telemetry::metrics::record_proxy_request(&tool, result);
@@ -1860,10 +1860,10 @@ fn handle_connection<S: Read + Write>(
             b.push(b'\n');
             #[cfg(feature = "otel")]
             {
-                use opentelemetry::trace::Status;
+                use opentelemetry::trace::{Status, TraceContextExt};
                 use tracing_opentelemetry::OpenTelemetrySpanExt;
-                let sp = tracing::Span::current();
-                sp.set_status(Status::error("spawn_failed"));
+                let cx = tracing::Span::current().context();
+                cx.span().set_status(Status::error("spawn_failed"));
             }
             log_request_result(verbose, &tool, kind, 86, &started);
             respond_plain(stream, "500 Internal Server Error", 86, &b);
@@ -1989,7 +1989,7 @@ fn handle_connection<S: Read + Write>(
 
     #[cfg(feature = "otel")]
     {
-        use opentelemetry::trace::Status;
+        use opentelemetry::trace::{Status, TraceContextExt};
         use tracing_opentelemetry::OpenTelemetrySpanExt;
         let secs = started.elapsed().as_secs_f64();
         let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1999,11 +1999,11 @@ fn handle_connection<S: Read + Write>(
         } else {
             "err"
         };
-        let sp = tracing::Span::current();
+        let cx = tracing::Span::current().context();
         if result == "timeout" {
-            sp.set_status(Status::error("proxy_timeout"));
+            cx.span().set_status(Status::error("proxy_timeout"));
         } else if result == "err" {
-            sp.set_status(Status::error(format!("exit_code={}", code)));
+            cx.span().set_status(Status::error(format!("exit_code={}", code)));
         }
         crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
         crate::telemetry::metrics::record_proxy_request(&tool, result);

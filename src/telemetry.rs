@@ -172,29 +172,7 @@ fn build_tracer(
             builder = builder
                 .with_trace_config(sdktrace::Config::default().with_resource(resource.clone()));
 
-            // Apply CLI-friendly batch defaults unless OTEL_BSP_* env overrides are set.
-            let use_env_bsp = std::env::var("OTEL_BSP_SCHEDULE_DELAY")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_some()
-                || std::env::var("OTEL_BSP_MAX_QUEUE_SIZE")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .is_some()
-                || std::env::var("OTEL_BSP_EXPORT_TIMEOUT")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .is_some();
-
-            if use_env_bsp {
-                builder.install_batch(opentelemetry_sdk::runtime::Tokio)
-            } else {
-                let cfg = sdktrace::BatchConfig::default()
-                    .with_scheduled_delay(std::time::Duration::from_secs(2))
-                    .with_max_queue_size(2048)
-                    .with_max_export_timeout(timeout);
-                builder.install_batch(opentelemetry_sdk::runtime::Tokio, cfg)
-            }
+            builder.install_batch(opentelemetry_sdk::runtime::Tokio)
         });
 
         match provider_result {
