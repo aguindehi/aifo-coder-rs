@@ -193,7 +193,7 @@ AIFO_CODER_OTEL=1 AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
   - telemetry_init() is idempotent; if a subscriber exists, a concise warning is emitted and init is skipped.
   - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
 
-For more details (samplers, OTLP, metrics sinks, CI checks), see `docs/otel.md`.
+For more details (samplers, OTLP, metrics sinks, CI checks), see `docs/README-opentelemetry.md`.
 
 # The aifo-coder
 
