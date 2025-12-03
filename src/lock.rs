@@ -70,6 +70,10 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                     #[cfg(feature = "otel")]
                     {
                         tracing::error!("lock acquisition failed: lock held by another process");
+                        use opentelemetry::trace::Status;
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        let sp = tracing::Span::current();
+                        sp.set_status(Status::error("lock_held"));
                     }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
@@ -104,6 +108,10 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
             // Avoid embedding raw paths directly; log a concise hashed summary instead.
             let status_msg = crate::telemetry::hash_string_hex(&msg);
             tracing::error!("lock acquisition failed: {}", status_msg);
+            use opentelemetry::trace::Status;
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
+            let sp = tracing::Span::current();
+            sp.set_status(Status::error(status_msg));
         }
     }
     Err(io::Error::other(crate::display_for_fork_error(
@@ -142,6 +150,10 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                     #[cfg(feature = "otel")]
                     {
                         tracing::error!("lock acquisition failed at specific path: lock held by another process");
+                        use opentelemetry::trace::Status;
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        let sp = tracing::Span::current();
+                        sp.set_status(Status::error("lock_held"));
                     }
                     Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(
