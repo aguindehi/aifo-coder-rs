@@ -94,6 +94,9 @@ if [ "$is_notify" -eq 1 ]; then
     tmp="${TMPDIR:-/tmp}/aifo-shim.$$"
     mkdir -p "$tmp"
     cmd=(curl -sS -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
+    if [ -n "${TRACEPARENT:-}" ]; then
+      cmd+=(-H "traceparent: $TRACEPARENT")
+    fi
     if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
       SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
       cmd+=(--unix-socket "$SOCKET")
@@ -122,6 +125,9 @@ if [ "$is_notify" -eq 1 ]; then
   else
     # Non-verbose async: fire-and-forget notify request
     cmd=(curl -sS -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "X-Aifo-Client: posix-shim-curl" -H "Content-Type: application/x-www-form-urlencoded")
+    if [ -n "${TRACEPARENT:-}" ]; then
+      cmd+=(-H "traceparent: $TRACEPARENT")
+    fi
     if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
       SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
       cmd+=(--unix-socket "$SOCKET")
@@ -147,6 +153,9 @@ send_signal() {
   sig="$1"
   [ -z "$exec_id" ] && return 0
   scmd=(curl -sS -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "Content-Type: application/x-www-form-urlencoded")
+  if [ -n "${TRACEPARENT:-}" ]; then
+    scmd+=(-H "traceparent: $TRACEPARENT")
+  fi
   if printf %s "$AIFO_TOOLEEXEC_URL" | grep -q '^unix://'; then
     SOCKET="${AIFO_TOOLEEXEC_URL#unix://}"
     scmd+=(--unix-socket "$SOCKET")
@@ -237,6 +246,9 @@ touch "$d/no_shell_on_tty" 2>/dev/null || true
 
 # Build curl form payload (urlencode all key=value pairs)
 cmd=(curl -sS --no-buffer -D "$tmp/h" -X POST -H "Authorization: Bearer $AIFO_TOOLEEXEC_TOKEN" -H "X-Aifo-Proto: 2" -H "TE: trailers" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Aifo-Exec-Id: $exec_id")
+if [ -n "${TRACEPARENT:-}" ]; then
+  cmd+=(-H "traceparent: $TRACEPARENT")
+fi
 cmd+=(--data-urlencode "tool=$tool" --data-urlencode "cwd=$cwd")
 # Append args preserving order
 for a in "$@"; do
