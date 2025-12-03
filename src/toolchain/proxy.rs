@@ -858,7 +858,9 @@ fn handle_connection<S: Read + Write>(
     #[cfg(feature = "otel")]
     let parent_cx = {
         let propagator = global::get_text_map_propagator(|p| p.clone());
-        propagator.extract(&HeaderMapExtractor { headers: &req.headers })
+        propagator.extract(&HeaderMapExtractor {
+            headers: &req.headers,
+        })
     };
 
     // Merge form/query
