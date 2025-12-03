@@ -27,7 +27,9 @@ v9 is an evolution of v8 with different defaults and stronger assumptions:
 
 Compile‑time behavior:
 - v8: Telemetry code is compile‑time optional via Cargo features `otel` and `otel-otlp`. Default build has telemetry compiled out.
-- v9: Telemetry dependencies are always linked; crate code is always built with tracing/OTEL support. No feature gating is used to remove telemetry at compile time.
+- v9: Telemetry dependencies are controlled via Cargo features as in v8, but the **default build enables them**:
+  - `otel` and `otel-otlp` are enabled by default (e.g., via Cargo features or `CARGO_FLAGS` in Makefile/wrappers).
+  - Users who want to build **without** telemetry can compile the crate without these features (e.g., `cargo build` without extra `--features`), and all telemetry code will be compiled out as before.
 
 Runtime defaults:
 - v8: Telemetry is runtime‑opt‑in: only enabled when `AIFO_CODER_OTEL=1` or `OTEL_EXPORTER_OTLP_ENDPOINT` is non‑empty. Default CLI behavior does not emit telemetry and does not install any exporters.
@@ -80,31 +82,45 @@ Migration and compatibility:
 
 3) Build and feature model (Cargo)
 
-Dependencies in Cargo.toml (non‑optional):
-- tracing = { version = "0.1", features = ["std"] }
-- tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-- opentelemetry = { version = "0.24" }
-- opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
-- tracing-opentelemetry = { version = "0.25" }
-- opentelemetry-stdout = { version = "0.5" }
-- opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic"] }
-- tokio = { version = "1", features = ["rt-multi-thread"] }
-- hostname = "0.3"
+Dependencies in Cargo.toml (optional, gated by features as in v8):
+- tracing = { version = "0.1", features = ["std"], optional = true }
+- tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
+- opentelemetry = { version = "0.24", optional = true }
+- opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"], optional = true }
+- tracing-opentelemetry = { version = "0.25", optional = true }
+- opentelemetry-stdout = { version = "0.5", optional = true }
+- opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic"], optional = true }
+- tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
+- hostname = { version = "0.3", optional = true }
 - humantime = "2.1"
 - once_cell = "1"
 
-Features section:
-- The `otel` and `otel-otlp` features remain defined for backward compatibility but no longer gate code:
-  - They may be left as empty feature sets or used only to adjust minor behavior (for example, enabling a couple of extra tests).
-  - They do not control whether telemetry is compiled in; all telemetry code builds regardless of features.
+Features section (unchanged in spirit from v8):
+- `otel` enables tracing and development exporters:
+  - "tracing"
+  - "tracing-subscriber"
+  - "opentelemetry"
+  - "opentelemetry_sdk"
+  - "tracing-opentelemetry"
+  - "opentelemetry-stdout"
+  - "hostname"
+  - "humantime"
+- `otel-otlp` adds OTLP exporter and Tokio runtime:
+  - "otel"
+  - "opentelemetry-otlp"
+  - "tokio"
 
 Default build:
-- Always includes telemetry support.
-- There is no “build without telemetry code” configuration in v9.
+- For internal builds and the provided Makefile/wrapper, `otel-otlp` is enabled by default via `CARGO_FLAGS` (for example `CARGO_FLAGS ?= --features otel-otlp`).
+- A developer who wants a **no-telemetry** binary can compile without these features:
+  - `cargo build` (no `--features otel` / `otel-otlp`) will compile the crate without telemetry code, and `telemetry_init()` becomes a no-op stub.
 
 4) Runtime configuration and defaults (environment)
 
-The key design change is how telemetry enablement and endpoint selection work.
+The key design change is how telemetry enablement and endpoint selection work when telemetry
+features are compiled in (i.e., when built with `otel` / `otel-otlp`). When telemetry is compiled
+out (build without these features), all runtime telemetry configuration is ignored and
+`telemetry_init()` is a no-op.
 
 Enablement:
 
@@ -118,8 +134,10 @@ Enablement:
 
 - OTEL_EXPORTER_OTLP_ENDPOINT
   - If set and non‑empty: used as the OTLP/gRPC endpoint.
-  - If unset or empty: v9 default endpoint is used:
-    `http://alloy-collector-az.service.dev.migros.cloud`.
+  - If unset or empty: v9 default endpoint is used. This default is defined in a single place in
+    the Rust code (for example as a `const DEFAULT_OTLP_ENDPOINT: &str`) so that developers can
+    easily change it when compiling their own binaries:
+    `http://alloy-collector-az.service.dev.migros.cloud` (project default).
 
 - Effective behavior:
   - Default (no env vars set): telemetry ON, using alloy endpoint.
@@ -349,7 +367,9 @@ v9 only changes the defaults for exporter selection as described in section 5.
 
 11) Testing strategy and acceptance criteria (v9)
 
-Important change: the golden stdout tests in v8 assumed “no telemetry when enabled with AIFO_CODER_OTEL=1 but default build off”. In v9, telemetry is on by default and always compiled; tests must adapt accordingly.
+Important change: the golden stdout tests in v8 assumed “no telemetry when enabled with AIFO_CODER_OTEL=1 but default build off”. In v9, telemetry is still **compile‑time optional**, but all provided Makefile and wrapper flows build with telemetry features (`otel-otlp`) enabled by default. Tests must cover both:
+- “with telemetry features” (the default `CARGO_FLAGS` path), and
+- “without telemetry features” (plain `cargo build` / `cargo run` without `--features otel*`).
 
 Default runs:
 
