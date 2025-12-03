@@ -55,6 +55,7 @@ CARGO_FLAGS ?= --features otel-otlp
 #     OTEL_EXPORTER_OTLP_TIMEOUT:  override OTLP timeout (default 5s in code)
 #     OTEL_BSP_*:                 batch span processor tuning
 #     AIFO_CODER_TRACING_FMT:     "1" to enable stderr fmt logging for spans
+AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url
 
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
