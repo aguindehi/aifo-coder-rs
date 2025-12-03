@@ -29,11 +29,10 @@ static INIT: OnceCell<()> = OnceCell::new();
 static INSTANCE_ID: OnceCell<String> = OnceCell::new();
 static HASH_SALT: OnceCell<u64> = OnceCell::new();
 
-// Default OTLP endpoint selection:
-// - First, use AIFO_OTEL_DEFAULT_ENDPOINT baked in at compile time (via build.rs) when present.
-// - Otherwise, fall back to a safe example endpoint for local collectors.
-const DEFAULT_OTLP_ENDPOINT: &str =
-    option_env!("AIFO_OTEL_DEFAULT_ENDPOINT").unwrap_or("http://localhost:4317");
+ // Default OTLP endpoint selection:
+ // - First, use AIFO_OTEL_DEFAULT_ENDPOINT baked in at compile time (via build.rs) when present.
+ // - Otherwise, fall back to a safe example endpoint for local collectors.
+const DEFAULT_OTLP_ENDPOINT: Option<&str> = option_env!("AIFO_OTEL_DEFAULT_ENDPOINT");
 
 fn telemetry_enabled_env() -> bool {
     match env::var("AIFO_CODER_OTEL") {
@@ -46,6 +45,7 @@ fn telemetry_enabled_env() -> bool {
 }
 
 fn effective_otlp_endpoint() -> Option<String> {
+    // 1) Runtime override
     if let Ok(v) = env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
         let t = v.trim();
         if !t.is_empty() {
@@ -53,8 +53,9 @@ fn effective_otlp_endpoint() -> Option<String> {
         }
     }
 
-    // Fallback to baked-in or code default; trim at runtime to avoid const fn limitations.
-    let t = DEFAULT_OTLP_ENDPOINT.trim();
+    // 2) Baked-in default (if any), else 3) code default; trim at runtime.
+    let baked = DEFAULT_OTLP_ENDPOINT.unwrap_or("http://localhost:4317");
+    let t = baked.trim();
     if t.is_empty() {
         return Some("http://localhost:4317".to_string());
     }
