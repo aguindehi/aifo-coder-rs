@@ -16,12 +16,12 @@ Implements v3 signal propagation and timeout model:
 #[cfg(feature = "otel")]
 use crate::telemetry::{hash_string_hex, telemetry_pii_enabled};
 use once_cell::sync::Lazy;
+#[cfg(feature = "otel")]
 use opentelemetry::global;
-use opentelemetry::propagation::TextMapPropagator;
+#[cfg(feature = "otel")]
+use opentelemetry::propagation::{Extractor, Injector};
+#[cfg(feature = "otel")]
 use opentelemetry::Context;
-use opentelemetry::KeyValue;
-use opentelemetry_http::HeaderExtractor;
-use opentelemetry_http::HeaderInjector;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env as std_env;
@@ -30,7 +30,6 @@ use std::fs;
 use std::io;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::ops::Deref;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
@@ -41,6 +40,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 #[cfg(feature = "otel")]
 use tracing::{info_span, instrument};
+#[cfg(feature = "otel")]
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -57,21 +58,35 @@ use super::{
     ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
 };
 
-struct RequestHeaders<'a> {
+#[cfg(feature = "otel")]
+struct HeaderMapExtractor<'a> {
     headers: &'a std::collections::HashMap<String, String>,
 }
 
-impl<'a> RequestHeaders<'a> {
-    fn new(headers: &'a std::collections::HashMap<String, String>) -> Self {
-        Self { headers }
+#[cfg(feature = "otel")]
+impl<'a> Extractor for HeaderMapExtractor<'a> {
+    fn get(&self, key: &str) -> Option<&str> {
+        // Try exact key first, then lowercase variant for robustness.
+        self.headers
+            .get(key)
+            .or_else(|| self.headers.get(&key.to_ascii_lowercase()))
+            .map(|s| s.as_str())
     }
 
-    fn as_injector(&self) -> HeaderInjector<&std::collections::HashMap<String, String>> {
-        HeaderInjector(self.headers)
+    fn keys(&self) -> Vec<&str> {
+        self.headers.keys().map(|k| k.as_str()).collect()
     }
+}
 
-    fn as_extractor(&self) -> HeaderExtractor<&std::collections::HashMap<String, String>> {
-        HeaderExtractor(self.headers)
+#[cfg(feature = "otel")]
+struct HeaderMapInjector<'a> {
+    headers: &'a mut std::collections::HashMap<String, String>,
+}
+
+#[cfg(feature = "otel")]
+impl<'a> Injector for HeaderMapInjector<'a> {
+    fn set(&mut self, key: &str, value: String) {
+        self.headers.insert(key.to_string(), value);
     }
 }
 
@@ -843,7 +858,7 @@ fn handle_connection<S: Read + Write>(
     #[cfg(feature = "otel")]
     let parent_cx = {
         let propagator = global::get_text_map_propagator(|p| p.clone());
-        propagator.extract(&RequestHeaders::new(&req.headers).as_extractor())
+        propagator.extract(&HeaderMapExtractor { headers: &req.headers })
     };
 
     // Merge form/query
@@ -1301,7 +1316,12 @@ fn handle_connection<S: Read + Write>(
             let propagator = global::get_text_map_propagator(|p| p.clone());
             // Create a temporary header map and inject current span context.
             let mut headers = std::collections::HashMap::<String, String>::new();
-            propagator.inject_context(&Context::current(), &mut HeaderInjector(&mut headers));
+            propagator.inject_context(
+                &Context::current(),
+                &mut HeaderMapInjector {
+                    headers: &mut headers,
+                },
+            );
             if let Some(traceparent_val) = headers
                 .get("traceparent")
                 .cloned()
