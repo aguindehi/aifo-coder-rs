@@ -5,6 +5,22 @@ fn main() {
     // Re-run build script when this file changes
     println!("cargo:rerun-if-changed=build.rs");
 
+    // Optional: bake in a default OTLP endpoint for telemetry from external configuration.
+    // Priority: AIFO_OTEL_ENDPOINT_FILE (file contents) > AIFO_OTEL_ENDPOINT (env value).
+    if let Ok(path) = std::env::var("AIFO_OTEL_ENDPOINT_FILE") {
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            let trimmed = contents.trim();
+            if !trimmed.is_empty() {
+                println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_ENDPOINT={trimmed}");
+            }
+        }
+    } else if let Ok(val) = std::env::var("AIFO_OTEL_ENDPOINT") {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_ENDPOINT={trimmed}");
+        }
+    }
+
     // Build date (UTC ISO-8601). Fallback to unix:<secs> if `date` is unavailable.
     let build_date = Command::new("date")
         .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])

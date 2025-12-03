@@ -29,7 +29,13 @@ static INIT: OnceCell<()> = OnceCell::new();
 static INSTANCE_ID: OnceCell<String> = OnceCell::new();
 static HASH_SALT: OnceCell<u64> = OnceCell::new();
 
-const DEFAULT_OTLP_ENDPOINT: &str = "http://alloy-collector-az.service.dev.migros.cloud";
+// Default OTLP endpoint selection:
+// - First, use AIFO_OTEL_DEFAULT_ENDPOINT baked in at compile time (via build.rs) when present.
+// - Otherwise, fall back to a safe example endpoint for local collectors.
+const DEFAULT_OTLP_ENDPOINT: &str = match option_env!("AIFO_OTEL_DEFAULT_ENDPOINT") {
+    Some(v) if !v.trim().is_empty() => v.trim(),
+    _ => "http://localhost:4317",
+};
 
 fn telemetry_enabled_env() -> bool {
     match env::var("AIFO_CODER_OTEL") {
