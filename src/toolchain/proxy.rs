@@ -856,12 +856,11 @@ fn handle_connection<S: Read + Write>(
 
     // Extract incoming trace context (if any) for propagation into shim/tool execs.
     #[cfg(feature = "otel")]
-    let parent_cx = {
-        let propagator = global::get_text_map_propagator(|p| p.clone());
-        propagator.extract(&HeaderMapExtractor {
+    let parent_cx = global::get_text_map_propagator(|prop| {
+        prop.extract(&HeaderMapExtractor {
             headers: &req.headers,
         })
-    };
+    });
 
     // Merge form/query
     let form = String::from_utf8_lossy(&req.body).to_string();
@@ -1215,7 +1214,7 @@ fn handle_connection<S: Read + Write>(
             session_id = %session
         );
         span.set_parent(parent_cx);
-        span.enter()
+        span.entered()
     };
 
     if !container_exists(&name) {
@@ -1315,15 +1314,16 @@ fn handle_connection<S: Read + Write>(
         // Inject W3C traceparent into shim environment for downstream propagation.
         #[cfg(feature = "otel")]
         {
-            let propagator = global::get_text_map_propagator(|p| p.clone());
             // Create a temporary header map and inject current span context.
             let mut headers = std::collections::HashMap::<String, String>::new();
-            propagator.inject_context(
-                &Context::current(),
-                &mut HeaderMapInjector {
-                    headers: &mut headers,
-                },
-            );
+            global::get_text_map_propagator(|prop| {
+                prop.inject_context(
+                    &Context::current(),
+                    &mut HeaderMapInjector {
+                        headers: &mut headers,
+                    },
+                );
+            });
             if let Some(traceparent_val) = headers
                 .get("traceparent")
                 .cloned()
