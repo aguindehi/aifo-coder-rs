@@ -46,15 +46,44 @@ ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-
 NEXTEST_VERSION ?= 0.9.114
 CARGO_FLAGS ?= --features otel-otlp
 
-# OpenTelemetry runtime configuration
-# - Telemetry features are enabled at build time via CARGO_FLAGS (default: --features otel-otlp).
-# - Runtime defaults (enabled/endpoint/timeouts) are owned by the Rust binary (see telemetry.rs).
-#   Env vars can override those defaults:
-#     AIFO_CODER_OTEL:     "0"/false to disable telemetry; unset/true => enabled
-#     OTEL_EXPORTER_OTLP_ENDPOINT: override default OTLP endpoint
-#     OTEL_EXPORTER_OTLP_TIMEOUT:  override OTLP timeout (default 5s in code)
-#     OTEL_BSP_*:                 batch span processor tuning
-#     AIFO_CODER_TRACING_FMT:     "1" to enable stderr fmt logging for spans
+# OpenTelemetry configuration
+# ---------------------------
+# Compile-time:
+# - Telemetry remains compile-time optional via features:
+#     otel      -> tracing + dev exporters (stderr/file)
+#     otel-otlp -> otel + OTLP exporter + Tokio runtime
+# - Internal builds use CARGO_FLAGS ?= --features otel-otlp so telemetry is compiled in by default.
+#
+# Runtime enablement (when built with otel/otel-otlp):
+# - AIFO_CODER_OTEL:
+#     unset                     -> telemetry ENABLED by default
+#     "1", "true", "yes"        -> telemetry ENABLED
+#     "0", "false", "no", "off" -> telemetry DISABLED (telemetry_init() is a no-op)
+#
+# OTLP endpoint precedence (traces + metrics):
+#  1) OTEL_EXPORTER_OTLP_ENDPOINT (runtime env, non-empty) – highest priority
+#  2) AIFO_OTEL_DEFAULT_ENDPOINT (baked in at build time via build.rs)
+#  3) Code default "http://localhost:4317" when neither of the above is set
+#
+# Build-time baked-in default:
+# - build.rs reads optional configuration and emits AIFO_OTEL_DEFAULT_ENDPOINT:
+#     AIFO_OTEL_ENDPOINT_FILE -> path to a file containing the endpoint URL
+#     AIFO_OTEL_ENDPOINT      -> endpoint URL as an env var
+#   Example local/internal build:
+#     echo "http://alloy-collector-az.service.dev.migros.cloud" > otel-otlp.url
+#     AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url make build-launcher
+#
+# Other runtime overrides (when telemetry is enabled):
+#   OTEL_EXPORTER_OTLP_TIMEOUT  -> OTLP export timeout (default 5s)
+#   OTEL_BSP_*                  -> batch span processor tuning
+#   OTEL_TRACES_SAMPLER         -> sampler (e.g. parentbased_traceidratio)
+#   OTEL_TRACES_SAMPLER_ARG     -> sampler argument (e.g. 0.1)
+#   AIFO_CODER_TRACING_FMT      -> "1" to install fmt logging layer on stderr (honors RUST_LOG)
+#   AIFO_CODER_OTEL_METRICS     -> "1" to enable metrics exporter
+#
+# Note:
+# - Makefile must NOT set AIFO_CODER_OTEL or OTEL_EXPORTER_OTLP_ENDPOINT by default;
+#   the Rust binary owns runtime defaults. Env vars can still be set per job or manually if needed.
 AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url
 
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
