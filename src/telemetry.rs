@@ -34,6 +34,17 @@ static HASH_SALT: OnceCell<u64> = OnceCell::new();
 // - Otherwise, fall back to a safe example endpoint for local collectors.
 const DEFAULT_OTLP_ENDPOINT: Option<&str> = option_env!("AIFO_OTEL_DEFAULT_ENDPOINT");
 
+// Default OTLP transport selection:
+// - First, use AIFO_OTEL_DEFAULT_TRANSPORT baked in at compile time (via build.rs) when present.
+// - Otherwise, fall back to "grpc".
+const DEFAULT_OTLP_TRANSPORT: Option<&str> = option_env!("AIFO_OTEL_DEFAULT_TRANSPORT");
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum OtelTransport {
+    Grpc,
+    Http,
+}
+
 fn telemetry_enabled_env() -> bool {
     match env::var("AIFO_CODER_OTEL") {
         Ok(v) => {
@@ -42,6 +53,31 @@ fn telemetry_enabled_env() -> bool {
         }
         Err(_) => true,
     }
+}
+
+fn otel_transport() -> OtelTransport {
+    // 1) Runtime override via AIFO_CODER_OTEL_EXPORT_TRANSPORT
+    if let Ok(v) = env::var("AIFO_CODER_OTEL_EXPORT_TRANSPORT") {
+        let t = v.trim().to_ascii_lowercase();
+        return match t.as_str() {
+            "http" | "http/protobuf" | "http-json" => OtelTransport::Http,
+            "grpc" => OtelTransport::Grpc,
+            _ => OtelTransport::Grpc,
+        };
+    }
+
+    // 2) Build-time baked-in default via AIFO_OTEL_DEFAULT_TRANSPORT
+    if let Some(t) = DEFAULT_OTLP_TRANSPORT {
+        let t = t.trim().to_ascii_lowercase();
+        return match t.as_str() {
+            "http" | "http/protobuf" | "http-json" => OtelTransport::Http,
+            "grpc" => OtelTransport::Grpc,
+            _ => OtelTransport::Grpc,
+        };
+    }
+
+    // 3) Code default: grpc
+    OtelTransport::Grpc
 }
 
 fn effective_otlp_endpoint() -> Option<String> {
@@ -147,6 +183,7 @@ fn build_resource() -> Resource {
 fn build_tracer(
     resource: &Resource,
     use_otlp: bool,
+    transport: OtelTransport,
 ) -> (sdktrace::TracerProvider, Option<tokio::runtime::Runtime>) {
     if use_otlp {
         use opentelemetry_otlp::WithExportConfig;
@@ -186,8 +223,12 @@ fn build_tracer(
         };
 
         let provider_result = rt.block_on(async move {
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
+            let exporter_builder = match transport {
+                OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
+                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
+            };
+
+            let exporter = exporter_builder
                 .with_endpoint(endpoint)
                 .with_timeout(timeout);
 
@@ -224,12 +265,13 @@ fn build_tracer(
 }
 
 #[cfg(not(feature = "otel-otlp"))]
-fn build_tracer(resource: &Resource, use_otlp: bool) -> sdktrace::TracerProvider {
+fn build_tracer(resource: &Resource, use_otlp: bool, transport: OtelTransport) -> sdktrace::TracerProvider {
     if use_otlp {
         eprintln!(
             "aifo-coder: telemetry: OTLP endpoint configured but otel-otlp feature is disabled; falling back to stderr exporter"
         );
     }
+    let _ = transport;
     build_stderr_tracer(resource)
 }
 
@@ -272,7 +314,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         .build()
 }
 
-fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(resource: &Resource, use_otlp: bool, transport: OtelTransport) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }
@@ -306,8 +348,12 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
                 .and_then(|s| humantime::parse_duration(&s).ok())
                 .unwrap_or_else(|| Duration::from_secs(2));
 
-            let exporter = match opentelemetry_otlp::new_exporter()
-                .tonic()
+            let exporter_builder = match transport {
+                OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
+                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
+            };
+
+            let exporter = match exporter_builder
                 .with_endpoint(endpoint)
                 .with_timeout(timeout)
                 .build_metrics_exporter(
@@ -356,6 +402,7 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
     }
 
     // Dev fallback: non-OTLP metrics exporter using stderr or a JSONL file sink.
+    let _ = transport;
     // Prefer stderr; if AIFO_CODER_OTEL_METRICS_FILE is set (or XDG_RUNTIME_DIR is available),
     // write JSONL to that path. Never write to stdout.
     let file_sink_path_opt = env::var("AIFO_CODER_OTEL_METRICS_FILE")
@@ -432,6 +479,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let resource = build_resource();
 
     let use_otlp = cfg!(feature = "otel-otlp") && effective_otlp_endpoint().is_some();
+    let transport = otel_transport();
 
     // Verbose OTEL mode: driven by env, set by main when CLI --verbose is active.
     let verbose_otel = env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1");
@@ -458,6 +506,13 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                     );
                 }
             }
+            eprintln!(
+                "aifo-coder: telemetry: OTLP transport={}",
+                match transport {
+                    OtelTransport::Grpc => "grpc",
+                    OtelTransport::Http => "http",
+                }
+            );
         } else {
             eprintln!(
                 "aifo-coder: telemetry: using stderr/file development exporters (no OTLP endpoint)"
@@ -466,7 +521,9 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
         if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() == Some("1") {
             if use_otlp {
-                eprintln!("aifo-coder: telemetry: metrics: OTLP exporter requested (best-effort; failures ignored)");
+                eprintln!(
+                    "aifo-coder: telemetry: metrics: OTLP exporter requested (best-effort; failures ignored)"
+                );
             } else {
                 eprintln!(
                     "aifo-coder: telemetry: metrics: dev exporter to stderr/file enabled (no OTLP)"
@@ -478,13 +535,13 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     }
 
     #[cfg(feature = "otel-otlp")]
-    let (tracer_provider, runtime) = build_tracer(&resource, use_otlp);
+    let (tracer_provider, runtime) = build_tracer(&resource, use_otlp, transport);
 
     #[cfg(not(feature = "otel-otlp"))]
-    let tracer_provider = build_tracer(&resource, use_otlp);
+    let tracer_provider = build_tracer(&resource, use_otlp, transport);
     let tracer = tracer_provider.tracer("aifo-coder");
 
-    let meter_provider = build_metrics_provider(&resource, use_otlp);
+    let meter_provider = build_metrics_provider(&resource, use_otlp, transport);
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
     }
