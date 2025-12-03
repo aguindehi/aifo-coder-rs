@@ -104,7 +104,11 @@ if command -v cargo >/dev/null 2>&1; then
     NEED_BUILD=1
   elif [ -f "$PROJECT_ROOT/Cargo.toml" ] && [ "$PROJECT_ROOT/Cargo.toml" -nt "$BIN" ]; then
     NEED_BUILD=1
+  elif [ -f "$PROJECT_ROOT/build.rs" ] && [ "$PROJECT_ROOT/build.rs" -nt "$BIN" ]; then
+    NEED_BUILD=1
   elif [ -d "$PROJECT_ROOT/src" ] && find "$PROJECT_ROOT/src" -type f -newer "$BIN" -print -quit | grep -q .; then
+    NEED_BUILD=1
+  elif [ -d "$PROJECT_ROOT/tests" ] && find "$PROJECT_ROOT/tests" -type f -newer "$BIN" -print -quit | grep -q .; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
