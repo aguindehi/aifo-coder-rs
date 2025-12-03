@@ -29,9 +29,9 @@ static INIT: OnceCell<()> = OnceCell::new();
 static INSTANCE_ID: OnceCell<String> = OnceCell::new();
 static HASH_SALT: OnceCell<u64> = OnceCell::new();
 
- // Default OTLP endpoint selection:
- // - First, use AIFO_OTEL_DEFAULT_ENDPOINT baked in at compile time (via build.rs) when present.
- // - Otherwise, fall back to a safe example endpoint for local collectors.
+// Default OTLP endpoint selection:
+// - First, use AIFO_OTEL_DEFAULT_ENDPOINT baked in at compile time (via build.rs) when present.
+// - Otherwise, fall back to a safe example endpoint for local collectors.
 const DEFAULT_OTLP_ENDPOINT: &str =
     option_env!("AIFO_OTEL_DEFAULT_ENDPOINT").unwrap_or("http://localhost:4317");
 
