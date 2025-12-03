@@ -225,7 +225,8 @@ fn build_tracer(
         let provider_result = rt.block_on(async move {
             let exporter_builder = match transport {
                 OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
-                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
+                // Fallback: reuse gRPC pipeline for HTTP transport until HTTP exporter is available.
+                OtelTransport::Http => opentelemetry_otlp::new_exporter().tonic(),
             };
 
             let exporter = exporter_builder
@@ -350,7 +351,8 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool, transport: OtelTr
 
             let exporter_builder = match transport {
                 OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
-                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
+                // Fallback: reuse gRPC pipeline for HTTP transport until HTTP exporter is available.
+                OtelTransport::Http => opentelemetry_otlp::new_exporter().tonic(),
             };
 
             let exporter = match exporter_builder
