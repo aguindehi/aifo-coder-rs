@@ -916,7 +916,14 @@ pub fn toolchain_run(
 
         #[cfg(feature = "otel")]
         {
+            use opentelemetry::trace::{Status, TraceContextExt};
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
             let secs = _started.elapsed().as_secs_f64();
+            if exit_code != 0 {
+                let cx = tracing::Span::current().context();
+                cx.span()
+                    .set_status(Status::error(format!("exit_code={}", exit_code)));
+            }
             crate::telemetry::metrics::record_docker_run_duration(kind_in, secs);
             crate::telemetry::metrics::record_docker_invocation("exec");
         }
@@ -1067,6 +1074,13 @@ pub fn toolchain_start_session(
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 if !exists_after {
+                    #[cfg(feature = "otel")]
+                    {
+                        use opentelemetry::trace::{Status, TraceContextExt};
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        let cx = tracing::Span::current().context();
+                        cx.span().set_status(Status::error("sidecar_start_failed"));
+                    }
                     return Err(io::Error::other(crate::display_for_toolchain_error(
                         &ToolchainError::Message(
                             "failed to start one or more sidecars".to_string(),

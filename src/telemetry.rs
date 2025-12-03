@@ -315,8 +315,63 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
         }
     }
 
-    // Dev fallback: when OTLP is not in use, metrics are disabled (no-op).
-    None
+    // Dev fallback: non-OTLP metrics exporter using stderr or a JSONL file sink.
+    // Prefer stderr; if AIFO_CODER_OTEL_METRICS_FILE is set (or XDG_RUNTIME_DIR is available),
+    // write JSONL to that path. Never write to stdout.
+    use std::io::Write as _;
+    let file_sink_path_opt = env::var("AIFO_CODER_OTEL_METRICS_FILE")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            // Default sink: ${XDG_RUNTIME_DIR:-/tmp}/aifo-coder.otel.metrics.jsonl
+            let base = env::var("XDG_RUNTIME_DIR")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "/tmp".to_string());
+            Some(format!("{}/aifo-coder.otel.metrics.jsonl", base.trim_end_matches('/')))
+        });
+
+    // Build exporter with a writer to stderr or to a file.
+    let exporter = if let Some(path) = file_sink_path_opt {
+        match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            Ok(f) => {
+                opentelemetry_stdout::MetricsExporterBuilder::new()
+                    .with_writer(f)
+                    .build()
+            }
+            Err(_) => {
+                // Fallback: stderr
+                opentelemetry_stdout::MetricsExporterBuilder::new()
+                    .with_writer(std::io::stderr())
+                    .build()
+            }
+        }
+    } else {
+        opentelemetry_stdout::MetricsExporterBuilder::new()
+            .with_writer(std::io::stderr())
+            .build()
+    };
+
+    // Use a PeriodicReader with ~2s export interval.
+    let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
+        .ok()
+        .and_then(|s| humantime::parse_duration(&s).ok())
+        .unwrap_or_else(|| Duration::from_secs(2));
+
+    let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+        .with_resource(resource.clone());
+
+    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
+        exporter,
+        opentelemetry_sdk::runtime::Tokio,
+    )
+    .with_interval(interval)
+    .build();
+
+    provider_builder = provider_builder.with_reader(reader);
+    Some(provider_builder.build())
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {
