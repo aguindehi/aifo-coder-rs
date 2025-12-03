@@ -1206,16 +1206,16 @@ fn handle_connection<S: Read + Write>(
         } else {
             hash_string_hex(&cwd)
         };
-        info_span!(
+        let span = info_span!(
             "proxy_request",
             tool = %tool,
             kind = %kind,
             arg_count = argv.len(),
             cwd = %cwd_field,
             session_id = %session
-        )
-        .set_parent(parent_cx)
-        .entered()
+        );
+        span.set_parent(parent_cx);
+        span.enter()
     };
 
     if !container_exists(&name) {
