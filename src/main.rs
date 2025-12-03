@@ -398,6 +398,11 @@ fn main() -> ExitCode {
     }
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
+
+    // Propagate CLI verbosity to telemetry so init can emit concise OTEL logs when requested.
+    if cli.verbose {
+        std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
+    }
     // Honor --non-interactive by suppressing the LLM credentials prompt
     if cli.non_interactive {
         std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");

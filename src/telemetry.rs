@@ -181,6 +181,15 @@ fn build_tracer(
                 eprintln!(
                     "aifo-coder: telemetry: failed to install OTLP tracer: {e}; falling back to stderr exporter"
                 );
+                if env::var("AIFO_CODER_OTEL_VERBOSE")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
+                {
+                    eprintln!(
+                        "aifo-coder: telemetry: OTLP export will be disabled; CLI output and exit codes remain unchanged"
+                    );
+                }
                 let provider = build_stderr_tracer(resource);
                 (provider, None)
             }
@@ -286,6 +295,15 @@ fn build_metrics_provider(resource: &Resource, use_otlp: bool) -> Option<SdkMete
                     eprintln!(
                         "aifo-coder: telemetry: failed to create OTLP metrics exporter: {e}; disabling metrics exporter"
                     );
+                    if env::var("AIFO_CODER_OTEL_VERBOSE")
+                        .ok()
+                        .as_deref()
+                        == Some("1")
+                    {
+                        eprintln!(
+                            "aifo-coder: telemetry: metrics export disabled; CLI behavior remains unchanged"
+                        );
+                    }
                     return None;
                 }
             };
@@ -396,6 +414,57 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             .ok()
             .map(|s| !s.trim().is_empty())
             .unwrap_or(false);
+
+    // Verbose OTEL mode: driven by env, set by main when CLI --verbose is active.
+    let verbose_otel = env::var("AIFO_CODER_OTEL_VERBOSE")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    if verbose_otel {
+        if use_otlp {
+            match env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+                Ok(ep) => {
+                    let ep_trimmed = ep.trim();
+                    if ep_trimmed.is_empty() {
+                        eprintln!(
+                            "aifo-coder: telemetry: OTLP enabled but OTEL_EXPORTER_OTLP_ENDPOINT is empty"
+                        );
+                    } else {
+                        eprintln!(
+                            "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
+                            ep_trimmed
+                        );
+                    }
+                }
+                Err(_) => {
+                    eprintln!(
+                        "aifo-coder: telemetry: OTLP enabled but OTEL_EXPORTER_OTLP_ENDPOINT is unset"
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "aifo-coder: telemetry: using stderr/file development exporters (no OTLP endpoint)"
+            );
+        }
+
+        if env::var("AIFO_CODER_OTEL_METRICS")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            if use_otlp {
+                eprintln!("aifo-coder: telemetry: metrics: OTLP exporter requested (best-effort; failures ignored)");
+            } else {
+                eprintln!(
+                    "aifo-coder: telemetry: metrics: dev exporter to stderr/file enabled (no OTLP)"
+                );
+            }
+        } else {
+            eprintln!("aifo-coder: telemetry: metrics: disabled (AIFO_CODER_OTEL_METRICS != 1)");
+        }
+    }
 
     #[cfg(feature = "otel-otlp")]
     let (tracer_provider, runtime) = build_tracer(&resource, use_otlp);
