@@ -176,6 +176,23 @@ AIFO_CODER_OTEL=1 AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
   cargo run --features otel -- --help
 ```
 
+- Exporters and sinks:
+  - Traces: development exporter writes to stderr only (never stdout).
+  - Metrics: development exporter writes to stderr when possible; otherwise JSONL to:
+    - ${AIFO_CODER_OTEL_METRICS_FILE}, or
+    - ${XDG_RUNTIME_DIR:-/tmp}/aifo-coder.otel.metrics.jsonl.
+- Propagation:
+  - The shim forwards W3C traceparent (from TRACEPARENT env) to the proxy over HTTP/Unix.
+  - The proxy extracts context and creates child spans; it also injects TRACEPARENT into sidecar execs.
+- Sampling and timeouts:
+  - OTEL_TRACES_SAMPLER / OTEL_TRACES_SAMPLER_ARG control sampling (e.g., parentbased_traceidratio).
+  - OTEL_EXPORTER_OTLP_TIMEOUT controls exporter timeouts (default 5s). BSP envs (OTEL_BSP_*) are respected.
+- CI invariant:
+  - Golden stdout: enabling telemetry must not change CLI stdout. See ci/otel-golden-stdout.sh.
+- Safety/idempotence:
+  - telemetry_init() is idempotent; if a subscriber exists, a concise warning is emitted and init is skipped.
+  - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
+
 For more details (samplers, OTLP, metrics sinks, CI checks), see `docs/otel.md`.
 
 # The aifo-coder
