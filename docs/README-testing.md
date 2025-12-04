@@ -107,10 +107,9 @@ Naming conventions
 - preview_* tests are Integration (int_preview_*): they depend on docker CLI path/env discovery.
 - notifications_* and shims_* tests are Integration: they spawn local processes/shims.
 
-Filters (transitional → target)
+Filters
 
-- Transitional filters: removed (Phase 5 complete).
-- Target-state filters (after file/function renames):
+- Target-state filters:
   - Integration: -E 'test(/^int_/)'
   - Acceptance/E2E: -E 'test(/^e2e_/)' with --run-ignored ignored-only
   - Unit lane: default “make check” runs all non-ignored tests (dockerless).
