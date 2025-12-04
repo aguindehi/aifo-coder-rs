@@ -209,10 +209,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
     // Development-only stderr exporter: emits compact span summaries to stderr when explicitly
     // opted into via AIFO_CODER_OTEL_DEV_STDERR=1. By default, we build a silent tracer provider
     // with no exporter to avoid extra stderr logs in normal runs.
-    let dev_stderr = env::var("AIFO_CODER_OTEL_DEV_STDERR")
-        .ok()
-        .as_deref()
-        == Some("1");
+    let dev_stderr = env::var("AIFO_CODER_OTEL_DEV_STDERR").ok().as_deref() == Some("1");
 
     if dev_stderr {
         #[derive(Debug)]
