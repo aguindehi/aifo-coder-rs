@@ -139,10 +139,7 @@ fn build_tracer(
 }
 
 #[cfg(not(feature = "otel-otlp"))]
-fn build_tracer(
-    _use_otlp: bool,
-    _transport: OtelTransport,
-) -> sdktrace::SdkTracerProvider {
+fn build_tracer(_use_otlp: bool, _transport: OtelTransport) -> sdktrace::SdkTracerProvider {
     // Silent tracer provider (no exporter).
     build_stderr_tracer()
 }
@@ -153,10 +150,7 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     sdktrace::SdkTracerProvider::builder().build()
 }
 
-fn build_metrics_provider(
-    _use_otlp: bool,
-    _transport: OtelTransport,
-) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(_use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
     // Default: enable metrics unless explicitly disabled via env toggle.
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
@@ -176,8 +170,7 @@ fn build_metrics_provider(
         .and_then(|s| humantime::parse_duration(&s).ok())
         .unwrap_or_else(|| Duration::from_secs(2));
 
-    let mut provider_builder =
-        opentelemetry_sdk::metrics::SdkMeterProvider::builder();
+    let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder();
 
     let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
         .with_interval(interval)
@@ -197,7 +190,6 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     }
 
     global::set_text_map_propagator(TraceContextPropagator::new());
-
 
     let use_otlp = cfg!(feature = "otel-otlp") && effective_otlp_endpoint().is_some();
     let transport = otel_transport();
