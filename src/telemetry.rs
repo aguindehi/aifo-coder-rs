@@ -76,12 +76,12 @@ fn otel_transport() -> OtelTransport {
         };
     }
 
-    // 3) Code default: grpc
-    OtelTransport::Grpc
+    // 3) Code default: prefer HTTP so HTTPS/TLS OTLP works without gRPC by default.
+    OtelTransport::Http
 }
 
 fn effective_otlp_endpoint() -> Option<String> {
-    // 1) Runtime override
+    // 1) Runtime override via OTEL_EXPORTER_OTLP_ENDPOINT
     if let Ok(v) = env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
         let t = v.trim();
         if !t.is_empty() {
@@ -90,10 +90,11 @@ fn effective_otlp_endpoint() -> Option<String> {
     }
 
     // 2) Baked-in default (if any), else 3) code default; trim at runtime.
-    let baked = DEFAULT_OTLP_ENDPOINT.unwrap_or("http://localhost:4317");
+    // Prefer HTTP/HTTPS form here so HTTP OTLP (including TLS) works out of the box.
+    let baked = DEFAULT_OTLP_ENDPOINT.unwrap_or("http://localhost:4318");
     let t = baked.trim();
     if t.is_empty() {
-        return Some("http://localhost:4317".to_string());
+        return Some("http://localhost:4318".to_string());
     }
 
     Some(t.to_string())
@@ -439,27 +440,25 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     // Verbose OTEL mode: driven by env, set by main when CLI --verbose is active.
     let verbose_otel = env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1");
 
+    // Compute metrics_enabled here so logging and behavior stay in sync.
+    let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
+        .ok()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .map(|v| v != "0" && v != "false" && v != "off")
+        .unwrap_or(true);
+
     if verbose_otel {
         if use_otlp {
-            match env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
-                Ok(ep) => {
-                    let ep_trimmed = ep.trim();
-                    if ep_trimmed.is_empty() {
-                        eprintln!(
-                            "aifo-coder: telemetry: OTLP enabled but OTEL_EXPORTER_OTLP_ENDPOINT is empty"
-                        );
-                    } else {
-                        eprintln!(
-                            "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
-                            ep_trimmed
-                        );
-                    }
-                }
-                Err(_) => {
-                    eprintln!(
-                        "aifo-coder: telemetry: OTLP enabled but OTEL_EXPORTER_OTLP_ENDPOINT is unset"
-                    );
-                }
+            // Try to show the *effective* OTLP endpoint (runtime or baked-in), not just the env var.
+            if let Some(ep) = effective_otlp_endpoint() {
+                eprintln!(
+                    "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
+                    ep
+                );
+            } else {
+                eprintln!(
+                    "aifo-coder: telemetry: OTLP enabled but no effective endpoint could be resolved"
+                );
             }
             eprintln!(
                 "aifo-coder: telemetry: OTLP transport={}",
@@ -474,18 +473,18 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             );
         }
 
-        if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() == Some("1") {
+        if metrics_enabled {
             if use_otlp {
                 eprintln!(
-                    "aifo-coder: telemetry: metrics: OTLP exporter requested (best-effort; failures ignored)"
+                    "aifo-coder: telemetry: metrics: enabled (OTLP exporter; best-effort, failures ignored)"
                 );
             } else {
                 eprintln!(
-                    "aifo-coder: telemetry: metrics: dev exporter to stderr/file enabled (no OTLP)"
+                    "aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file; no OTLP endpoint)"
                 );
             }
         } else {
-            eprintln!("aifo-coder: telemetry: metrics: disabled (AIFO_CODER_OTEL_METRICS != 1)");
+            eprintln!("aifo-coder: telemetry: metrics: disabled (env override)");
         }
     }
 
