@@ -170,8 +170,7 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
         {
             let ep =
                 effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
-            let exporter = match opentelemetry_otlp::new_exporter()
-                .http()
+            let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
                 .with_endpoint(ep)
                 .build_metrics_exporter()
             {
