@@ -205,42 +205,57 @@ fn build_tracer(
 }
 
 fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
-    // Development-only stderr exporter: emits compact span summaries to stderr.
-    #[derive(Debug)]
-    struct StderrSpanExporter;
+    // Development-only stderr exporter: emits compact span summaries to stderr when explicitly
+    // opted into via AIFO_CODER_OTEL_DEV_STDERR=1. By default, we build a silent tracer provider
+    // with no exporter to avoid extra stderr logs in normal runs.
+    let dev_stderr = env::var("AIFO_CODER_OTEL_DEV_STDERR")
+        .ok()
+        .as_deref()
+        == Some("1");
 
-    impl SpanExporter for StderrSpanExporter {
-        fn export(
-            &mut self,
-            batch: Vec<SpanData>,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceExportResult> + Send + 'static>>
-        {
-            Box::pin(async move {
-                let mut stderr = std::io::stderr();
-                for span in batch {
-                    let name = span.name;
-                    let span_id = span.span_context.span_id().to_string();
-                    let trace_id = span.span_context.trace_id().to_string();
-                    let _ = writeln!(
-                        stderr,
-                        "otel-span name={name} trace_id={trace_id} span_id={span_id}"
-                    );
-                }
-                Ok(())
-            })
+    if dev_stderr {
+        #[derive(Debug)]
+        struct StderrSpanExporter;
+
+        impl SpanExporter for StderrSpanExporter {
+            fn export(
+                &mut self,
+                batch: Vec<SpanData>,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = TraceExportResult> + Send + 'static>,
+            > {
+                Box::pin(async move {
+                    let mut stderr = std::io::stderr();
+                    for span in batch {
+                        let name = span.name;
+                        let span_id = span.span_context.span_id().to_string();
+                        let trace_id = span.span_context.trace_id().to_string();
+                        let _ = writeln!(
+                            stderr,
+                            "otel-span name={name} trace_id={trace_id} span_id={span_id}"
+                        );
+                    }
+                    Ok(())
+                })
+            }
+
+            fn shutdown(&mut self) {
+                // nothing to do for stderr exporter
+            }
         }
 
-        fn shutdown(&mut self) {
-            // nothing to do for stderr exporter
-        }
+        let exporter = StderrSpanExporter;
+        // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
+        sdktrace::TracerProvider::builder()
+            .with_simple_exporter(exporter)
+            .with_config(sdktrace::Config::default().with_resource(resource.clone()))
+            .build()
+    } else {
+        // Silent provider: respects sampling config but does not export spans anywhere.
+        sdktrace::TracerProvider::builder()
+            .with_config(sdktrace::Config::default().with_resource(resource.clone()))
+            .build()
     }
-
-    let exporter = StderrSpanExporter;
-    // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
-    sdktrace::TracerProvider::builder()
-        .with_simple_exporter(exporter)
-        .with_config(sdktrace::Config::default().with_resource(resource.clone()))
-        .build()
 }
 
 fn build_metrics_provider(
