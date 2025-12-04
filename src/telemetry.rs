@@ -9,7 +9,6 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
@@ -127,46 +126,34 @@ pub fn hash_string_hex(s: &str) -> String {
     format!("{:016x}", h)
 }
 
-fn build_resource() -> Resource {
-    // Use an empty Resource to avoid cross-version type mismatches.
-    Resource::empty()
-}
+/* No explicit Resource configuration; use SDK defaults. */
 
 #[cfg(feature = "otel-otlp")]
 fn build_tracer(
-    resource: &Resource,
     _use_otlp: bool,
     _transport: OtelTransport,
 ) -> (sdktrace::SdkTracerProvider, Option<tokio::runtime::Runtime>) {
-    // Option 1: disable OTLP trace export entirely.
-    // Always use the development stderr exporter for traces; never send traces to a remote
-    // collector. This keeps spans useful locally (e.g., via fmt logging) while avoiding any
-    // dependency on gRPC or HTTPS trace backends (Tempo).
-    let provider = build_stderr_tracer(resource);
+    // Silent tracer provider (no exporter).
+    let provider = build_stderr_tracer();
     (provider, None)
 }
 
 #[cfg(not(feature = "otel-otlp"))]
 fn build_tracer(
-    resource: &Resource,
     _use_otlp: bool,
     _transport: OtelTransport,
 ) -> sdktrace::SdkTracerProvider {
-    // When otel-otlp is not compiled, we already had no OTLP traces. Keep using the stderr
-    // development exporter.
-    build_stderr_tracer(resource)
+    // Silent tracer provider (no exporter).
+    build_stderr_tracer()
 }
 
-fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
+fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     // Silent tracer provider (no exporter). For debugging, prefer enabling the fmt layer via
     // AIFO_CODER_TRACING_FMT=1 which prints spans/logs without custom exporters.
-    sdktrace::SdkTracerProvider::builder()
-        .with_resource(resource.clone())
-        .build()
+    sdktrace::SdkTracerProvider::builder().build()
 }
 
 fn build_metrics_provider(
-    resource: &Resource,
     _use_otlp: bool,
     _transport: OtelTransport,
 ) -> Option<SdkMeterProvider> {
@@ -190,7 +177,7 @@ fn build_metrics_provider(
         .unwrap_or_else(|| Duration::from_secs(2));
 
     let mut provider_builder =
-        opentelemetry_sdk::metrics::SdkMeterProvider::builder().with_resource(resource.clone());
+        opentelemetry_sdk::metrics::SdkMeterProvider::builder();
 
     let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
         .with_interval(interval)
@@ -211,7 +198,6 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let resource = build_resource();
 
     let use_otlp = cfg!(feature = "otel-otlp") && effective_otlp_endpoint().is_some();
     let transport = otel_transport();
@@ -268,13 +254,13 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     }
 
     #[cfg(feature = "otel-otlp")]
-    let (tracer_provider, runtime) = build_tracer(&resource, use_otlp, transport);
+    let (tracer_provider, runtime) = build_tracer(use_otlp, transport);
 
     #[cfg(not(feature = "otel-otlp"))]
-    let tracer_provider = build_tracer(&resource, use_otlp, transport);
+    let tracer_provider = build_tracer(use_otlp, transport);
     let tracer = tracer_provider.tracer("aifo-coder");
 
-    let meter_provider = build_metrics_provider(&resource, use_otlp, transport);
+    let meter_provider = build_metrics_provider(use_otlp, transport);
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
     }
