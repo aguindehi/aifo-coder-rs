@@ -33,6 +33,13 @@ AIFO_CODER_OTEL_METRICS=1 \
 AIFO_CODER_TRACING_FMT="${AIFO_CODER_TRACING_FMT:-0}" \
 cargo run --quiet --features otel -- --help >/dev/null
 
+# OTLP exporter smoke (feature: otel-otlp). Should not panic even if a collector is absent.
+cargo build --features otel-otlp
+OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-https://localhost:4318}" \
+AIFO_CODER_TRACING_FMT="${AIFO_CODER_TRACING_FMT:-0}" \
+AIFO_CODER_OTEL_METRICS=1 \
+cargo run --quiet --features otel-otlp -- --help >/dev/null
+
 rm -rf "$TMP_DIR"
 
 echo "OK: otel build, golden stdout, and smoke run all passed."
