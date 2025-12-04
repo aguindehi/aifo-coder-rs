@@ -25,11 +25,11 @@ getrandom = "0.2"
 serde_yaml = "0.9"
 tracing = { version = "0.1", features = ["std"], optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
-opentelemetry = { version = "0.31.0", optional = true }
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"], optional = true }
+opentelemetry = { version = "0.30.0", optional = true }
+opentelemetry_sdk = { version = "0.30.0", features = ["rt-tokio"], optional = true }
 tracing-opentelemetry = { version = "0.31.0", optional = true }
-opentelemetry-stdout = { version = "0.31.0", optional = true }
-opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic", "http-proto"], optional = true }
+opentelemetry-stdout = { version = "0.30.0", optional = true }
+opentelemetry-otlp = { version = "0.30.0", features = ["grpc-tonic", "http-proto"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 hostname = { version = "0.3", optional = true }
 humantime = { version = "2.1", optional = true }

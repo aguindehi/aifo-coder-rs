@@ -7,7 +7,6 @@ use std::time::SystemTime;
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
@@ -129,54 +128,8 @@ pub fn hash_string_hex(s: &str) -> String {
 }
 
 fn build_resource() -> Resource {
-    let service_name = env::var("OTEL_SERVICE_NAME")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "aifo-coder".to_string());
-
-    let mut attrs = Vec::new();
-    attrs.push(KeyValue::new("service.name", service_name));
-    attrs.push(KeyValue::new("service.version", env!("CARGO_PKG_VERSION")));
-    attrs.push(KeyValue::new("service.namespace", "aifo"));
-
-    let pid = std::process::id() as i64;
-    attrs.push(KeyValue::new("process.pid", pid));
-
-    let instance_id = INSTANCE_ID.get_or_init(|| {
-        let nanos = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        format!("{pid}-{nanos}")
-    });
-    attrs.push(KeyValue::new("service.instance.id", instance_id.clone()));
-
-    if let Ok(host) = hostname::get() {
-        if let Ok(s) = host.into_string() {
-            attrs.push(KeyValue::new("host.name", s));
-        }
-    }
-
-    if let Ok(os_type) = env::var("OSTYPE") {
-        if !os_type.is_empty() {
-            attrs.push(KeyValue::new("os.type", os_type));
-        }
-    }
-
-    if let Ok(exec) = env::current_exe() {
-        if let Some(name) = exec.file_name().and_then(|s| s.to_str()) {
-            attrs.push(KeyValue::new("process.executable.name", name.to_string()));
-        }
-    }
-
-    if let Ok(env_name) = env::var("DEPLOYMENT_ENVIRONMENT") {
-        if !env_name.is_empty() {
-            attrs.push(KeyValue::new("deployment.environment", env_name));
-        }
-    }
-
-    // 0.31: build Resource from attributes via public From<Vec<KeyValue>>.
-    Resource::from(attrs)
+    // Use default Resource to avoid cross-version type mismatches.
+    Resource::default()
 }
 
 #[cfg(feature = "otel-otlp")]
