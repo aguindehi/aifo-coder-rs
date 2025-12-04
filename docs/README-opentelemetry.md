@@ -193,3 +193,74 @@ otel-otlp-smoke:
 This document, together with `ci/otel-golden-stdout.sh`, completes Phase 6 by providing a
 repeatable CI check for otel builds and a clear reference for enabling, tuning and troubleshooting
 OpenTelemetry in `aifo-coder`.
+
+## 8. Test plan and coverage
+
+Goal: validate that enabling telemetry never changes CLI stdout or exit codes, and that core telemetry
+paths initialize cleanly, are idempotent, and safe when disabled. Cover unit, integration (no Docker
+assumptions) and optional e2e (Docker-required) scenarios.
+
+Scope notes:
+- CI “unit/integration” jobs run with AIFO_CODER_TEST_DISABLE_DOCKER=1 (no Docker).
+- e2e tests that need Docker must be marked #[ignore] and will run only in Docker-enabled lanes.
+
+### 8.1 Unit tests (crate-level invariants; no Docker required)
+
+Focus:
+- Idempotence of telemetry_init(): subsequent calls are no-ops.
+- Safe disablement via AIFO_CODER_OTEL=0 (returns None; no panics).
+- Optional fmt layer: AIFO_CODER_TRACING_FMT=1 must not panic and must not affect stdout.
+
+Implementation details:
+- tests/otel_basic_tests.rs:
+  - otel_idempotent_second_none: call telemetry_init() twice; assert second call returns None.
+  - otel_disabled_env_returns_none_both_calls: set AIFO_CODER_OTEL=0; call telemetry_init() twice and assert None for both.
+  - otel_fmt_layer_no_panic: set AIFO_CODER_TRACING_FMT=1 + RUST_LOG=warn; call telemetry_init(); assert no panic.
+
+These tests are agnostic to feature flags: with otel disabled at compile-time, telemetry_init() is a stub returning Option<()>;
+with otel enabled, it returns Option<TelemetryGuard>. In both cases the invariants above hold.
+
+### 8.2 Integration tests (feature-enabled builds; no external collector required)
+
+Focus:
+- Golden stdout for --help regardless of AIFO_CODER_OTEL setting (already covered by script).
+- Smoke run with metrics enabled but without OTLP endpoint (dev exporters or no-ops).
+
+Implementation details:
+- Script ci/otel-golden-stdout.sh (kept source-controlled):
+  - cargo build --features otel
+  - Compare stdout of: “cargo run --features otel -- --help” vs “AIFO_CODER_OTEL=0 cargo run --features otel -- --help”
+    and fail on diff.
+  - Smoke run with metrics enabled: AIFO_CODER_OTEL_METRICS=1 cargo run --features otel -- --help
+
+Notes:
+- The default Makefile uses CARGO_FLAGS ?= --features otel-otlp; CI executes tests under otel-otlp by default.
+
+### 8.3 Optional e2e tests (Docker-required; ignored by default)
+
+Focus (optional future extension):
+- Start the tool-exec proxy, invoke a simple tool via sidecar, and verify end-to-end streaming with a TRACEPARENT value injected.
+- Validate that disconnect handling returns the canonical drop line and escalates signals according to policy.
+
+Notes:
+- These tests would live under tests/e2e_otel_*.rs and be annotated with #[ignore].
+- They should be enabled only in a Docker-capable lane (e.g., test-e2e job family).
+
+### 8.4 Running locally
+
+- Unit/integration tests (no Docker):
+  - make test
+  - or: cargo nextest run
+- Golden stdout and smoke (no Docker required):
+  - ci/otel-golden-stdout.sh
+
+### 8.5 Consistency and gap analysis
+
+- Stdout invariants are enforced by a golden test script and do not rely on log capture.
+- Idempotence and environment toggles are validated in-process without relying on private APIs.
+- Metrics API is intentionally not depended upon directly by tests to avoid leaking non-public symbols;
+  behavior is validated indirectly via “no panic” guarantees in otel and no-otel builds.
+- OTLP endpoint and transport selection are exercised implicitly by initialization (no exporter hard-fail).
+- e2e coverage is intentionally optional and isolated (ignored) to keep the default test suite portable.
+
+This test plan keeps default runs fast and hermetic while providing a clear path to opt-in e2e validation.

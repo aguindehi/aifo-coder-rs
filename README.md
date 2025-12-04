@@ -201,6 +201,10 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
 
 For more details (endpoint precedence, HTTP transport, CI checks), see `docs/README-opentelemetry.md`.
 
+Telemetry tests:
+- Run unit/integration tests (no Docker): make test
+- Golden stdout and smoke (no Docker): ci/otel-golden-stdout.sh
+
 # The aifo-coder
 
 Containerized launcher and Docker images bundling six terminal AI coding agents:
