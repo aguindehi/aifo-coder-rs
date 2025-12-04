@@ -71,6 +71,7 @@ fn e2e_otel_proxy_exec_node_version() {
          Host: {host}:{port}\r\n\
          Authorization: Bearer {token}\r\n\
          X-Aifo-Proto: 2\r\n\
+         traceparent: 00-00000000000000000000000000000000-0000000000000000-00\r\n\
          Content-Type: application/x-www-form-urlencoded\r\n\
          Content-Length: {len}\r\n\
          Connection: close\r\n\
