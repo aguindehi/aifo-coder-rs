@@ -175,7 +175,7 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
                 effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
             let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
                 .with_endpoint(ep)
-                .build_metrics_exporter()
+                .build_metrics_exporter(opentelemetry_sdk::metrics::Temporality::Cumulative)
             {
                 Ok(exp) => exp,
                 Err(_e) => {
