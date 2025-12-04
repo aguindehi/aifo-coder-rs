@@ -263,7 +263,13 @@ fn build_metrics_provider(
     use_otlp: bool,
     transport: OtelTransport,
 ) -> Option<SdkMeterProvider> {
-    if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
+    // Default: enable metrics unless explicitly disabled via env toggle.
+    let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
+        .ok()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .map(|v| v != "0" && v != "false" && v != "off")
+        .unwrap_or(true);
+    if !metrics_enabled {
         return None;
     }
 
@@ -296,10 +302,10 @@ fn build_metrics_provider(
                 .and_then(|s| humantime::parse_duration(&s).ok())
                 .unwrap_or_else(|| Duration::from_secs(2));
 
+            // Use HTTP OTLP when requested; avoid requiring gRPC for HTTPS endpoints.
             let exporter_builder = match transport {
                 OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
-                // Fallback: reuse gRPC pipeline for HTTP transport until HTTP exporter is available.
-                OtelTransport::Http => opentelemetry_otlp::new_exporter().tonic(),
+                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
             };
 
             let exporter = match exporter_builder
