@@ -260,7 +260,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             }
         } else {
             eprintln!(
-                "aifo-coder: telemetry: metrics: disabled (default; enable with AIFO_CODER_OTEL_METRICS=1)"
+                "aifo-coder: telemetry: metrics: disabled (env override; enabled by default)"
             );
         }
     }
