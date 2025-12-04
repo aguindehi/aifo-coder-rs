@@ -175,8 +175,8 @@ fn build_resource() -> Resource {
         }
     }
 
-    // 0.31: build Resource from attribute vector with Resource::new.
-    Resource::new(attrs)
+    // 0.31: build Resource from attributes via public From<Vec<KeyValue>>.
+    Resource::from(attrs)
 }
 
 #[cfg(feature = "otel-otlp")]
