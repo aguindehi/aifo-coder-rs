@@ -60,7 +60,10 @@ fn e2e_otel_proxy_exec_node_version() {
     };
 
     // Inject a TRACEPARENT for propagation; proxy will extract it, but we only require functional success.
-    std::env::set_var("TRACEPARENT", "00-00000000000000000000000000000000-0000000000000000-00");
+    std::env::set_var(
+        "TRACEPARENT",
+        "00-00000000000000000000000000000000-0000000000000000-00",
+    );
 
     let body = "tool=node&cwd=/workspace&arg=--version";
     let req = format!(
