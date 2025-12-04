@@ -379,9 +379,7 @@ fn main() -> ExitCode {
         std::env::set_var("AIFO_CODER_OTEL_DEBUG_OTLP", "1");
     }
 
-    // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
-    // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
-    let _telemetry_guard = aifo_coder::telemetry_init();
+    
 
     // Record a single run metric when telemetry+metrics are enabled (agent known later).
     #[cfg(feature = "otel")]
@@ -449,6 +447,9 @@ fn main() -> ExitCode {
     if !cli.quiet {
         print_startup_banner();
     }
+    // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
+    // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
+    let _telemetry_guard = aifo_coder::telemetry_init();
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines

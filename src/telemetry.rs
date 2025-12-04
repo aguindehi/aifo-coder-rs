@@ -220,44 +220,61 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
         .unwrap_or(true);
 
     if verbose_otel {
+        let use_err = crate::color_enabled_stderr();
         if use_otlp {
             // Try to show the *effective* OTLP endpoint (runtime or baked-in), not just the env var.
             if let Some(ep) = effective_otlp_endpoint() {
-                eprintln!(
-                    "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
-                    ep
+                crate::log_info_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
+                        ep
+                    ),
                 );
             } else {
-                eprintln!(
-                    "aifo-coder: telemetry: OTLP enabled but no effective endpoint could be resolved"
+                crate::log_info_stderr(
+                    use_err,
+                    "aifo-coder: telemetry: OTLP enabled but no effective endpoint could be resolved",
                 );
             }
-            eprintln!(
-                "aifo-coder: telemetry: OTLP transport={}",
-                match transport {
-                    OtelTransport::Grpc => "grpc",
-                    OtelTransport::Http => "http",
-                }
+            crate::log_info_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: telemetry: OTLP transport={}",
+                    match transport {
+                        OtelTransport::Grpc => "grpc",
+                        OtelTransport::Http => "http",
+                    }
+                ),
             );
         } else {
-            eprintln!(
-                "aifo-coder: telemetry: using stderr/file development exporters (no OTLP endpoint)"
+            crate::log_info_stderr(
+                use_err,
+                "aifo-coder: telemetry: using stderr/file development exporters (no OTLP endpoint)",
             );
         }
 
         if metrics_enabled {
             if use_otlp {
-                eprintln!("aifo-coder: telemetry: metrics: enabled (OTLP http)");
+                crate::log_info_stderr(
+                    use_err,
+                    "aifo-coder: telemetry: metrics: enabled (OTLP http)",
+                );
             } else if telemetry_debug_otlp() {
-                eprintln!("aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file)");
+                crate::log_info_stderr(
+                    use_err,
+                    "aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file)",
+                );
             } else {
-                eprintln!(
-                    "aifo-coder: telemetry: metrics: enabled (no OTLP endpoint; disabled locally to avoid flooding)"
+                crate::log_info_stderr(
+                    use_err,
+                    "aifo-coder: telemetry: metrics: enabled (no OTLP endpoint; disabled locally to avoid flooding)",
                 );
             }
         } else {
-            eprintln!(
-                "aifo-coder: telemetry: metrics: disabled (env override; enabled by default)"
+            crate::log_info_stderr(
+                use_err,
+                "aifo-coder: telemetry: metrics: disabled (env override; enabled by default)",
             );
         }
     }
