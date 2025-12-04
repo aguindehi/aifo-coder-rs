@@ -6,10 +6,12 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
+use opentelemetry_sdk::Resource;
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel-otlp")]
@@ -116,6 +118,26 @@ pub fn hash_string_hex(s: &str) -> String {
 
 /* No explicit Resource configuration; use SDK defaults. */
 
+fn instance_id() -> String {
+    INSTANCE_ID
+        .get_or_init(|| format!("{:016x}", hash_salt()))
+        .clone()
+}
+
+fn build_resource() -> Resource {
+    let name = env::var("OTEL_SERVICE_NAME")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "aifo-coder".to_string());
+
+    Resource::new(vec![
+        KeyValue::new("service.name", name),
+        KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+        KeyValue::new("service.instance.id", instance_id()),
+    ])
+}
+
 #[cfg(feature = "otel-otlp")]
 fn build_tracer(
     _use_otlp: bool,
@@ -135,7 +157,9 @@ fn build_tracer(_use_otlp: bool, _transport: OtelTransport) -> sdktrace::SdkTrac
 fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     // Silent tracer provider (no exporter). For debugging, prefer enabling the fmt layer via
     // AIFO_CODER_TRACING_FMT=1 which prints spans/logs without custom exporters.
-    sdktrace::SdkTracerProvider::builder().build()
+    sdktrace::SdkTracerProvider::builder()
+        .with_resource(build_resource())
+        .build()
 }
 
 fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
@@ -156,6 +180,7 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
         .unwrap_or_else(|| Duration::from_secs(2));
 
     let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder();
+    provider_builder = provider_builder.with_resource(build_resource());
 
     // Debug mode: send metrics to stderr/file to inspect locally
     if telemetry_debug_otlp() {
