@@ -128,8 +128,8 @@ pub fn hash_string_hex(s: &str) -> String {
 }
 
 fn build_resource() -> Resource {
-    // Use default Resource to avoid cross-version type mismatches.
-    Resource::default()
+    // Use an empty Resource to avoid cross-version type mismatches.
+    Resource::empty()
 }
 
 #[cfg(feature = "otel-otlp")]
