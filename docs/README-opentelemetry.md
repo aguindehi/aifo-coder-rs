@@ -212,7 +212,7 @@ Focus:
 - Optional fmt layer: AIFO_CODER_TRACING_FMT=1 must not panic and must not affect stdout.
 
 Implementation details:
-- tests/otel_basic_tests.rs:
+- tests/unit_otel_basic_tests.rs:
   - otel_idempotent_second_none: call telemetry_init() twice; assert second call returns None.
   - otel_disabled_env_returns_none_both_calls: set AIFO_CODER_OTEL=0; call telemetry_init() twice and assert None for both.
   - otel_fmt_layer_no_panic: set AIFO_CODER_TRACING_FMT=1 + RUST_LOG=warn; call telemetry_init(); assert no panic.
