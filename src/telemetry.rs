@@ -177,7 +177,8 @@ fn build_resource() -> Resource {
         }
     }
 
-    Resource::from_iter(attrs)
+    // 0.31 exposes From<Vec<KeyValue>> for Resource; use that instead of new()/from_iter().
+    Resource::from(attrs)
 }
 
 #[cfg(feature = "otel-otlp")]
@@ -217,7 +218,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
 
         impl SpanExporter for StderrSpanExporter {
             fn export(
-                &mut self,
+                &self,
                 batch: Vec<sdktrace::SpanData>,
             ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceError> + Send>> {
                 Box::pin(async move {
@@ -235,8 +236,10 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
                 })
             }
 
-            fn shutdown(&mut self) -> Result<(), TraceError> {
-                Ok(())
+            fn shutdown(
+                &self,
+            ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceError> + Send>> {
+                Box::pin(async { Ok(()) })
             }
         }
 
@@ -273,9 +276,6 @@ fn build_metrics_provider(
     {
         if use_otlp {
             use opentelemetry_otlp::WithExportConfig;
-            use opentelemetry_sdk::metrics::reader::{
-                DefaultAggregationSelector, DefaultTemporalitySelector,
-            };
 
             let endpoint = match effective_otlp_endpoint() {
                 Some(ep) => ep,
@@ -312,10 +312,7 @@ fn build_metrics_provider(
                     .with_timeout(timeout),
             };
 
-            let exporter = match exporter_builder.build_metrics_exporter(
-                Box::<DefaultAggregationSelector>::default(),
-                Box::<DefaultTemporalitySelector>::default(),
-            ) {
+            let exporter = match exporter_builder.build_metrics_exporter() {
                 Ok(exp) => exp,
                 Err(e) => {
                     eprintln!(
@@ -333,12 +330,9 @@ fn build_metrics_provider(
             let mut provider_builder =
                 opentelemetry_sdk::metrics::SdkMeterProvider::builder().with_resource(resource.clone());
 
-            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
-                exporter,
-                opentelemetry_sdk::runtime::Tokio,
-            )
-            .with_interval(interval)
-            .build();
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+                .with_interval(interval)
+                .build();
 
             provider_builder = provider_builder.with_reader(reader);
             return Some(provider_builder.build());
@@ -376,21 +370,8 @@ fn build_metrics_provider(
         });
 
     // Build exporter with a writer to stderr or to a file.
-    let exporter = if let Some(path) = file_sink_path_opt {
-        match std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-        {
-            Ok(f) => opentelemetry_stdout::MetricExporterBuilder::new(f).build(),
-            Err(_) => {
-                // Fallback: stderr
-                opentelemetry_stdout::MetricExporterBuilder::new(std::io::stderr()).build()
-            }
-        }
-    } else {
-        opentelemetry_stdout::MetricExporterBuilder::new(std::io::stderr()).build()
-    };
+    // In 0.31, MetricExporterBuilder no longer exposes writer configuration; use default.
+    let exporter = opentelemetry_stdout::MetricExporterBuilder::default().build();
 
     // Use a PeriodicReader with ~2s export interval.
     let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
@@ -401,12 +382,9 @@ fn build_metrics_provider(
     let mut provider_builder =
         opentelemetry_sdk::metrics::SdkMeterProvider::builder().with_resource(resource.clone());
 
-    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
-        exporter,
-        opentelemetry_sdk::runtime::Tokio,
-    )
-    .with_interval(interval)
-    .build();
+    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+        .with_interval(interval)
+        .build();
 
     provider_builder = provider_builder.with_reader(reader);
     Some(provider_builder.build())
