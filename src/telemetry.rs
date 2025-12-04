@@ -13,7 +13,7 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
-use opentelemetry_sdk::trace::SpanExporter;
+use opentelemetry_sdk::trace::{SpanExporter, TraceError};
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel")]
@@ -177,7 +177,7 @@ fn build_resource() -> Resource {
         }
     }
 
-    Resource::new(attrs)
+    Resource::from_iter(attrs)
 }
 
 #[cfg(feature = "otel-otlp")]
@@ -219,9 +219,7 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
             fn export(
                 &mut self,
                 batch: Vec<sdktrace::SpanData>,
-            ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = opentelemetry::trace::TraceError> + Send>,
-            > {
+            ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceError> + Send>> {
                 Box::pin(async move {
                     let mut stderr = std::io::stderr();
                     for span in batch {
@@ -237,22 +235,21 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
                 })
             }
 
-            fn shutdown(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-            {
-                Box::pin(async {})
+            fn shutdown(&mut self) -> Result<(), TraceError> {
+                Ok(())
             }
         }
 
         let exporter = StderrSpanExporter;
         // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
         sdktrace::SdkTracerProvider::builder()
+            .with_resource(resource.clone())
             .with_simple_exporter(exporter)
-            .with_config(sdktrace::Config::default().with_resource(resource.clone()))
             .build()
     } else {
         // Silent provider: respects sampling config but does not export spans anywhere.
         sdktrace::SdkTracerProvider::builder()
-            .with_config(sdktrace::Config::default().with_resource(resource.clone()))
+            .with_resource(resource.clone())
             .build()
     }
 }
@@ -276,8 +273,9 @@ fn build_metrics_provider(
     {
         if use_otlp {
             use opentelemetry_otlp::WithExportConfig;
-            use opentelemetry_sdk::metrics::aggregation::cumulative_temporality_selector;
-            use opentelemetry_sdk::metrics::selectors::simple::histogram;
+            use opentelemetry_sdk::metrics::reader::{
+                DefaultAggregationSelector, DefaultTemporalitySelector,
+            };
 
             let endpoint = match effective_otlp_endpoint() {
                 Some(ep) => ep,
@@ -314,15 +312,11 @@ fn build_metrics_provider(
                     .with_timeout(timeout),
             };
 
-            // Build metrics pipeline (controller implements MeterProvider).
-            let controller = match opentelemetry_otlp::new_pipeline()
-                .metrics(histogram(), cumulative_temporality_selector())
-                .with_exporter(exporter_builder)
-                .with_resource(resource.clone())
-                .with_period(interval)
-                .build()
-            {
-                Ok(c) => c,
+            let exporter = match exporter_builder.build_metrics_exporter(
+                Box::<DefaultAggregationSelector>::default(),
+                Box::<DefaultTemporalitySelector>::default(),
+            ) {
+                Ok(exp) => exp,
                 Err(e) => {
                     eprintln!(
                         "aifo-coder: telemetry: failed to create OTLP metrics exporter: {e}; disabling metrics exporter"
@@ -336,9 +330,18 @@ fn build_metrics_provider(
                 }
             };
 
-            // In 0.31, the returned controller type implements MeterProvider and is
-            // aliased by SdkMeterProvider, so we can return it directly.
-            return Some(controller);
+            let mut provider_builder =
+                opentelemetry_sdk::metrics::SdkMeterProvider::builder().with_resource(resource.clone());
+
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
+                exporter,
+                opentelemetry_sdk::runtime::Tokio,
+            )
+            .with_interval(interval)
+            .build();
+
+            provider_builder = provider_builder.with_reader(reader);
+            return Some(provider_builder.build());
         }
     }
 
@@ -379,20 +382,14 @@ fn build_metrics_provider(
             .append(true)
             .open(&path)
         {
-            Ok(f) => opentelemetry_stdout::MetricExporterBuilder::default()
-                .with_writer(f)
-                .build(),
+            Ok(f) => opentelemetry_stdout::MetricExporterBuilder::new(f).build(),
             Err(_) => {
                 // Fallback: stderr
-                opentelemetry_stdout::MetricExporterBuilder::default()
-                    .with_writer(std::io::stderr())
-                    .build()
+                opentelemetry_stdout::MetricExporterBuilder::new(std::io::stderr()).build()
             }
         }
     } else {
-        opentelemetry_stdout::MetricExporterBuilder::default()
-            .with_writer(std::io::stderr())
-            .build()
+        opentelemetry_stdout::MetricExporterBuilder::new(std::io::stderr()).build()
     };
 
     // Use a PeriodicReader with ~2s export interval.
