@@ -239,6 +239,10 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) verbose: bool,
 
+    /// Debug OTLP metrics exporter: send metrics to stderr/file instead of OTLP (for troubleshooting)
+    #[arg(long = "debug-otel-otlp")]
+    pub(crate) debug_otel_otlp: bool,
+
     /// Suppress startup banner output
     #[arg(long, short = 'q')]
     pub(crate) quiet: bool,

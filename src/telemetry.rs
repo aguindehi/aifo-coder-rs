@@ -52,27 +52,7 @@ fn telemetry_enabled_env() -> bool {
 }
 
 fn otel_transport() -> OtelTransport {
-    // 1) Runtime override via AIFO_CODER_OTEL_EXPORT_TRANSPORT
-    if let Ok(v) = env::var("AIFO_CODER_OTEL_EXPORT_TRANSPORT") {
-        let t = v.trim().to_ascii_lowercase();
-        return match t.as_str() {
-            "http" | "http/protobuf" | "http-json" => OtelTransport::Http,
-            "grpc" => OtelTransport::Grpc,
-            _ => OtelTransport::Grpc,
-        };
-    }
-
-    // 2) Build-time baked-in default via AIFO_OTEL_DEFAULT_TRANSPORT
-    if let Some(t) = DEFAULT_OTLP_TRANSPORT {
-        let t = t.trim().to_ascii_lowercase();
-        return match t.as_str() {
-            "http" | "http/protobuf" | "http-json" => OtelTransport::Http,
-            "grpc" => OtelTransport::Grpc,
-            _ => OtelTransport::Grpc,
-        };
-    }
-
-    // 3) Code default: prefer HTTP so HTTPS/TLS OTLP works without gRPC by default.
+    // Force HTTP/HTTPS transport; ignore any grpc requests.
     OtelTransport::Http
 }
 
@@ -87,10 +67,10 @@ fn effective_otlp_endpoint() -> Option<String> {
 
     // 2) Baked-in default (if any), else 3) code default; trim at runtime.
     // Prefer HTTP/HTTPS form here so HTTP OTLP (including TLS) works out of the box.
-    let baked = DEFAULT_OTLP_ENDPOINT.unwrap_or("http://localhost:4318");
+    let baked = DEFAULT_OTLP_ENDPOINT.unwrap_or("https://localhost:4318");
     let t = baked.trim();
     if t.is_empty() {
-        return Some("http://localhost:4318".to_string());
+        return Some("https://localhost:4318".to_string());
     }
 
     Some(t.to_string())
@@ -99,6 +79,14 @@ fn effective_otlp_endpoint() -> Option<String> {
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
 pub fn telemetry_pii_enabled() -> bool {
     env::var("AIFO_CODER_OTEL_PII").ok().as_deref() == Some("1")
+}
+
+/// Return true if debug mode should use stderr/file exporter for metrics.
+fn telemetry_debug_otlp() -> bool {
+    env::var("AIFO_CODER_OTEL_DEBUG_OTLP")
+        .ok()
+        .as_deref()
+        == Some("1")
 }
 
 /// Compute or retrieve a per-process FNV-1a salt derived from pid and start time.
@@ -150,21 +138,18 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     sdktrace::SdkTracerProvider::builder().build()
 }
 
-fn build_metrics_provider(_use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
-    // Default: metrics disabled; enable explicitly with AIFO_CODER_OTEL_METRICS=1
+fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
+    // Default: metrics enabled unless explicitly disabled via AIFO_CODER_OTEL_METRICS=0|false|no|off
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
         .map(|v| v.trim().to_ascii_lowercase())
-        .map(|v| v == "1" || v == "true" || v == "yes")
-        .unwrap_or(false);
+        .map(|v| !(v == "0" || v == "false" || v == "no" || v == "off"))
+        .unwrap_or(true);
     if !metrics_enabled {
         return None;
     }
 
-    // Dev exporter to stderr (no OTLP by default).
-    let exporter = opentelemetry_stdout::MetricExporterBuilder::default().build();
-
-    // Use a PeriodicReader with ~2s export interval (configurable).
+    // Export interval (best-effort; default ~2s)
     let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
         .ok()
         .and_then(|s| humantime::parse_duration(&s).ok())
@@ -172,12 +157,43 @@ fn build_metrics_provider(_use_otlp: bool, _transport: OtelTransport) -> Option<
 
     let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder();
 
-    let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
-        .with_interval(interval)
-        .build();
+    // Debug mode: send metrics to stderr/file to inspect locally
+    if telemetry_debug_otlp() {
+        let exporter = opentelemetry_stdout::MetricExporterBuilder::default().build();
+        let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+            .with_interval(interval)
+            .build();
+        provider_builder = provider_builder.with_reader(reader);
+        return Some(provider_builder.build());
+    }
 
-    provider_builder = provider_builder.with_reader(reader);
-    Some(provider_builder.build())
+    // Prefer OTLP HTTP/HTTPS exporter when available; avoid stderr flooding otherwise.
+    if use_otlp {
+        #[cfg(feature = "otel-otlp")]
+        {
+            let ep = effective_otlp_endpoint()
+                .unwrap_or_else(|| "https://localhost:4318".to_string());
+            let exporter = match opentelemetry_otlp::new_exporter()
+                .http()
+                .with_endpoint(ep)
+                .build_metrics_exporter()
+            {
+                Ok(exp) => exp,
+                Err(_e) => {
+                    // Best-effort: disable metrics locally if exporter creation fails
+                    return None;
+                }
+            };
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+                .with_interval(interval)
+                .build();
+            provider_builder = provider_builder.with_reader(reader);
+            return Some(provider_builder.build());
+        }
+    }
+
+    // No endpoint available and not in debug mode: disable local metrics to avoid flooding.
+    None
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {
@@ -201,8 +217,8 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
         .map(|v| v.trim().to_ascii_lowercase())
-        .map(|v| v == "1" || v == "true" || v == "yes")
-        .unwrap_or(false);
+        .map(|v| !(v == "0" || v == "false" || v == "no" || v == "off"))
+        .unwrap_or(true);
 
     if verbose_otel {
         if use_otlp {
@@ -232,12 +248,14 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
         if metrics_enabled {
             if use_otlp {
+                eprintln!("aifo-coder: telemetry: metrics: enabled (OTLP http)");
+            } else if telemetry_debug_otlp() {
                 eprintln!(
-                    "aifo-coder: telemetry: metrics: enabled (OTLP exporter; best-effort, failures ignored)"
+                    "aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file)"
                 );
             } else {
                 eprintln!(
-                    "aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file; no OTLP endpoint)"
+                    "aifo-coder: telemetry: metrics: enabled (no OTLP endpoint; disabled locally to avoid flooding)"
                 );
             }
         } else {
