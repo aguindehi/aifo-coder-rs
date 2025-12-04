@@ -592,6 +592,12 @@ lint:
     - echo "Running lint job…"
     - make lint
 
+otel-golden-stdout:
+  extends: .rust-ci-base
+  script:
+    - echo "Running OpenTelemetry golden stdout and smoke tests…"
+    - sh ci/otel-golden-stdout.sh
+
 test:
   extends: .rust-ci-base
   needs:

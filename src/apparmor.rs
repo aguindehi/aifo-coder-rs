@@ -7,7 +7,10 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::warn_print;
+#[cfg(feature = "otel")]
+use tracing::instrument;
 
+#[cfg_attr(feature = "otel", instrument(level = "debug"))]
 pub fn docker_supports_apparmor() -> bool {
     let runtime = match crate::container_runtime_path() {
         Ok(p) => p,
@@ -69,6 +72,10 @@ fn apparmor_profile_available(_name: &str) -> bool {
     true
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(source = "noisy"))
+)]
 pub fn desired_apparmor_profile() -> Option<String> {
     if !docker_supports_apparmor() {
         return None;
@@ -108,6 +115,10 @@ pub fn desired_apparmor_profile() -> Option<String> {
     }
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(level = "debug", skip(), fields(source = "quiet"))
+)]
 pub fn desired_apparmor_profile_quiet() -> Option<String> {
     if !docker_supports_apparmor() {
         return None;

@@ -4,6 +4,9 @@ use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "otel")]
+use tracing::instrument;
+
 /// Repository/user-scoped lock guard that removes the lock file on drop.
 #[derive(Debug)]
 pub struct RepoLock {
@@ -30,6 +33,15 @@ impl Drop for RepoLock {
     }
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(),
+        fields(candidate_paths = candidate_lock_paths().len())
+    )
+)]
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
 pub fn acquire_lock() -> io::Result<RepoLock> {
     let paths = candidate_lock_paths();
@@ -55,6 +67,14 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                     });
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    #[cfg(feature = "otel")]
+                    {
+                        tracing::error!("lock acquisition failed: lock held by another process");
+                        use opentelemetry::trace::{Status, TraceContextExt};
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        let cx = tracing::Span::current().context();
+                        cx.span().set_status(Status::error("lock_held"));
+                    }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
                             "Another coding agent is already running (lock held). Please try again later.".to_string(),
@@ -83,12 +103,31 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
     );
     if let Some(e) = last_err {
         msg.push_str(&format!(" (last error: {e})"));
+        #[cfg(feature = "otel")]
+        {
+            // Avoid embedding raw paths directly; log a concise hashed summary instead.
+            let status_msg = crate::telemetry::hash_string_hex(&msg);
+            tracing::error!("lock acquisition failed: {}", status_msg);
+            use opentelemetry::trace::{Status, TraceContextExt};
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
+            let cx = tracing::Span::current().context();
+            cx.span().set_status(Status::error(status_msg));
+        }
     }
     Err(io::Error::other(crate::display_for_fork_error(
         &crate::ForkError::Message(msg),
     )))
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(),
+        fields(path_hash = %crate::telemetry::hash_string_hex(&p.display().to_string()))
+    )
+)]
 /// Acquire a lock at a specific path (helper for tests).
 pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
     if let Some(parent) = p.parent() {
@@ -101,19 +140,31 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
         .truncate(true)
         .open(p)
     {
-        Ok(f) => match f.try_lock_exclusive() {
-            Ok(_) => Ok(RepoLock {
-                file: f,
-                path: p.to_path_buf(),
-            }),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::other(
-                crate::display_for_fork_error(&crate::ForkError::Message(
-                    "Another coding agent is already running (lock held). Please try again later."
-                        .to_string(),
-                )),
-            )),
-            Err(e) => Err(e),
-        },
+        Ok(f) => {
+            match f.try_lock_exclusive() {
+                Ok(_) => Ok(RepoLock {
+                    file: f,
+                    path: p.to_path_buf(),
+                }),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    #[cfg(feature = "otel")]
+                    {
+                        tracing::error!("lock acquisition failed at specific path: lock held by another process");
+                        use opentelemetry::trace::{Status, TraceContextExt};
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        let cx = tracing::Span::current().context();
+                        cx.span().set_status(Status::error("lock_held"));
+                    }
+                    Err(io::Error::other(crate::display_for_fork_error(
+                    &crate::ForkError::Message(
+                        "Another coding agent is already running (lock held). Please try again later."
+                            .to_string(),
+                    ),
+                )))
+                }
+                Err(e) => Err(e),
+            }
+        }
         Err(e) => Err(e),
     }
 }

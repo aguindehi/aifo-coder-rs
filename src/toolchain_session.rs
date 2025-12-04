@@ -12,6 +12,9 @@ use std::sync::{
     Arc,
 };
 
+#[cfg(feature = "otel")]
+use tracing::instrument;
+
 use crate::cli::Cli;
 
 pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
@@ -104,6 +107,21 @@ pub struct ToolchainSession {
 impl ToolchainSession {
     /// Start session and proxy when toolchains requested and not in dry-run.
     /// Prints identical messages as existing main.rs paths on success/failure.
+    #[cfg_attr(
+        feature = "otel",
+        instrument(
+            level = "info",
+            err,
+            skip(cli),
+            fields(
+                toolchain_count = cli.toolchain.len(),
+                spec_count = cli.toolchain_spec.len(),
+                no_cache = %cli.no_toolchain_cache,
+                dry_run = %cli.dry_run,
+                verbose = %cli.verbose
+            )
+        )
+    )]
     pub fn start_if_requested(cli: &Cli) -> Result<Option<Self>, io::Error> {
         if cli.toolchain.is_empty() && cli.toolchain_spec.is_empty() {
             return Ok(None);

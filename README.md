@@ -148,6 +148,63 @@ PATH policy:
 - codex, crush: node-first
 - aider: adds /opt/venv/bin before system paths
 
+## Telemetry (OpenTelemetry) (optional)
+
+aifo-coder includes optional OpenTelemetry-based tracing and metrics behind Cargo features and
+environment variables. Telemetry is enabled by default in feature-enabled builds and never required
+for normal use (disable via `AIFO_CODER_OTEL=0|false|no|off`).
+
+- Build-time features:
+  - `otel`: enables tracing and installs the OpenTelemetry layer (no fmt logs by default).
+  - `otel-otlp`: extends `otel` with OTLP HTTP exporter support (no gRPC).
+- Runtime enablement (when built with `otel`):
+  - Default: telemetry enabled; disable with `AIFO_CODER_OTEL=0|false|no|off`.
+  - `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty) selects the OTLP endpoint (HTTP/HTTPS, e.g., `https://localhost:4318`).
+  - `AIFO_CODER_TRACING_FMT=1` opts into a fmt logging layer on stderr (honors `RUST_LOG`,
+    default filter `warn`).
+  - `AIFO_CODER_OTEL_METRICS` controls metrics instruments/exporter (default enabled).
+  - CLI `--verbose` sets `AIFO_CODER_OTEL_VERBOSE=1` to print concise initialization info.
+- Privacy:
+  - By default, sensitive values (paths/args) are recorded as counts and salted hashes.
+  - Setting `AIFO_CODER_OTEL_PII=1` allows raw values for debugging; do not use this in production.
+
+Examples:
+
+```bash
+# Disable telemetry (baseline)
+AIFO_CODER_OTEL=0 cargo run --features otel -- --help
+
+# Traces with fmt logging and RUST_LOG control
+AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
+  cargo run --features otel -- --help
+
+# Send metrics/traces via OTLP HTTP (if compiled with otel-otlp)
+OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
+  cargo run --features otel-otlp -- --help
+```
+
+- Exporters and sinks:
+  - Transport: OTLP over HTTP/HTTPS (no gRPC).
+  - Traces: provider installed; without an endpoint, no external export occurs (use the fmt layer for local visibility).
+  - Metrics: with an endpoint, exports via OTLP; in debug mode (`--debug-otel-otlp` sets `AIFO_CODER_OTEL_DEBUG_OTLP=1`), exports to a development sink (stderr/file).
+- Propagation:
+  - The shim forwards W3C traceparent (from TRACEPARENT env) to the proxy over HTTP/Unix.
+  - The proxy extracts context and creates child spans; it also injects TRACEPARENT into sidecar execs.
+- Sampling and timeouts:
+  - `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` control sampling (e.g., `parentbased_traceidratio`).
+  - `OTEL_EXPORTER_OTLP_TIMEOUT` controls exporter timeouts (default 5s). BSP envs (`OTEL_BSP_*`) are respected.
+- CI invariant:
+  - Golden stdout: enabling/disabling telemetry must not change CLI stdout. See ci/otel-golden-stdout.sh.
+- Safety/idempotence:
+  - `telemetry_init()` is idempotent; if a subscriber exists, init is skipped with a concise stderr message.
+  - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
+
+For more details (endpoint precedence, HTTP transport, CI checks), see `docs/README-opentelemetry.md`.
+
+Telemetry tests:
+- Run unit/integration tests (no Docker): make test
+- Golden stdout and smoke (no Docker): ci/otel-golden-stdout.sh
+
 # The aifo-coder
 
 Containerized launcher and Docker images bundling six terminal AI coding agents:

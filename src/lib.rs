@@ -41,6 +41,8 @@ mod fork_strategy;
 mod fork_windows_helpers;
 mod lock;
 mod registry;
+#[cfg(feature = "otel")]
+mod telemetry;
 mod toolchain;
 mod ui;
 mod util;
@@ -66,3 +68,11 @@ pub use util::docker_security::{docker_security_options_parse, DockerSecurityOpt
 pub use util::fs::{ensure_file_exists, path_pair};
 pub use util::id::create_session_id;
 pub use util::*;
+
+#[cfg(feature = "otel")]
+pub use telemetry::{telemetry_init, TelemetryGuard};
+
+#[cfg(not(feature = "otel"))]
+pub fn telemetry_init() -> Option<()> {
+    None
+}

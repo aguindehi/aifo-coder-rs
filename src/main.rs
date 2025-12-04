@@ -366,6 +366,25 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+
+    // Parse command-line arguments into structured CLI options
+    let cli = Cli::parse();
+
+    // Propagate CLI verbosity to telemetry so init can emit concise OTEL logs when requested.
+    if cli.verbose {
+        std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
+    }
+    // If requested, force metrics debug exporter (stderr/file) before telemetry_init.
+    if cli.debug_otel_otlp {
+        std::env::set_var("AIFO_CODER_OTEL_DEBUG_OTLP", "1");
+    }
+
+    // Record a single run metric when telemetry+metrics are enabled (agent known later).
+    #[cfg(feature = "otel")]
+    {
+        // Tag will be refined once the concrete agent is known; this initial run has no agent label.
+        // Call sites with agent label live in docker.rs metrics hooks.
+    }
     if std::env::var("AIFO_GLOBAL_TAG")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -385,8 +404,6 @@ fn main() -> ExitCode {
             "aifo-coder: warning: AIFO_GLOBAL_TAG is no longer supported; use AIFO_TAG instead.",
         );
     }
-    // Parse command-line arguments into structured CLI options
-    let cli = Cli::parse();
     // Honor --non-interactive by suppressing the LLM credentials prompt
     if cli.non_interactive {
         std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");
@@ -428,6 +445,9 @@ fn main() -> ExitCode {
     if !cli.quiet {
         print_startup_banner();
     }
+    // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
+    // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
+    let _telemetry_guard = aifo_coder::telemetry_init();
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines

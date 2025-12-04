@@ -13,7 +13,15 @@ Implements v3 signal propagation and timeout model:
 - Notifications policy per spec with independent short timeout.
 - Streaming prelude only after successful spawn; plain 500 on spawn error.
 */
+#[cfg(feature = "otel")]
+use crate::telemetry::{hash_string_hex, telemetry_pii_enabled};
 use once_cell::sync::Lazy;
+#[cfg(feature = "otel")]
+use opentelemetry::global;
+#[cfg(feature = "otel")]
+use opentelemetry::propagation::{Extractor, Injector};
+#[cfg(feature = "otel")]
+use opentelemetry::Context;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env as std_env;
@@ -30,6 +38,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
+#[cfg(feature = "otel")]
+use tracing::{info_span, instrument};
+#[cfg(feature = "otel")]
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
@@ -45,6 +57,38 @@ use super::{
     log_parsed_request, log_request_result, random_token, ERR_BAD_REQUEST, ERR_FORBIDDEN,
     ERR_METHOD_NOT_ALLOWED, ERR_NOT_FOUND, ERR_UNAUTHORIZED, ERR_UNSUPPORTED_PROTO,
 };
+
+#[cfg(feature = "otel")]
+struct HeaderMapExtractor<'a> {
+    headers: &'a std::collections::HashMap<String, String>,
+}
+
+#[cfg(feature = "otel")]
+impl<'a> Extractor for HeaderMapExtractor<'a> {
+    fn get(&self, key: &str) -> Option<&str> {
+        // Try exact key first, then lowercase variant for robustness.
+        self.headers
+            .get(key)
+            .or_else(|| self.headers.get(&key.to_ascii_lowercase()))
+            .map(|s| s.as_str())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.headers.keys().map(|k| k.as_str()).collect()
+    }
+}
+
+#[cfg(feature = "otel")]
+struct HeaderMapInjector<'a> {
+    headers: &'a mut std::collections::HashMap<String, String>,
+}
+
+#[cfg(feature = "otel")]
+impl<'a> Injector for HeaderMapInjector<'a> {
+    fn set(&mut self, key: &str, value: String) {
+        self.headers.insert(key.to_string(), value);
+    }
+}
 
 struct ProxyCtx {
     runtime: PathBuf,
@@ -443,6 +487,15 @@ fn build_exec_args_with_wrapper(
     spawn_args
 }
 
+#[cfg_attr(
+    feature = "otel",
+    instrument(
+        level = "info",
+        err,
+        skip(verbose),
+        fields(session_id = %session_id, verbose = %verbose)
+    )
+)]
 pub fn toolexec_start_proxy(
     session_id: &str,
     verbose: bool,
@@ -801,6 +854,14 @@ fn handle_connection<S: Read + Write>(
     // Auth/proto centralized
     let auth_res = auth::validate_auth_and_proto(&req.headers, token);
 
+    // Extract incoming trace context (if any) for propagation into shim/tool execs.
+    #[cfg(feature = "otel")]
+    let parent_cx = global::get_text_map_propagator(|prop| {
+        prop.extract(&HeaderMapExtractor {
+            headers: &req.headers,
+        })
+    });
+
     // Merge form/query
     let form = String::from_utf8_lossy(&req.body).to_string();
     let mut tool = String::new();
@@ -1135,6 +1196,27 @@ fn handle_connection<S: Read + Write>(
     }
 
     let name = sidecar::sidecar_container_name(kind, session);
+
+    // Build OpenTelemetry span for this proxy request (after routing is known).
+    #[cfg(feature = "otel")]
+    let _proxy_span_guard = {
+        let cwd_field = if telemetry_pii_enabled() {
+            cwd.clone()
+        } else {
+            hash_string_hex(&cwd)
+        };
+        let span = info_span!(
+            "proxy_request",
+            tool = %tool,
+            kind = %kind,
+            arg_count = argv.len(),
+            cwd = %cwd_field,
+            session_id = %session
+        );
+        span.set_parent(parent_cx);
+        span.entered()
+    };
+
     if !container_exists(&name) {
         let msg = format!(
             "\r\ntool '{}' not available in running sidecars; start an appropriate toolchain (e.g., --toolchain c-cpp or --toolchain rust)\n",
@@ -1227,7 +1309,42 @@ fn handle_connection<S: Read + Write>(
         if verbose {
             log_compact(&format!("aifo-coder: proxy stream: use_tty={}", use_tty));
         }
-        let spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
+        #[cfg_attr(not(feature = "otel"), allow(unused_mut))]
+        let mut spawn_args = build_exec_args_with_wrapper(&name, &exec_preview_args, use_tty);
+
+        // Inject W3C traceparent into shim environment for downstream propagation.
+        #[cfg(feature = "otel")]
+        {
+            // Create a temporary header map and inject current span context.
+            let mut headers = std::collections::HashMap::<String, String>::new();
+            global::get_text_map_propagator(|prop| {
+                prop.inject_context(
+                    &Context::current(),
+                    &mut HeaderMapInjector {
+                        headers: &mut headers,
+                    },
+                );
+            });
+            if let Some(traceparent_val) = headers
+                .get("traceparent")
+                .cloned()
+                .or_else(|| headers.get("Traceparent").cloned())
+            {
+                // Ensure we pass it through as environment to the shim.
+                // The wrapper always uses "docker exec ... sh -c <script>", so we can prefix
+                // an export of TRACEPARENT before the main script.
+                if let Some(last) = spawn_args.last_mut() {
+                    let original_script = last.clone();
+                    let injected = format!(
+                        "export TRACEPARENT={q}{v}{q}; {orig}",
+                        q = "'",
+                        v = traceparent_val,
+                        orig = original_script,
+                    );
+                    *last = injected;
+                }
+            }
+        }
         let mut cmd = Command::new(&ctx.runtime);
         for a in &spawn_args {
             cmd.arg(a);
@@ -1239,6 +1356,13 @@ fn handle_connection<S: Read + Write>(
             Err(e) => {
                 let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
                 b.push(b'\n');
+                #[cfg(feature = "otel")]
+                {
+                    use opentelemetry::trace::{Status, TraceContextExt};
+                    use tracing_opentelemetry::OpenTelemetrySpanExt;
+                    let cx = tracing::Span::current().context();
+                    cx.span().set_status(Status::error("spawn_failed"));
+                }
                 log_request_result(verbose, &tool, kind, 86, &started);
                 respond_plain(stream, "500 Internal Server Error", 86, &b);
                 let _ = stream.flush();
@@ -1637,6 +1761,31 @@ fn handle_connection<S: Read + Write>(
             let _ = rs.remove(&exec_id);
         }
         log_request_result(verbose, &tool, kind, code, &started);
+
+        #[cfg(feature = "otel")]
+        {
+            use opentelemetry::trace::{Status, TraceContextExt};
+            use tracing_opentelemetry::OpenTelemetrySpanExt;
+            let secs = started.elapsed().as_secs_f64();
+            let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                "timeout"
+            } else if code == 0 {
+                "ok"
+            } else {
+                "err"
+            };
+            // Set span status on errors/timeouts (concise message).
+            let cx = tracing::Span::current().context();
+            if result == "timeout" {
+                cx.span().set_status(Status::error("proxy_timeout"));
+            } else if result == "err" {
+                cx.span()
+                    .set_status(Status::error(format!("exit_code={}", code)));
+            }
+            crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+            crate::telemetry::metrics::record_proxy_request(&tool, result);
+        }
         if verbose {
             logger.boundary_log(&format!(
                 "aifo-coder: proxy stream: totals bytes={} chunks={}",
@@ -1710,6 +1859,13 @@ fn handle_connection<S: Read + Write>(
         Err(e) => {
             let mut b = format!("aifo-coder proxy error: {}", e).into_bytes();
             b.push(b'\n');
+            #[cfg(feature = "otel")]
+            {
+                use opentelemetry::trace::{Status, TraceContextExt};
+                use tracing_opentelemetry::OpenTelemetrySpanExt;
+                let cx = tracing::Span::current().context();
+                cx.span().set_status(Status::error("spawn_failed"));
+            }
             log_request_result(verbose, &tool, kind, 86, &started);
             respond_plain(stream, "500 Internal Server Error", 86, &b);
             let _ = stream.flush();
@@ -1831,6 +1987,29 @@ fn handle_connection<S: Read + Write>(
     }
     let code = final_code;
     log_request_result(verbose, &tool, kind, code, &started);
+
+    #[cfg(feature = "otel")]
+    {
+        use opentelemetry::trace::{Status, TraceContextExt};
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+        let secs = started.elapsed().as_secs_f64();
+        let result = if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
+            "timeout"
+        } else if code == 0 {
+            "ok"
+        } else {
+            "err"
+        };
+        let cx = tracing::Span::current().context();
+        if result == "timeout" {
+            cx.span().set_status(Status::error("proxy_timeout"));
+        } else if result == "err" {
+            cx.span()
+                .set_status(Status::error(format!("exit_code={}", code)));
+        }
+        crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
+        crate::telemetry::metrics::record_proxy_request(&tool, result);
+    }
     // If watcher timed out (on initial INT), map to 504 with exit code 124
     if timeout_secs > 0 && timed_out.load(std::sync::atomic::Ordering::SeqCst) {
         respond_plain(stream, "504 Gateway Timeout", 124, b"timeout\n");

@@ -21,6 +21,9 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*|Windows_NT) EXE=".exe" ;;
 esac
 
+# Default compile-time flags (kept in sync with Makefile CARGO_FLAGS).
+: "${CARGO_FLAGS:=--features otel-otlp}"
+
 # Ensure common PATHs for rustup and Homebrew on macOS
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
@@ -60,6 +63,8 @@ else
 fi
 PROJECT_ROOT_DEFAULT="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 PROJECT_ROOT="${AIFO_CODER_PROJECT_ROOT:-$PROJECT_ROOT_DEFAULT}"
+# Ensure build.rs can bake the default OTLP endpoint from local file
+export AIFO_OTEL_ENDPOINT_FILE="$PROJECT_ROOT/otel-otlp.url"
 
 BIN="${AIFO_CODER_BIN:-$PROJECT_ROOT/target/release/aifo-coder$EXE}"
 
@@ -86,25 +91,41 @@ if command -v cargo >/dev/null 2>&1; then
     NEED_BUILD=1
   elif [ -f "$PROJECT_ROOT/Cargo.toml" ] && [ "$PROJECT_ROOT/Cargo.toml" -nt "$BIN" ]; then
     NEED_BUILD=1
+  elif [ -f "$PROJECT_ROOT/build.rs" ] && [ "$PROJECT_ROOT/build.rs" -nt "$BIN" ]; then
+    NEED_BUILD=1
   elif [ -d "$PROJECT_ROOT/src" ] && find "$PROJECT_ROOT/src" -type f -newer "$BIN" -print -quit | grep -q .; then
+    NEED_BUILD=1
+  elif [ -d "$PROJECT_ROOT/tests" ] && find "$PROJECT_ROOT/tests" -type f -newer "$BIN" -print -quit | grep -q .; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
     echo "Building aifo-coder (release)..."
-    CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
+    CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build $CARGO_FLAGS --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
     BIN="$PROJECT_ROOT/target/release/aifo-coder$EXE"
   fi
 fi
 
 if [ -x "$BIN" ] && can_run "$BIN"; then
+  for arg in "$@"; do
+    if [ "$arg" = "--debug-otel-otlp" ]; then
+      export AIFO_CODER_OTEL_DEBUG_OTLP=1
+      break
+    fi
+  done
   exec "$BIN" "$@"
 fi
 
 if command -v cargo >/dev/null 2>&1; then
   echo "Building aifo-coder (release)..."
-  CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
+  CARGO_TARGET_DIR="$PROJECT_ROOT/target" cargo build $CARGO_FLAGS --release --manifest-path "$PROJECT_ROOT/Cargo.toml"
   BIN="$PROJECT_ROOT/target/release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
+    for arg in "$@"; do
+      if [ "$arg" = "--debug-otel-otlp" ]; then
+        export AIFO_CODER_OTEL_DEBUG_OTLP=1
+        break
+      fi
+    done
     exec "$BIN" "$@"
   fi
 fi
@@ -133,7 +154,7 @@ if command -v docker >/dev/null 2>&1; then
   esac
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
   MSYS_NO_PATHCONV=1 \
-    docker run $DOCKER_PLATFORM_ARGS --rm \
+    docker run $DOCKER_PLATFORM_ARGS --rm -e AIFO_OTEL_ENDPOINT_FILE=/workspace/otel-otlp.url \
       -v "$PROJECT_ROOT:/workspace" \
       -v "$HOME/.cargo/registry:/root/.cargo/registry" \
       -v "$HOME/.cargo/git:/root/.cargo/git" \
@@ -142,6 +163,12 @@ if command -v docker >/dev/null 2>&1; then
       "${RUST_BUILDER_IMAGE:-aifo-coder-rust-builder}" cargo build --release $CARGO_TARGET
   BIN="$PROJECT_ROOT/target/${RELEASE_FOLDER}release/aifo-coder$EXE"
   if [ -x "$BIN" ] && can_run "$BIN"; then
+    for arg in "$@"; do
+      if [ "$arg" = "--debug-otel-otlp" ]; then
+        export AIFO_CODER_OTEL_DEBUG_OTLP=1
+        break
+      fi
+    done
     exec "$BIN" "$@"
   else
     echo "Error: built binary at $BIN is not executable on this host (architecture mismatch?)." >&2

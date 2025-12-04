@@ -26,4 +26,9 @@ fn unit_test_aifo_shim_uses_data_urlencode_and_bearer_only() {
         "aifo-shim must not send X-Aifo-Token; content:\n{}",
         content
     );
+    assert!(
+        content.contains("traceparent: $TRACEPARENT"),
+        "aifo-shim must propagate TRACEPARENT as traceparent header when set; content:\n{}",
+        content
+    );
 }
