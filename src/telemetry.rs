@@ -243,7 +243,11 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
         .build()
 }
 
-fn build_metrics_provider(resource: &Resource, use_otlp: bool, transport: OtelTransport) -> Option<SdkMeterProvider> {
+fn build_metrics_provider(
+    resource: &Resource,
+    use_otlp: bool,
+    transport: OtelTransport,
+) -> Option<SdkMeterProvider> {
     if env::var("AIFO_CODER_OTEL_METRICS").ok().as_deref() != Some("1") {
         return None;
     }

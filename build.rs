@@ -11,10 +11,7 @@ fn main() {
     //   2) AIFO_OTEL_ENDPOINT (env value) + optional AIFO_OTEL_TRANSPORT (env value)
     if let Ok(path) = std::env::var("AIFO_OTEL_ENDPOINT_FILE") {
         if let Ok(contents) = std::fs::read_to_string(&path) {
-            let mut lines = contents
-                .lines()
-                .map(|l| l.trim())
-                .filter(|l| !l.is_empty());
+            let mut lines = contents.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
             if let Some(ep) = lines.next() {
                 println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_ENDPOINT={ep}");
             }
