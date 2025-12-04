@@ -182,97 +182,25 @@ fn build_resource() -> Resource {
 #[cfg(feature = "otel-otlp")]
 fn build_tracer(
     resource: &Resource,
-    use_otlp: bool,
-    transport: OtelTransport,
+    _use_otlp: bool,
+    _transport: OtelTransport,
 ) -> (sdktrace::TracerProvider, Option<tokio::runtime::Runtime>) {
-    if use_otlp {
-        use opentelemetry_otlp::WithExportConfig;
-
-        let endpoint = match effective_otlp_endpoint() {
-            Some(ep) => ep,
-            None => {
-                if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
-                    eprintln!(
-                        "aifo-coder: telemetry: no OTLP endpoint available; falling back to stderr exporter"
-                    );
-                }
-                let provider = build_stderr_tracer(resource);
-                return (provider, None);
-            }
-        };
-
-        let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
-            .ok()
-            .and_then(|s| humantime::parse_duration(&s).ok())
-            .unwrap_or_else(|| Duration::from_secs(5));
-
-        let rt_result = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .thread_name("aifo-otel-worker")
-            .build();
-
-        let rt = match rt_result {
-            Ok(rt) => rt,
-            Err(e) => {
-                eprintln!(
-                    "aifo-coder: telemetry: failed to create OTLP runtime: {e}; falling back to stderr exporter"
-                );
-                let provider = build_stderr_tracer(resource);
-                return (provider, None);
-            }
-        };
-
-        let provider_result = rt.block_on(async move {
-            let exporter_builder = match transport {
-                OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
-                // Fallback: reuse gRPC pipeline for HTTP transport until HTTP exporter is available.
-                OtelTransport::Http => opentelemetry_otlp::new_exporter().tonic(),
-            };
-
-            let exporter = exporter_builder
-                .with_endpoint(endpoint)
-                .with_timeout(timeout);
-
-            let mut builder = opentelemetry_otlp::new_pipeline()
-                .tracing()
-                .with_exporter(exporter);
-
-            // Use default Config which respects OTEL_TRACES_SAMPLER / OTEL_TRACES_SAMPLER_ARG
-            builder = builder
-                .with_trace_config(sdktrace::Config::default().with_resource(resource.clone()));
-
-            builder.install_batch(opentelemetry_sdk::runtime::Tokio)
-        });
-
-        match provider_result {
-            Ok(provider) => (provider, Some(rt)),
-            Err(e) => {
-                eprintln!(
-                    "aifo-coder: telemetry: failed to install OTLP tracer: {e}; falling back to stderr exporter"
-                );
-                if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
-                    eprintln!(
-                        "aifo-coder: telemetry: OTLP export will be disabled; CLI output and exit codes remain unchanged"
-                    );
-                }
-                let provider = build_stderr_tracer(resource);
-                (provider, None)
-            }
-        }
-    } else {
-        let provider = build_stderr_tracer(resource);
-        (provider, None)
-    }
+    // Option 1: disable OTLP trace export entirely.
+    // Always use the development stderr exporter for traces; never send traces to a remote
+    // collector. This keeps spans useful locally (e.g., via fmt logging) while avoiding any
+    // dependency on gRPC or HTTPS trace backends (Tempo).
+    let provider = build_stderr_tracer(resource);
+    (provider, None)
 }
 
 #[cfg(not(feature = "otel-otlp"))]
-fn build_tracer(resource: &Resource, use_otlp: bool, transport: OtelTransport) -> sdktrace::TracerProvider {
-    if use_otlp {
-        eprintln!(
-            "aifo-coder: telemetry: OTLP endpoint configured but otel-otlp feature is disabled; falling back to stderr exporter"
-        );
-    }
-    let _ = transport;
+fn build_tracer(
+    resource: &Resource,
+    _use_otlp: bool,
+    _transport: OtelTransport,
+) -> sdktrace::TracerProvider {
+    // When otel-otlp is not compiled, we already had no OTLP traces. Keep using the stderr
+    // development exporter.
     build_stderr_tracer(resource)
 }
 
