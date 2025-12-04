@@ -2,7 +2,7 @@ use aifo_coder::telemetry_init;
 
 /// Ensure that disabling via common falsy values yields None (idempotent/no-op).
 #[test]
-fn otel_disabled_env_false() {
+fn unit_otel_disabled_env_false() {
     std::env::set_var("AIFO_CODER_OTEL", "false");
     let first = telemetry_init();
     let second = telemetry_init();
@@ -15,7 +15,7 @@ fn otel_disabled_env_false() {
 }
 
 #[test]
-fn otel_disabled_env_no() {
+fn unit_otel_disabled_env_no() {
     std::env::set_var("AIFO_CODER_OTEL", "no");
     let first = telemetry_init();
     let second = telemetry_init();
@@ -28,7 +28,7 @@ fn otel_disabled_env_no() {
 }
 
 #[test]
-fn otel_disabled_env_off() {
+fn unit_otel_disabled_env_off() {
     std::env::set_var("AIFO_CODER_OTEL", "off");
     let first = telemetry_init();
     let second = telemetry_init();
