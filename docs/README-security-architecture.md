@@ -123,7 +123,7 @@ The launcher mounts only the minimum required host paths:
 - No direct host secret stores (browser, OS keychains) are exposed via mounts.
 - GPG keys are imported into container home; host `.gnupg` remains read‑only and separate.
 
-### 2.3 Toolchain Sidecars (Phase 1)
+### 2.3 Toolchain Sidecars
 
 Toolchain sidecars are separate containers providing development tools:
 

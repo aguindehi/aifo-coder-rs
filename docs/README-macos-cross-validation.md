@@ -1,4 +1,4 @@
-# Phase 4 — Validation (macOS cross build)
+# Validation of the macOS cross build
 
 This document describes how to validate the macOS cross build locally and in CI
 according to spec/aifo-coder-implement-macos-cross-builder-image-v3.spec (v3).
@@ -13,7 +13,9 @@ Local validation (developer machine)
 3) Build the macOS launcher inside the cross image:
    - Both architectures:
      make build-launcher-macos-cross
-   - Arm64 only:
+   - AMD64 only:
+     make build-launcher-macos-cross-amd64
+   - ARM64 only:
      make build-launcher-macos-cross-arm64
 
 4) Validate the resulting binary with file(1):

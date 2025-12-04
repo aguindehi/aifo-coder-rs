@@ -98,7 +98,7 @@ security unlock-keychain -p "<your-password>" login.keychain-db
 xattr -cr dist/aifo-coder.app dist/aifo-coder.dmg
 ```
 
-Toolchains (Phases 2–4)
+Toolchains
 - aifo-coder can attach language toolchains (rust, node/typescript, python, c-cpp, go) as sidecar containers and inject PATH shims inside the agent so tools like cargo, npx, python, gcc, go work transparently.
 - See docs/TOOLCHAINS.md for details, examples, and testing instructions.
 
