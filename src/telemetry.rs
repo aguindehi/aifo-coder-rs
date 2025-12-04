@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::env;
-use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -13,7 +12,6 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
-use opentelemetry_sdk::trace::{SpanExporter, TraceError};
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel")]
@@ -177,8 +175,8 @@ fn build_resource() -> Resource {
         }
     }
 
-    // 0.31 exposes From<Vec<KeyValue>> for Resource; use that instead of new()/from_iter().
-    Resource::from(attrs)
+    // 0.31: build Resource from attribute vector with Resource::new.
+    Resource::new(attrs)
 }
 
 #[cfg(feature = "otel-otlp")]
@@ -207,60 +205,17 @@ fn build_tracer(
 }
 
 fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
-    // Development-only stderr exporter: emits compact span summaries to stderr when explicitly
-    // opted into via AIFO_CODER_OTEL_DEV_STDERR=1. By default, we build a silent tracer provider
-    // with no exporter to avoid extra stderr logs in normal runs.
-    let dev_stderr = env::var("AIFO_CODER_OTEL_DEV_STDERR").ok().as_deref() == Some("1");
-
-    if dev_stderr {
-        #[derive(Debug)]
-        struct StderrSpanExporter;
-
-        impl SpanExporter for StderrSpanExporter {
-            fn export(
-                &self,
-                batch: Vec<sdktrace::SpanData>,
-            ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceError> + Send>> {
-                Box::pin(async move {
-                    let mut stderr = std::io::stderr();
-                    for span in batch {
-                        let name = span.name;
-                        let span_id = span.span_context.span_id().to_string();
-                        let trace_id = span.span_context.trace_id().to_string();
-                        let _ = writeln!(
-                            stderr,
-                            "otel-span name={name} trace_id={trace_id} span_id={span_id}"
-                        );
-                    }
-                    Ok(())
-                })
-            }
-
-            fn shutdown(
-                &self,
-            ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TraceError> + Send>> {
-                Box::pin(async { Ok(()) })
-            }
-        }
-
-        let exporter = StderrSpanExporter;
-        // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
-        sdktrace::SdkTracerProvider::builder()
-            .with_resource(resource.clone())
-            .with_simple_exporter(exporter)
-            .build()
-    } else {
-        // Silent provider: respects sampling config but does not export spans anywhere.
-        sdktrace::SdkTracerProvider::builder()
-            .with_resource(resource.clone())
-            .build()
-    }
+    // Silent tracer provider (no exporter). For debugging, prefer enabling the fmt layer via
+    // AIFO_CODER_TRACING_FMT=1 which prints spans/logs without custom exporters.
+    sdktrace::SdkTracerProvider::builder()
+        .with_resource(resource.clone())
+        .build()
 }
 
 fn build_metrics_provider(
     resource: &Resource,
-    use_otlp: bool,
-    transport: OtelTransport,
+    _use_otlp: bool,
+    _transport: OtelTransport,
 ) -> Option<SdkMeterProvider> {
     // Default: enable metrics unless explicitly disabled via env toggle.
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
@@ -272,108 +227,10 @@ fn build_metrics_provider(
         return None;
     }
 
-    #[cfg(feature = "otel-otlp")]
-    {
-        if use_otlp {
-            use opentelemetry_otlp::WithExportConfig;
-
-            let endpoint = match effective_otlp_endpoint() {
-                Some(ep) => ep,
-                None => {
-                    if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!(
-                            "aifo-coder: telemetry: no OTLP endpoint available for metrics; disabling metrics exporter"
-                        );
-                    }
-                    return None;
-                }
-            };
-
-            let timeout = env::var("OTEL_EXPORTER_OTLP_TIMEOUT")
-                .ok()
-                .and_then(|s| humantime::parse_duration(&s).ok())
-                .unwrap_or_else(|| Duration::from_secs(5));
-
-            // Default to a 2s export interval when OTEL_METRICS_EXPORT_INTERVAL is unset.
-            let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
-                .ok()
-                .and_then(|s| humantime::parse_duration(&s).ok())
-                .unwrap_or_else(|| Duration::from_secs(2));
-
-            // Configure exporter builder based on transport (HTTP vs gRPC).
-            let exporter_builder = match transport {
-                OtelTransport::Grpc => opentelemetry_otlp::new_exporter()
-                    .tonic()
-                    .with_endpoint(endpoint.clone())
-                    .with_timeout(timeout),
-                OtelTransport::Http => opentelemetry_otlp::new_exporter()
-                    .http()
-                    .with_endpoint(endpoint.clone())
-                    .with_timeout(timeout),
-            };
-
-            let exporter = match exporter_builder.build_metrics_exporter() {
-                Ok(exp) => exp,
-                Err(e) => {
-                    eprintln!(
-                        "aifo-coder: telemetry: failed to create OTLP metrics exporter: {e}; disabling metrics exporter"
-                    );
-                    if env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!(
-                            "aifo-coder: telemetry: metrics export disabled; CLI behavior remains unchanged"
-                        );
-                    }
-                    return None;
-                }
-            };
-
-            let mut provider_builder =
-                opentelemetry_sdk::metrics::SdkMeterProvider::builder().with_resource(resource.clone());
-
-            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
-                .with_interval(interval)
-                .build();
-
-            provider_builder = provider_builder.with_reader(reader);
-            return Some(provider_builder.build());
-        }
-    }
-
-    #[cfg(not(feature = "otel-otlp"))]
-    {
-        if use_otlp {
-            eprintln!(
-                "aifo-coder: telemetry: OTLP endpoint configured for metrics but otel-otlp feature is disabled; metrics exporter will not be installed"
-            );
-        }
-    }
-
-    // Dev fallback: non-OTLP metrics exporter using stderr or a JSONL file sink.
-    let _ = transport;
-    // Prefer stderr; if AIFO_CODER_OTEL_METRICS_FILE is set (or XDG_RUNTIME_DIR is available),
-    // write JSONL to that path. Never write to stdout.
-    let file_sink_path_opt = env::var("AIFO_CODER_OTEL_METRICS_FILE")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            // Default sink: ${XDG_RUNTIME_DIR:-/tmp}/aifo-coder.otel.metrics.jsonl
-            let base = env::var("XDG_RUNTIME_DIR")
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "/tmp".to_string());
-            Some(format!(
-                "{}/aifo-coder.otel.metrics.jsonl",
-                base.trim_end_matches('/')
-            ))
-        });
-
-    // Build exporter with a writer to stderr or to a file.
-    // In 0.31, MetricExporterBuilder no longer exposes writer configuration; use default.
+    // Dev exporter to stderr (no OTLP by default).
     let exporter = opentelemetry_stdout::MetricExporterBuilder::default().build();
 
-    // Use a PeriodicReader with ~2s export interval.
+    // Use a PeriodicReader with ~2s export interval (configurable).
     let interval = env::var("OTEL_METRICS_EXPORT_INTERVAL")
         .ok()
         .and_then(|s| humantime::parse_duration(&s).ok())
