@@ -171,15 +171,6 @@ build-rust-builder:
         IMAGE_TAG_CUSTOM_ONLY: "true"
     # Default branch: rebuild stable 'ci' tag only when relevant build inputs change
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        - Dockerfile
-        - Cargo.toml
-        - build.rs
-        - .cargo/**/*
-        - rust-toolchain.toml
-        - src/**/*
-        - toolchains/**/*
-        - .gitlab-ci.yml
       variables:
         IMAGE_TAG_CUSTOM: "ci"
         IMAGE_TAG_CUSTOM_ONLY: "true"
