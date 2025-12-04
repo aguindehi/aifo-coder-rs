@@ -17,7 +17,8 @@ Telemetry is guarded by two Cargo features, both disabled by default:
   - Pulls in `tracing`, `tracing-subscriber`, `opentelemetry`, `opentelemetry_sdk`,
     `tracing-opentelemetry`, and `opentelemetry-stdout`.
 - `otel-otlp`
-  - Extends `otel` with OTLP/gRPC export via `opentelemetry-otlp` and a private Tokio runtime.
+  - Extends `otel` with OTLP HTTP exporter support (via `opentelemetry-otlp` with `http-proto`).
+  - Uses a PeriodicReader for metrics when an endpoint is configured; no dedicated Tokio runtime is required for traces.
 
 Example builds:
 
@@ -34,12 +35,10 @@ Telemetry is controlled purely via environment variables; no new CLI flags are a
 
 Enablement rules (when built with `--features otel`):
 
-- `AIFO_CODER_OTEL=1`
-  - Enables telemetry initialization.
-- `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty)
-  - Also enables telemetry; enables OTLP path when `otel-otlp` is compiled.
-- If both are unset/empty, telemetry initialization returns early without installing any
-  tracing subscriber or exporters.
+- Default: telemetry is enabled when `AIFO_CODER_OTEL` is unset.
+- Disable by setting `AIFO_CODER_OTEL=0`, `false`, `no` or `off`.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty) selects the OTLP endpoint (HTTP/HTTPS); it does not by itself change enablement.
+- CLI `--verbose` sets `AIFO_CODER_OTEL_VERBOSE=1` to print concise initialization info on stderr.
 
 Basic usage examples:
 
@@ -60,17 +59,15 @@ cargo run --features otel -- --help
 When compiled with `--features otel-otlp` and `OTEL_EXPORTER_OTLP_ENDPOINT` is set:
 
 ```bash
-AIFO_CODER_OTEL=1 \
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
 cargo run --features otel-otlp -- --help
 ```
 
 Notes:
 
-- The exporter uses tonic gRPC and respects `OTEL_EXPORTER_OTLP_TIMEOUT` (default 5s) and
+- The exporter uses OTLP over HTTP/HTTPS and respects `OTEL_EXPORTER_OTLP_TIMEOUT` (default 5s) and
   `OTEL_BSP_*` batch settings.
-- A private multi-threaded Tokio runtime is created for exporting spans/metrics; it is shut down
-  cleanly via `TelemetryGuard::drop`.
+- A PeriodicReader is used for metrics export; no dedicated Tokio runtime is required for traces.
 
 ## 3. Logging and fmt layer
 
@@ -96,18 +93,14 @@ user-visible effect.
 
 ## 4. Metrics
 
-Metrics are opt-in at runtime and disabled by default.
+Metrics are enabled by default when telemetry is enabled. Disable with `AIFO_CODER_OTEL_METRICS=0`, `false`, `no` or `off`.
 
 Environment variables:
 
 - `AIFO_CODER_OTEL_METRICS`
-  - `"1"` enables metrics exporter and instruments.
-- `AIFO_CODER_OTEL_METRICS_FILE`
-  - Optional file path for the development metrics sink when stdout metrics cannot be directed
-    to stderr. Default:
-    `${XDG_RUNTIME_DIR:-/tmp}/aifo-coder.otel.metrics.jsonl`.
+  - Controls metrics instruments/exporter (default enabled).
 
-Example (stdout dev exporters; traces to stderr, metrics to stderr or file):
+Example (dev exporters; traces to stderr, metrics to stderr/file):
 
 ```bash
 AIFO_CODER_OTEL=1 \
@@ -142,11 +135,11 @@ It performs:
 
 1. `cargo build --features otel`
 2. Golden stdout test:
-   - Runs `cargo run --quiet -- --help` (baseline).
-   - Runs `AIFO_CODER_OTEL=1 cargo run --quiet --features otel -- --help`.
+   - Runs `AIFO_CODER_OTEL=0 cargo run --quiet --features otel -- --help` (baseline, telemetry disabled).
+   - Runs `cargo run --quiet --features otel -- --help` (telemetry enabled by default).
    - Fails if stdout differs between the two runs.
 3. Smoke run with metrics enabled:
-   - `AIFO_CODER_OTEL=1 AIFO_CODER_OTEL_METRICS=1 cargo run --features otel -- --help`.
+   - `AIFO_CODER_OTEL_METRICS=1 cargo run --features otel -- --help`.
 
 Example CI job snippet (pseudo YAML):
 
@@ -169,7 +162,7 @@ An optional OTLP CI job can be added if a collector is available, e.g.:
 otel-otlp-smoke:
   stage: test
   script:
-    - AIFO_CODER_OTEL=1 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317 \
+    - OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector:4318 \
       cargo run --features otel-otlp -- --help
 ```
 
@@ -182,9 +175,10 @@ otel-otlp-smoke:
   ```
 
 - **No traces appear in local collector**  
-  - Confirm `AIFO_CODER_OTEL=1` and `OTEL_EXPORTER_OTLP_ENDPOINT` are set.
+  - Ensure telemetry is not disabled (`AIFO_CODER_OTEL` unset or set to `1`).
+  - Set `OTEL_EXPORTER_OTLP_ENDPOINT` (HTTP/HTTPS, e.g., `https://localhost:4318`).
   - Ensure network connectivity from the host to the collector.
-  - Check for concise warnings on stderr about exporter initialization.
+  - For local visibility without an endpoint, enable the fmt layer (`AIFO_CODER_TRACING_FMT=1` and `RUST_LOG`).
 
 - **Unexpected stderr logs**  
   - Ensure `AIFO_CODER_TRACING_FMT` is not set (or set to `"0"`).
