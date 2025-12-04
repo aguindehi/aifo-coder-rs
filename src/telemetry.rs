@@ -12,6 +12,9 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
 use tracing_subscriber::prelude::*;
 
+#[cfg(feature = "otel-otlp")]
+use opentelemetry_otlp::WithExportConfig;
+
 #[cfg(feature = "otel")]
 pub mod metrics;
 
