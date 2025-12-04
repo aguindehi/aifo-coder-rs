@@ -9,11 +9,11 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
-use opentelemetry_sdk::export::trace::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
+use opentelemetry_sdk::trace::export::{ExportResult as TraceExportResult, SpanData, SpanExporter};
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel")]
@@ -185,7 +185,7 @@ fn build_tracer(
     resource: &Resource,
     _use_otlp: bool,
     _transport: OtelTransport,
-) -> (sdktrace::TracerProvider, Option<tokio::runtime::Runtime>) {
+) -> (sdktrace::SdkTracerProvider, Option<tokio::runtime::Runtime>) {
     // Option 1: disable OTLP trace export entirely.
     // Always use the development stderr exporter for traces; never send traces to a remote
     // collector. This keeps spans useful locally (e.g., via fmt logging) while avoiding any
@@ -199,13 +199,13 @@ fn build_tracer(
     resource: &Resource,
     _use_otlp: bool,
     _transport: OtelTransport,
-) -> sdktrace::TracerProvider {
+) -> sdktrace::SdkTracerProvider {
     // When otel-otlp is not compiled, we already had no OTLP traces. Keep using the stderr
     // development exporter.
     build_stderr_tracer(resource)
 }
 
-fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
+fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
     // Development-only stderr exporter: emits compact span summaries to stderr when explicitly
     // opted into via AIFO_CODER_OTEL_DEV_STDERR=1. By default, we build a silent tracer provider
     // with no exporter to avoid extra stderr logs in normal runs.
@@ -244,13 +244,13 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::TracerProvider {
 
         let exporter = StderrSpanExporter;
         // Use default Config so standard env vars (e.g., OTEL_TRACES_SAMPLER) are honored.
-        sdktrace::TracerProvider::builder()
+        sdktrace::SdkTracerProvider::builder()
             .with_simple_exporter(exporter)
             .with_config(sdktrace::Config::default().with_resource(resource.clone()))
             .build()
     } else {
         // Silent provider: respects sampling config but does not export spans anywhere.
-        sdktrace::TracerProvider::builder()
+        sdktrace::SdkTracerProvider::builder()
             .with_config(sdktrace::Config::default().with_resource(resource.clone()))
             .build()
     }
@@ -275,9 +275,8 @@ fn build_metrics_provider(
     {
         if use_otlp {
             use opentelemetry_otlp::WithExportConfig;
-            use opentelemetry_sdk::metrics::reader::{
-                DefaultAggregationSelector, DefaultTemporalitySelector,
-            };
+            use opentelemetry_sdk::metrics::aggregation::cumulative_temporality_selector;
+            use opentelemetry_sdk::metrics::selectors::simple::histogram;
 
             let endpoint = match effective_otlp_endpoint() {
                 Some(ep) => ep,
@@ -316,7 +315,7 @@ fn build_metrics_provider(
 
             // Build metrics pipeline (controller implements MeterProvider).
             let controller = match opentelemetry_otlp::new_pipeline()
-                .metrics(DefaultAggregationSelector::new(), DefaultTemporalitySelector::new())
+                .metrics(histogram(), cumulative_temporality_selector())
                 .with_exporter(exporter_builder)
                 .with_resource(resource.clone())
                 .with_period(interval)
@@ -538,7 +537,6 @@ impl Drop for TelemetryGuard {
         if let Some(ref mp) = self.meter_provider {
             let _ = mp.force_flush();
         }
-        global::shutdown_tracer_provider();
         #[cfg(feature = "otel-otlp")]
         {
             if let Some(rt) = self.runtime.take() {
