@@ -374,6 +374,10 @@ fn main() -> ExitCode {
     if cli.verbose {
         std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
     }
+    // If requested, force metrics debug exporter (stderr/file) before telemetry_init.
+    if cli.debug_otel_otlp {
+        std::env::set_var("AIFO_CODER_OTEL_DEBUG_OTLP", "1");
+    }
 
     // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
     // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
