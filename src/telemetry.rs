@@ -274,8 +274,10 @@ fn build_metrics_provider(
     #[cfg(feature = "otel-otlp")]
     {
         if use_otlp {
-            // OTLP metrics exporter with PeriodicReader (1–2s interval).
             use opentelemetry_otlp::WithExportConfig;
+            use opentelemetry_sdk::metrics::reader::{
+                DefaultAggregationSelector, DefaultTemporalitySelector,
+            };
 
             let endpoint = match effective_otlp_endpoint() {
                 Some(ep) => ep,
@@ -300,22 +302,27 @@ fn build_metrics_provider(
                 .and_then(|s| humantime::parse_duration(&s).ok())
                 .unwrap_or_else(|| Duration::from_secs(2));
 
-            // Use HTTP OTLP when requested; avoid requiring gRPC for HTTPS endpoints.
+            // Configure exporter builder based on transport (HTTP vs gRPC).
             let exporter_builder = match transport {
-                OtelTransport::Grpc => opentelemetry_otlp::new_exporter().tonic(),
-                OtelTransport::Http => opentelemetry_otlp::new_exporter().http(),
+                OtelTransport::Grpc => opentelemetry_otlp::new_exporter()
+                    .tonic()
+                    .with_endpoint(endpoint.clone())
+                    .with_timeout(timeout),
+                OtelTransport::Http => opentelemetry_otlp::new_exporter()
+                    .http()
+                    .with_endpoint(endpoint.clone())
+                    .with_timeout(timeout),
             };
 
-            let exporter = match exporter_builder
-                .with_endpoint(endpoint)
-                .with_timeout(timeout)
-                .build_metrics_exporter(
-                    Box::<opentelemetry_sdk::metrics::reader::DefaultAggregationSelector>::default(
-                    ),
-                    Box::<opentelemetry_sdk::metrics::reader::DefaultTemporalitySelector>::default(
-                    ),
-                ) {
-                Ok(exp) => exp,
+            // Build metrics pipeline (controller implements MeterProvider).
+            let controller = match opentelemetry_otlp::new_pipeline()
+                .metrics(DefaultAggregationSelector::new(), DefaultTemporalitySelector::new())
+                .with_exporter(exporter_builder)
+                .with_resource(resource.clone())
+                .with_period(interval)
+                .build()
+            {
+                Ok(c) => c,
                 Err(e) => {
                     eprintln!(
                         "aifo-coder: telemetry: failed to create OTLP metrics exporter: {e}; disabling metrics exporter"
@@ -329,19 +336,9 @@ fn build_metrics_provider(
                 }
             };
 
-            let mut provider_builder = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-                .with_resource(resource.clone());
-
-            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
-                exporter,
-                opentelemetry_sdk::runtime::Tokio,
-            )
-            .with_interval(interval)
-            .build();
-
-            provider_builder = provider_builder.with_reader(reader);
-
-            return Some(provider_builder.build());
+            // In 0.31, the returned controller type implements MeterProvider and is
+            // aliased by SdkMeterProvider, so we can return it directly.
+            return Some(controller);
         }
     }
 
