@@ -151,12 +151,12 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
 }
 
 fn build_metrics_provider(_use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
-    // Default: enable metrics unless explicitly disabled via env toggle.
+    // Default: metrics disabled; enable explicitly with AIFO_CODER_OTEL_METRICS=1
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
         .map(|v| v.trim().to_ascii_lowercase())
-        .map(|v| v != "0" && v != "false" && v != "off")
-        .unwrap_or(true);
+        .map(|v| v == "1" || v == "true" || v == "yes")
+        .unwrap_or(false);
     if !metrics_enabled {
         return None;
     }
@@ -197,12 +197,12 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     // Verbose OTEL mode: driven by env, set by main when CLI --verbose is active.
     let verbose_otel = env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1");
 
-    // Compute metrics_enabled here so logging and behavior stay in sync.
+    // Compute metrics_enabled here so logging and behavior stay in sync (default: disabled).
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
         .map(|v| v.trim().to_ascii_lowercase())
-        .map(|v| v != "0" && v != "false" && v != "off")
-        .unwrap_or(true);
+        .map(|v| v == "1" || v == "true" || v == "yes")
+        .unwrap_or(false);
 
     if verbose_otel {
         if use_otlp {
@@ -241,7 +241,9 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                 );
             }
         } else {
-            eprintln!("aifo-coder: telemetry: metrics: disabled (env override)");
+            eprintln!(
+                "aifo-coder: telemetry: metrics: disabled (default; enable with AIFO_CODER_OTEL_METRICS=1)"
+            );
         }
     }
 
