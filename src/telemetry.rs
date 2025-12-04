@@ -83,10 +83,7 @@ pub fn telemetry_pii_enabled() -> bool {
 
 /// Return true if debug mode should use stderr/file exporter for metrics.
 fn telemetry_debug_otlp() -> bool {
-    env::var("AIFO_CODER_OTEL_DEBUG_OTLP")
-        .ok()
-        .as_deref()
-        == Some("1")
+    env::var("AIFO_CODER_OTEL_DEBUG_OTLP").ok().as_deref() == Some("1")
 }
 
 /// Compute or retrieve a per-process FNV-1a salt derived from pid and start time.
@@ -171,8 +168,8 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
     if use_otlp {
         #[cfg(feature = "otel-otlp")]
         {
-            let ep = effective_otlp_endpoint()
-                .unwrap_or_else(|| "https://localhost:4318".to_string());
+            let ep =
+                effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
             let exporter = match opentelemetry_otlp::new_exporter()
                 .http()
                 .with_endpoint(ep)
@@ -250,9 +247,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             if use_otlp {
                 eprintln!("aifo-coder: telemetry: metrics: enabled (OTLP http)");
             } else if telemetry_debug_otlp() {
-                eprintln!(
-                    "aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file)"
-                );
+                eprintln!("aifo-coder: telemetry: metrics: enabled (dev exporter to stderr/file)");
             } else {
                 eprintln!(
                     "aifo-coder: telemetry: metrics: enabled (no OTLP endpoint; disabled locally to avoid flooding)"
