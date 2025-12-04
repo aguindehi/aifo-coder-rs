@@ -379,8 +379,6 @@ fn main() -> ExitCode {
         std::env::set_var("AIFO_CODER_OTEL_DEBUG_OTLP", "1");
     }
 
-    
-
     // Record a single run metric when telemetry+metrics are enabled (agent known later).
     #[cfg(feature = "otel")]
     {

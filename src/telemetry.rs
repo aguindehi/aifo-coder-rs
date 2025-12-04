@@ -6,8 +6,8 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
@@ -133,10 +133,7 @@ fn build_resource() -> Resource {
 
     Resource::builder()
         .with_attribute(KeyValue::new("service.name", name))
-        .with_attribute(KeyValue::new(
-            "service.version",
-            env!("CARGO_PKG_VERSION"),
-        ))
+        .with_attribute(KeyValue::new("service.version", env!("CARGO_PKG_VERSION")))
         .with_attribute(KeyValue::new("service.instance.id", instance_id()))
         .build()
 }
