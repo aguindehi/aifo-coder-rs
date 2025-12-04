@@ -131,11 +131,14 @@ fn build_resource() -> Resource {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "aifo-coder".to_string());
 
-    Resource::new(vec![
-        KeyValue::new("service.name", name),
-        KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
-        KeyValue::new("service.instance.id", instance_id()),
-    ])
+    Resource::builder()
+        .with_attribute(KeyValue::new("service.name", name))
+        .with_attribute(KeyValue::new(
+            "service.version",
+            env!("CARGO_PKG_VERSION"),
+        ))
+        .with_attribute(KeyValue::new("service.instance.id", instance_id()))
+        .build()
 }
 
 #[cfg(feature = "otel-otlp")]
