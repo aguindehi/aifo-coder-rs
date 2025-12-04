@@ -63,6 +63,8 @@ else
 fi
 PROJECT_ROOT_DEFAULT="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 PROJECT_ROOT="${AIFO_CODER_PROJECT_ROOT:-$PROJECT_ROOT_DEFAULT}"
+# Ensure build.rs can bake the default OTLP endpoint from local file
+export AIFO_OTEL_ENDPOINT_FILE="$PROJECT_ROOT/otel-otlp.url"
 
 BIN="${AIFO_CODER_BIN:-$PROJECT_ROOT/target/release/aifo-coder$EXE}"
 
@@ -140,7 +142,7 @@ if command -v docker >/dev/null 2>&1; then
   esac
   if [ -n "$PLAT" ]; then DOCKER_PLATFORM_ARGS="--platform $PLAT"; else DOCKER_PLATFORM_ARGS=""; fi
   MSYS_NO_PATHCONV=1 \
-    docker run $DOCKER_PLATFORM_ARGS --rm \
+    docker run $DOCKER_PLATFORM_ARGS --rm -e AIFO_OTEL_ENDPOINT_FILE=/workspace/otel-otlp.url \
       -v "$PROJECT_ROOT:/workspace" \
       -v "$HOME/.cargo/registry:/root/.cargo/registry" \
       -v "$HOME/.cargo/git:/root/.cargo/git" \

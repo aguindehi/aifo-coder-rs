@@ -85,6 +85,7 @@ CARGO_FLAGS ?= --features otel-otlp
 # - Makefile must NOT set AIFO_CODER_OTEL or OTEL_EXPORTER_OTLP_ENDPOINT by default;
 #   the Rust binary owns runtime defaults. Env vars can still be set per job or manually if needed.
 AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url
+export AIFO_OTEL_ENDPOINT_FILE
 
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
@@ -1541,7 +1542,7 @@ build-launcher:
 	  esac; \
 	  [ -n "$$TGT" ] || { echo "Unsupported architecture/OS: $$OS $$ARCH" >&2; exit 1; }; \
 	  echo "Building launcher inside $(RUST_BUILDER_IMAGE) for target $$TGT ..."; \
-	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -e AIFO_OTEL_ENDPOINT_FILE=/workspace/otel-otlp.url \
 	    -v "$$PWD:/workspace" \
 	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
