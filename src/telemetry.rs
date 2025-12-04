@@ -13,7 +13,7 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace as sdktrace;
-use opentelemetry_sdk::trace::export::{ExportResult as TraceExportResult, SpanData, SpanExporter};
+use opentelemetry_sdk::trace::SpanExporter;
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel")]
@@ -218,9 +218,9 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
         impl SpanExporter for StderrSpanExporter {
             fn export(
                 &mut self,
-                batch: Vec<SpanData>,
+                batch: Vec<sdktrace::SpanData>,
             ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = TraceExportResult> + Send + 'static>,
+                Box<dyn std::future::Future<Output = opentelemetry::trace::TraceError> + Send>,
             > {
                 Box::pin(async move {
                     let mut stderr = std::io::stderr();
@@ -237,8 +237,9 @@ fn build_stderr_tracer(resource: &Resource) -> sdktrace::SdkTracerProvider {
                 })
             }
 
-            fn shutdown(&mut self) {
-                // nothing to do for stderr exporter
+            fn shutdown(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+            {
+                Box::pin(async {})
             }
         }
 
@@ -378,18 +379,18 @@ fn build_metrics_provider(
             .append(true)
             .open(&path)
         {
-            Ok(f) => opentelemetry_stdout::MetricsExporterBuilder::default()
+            Ok(f) => opentelemetry_stdout::MetricExporterBuilder::default()
                 .with_writer(f)
                 .build(),
             Err(_) => {
                 // Fallback: stderr
-                opentelemetry_stdout::MetricsExporterBuilder::default()
+                opentelemetry_stdout::MetricExporterBuilder::default()
                     .with_writer(std::io::stderr())
                     .build()
             }
         }
     } else {
-        opentelemetry_stdout::MetricsExporterBuilder::default()
+        opentelemetry_stdout::MetricExporterBuilder::default()
             .with_writer(std::io::stderr())
             .build()
     };
