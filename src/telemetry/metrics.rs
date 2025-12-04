@@ -23,7 +23,7 @@ fn runs_total() -> Counter<u64> {
                 .u64_counter("aifo_runs_total")
                 .with_description("Total aifo-coder CLI runs")
                 .with_unit("1")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -35,7 +35,7 @@ fn docker_invocations_total() -> Counter<u64> {
                 .u64_counter("docker_invocations_total")
                 .with_description("Total Docker CLI invocations by kind")
                 .with_unit("1")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -47,7 +47,7 @@ fn proxy_requests_total() -> Counter<u64> {
                 .u64_counter("proxy_requests_total")
                 .with_description("Total proxy tool requests by result")
                 .with_unit("1")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -59,7 +59,7 @@ fn sidecars_started_total() -> Counter<u64> {
                 .u64_counter("toolchain_sidecars_started_total")
                 .with_description("Total toolchain sidecars started by kind")
                 .with_unit("1")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -71,7 +71,7 @@ fn sidecars_stopped_total() -> Counter<u64> {
                 .u64_counter("toolchain_sidecars_stopped_total")
                 .with_description("Total toolchain sidecars stopped by kind")
                 .with_unit("1")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -83,7 +83,7 @@ fn docker_run_duration_hist() -> Histogram<f64> {
                 .f64_histogram("docker_run_duration")
                 .with_description("Duration of docker run invocations by agent (s)")
                 .with_unit("s")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -95,7 +95,7 @@ fn proxy_exec_duration_hist() -> Histogram<f64> {
                 .f64_histogram("proxy_exec_duration")
                 .with_description("Duration of proxy exec per tool (s)")
                 .with_unit("s")
-                .init()
+                .build()
         })
         .clone()
 }
@@ -107,7 +107,7 @@ fn registry_probe_duration_hist() -> Histogram<f64> {
                 .f64_histogram("registry_probe_duration")
                 .with_description("Duration of registry probe by source (s)")
                 .with_unit("s")
-                .init()
+                .build()
         })
         .clone()
 }
