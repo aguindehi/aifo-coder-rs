@@ -210,7 +210,7 @@ fn build_metrics_provider_with_status(
         return (Some(provider_builder.build()), MetricsStatus::InstalledDev);
     }
 
-    // Wrap a PushMetricsExporter to log export failures in verbose OTEL mode.
+    // Wrap a PushMetricExporter to log export failures in verbose OTEL mode.
     struct LoggingMetricsExporter<E> {
         inner: E,
     }
@@ -227,39 +227,62 @@ fn build_metrics_provider_with_status(
     {
         fn export(
             &self,
-            rm: &opentelemetry_sdk::metrics::data::ResourceMetrics,
-        ) -> opentelemetry_sdk::metrics::exporter::ExportResult {
-            let res = self.inner.export(rm);
-            if res.is_err() && verbose_otel_enabled() {
-                let use_err = crate::color_enabled_stderr();
-                crate::log_warn_stderr(
-                    use_err,
-                    &format!(
-                        "aifo-coder: telemetry: metrics export failed: {:?}",
-                        res
-                    ),
-                );
-            }
-            res
+            rm: opentelemetry_sdk::metrics::data::ResourceMetrics,
+        ) -> opentelemetry_sdk::metrics::exporter::ExportFuture {
+            let fut = self.inner.export(rm);
+            Box::pin(async move {
+                let res = fut.await;
+                if let Err(ref err) = res {
+                    if verbose_otel_enabled() {
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: telemetry: metrics export failed: {}",
+                                err
+                            ),
+                        );
+                    }
+                }
+                res
+            })
         }
 
-        fn force_flush(&self) -> opentelemetry_sdk::metrics::exporter::ExportResult {
-            let res = self.inner.force_flush();
-            if res.is_err() && verbose_otel_enabled() {
-                let use_err = crate::color_enabled_stderr();
-                crate::log_warn_stderr(
-                    use_err,
-                    &format!(
-                        "aifo-coder: telemetry: metrics exporter force_flush failed: {:?}",
-                        res
-                    ),
-                );
-            }
-            res
+        fn force_flush(
+            &self,
+        ) -> opentelemetry_sdk::metrics::exporter::ExportFuture {
+            let fut = self.inner.force_flush();
+            Box::pin(async move {
+                let res = fut.await;
+                if let Err(ref err) = res {
+                    if verbose_otel_enabled() {
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
+                                err
+                            ),
+                        );
+                    }
+                }
+                res
+            })
         }
 
-        fn shutdown(&self) -> opentelemetry_sdk::metrics::exporter::ExportResult {
+        fn shutdown(&self) -> opentelemetry_sdk::metrics::OTelSdkResult<()> {
             self.inner.shutdown()
+        }
+
+        fn shutdown_with_timeout(
+            &self,
+            timeout: std::time::Duration,
+        ) -> opentelemetry_sdk::metrics::OTelSdkResult<()> {
+            self.inner.shutdown_with_timeout(timeout)
+        }
+
+        fn temporality(&self) -> opentelemetry_sdk::metrics::Temporality {
+            self.inner.temporality()
         }
     }
 
