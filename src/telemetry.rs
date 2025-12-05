@@ -250,24 +250,21 @@ fn build_metrics_provider_with_status(
             }
         }
 
-        fn force_flush(&self) -> impl std::future::Future<Output = OTelSdkResult> + Send {
-            let fut = self.inner.force_flush();
-            async move {
-                let res = fut.await;
-                if let Err(ref err) = res {
-                    if verbose_otel_enabled() {
-                        let use_err = crate::color_enabled_stderr();
-                        crate::log_warn_stderr(
-                            use_err,
-                            &format!(
-                                "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
-                                err
-                            ),
-                        );
-                    }
+        fn force_flush(&self) -> OTelSdkResult {
+            let res = self.inner.force_flush();
+            if let Err(ref err) = res {
+                if verbose_otel_enabled() {
+                    let use_err = crate::color_enabled_stderr();
+                    crate::log_warn_stderr(
+                        use_err,
+                        &format!(
+                            "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
+                            err
+                        ),
+                    );
                 }
-                res
             }
+            res
         }
 
         fn shutdown(&self) -> OTelSdkResult {
