@@ -236,10 +236,7 @@ fn build_metrics_provider_with_status(
                         let use_err = crate::color_enabled_stderr();
                         crate::log_warn_stderr(
                             use_err,
-                            &format!(
-                                "aifo-coder: telemetry: metrics export failed: {}",
-                                err
-                            ),
+                            &format!("aifo-coder: telemetry: metrics export failed: {}", err),
                         );
                     }
                 }
@@ -271,10 +268,7 @@ fn build_metrics_provider_with_status(
             self.inner.shutdown()
         }
 
-        fn shutdown_with_timeout(
-            &self,
-            timeout: std::time::Duration,
-        ) -> OTelSdkResult {
+        fn shutdown_with_timeout(&self, timeout: std::time::Duration) -> OTelSdkResult {
             self.inner.shutdown_with_timeout(timeout)
         }
 
@@ -311,12 +305,14 @@ fn build_metrics_provider_with_status(
             };
             // Wrap exporter so that runtime export/flush failures are logged in verbose OTEL mode.
             let logging_exporter = LoggingMetricsExporter::new(exporter);
-            let reader =
-                opentelemetry_sdk::metrics::PeriodicReader::builder(logging_exporter)
+            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(logging_exporter)
                 .with_interval(interval)
                 .build();
             provider_builder = provider_builder.with_reader(reader);
-            return (Some(provider_builder.build()), MetricsStatus::InstalledOtlpHttp);
+            return (
+                Some(provider_builder.build()),
+                MetricsStatus::InstalledOtlpHttp,
+            );
         }
         #[cfg(not(feature = "otel-otlp"))]
         {
