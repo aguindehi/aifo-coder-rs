@@ -162,7 +162,20 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
         .build()
 }
 
-fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<SdkMeterProvider> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum MetricsStatus {
+    InstalledOtlpHttp,
+    InstalledDev,
+    DisabledEnv,
+    DisabledNoEndpoint,
+    DisabledCreateFailed,
+    DisabledLocalFlood,
+}
+
+fn build_metrics_provider_with_status(
+    use_otlp: bool,
+    _transport: OtelTransport,
+) -> (Option<SdkMeterProvider>, MetricsStatus) {
     // Default: metrics enabled unless explicitly disabled via AIFO_CODER_OTEL_METRICS=0|false|no|off
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
@@ -170,7 +183,7 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
         .map(|v| !(v == "0" || v == "false" || v == "no" || v == "off"))
         .unwrap_or(true);
     if !metrics_enabled {
-        return None;
+        return (None, MetricsStatus::DisabledEnv);
     }
 
     // Export interval (best-effort; default ~2s)
@@ -189,7 +202,7 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
             .with_interval(interval)
             .build();
         provider_builder = provider_builder.with_reader(reader);
-        return Some(provider_builder.build());
+        return (Some(provider_builder.build()), MetricsStatus::InstalledDev);
     }
 
     // Prefer OTLP HTTP/HTTPS exporter when available; avoid stderr flooding otherwise.
@@ -205,19 +218,23 @@ fn build_metrics_provider(use_otlp: bool, _transport: OtelTransport) -> Option<S
                 Ok(exp) => exp,
                 Err(_e) => {
                     // Best-effort: disable metrics locally if exporter creation fails
-                    return None;
+                    return (None, MetricsStatus::DisabledCreateFailed);
                 }
             };
             let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
                 .with_interval(interval)
                 .build();
             provider_builder = provider_builder.with_reader(reader);
-            return Some(provider_builder.build());
+            return (Some(provider_builder.build()), MetricsStatus::InstalledOtlpHttp);
+        }
+        #[cfg(not(feature = "otel-otlp"))]
+        {
+            return (None, MetricsStatus::DisabledNoEndpoint);
         }
     }
 
     // No endpoint available and not in debug mode: disable local metrics to avoid flooding.
-    None
+    (None, MetricsStatus::DisabledLocalFlood)
 }
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {
@@ -312,9 +329,33 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let tracer_provider = build_tracer(use_otlp, transport);
     let tracer = tracer_provider.tracer("aifo-coder");
 
-    let meter_provider = build_metrics_provider(use_otlp, transport);
+    let (meter_provider, metrics_status) = build_metrics_provider_with_status(use_otlp, transport);
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
+    }
+    if verbose_otel {
+        let use_err = crate::color_enabled_stderr();
+        let msg = match metrics_status {
+            MetricsStatus::InstalledOtlpHttp => {
+                "aifo-coder: telemetry: metrics exporter: installed (otlp http)"
+            }
+            MetricsStatus::InstalledDev => {
+                "aifo-coder: telemetry: metrics exporter: installed (dev exporter to stderr/file)"
+            }
+            MetricsStatus::DisabledEnv => {
+                "aifo-coder: telemetry: metrics exporter: disabled (env)"
+            }
+            MetricsStatus::DisabledNoEndpoint => {
+                "aifo-coder: telemetry: metrics exporter: disabled (no endpoint)"
+            }
+            MetricsStatus::DisabledCreateFailed => {
+                "aifo-coder: telemetry: metrics exporter: disabled (exporter creation failed)"
+            }
+            MetricsStatus::DisabledLocalFlood => {
+                "aifo-coder: telemetry: metrics exporter: disabled (local; no endpoint; avoiding flooding)"
+            }
+        };
+        crate::log_info_stderr(use_err, msg);
     }
 
     global::set_tracer_provider(tracer_provider);
