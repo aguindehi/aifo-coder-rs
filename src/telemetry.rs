@@ -319,7 +319,6 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                 "aifo-coder: telemetry: metrics: disabled (env override; enabled by default)",
             );
         }
-        crate::log_info_stderr(use_err, "")
     }
 
     #[cfg(feature = "otel-otlp")]
