@@ -221,9 +221,9 @@ fn build_metrics_provider_with_status(
         }
     }
 
-    impl<E> opentelemetry_sdk::metrics::exporter::PushMetricsExporter for LoggingMetricsExporter<E>
+    impl<E> opentelemetry_sdk::metrics::exporter::PushMetricExporter for LoggingMetricsExporter<E>
     where
-        E: opentelemetry_sdk::metrics::exporter::PushMetricsExporter + Send + Sync + 'static,
+        E: opentelemetry_sdk::metrics::exporter::PushMetricExporter + Send + Sync + 'static,
     {
         fn export(
             &self,
