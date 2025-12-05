@@ -9,7 +9,8 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
-use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::metrics::exporter::{ExportFuture, PushMetricExporter};
+use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
 use opentelemetry_sdk::Resource;
@@ -222,59 +223,62 @@ fn build_metrics_provider_with_status(
         }
     }
 
-    impl<E> opentelemetry_sdk::metrics::exporter::PushMetricExporter for LoggingMetricsExporter<E>
+    impl<E> PushMetricExporter for LoggingMetricsExporter<E>
     where
-        E: opentelemetry_sdk::metrics::exporter::PushMetricExporter + Send + Sync + 'static,
+        E: PushMetricExporter + Send + Sync + 'static,
     {
-        fn export(
-            &self,
-            rm: &opentelemetry_sdk::metrics::data::ResourceMetrics,
-        ) -> OTelSdkResult<()> {
-            let res = self.inner.export(rm);
-            if let Err(ref err) = res {
-                if verbose_otel_enabled() {
-                    let use_err = crate::color_enabled_stderr();
-                    crate::log_warn_stderr(
-                        use_err,
-                        &format!(
-                            "aifo-coder: telemetry: metrics export failed: {}",
-                            err
-                        ),
-                    );
+        fn export(&self, rm: &ResourceMetrics) -> ExportFuture {
+            let fut = self.inner.export(rm);
+            Box::pin(async move {
+                let res = fut.await;
+                if let Err(ref err) = res {
+                    if verbose_otel_enabled() {
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: telemetry: metrics export failed: {}",
+                                err
+                            ),
+                        );
+                    }
                 }
-            }
-            res
+                res
+            })
         }
 
-        fn force_flush(&self) -> OTelSdkResult<()> {
-            let res = self.inner.force_flush();
-            if let Err(ref err) = res {
-                if verbose_otel_enabled() {
-                    let use_err = crate::color_enabled_stderr();
-                    crate::log_warn_stderr(
-                        use_err,
-                        &format!(
-                            "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
-                            err
-                        ),
-                    );
+        fn force_flush(&self) -> ExportFuture {
+            let fut = self.inner.force_flush();
+            Box::pin(async move {
+                let res = fut.await;
+                if let Err(ref err) = res {
+                    if verbose_otel_enabled() {
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
+                                err
+                            ),
+                        );
+                    }
                 }
-            }
-            res
+                res
+            })
         }
 
-        fn shutdown(&self) -> OTelSdkResult<()> {
+        fn shutdown(&self) -> OTelSdkResult {
             self.inner.shutdown()
         }
 
         fn shutdown_with_timeout(
             &self,
             timeout: std::time::Duration,
-        ) -> OTelSdkResult<()> {
+        ) -> OTelSdkResult {
             self.inner.shutdown_with_timeout(timeout)
         }
 
-        fn temporality(&self) -> opentelemetry_sdk::metrics::Temporality {
+        fn temporality(&self) -> Temporality {
             self.inner.temporality()
         }
     }
@@ -287,7 +291,7 @@ fn build_metrics_provider_with_status(
                 effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
             let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
                 .with_endpoint(ep)
-                .build_metrics_exporter(opentelemetry_sdk::metrics::Temporality::Cumulative)
+                .build_metrics_exporter(Temporality::Cumulative)
             {
                 Ok(exp) => exp,
                 Err(e) => {
