@@ -286,8 +286,9 @@ fn build_metrics_provider_with_status(
         {
             let ep =
                 effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
-            let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
-                .with_endpoint(ep)
+            let exporter = match opentelemetry_otlp::new_exporter()
+                .http()
+                .with_endpoint(ep.clone())
                 .build_metrics_exporter(Temporality::Cumulative)
             {
                 Ok(exp) => exp,
