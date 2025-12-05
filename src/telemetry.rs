@@ -91,6 +91,11 @@ fn telemetry_debug_otlp() -> bool {
     env::var("AIFO_CODER_OTEL_DEBUG_OTLP").ok().as_deref() == Some("1")
 }
 
+/// Return true when verbose OTEL logging is enabled (wired from CLI --verbose).
+fn verbose_otel_enabled() -> bool {
+    env::var("AIFO_CODER_OTEL_VERBOSE").ok().as_deref() == Some("1")
+}
+
 /// Compute or retrieve a per-process FNV-1a salt derived from pid and start time.
 fn hash_salt() -> u64 {
     *HASH_SALT.get_or_init(|| {
@@ -205,6 +210,59 @@ fn build_metrics_provider_with_status(
         return (Some(provider_builder.build()), MetricsStatus::InstalledDev);
     }
 
+    // Wrap a PushMetricsExporter to log export failures in verbose OTEL mode.
+    struct LoggingMetricsExporter<E> {
+        inner: E,
+    }
+
+    impl<E> LoggingMetricsExporter<E> {
+        fn new(inner: E) -> Self {
+            Self { inner }
+        }
+    }
+
+    impl<E> opentelemetry_sdk::metrics::exporter::PushMetricsExporter for LoggingMetricsExporter<E>
+    where
+        E: opentelemetry_sdk::metrics::exporter::PushMetricsExporter + Send + Sync + 'static,
+    {
+        fn export(
+            &self,
+            rm: &opentelemetry_sdk::metrics::data::ResourceMetrics,
+        ) -> opentelemetry_sdk::metrics::exporter::ExportResult {
+            let res = self.inner.export(rm);
+            if res.is_err() && verbose_otel_enabled() {
+                let use_err = crate::color_enabled_stderr();
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: telemetry: metrics export failed: {:?}",
+                        res
+                    ),
+                );
+            }
+            res
+        }
+
+        fn force_flush(&self) -> opentelemetry_sdk::metrics::exporter::ExportResult {
+            let res = self.inner.force_flush();
+            if res.is_err() && verbose_otel_enabled() {
+                let use_err = crate::color_enabled_stderr();
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: telemetry: metrics exporter force_flush failed: {:?}",
+                        res
+                    ),
+                );
+            }
+            res
+        }
+
+        fn shutdown(&self) -> opentelemetry_sdk::metrics::exporter::ExportResult {
+            self.inner.shutdown()
+        }
+    }
+
     // Prefer OTLP HTTP/HTTPS exporter when available; avoid stderr flooding otherwise.
     if use_otlp {
         #[cfg(feature = "otel-otlp")]
@@ -216,12 +274,25 @@ fn build_metrics_provider_with_status(
                 .build_metrics_exporter(opentelemetry_sdk::metrics::Temporality::Cumulative)
             {
                 Ok(exp) => exp,
-                Err(_e) => {
+                Err(e) => {
                     // Best-effort: disable metrics locally if exporter creation fails
+                    if verbose_otel_enabled() {
+                        let use_err = crate::color_enabled_stderr();
+                        crate::log_warn_stderr(
+                            use_err,
+                            &format!(
+                                "aifo-coder: telemetry: failed to build OTLP metrics exporter: {}",
+                                e
+                            ),
+                        );
+                    }
                     return (None, MetricsStatus::DisabledCreateFailed);
                 }
             };
-            let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+            // Wrap exporter so that runtime export/flush failures are logged in verbose OTEL mode.
+            let logging_exporter = LoggingMetricsExporter::new(exporter);
+            let reader =
+                opentelemetry_sdk::metrics::PeriodicReader::builder(logging_exporter)
                 .with_interval(interval)
                 .build();
             provider_builder = provider_builder.with_reader(reader);
