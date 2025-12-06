@@ -1206,12 +1206,12 @@ fn handle_connection<S: Read + Write>(
             hash_string_hex(&cwd)
         };
         let span = info_span!(
-            "proxy_request",
-            tool = %tool,
-            kind = %kind,
-            arg_count = argv.len(),
-            cwd = %cwd_field,
-            session_id = %session
+            "aifo_coder_proxy_request",
+            aifo_coder_tool = %tool,
+            aifo_coder_kind = %kind,
+            aifo_coder_arg_count = argv.len(),
+            aifo_coder_cwd = %cwd_field,
+            aifo_coder_session_id = %session
         );
         span.set_parent(parent_cx);
         span.entered()
@@ -1361,7 +1361,8 @@ fn handle_connection<S: Read + Write>(
                     use opentelemetry::trace::{Status, TraceContextExt};
                     use tracing_opentelemetry::OpenTelemetrySpanExt;
                     let cx = tracing::Span::current().context();
-                    cx.span().set_status(Status::error("spawn_failed"));
+                    cx.span()
+                        .set_status(Status::error("aifo_coder_spawn_failed"));
                 }
                 log_request_result(verbose, &tool, kind, 86, &started);
                 respond_plain(stream, "500 Internal Server Error", 86, &b);
@@ -1778,10 +1779,13 @@ fn handle_connection<S: Read + Write>(
             // Set span status on errors/timeouts (concise message).
             let cx = tracing::Span::current().context();
             if result == "timeout" {
-                cx.span().set_status(Status::error("proxy_timeout"));
-            } else if result == "err" {
                 cx.span()
-                    .set_status(Status::error(format!("exit_code={}", code)));
+                    .set_status(Status::error("aifo_coder_proxy_timeout"));
+            } else if result == "err" {
+                cx.span().set_status(Status::error(format!(
+                    "aifo_coder_exit_code={}",
+                    code
+                )));
             }
             crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
             crate::telemetry::metrics::record_proxy_request(&tool, result);
@@ -1864,7 +1868,8 @@ fn handle_connection<S: Read + Write>(
                 use opentelemetry::trace::{Status, TraceContextExt};
                 use tracing_opentelemetry::OpenTelemetrySpanExt;
                 let cx = tracing::Span::current().context();
-                cx.span().set_status(Status::error("spawn_failed"));
+                cx.span()
+                    .set_status(Status::error("aifo_coder_spawn_failed"));
             }
             log_request_result(verbose, &tool, kind, 86, &started);
             respond_plain(stream, "500 Internal Server Error", 86, &b);
@@ -2002,10 +2007,13 @@ fn handle_connection<S: Read + Write>(
         };
         let cx = tracing::Span::current().context();
         if result == "timeout" {
-            cx.span().set_status(Status::error("proxy_timeout"));
-        } else if result == "err" {
             cx.span()
-                .set_status(Status::error(format!("exit_code={}", code)));
+                .set_status(Status::error("aifo_coder_proxy_timeout"));
+        } else if result == "err" {
+            cx.span().set_status(Status::error(format!(
+                "aifo_coder_exit_code={}",
+                code
+            )));
         }
         crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
         crate::telemetry::metrics::record_proxy_request(&tool, result);

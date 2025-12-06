@@ -39,7 +39,7 @@ impl Drop for RepoLock {
         level = "info",
         err,
         skip(),
-        fields(candidate_paths = candidate_lock_paths().len())
+        fields(aifo_coder_candidate_paths = candidate_lock_paths().len())
     )
 )]
 /// Acquire a non-blocking exclusive lock using default candidate lock paths.
@@ -73,7 +73,8 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                         use opentelemetry::trace::{Status, TraceContextExt};
                         use tracing_opentelemetry::OpenTelemetrySpanExt;
                         let cx = tracing::Span::current().context();
-                        cx.span().set_status(Status::error("lock_held"));
+                        cx.span()
+                            .set_status(Status::error("aifo_coder_lock_held"));
                     }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
@@ -107,11 +108,12 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
         {
             // Avoid embedding raw paths directly; log a concise hashed summary instead.
             let status_msg = crate::telemetry::hash_string_hex(&msg);
-            tracing::error!("lock acquisition failed: {}", status_msg);
+            let status = format!("aifo_coder_lock_acquisition_failed:{}", status_msg);
+            tracing::error!("lock acquisition failed: {}", status);
             use opentelemetry::trace::{Status, TraceContextExt};
             use tracing_opentelemetry::OpenTelemetrySpanExt;
             let cx = tracing::Span::current().context();
-            cx.span().set_status(Status::error(status_msg));
+            cx.span().set_status(Status::error(status));
         }
     }
     Err(io::Error::other(crate::display_for_fork_error(
@@ -153,7 +155,8 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                         use opentelemetry::trace::{Status, TraceContextExt};
                         use tracing_opentelemetry::OpenTelemetrySpanExt;
                         let cx = tracing::Span::current().context();
-                        cx.span().set_status(Status::error("lock_held"));
+                        cx.span()
+                            .set_status(Status::error("aifo_coder_lock_held"));
                     }
                     Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(
