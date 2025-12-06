@@ -239,10 +239,7 @@ fn build_metrics_provider_with_status(
                         let use_err = crate::color_enabled_stderr();
                         crate::log_warn_stderr(
                             use_err,
-                            &format!(
-                                "aifo-coder: telemetry: metrics export failed: {}",
-                                err
-                            ),
+                            &format!("aifo-coder: telemetry: metrics export failed: {}", err),
                         );
                     }
                 }

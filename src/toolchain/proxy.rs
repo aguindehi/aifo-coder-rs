@@ -1782,10 +1782,8 @@ fn handle_connection<S: Read + Write>(
                 cx.span()
                     .set_status(Status::error("aifo_coder_proxy_timeout"));
             } else if result == "err" {
-                cx.span().set_status(Status::error(format!(
-                    "aifo_coder_exit_code={}",
-                    code
-                )));
+                cx.span()
+                    .set_status(Status::error(format!("aifo_coder_exit_code={}", code)));
             }
             crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
             crate::telemetry::metrics::record_proxy_request(&tool, result);
@@ -2010,10 +2008,8 @@ fn handle_connection<S: Read + Write>(
             cx.span()
                 .set_status(Status::error("aifo_coder_proxy_timeout"));
         } else if result == "err" {
-            cx.span().set_status(Status::error(format!(
-                "aifo_coder_exit_code={}",
-                code
-            )));
+            cx.span()
+                .set_status(Status::error(format!("aifo_coder_exit_code={}", code)));
         }
         crate::telemetry::metrics::record_proxy_exec_duration(&tool, secs);
         crate::telemetry::metrics::record_proxy_request(&tool, result);

@@ -73,8 +73,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                         use opentelemetry::trace::{Status, TraceContextExt};
                         use tracing_opentelemetry::OpenTelemetrySpanExt;
                         let cx = tracing::Span::current().context();
-                        cx.span()
-                            .set_status(Status::error("aifo_coder_lock_held"));
+                        cx.span().set_status(Status::error("aifo_coder_lock_held"));
                     }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
@@ -155,8 +154,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                         use opentelemetry::trace::{Status, TraceContextExt};
                         use tracing_opentelemetry::OpenTelemetrySpanExt;
                         let cx = tracing::Span::current().context();
-                        cx.span()
-                            .set_status(Status::error("aifo_coder_lock_held"));
+                        cx.span().set_status(Status::error("aifo_coder_lock_held"));
                     }
                     Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(

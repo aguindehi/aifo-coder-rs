@@ -147,7 +147,10 @@ pub fn record_sidecar_stopped(kind: &str) {
 
 pub fn record_docker_run_duration(agent: &str, secs: f64) {
     let h = docker_run_duration_hist();
-    h.record(secs, &[KeyValue::new("aifo_coder_agent", agent.to_string())]);
+    h.record(
+        secs,
+        &[KeyValue::new("aifo_coder_agent", agent.to_string())],
+    );
 }
 
 pub fn record_proxy_exec_duration(tool: &str, secs: f64) {
@@ -157,5 +160,8 @@ pub fn record_proxy_exec_duration(tool: &str, secs: f64) {
 
 pub fn record_registry_probe_duration(source: &str, secs: f64) {
     let h = registry_probe_duration_hist();
-    h.record(secs, &[KeyValue::new("aifo_coder_source", source.to_string())]);
+    h.record(
+        secs,
+        &[KeyValue::new("aifo_coder_source", source.to_string())],
+    );
 }

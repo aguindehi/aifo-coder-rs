@@ -921,10 +921,8 @@ pub fn toolchain_run(
             let secs = _started.elapsed().as_secs_f64();
             if exit_code != 0 {
                 let cx = tracing::Span::current().context();
-                cx.span().set_status(Status::error(format!(
-                    "aifo_coder_exit_code={}",
-                    exit_code
-                )));
+                cx.span()
+                    .set_status(Status::error(format!("aifo_coder_exit_code={}", exit_code)));
             }
             crate::telemetry::metrics::record_docker_run_duration(kind_in, secs);
             crate::telemetry::metrics::record_docker_invocation("exec");

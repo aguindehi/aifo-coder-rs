@@ -91,11 +91,7 @@ pub fn invalidate_registry_cache() {
 /// Mirror registry (quiet): probe via curl then TCP; cache OnceCell + on-disk.
 #[cfg_attr(
     feature = "otel",
-    instrument(
-        level = "debug",
-        skip(),
-        fields(aifo_coder_source = "mirror_quiet")
-    )
+    instrument(level = "debug", skip(), fields(aifo_coder_source = "mirror_quiet"))
 )]
 pub fn preferred_mirror_registry_prefix_quiet() -> String {
     if let Some(mode) = *REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock") {
@@ -208,11 +204,7 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
 /// Mirror registry: return how it was determined ("curl", "tcp", or "unknown" for overrides/unset).
 #[cfg_attr(
     feature = "otel",
-    instrument(
-        level = "debug",
-        skip(),
-        fields(aifo_coder_source = "mirror_source")
-    )
+    instrument(level = "debug", skip(), fields(aifo_coder_source = "mirror_source"))
 )]
 pub fn preferred_mirror_registry_source() -> String {
     if REGISTRY_PROBE_OVERRIDE
@@ -241,11 +233,7 @@ pub fn preferred_mirror_registry_source() -> String {
 /// Internal registry (env-only; no probe, no disk cache)
 #[cfg_attr(
     feature = "otel",
-    instrument(
-        level = "debug",
-        skip(),
-        fields(aifo_coder_source = "internal_quiet")
-    )
+    instrument(level = "debug", skip(), fields(aifo_coder_source = "internal_quiet"))
 )]
 pub fn preferred_internal_registry_prefix_quiet() -> String {
     if let Some(v) = INTERNAL_REGISTRY_PREFIX_CACHE.get() {
@@ -279,11 +267,7 @@ pub fn preferred_internal_registry_prefix_quiet() -> String {
 /// Internal registry source: "env" | "env-empty" | "unset"
 #[cfg_attr(
     feature = "otel",
-    instrument(
-        level = "debug",
-        skip(),
-        fields(aifo_coder_source = "internal_source")
-    )
+    instrument(level = "debug", skip(), fields(aifo_coder_source = "internal_source"))
 )]
 pub fn preferred_internal_registry_source() -> String {
     INTERNAL_REGISTRY_SOURCE
