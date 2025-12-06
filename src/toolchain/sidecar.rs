@@ -44,7 +44,7 @@ pub(crate) fn sidecar_network_name(id: &str) -> String {
     instrument(
         level = "info",
         skip(runtime),
-        fields(network = %name, verbose = %verbose)
+        fields(aifo_coder_network = %name, aifo_coder_verbose = %verbose)
     )
 )]
 pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
@@ -109,7 +109,7 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
     instrument(
         level = "debug",
         skip(runtime),
-        fields(network = %name, verbose = %verbose)
+        fields(aifo_coder_network = %name, aifo_coder_verbose = %verbose)
     )
 )]
 pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
@@ -739,10 +739,10 @@ mod bootstrap_guard_tests {
         err,
         skip(args, image_override),
         fields(
-            kind = %kind_in,
-            no_cache = %no_cache,
-            verbose = %verbose,
-            dry_run = %dry_run
+            aifo_coder_kind = %kind_in,
+            aifo_coder_no_cache = %no_cache,
+            aifo_coder_verbose = %verbose,
+            aifo_coder_dry_run = %dry_run
         )
     )
 )]
@@ -922,7 +922,7 @@ pub fn toolchain_run(
             if exit_code != 0 {
                 let cx = tracing::Span::current().context();
                 cx.span()
-                    .set_status(Status::error(format!("exit_code={}", exit_code)));
+                    .set_status(Status::error(format!("aifo_coder_exit_code={}", exit_code)));
             }
             crate::telemetry::metrics::record_docker_run_duration(kind_in, secs);
             crate::telemetry::metrics::record_docker_invocation("exec");
@@ -962,7 +962,11 @@ pub fn toolchain_run(
         level = "info",
         err,
         skip(overrides),
-        fields(kinds = ?kinds, no_cache = %no_cache, verbose = %verbose)
+        fields(
+            aifo_coder_kinds = ?kinds,
+            aifo_coder_no_cache = %no_cache,
+            aifo_coder_verbose = %verbose
+        )
     )
 )]
 pub fn toolchain_start_session(
@@ -1079,7 +1083,8 @@ pub fn toolchain_start_session(
                         use opentelemetry::trace::{Status, TraceContextExt};
                         use tracing_opentelemetry::OpenTelemetrySpanExt;
                         let cx = tracing::Span::current().context();
-                        cx.span().set_status(Status::error("sidecar_start_failed"));
+                        cx.span()
+                            .set_status(Status::error("aifo_coder_sidecar_start_failed"));
                     }
                     return Err(io::Error::other(crate::display_for_toolchain_error(
                         &ToolchainError::Message(
@@ -1163,7 +1168,12 @@ pub fn toolchain_purge_volume_names() -> &'static [&'static str] {
 /// Purge all named Docker volumes used as toolchain caches (rust, node, python, c/cpp, go).
 #[cfg_attr(
     feature = "otel",
-    instrument(level = "info", err, skip(), fields(verbose = %verbose))
+    instrument(
+        level = "info",
+        err,
+        skip(),
+        fields(aifo_coder_verbose = %verbose)
+    )
 )]
 pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
     let runtime = container_runtime_path()?;
@@ -1197,7 +1207,10 @@ pub fn toolchain_purge_caches(verbose: bool) -> io::Result<()> {
         level = "info",
         err,
         skip(verbose),
-        fields(session_id = %session_id, verbose = %verbose)
+        fields(
+            aifo_coder_session_id = %session_id,
+            aifo_coder_verbose = %verbose
+        )
     )
 )]
 pub fn toolchain_bootstrap_typescript_global(session_id: &str, verbose: bool) -> io::Result<()> {
