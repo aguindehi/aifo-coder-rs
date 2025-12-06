@@ -40,6 +40,16 @@ Enablement rules (when built with `--features otel`):
 - `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty) selects the OTLP endpoint (HTTP/HTTPS); it does not by itself change enablement.
 - CLI `--verbose` sets `AIFO_CODER_OTEL_VERBOSE=1` to print concise initialization info on stderr.
 
+Endpoint selection and precedence:
+
+1. **Runtime override**: if `OTEL_EXPORTER_OTLP_ENDPOINT` is set and non-empty at runtime, it is used.
+2. **Baked-in default**: otherwise, if the binary was built with a baked-in default (`AIFO_OTEL_DEFAULT_ENDPOINT`,
+   set at compile time by `build.rs`), that value is used.
+3. **Fallback**: if neither of the above is present, `https://localhost:4318` is used as a safe local default.
+
+The baked-in `AIFO_OTEL_DEFAULT_ENDPOINT` is not meant to be set manually; it is derived from build-time inputs
+(see Section 2.2). At runtime, `OTEL_EXPORTER_OTLP_ENDPOINT` always has highest precedence.
+
 Basic usage examples:
 
 ```bash
@@ -68,6 +78,31 @@ Notes:
 - The exporter uses OTLP over HTTP/HTTPS and respects `OTEL_EXPORTER_OTLP_TIMEOUT` (default 5s) and
   `OTEL_BSP_*` batch settings.
 - A PeriodicReader is used for metrics export; no dedicated Tokio runtime is required for traces.
+
+### 2.2 Build-time defaults for OTLP endpoint (CI / release binaries)
+
+Release binaries can carry a baked-in default OTLP endpoint and transport. This is configured at **build time**
+via `build.rs` and a small set of environment variables:
+
+- `AIFO_OTEL_ENDPOINT_FILE` (preferred in some environments):
+  - If set, `build.rs` reads the first non-empty line as the default endpoint and the second non-empty line
+    (optional) as the transport (`grpc` or `http`).
+- `AIFO_OTEL_ENDPOINT`:
+  - If set and non-empty, `build.rs` bakes it into the binary as `AIFO_OTEL_DEFAULT_ENDPOINT`.
+- `AIFO_OTEL_TRANSPORT`:
+  - If set to `grpc` or `http`, `build.rs` bakes it into the binary as `AIFO_OTEL_DEFAULT_TRANSPORT`.
+
+At runtime, `effective_otlp_endpoint()` uses this baked-in `AIFO_OTEL_DEFAULT_ENDPOINT` if present and if
+`OTEL_EXPORTER_OTLP_ENDPOINT` is not set. In CI, the launcher build jobs pass through:
+
+- `AIFO_OTEL_ENDPOINT`
+- `AIFO_OTEL_TRANSPORT`
+
+as job-level variables, with their actual values configured as **protected GitLab CI variables** (not hardcoded
+in `.gitlab-ci.yml`). This allows release binaries to default to a corporate OTLP/Alloy collector while
+keeping the endpoint configurable outside the repo.
+
+Local builds can do the same by exporting `AIFO_OTEL_ENDPOINT`/`AIFO_OTEL_TRANSPORT` before running `cargo build`.
 
 ## 3. Logging and fmt layer
 
@@ -155,6 +190,10 @@ This job ensures:
 - The crate builds successfully with `--features otel`.
 - Enabling telemetry does not change the CLI stdout for a short run like `--help`.
 - A metrics-enabled run succeeds without panics and with proper shutdown/flush.
+
+The golden stdout test runs against the Rust crate directly; it is unaffected by any baked-in
+`AIFO_OTEL_DEFAULT_ENDPOINT`/`AIFO_OTEL_DEFAULT_TRANSPORT` used in release binaries. Those build-time
+defaults only influence where telemetry is exported, not the CLI stdout or exit codes.
 
 An optional OTLP CI job can be added if a collector is available, e.g.:
 

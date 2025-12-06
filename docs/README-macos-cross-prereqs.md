@@ -37,6 +37,13 @@ Required GitLab CI variables
 - APPLE_SDK_SHA256 (masked + protected)
   - Exact SHA-256 digest (64 hex characters) for the tarball at APPLE_SDK_URL.
   - Used for integrity verification in both producer and consumer jobs.
+- AIFO_OTEL_ENDPOINT (protected)
+  - Optional but recommended for release pipelines.
+  - OTLP HTTP/HTTPS endpoint used as the **default** metrics/traces endpoint baked into launcher binaries via `build.rs`.
+  - Must not be hard-coded into `.gitlab-ci.yml`; configure at project or group level.
+- AIFO_OTEL_TRANSPORT (protected)
+  - Optional; one of `http` or `grpc` (currently only HTTP is used at runtime).
+  - When set, `build.rs` bakes it into the binary as `AIFO_OTEL_DEFAULT_TRANSPORT`.
 
 Optional CI variables
 - APPLE_SDK_BASE64 (masked + protected)
