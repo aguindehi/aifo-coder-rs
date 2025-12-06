@@ -171,16 +171,36 @@ for normal use (disable via `AIFO_CODER_OTEL=0|false|no|off`).
 Examples:
 
 ```bash
+# Build the launcher with telemetry features (uses CARGO_FLAGS, default: --features otel-otlp)
+make build-launcher
+
 # Disable telemetry (baseline)
-AIFO_CODER_OTEL=0 cargo run --features otel -- --help
+AIFO_CODER_OTEL=0 ./aifo-coder --help
+
+# Build with a baked-in default OTLP endpoint (local build; CI uses protected variables)
+AIFO_OTEL_ENDPOINT=https://localhost:4318 \
+AIFO_OTEL_TRANSPORT=http \
+make build-launcher
+
+# At runtime, override baked-in defaults with OTEL_EXPORTER_OTLP_ENDPOINT
+OTEL_EXPORTER_OTLP_ENDPOINT=https://other-collector:4318 \
+./aifo-coder --help
 
 # Traces with fmt logging and RUST_LOG control
 AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
-  cargo run --features otel -- --help
+  ./aifo-coder --help
 
-# Send metrics/traces via OTLP HTTP (if compiled with otel-otlp)
+# Send metrics/traces via OTLP HTTP (launcher built with otel-otlp features)
 OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
-  cargo run --features otel-otlp -- --help
+  ./aifo-coder --help
+```
+
+For crate-level development without the Makefile or launcher, you can still use:
+
+```bash
+cargo build --features otel
+cargo build --features otel-otlp
+cargo run --features otel -- --help
 ```
 
 - Exporters and sinks:

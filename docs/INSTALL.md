@@ -29,6 +29,13 @@ Notes:
     runtime. Internal namespaces do not apply to MR.
   - Internal namespace: set AIFO_CODER_INTERNAL_REGISTRY_NAMESPACE for the path segment used with
     the internal registry (default: ai-foundation/prototypes/aifo-coder-rs).
+- OTEL defaults for release binaries:
+  - Release launchers may be built in CI with a baked-in default OTLP endpoint and transport, derived from
+    CI variables `AIFO_OTEL_ENDPOINT` and `AIFO_OTEL_TRANSPORT` via `build.rs`.
+  - At runtime, you can always override the endpoint with `OTEL_EXPORTER_OTLP_ENDPOINT`; setting
+    `AIFO_CODER_OTEL=0|false|no|off` disables telemetry entirely.
+  - For local builds, you can opt into a specific default by exporting `AIFO_OTEL_ENDPOINT`/`AIFO_OTEL_TRANSPORT`
+    before running `cargo build`.
 - Agent image overrides:
   - AIFO_CODER_AGENT_IMAGE: full image reference used verbatim (host/path:tag or @digest).
   - AIFO_CODER_AGENT_TAG: retags the default agent image (e.g., release-0.6.3).

@@ -419,6 +419,11 @@ build-launcher-macos:
   image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
   tags:
     - qual-mcap-gcp
+  variables:
+    # Use CI-level AIFO_OTEL_ENDPOINT / AIFO_OTEL_TRANSPORT (if defined) to bake in OTLP defaults via build.rs.
+    # Values should be configured as protected CI variables, not hardcoded here.
+    AIFO_OTEL_ENDPOINT: "${AIFO_OTEL_ENDPOINT}"
+    AIFO_OTEL_TRANSPORT: "${AIFO_OTEL_TRANSPORT}"
   script:
     - rustc --version; cargo --version
     - rustup target add aarch64-apple-darwin || true
@@ -443,6 +448,11 @@ build-launcher-macos-x86_64:
   image: $CI_REGISTRY_IMAGE/aifo-coder-macos-cross-rust-builder:$CI_COMMIT_TAG
   tags:
     - qual-mcap-gcp
+  variables:
+    # Use CI-level AIFO_OTEL_ENDPOINT / AIFO_OTEL_TRANSPORT (if defined) to bake in OTLP defaults via build.rs.
+    # Values should be configured as protected CI variables, not hardcoded here.
+    AIFO_OTEL_ENDPOINT: "${AIFO_OTEL_ENDPOINT}"
+    AIFO_OTEL_TRANSPORT: "${AIFO_OTEL_TRANSPORT}"
   script:
     - rustc --version; cargo --version
     - rustup target add x86_64-apple-darwin || true
@@ -476,6 +486,11 @@ build-launcher:
   image: $CI_REGISTRY_IMAGE/aifo-coder-rust-builder:$CI_COMMIT_TAG
   tags: # List of CI runners: https://wiki.migros.net/spaces/DEVOPS/pages/911828024/GitLab+CI+Runners#GitLabCIRunners-CIrunners
     - qual-mcap-gcp
+  variables:
+    # Use CI-level AIFO_OTEL_ENDPOINT / AIFO_OTEL_TRANSPORT (if defined) to bake in OTLP defaults via build.rs.
+    # Values should be configured as protected CI variables, not hardcoded here.
+    AIFO_OTEL_ENDPOINT: "${AIFO_OTEL_ENDPOINT}"
+    AIFO_OTEL_TRANSPORT: "${AIFO_OTEL_TRANSPORT}"
   script:
     - cargo --version
     - rustc --version
