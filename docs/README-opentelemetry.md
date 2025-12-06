@@ -20,7 +20,14 @@ Telemetry is guarded by two Cargo features, both disabled by default:
   - Extends `otel` with OTLP HTTP exporter support (via `opentelemetry-otlp` with `http-proto`).
   - Uses a PeriodicReader for metrics when an endpoint is configured; no dedicated Tokio runtime is required for traces.
 
-Example builds:
+Example builds (launcher via Makefile):
+
+```bash
+# Build launcher with telemetry features (CARGO_FLAGS controls features; default: --features otel-otlp)
+make build-launcher
+```
+
+For direct crate-level development (without the Makefile/launcher), you can still use:
 
 ```bash
 cargo build --features otel
@@ -53,15 +60,18 @@ The baked-in `AIFO_OTEL_DEFAULT_ENDPOINT` is not meant to be set manually; it is
 Basic usage examples:
 
 ```bash
+# Build the launcher with telemetry features (uses CARGO_FLAGS, default: --features otel-otlp)
+make build-launcher
+
 # Traces to stderr via stdout exporter (no fmt layer, no extra logs)
 AIFO_CODER_OTEL=1 \
-cargo run --features otel -- --help
+./aifo-coder --help
 
 # Traces with fmt layer enabled (logs on stderr; RUST_LOG respected)
 AIFO_CODER_OTEL=1 \
 AIFO_CODER_TRACING_FMT=1 \
 RUST_LOG=info \
-cargo run --features otel -- --help
+./aifo-coder --help
 ```
 
 ### 2.1 OTLP exporter
@@ -69,8 +79,11 @@ cargo run --features otel -- --help
 When compiled with `--features otel-otlp` and `OTEL_EXPORTER_OTLP_ENDPOINT` is set:
 
 ```bash
+# Build the launcher with otel-otlp features (via CARGO_FLAGS)
+make build-launcher
+
 OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
-cargo run --features otel-otlp -- --help
+./aifo-coder --help
 ```
 
 Notes:
@@ -117,10 +130,13 @@ To opt into stderr logs via `tracing-subscriber::fmt`:
 Example:
 
 ```bash
+# Build the launcher with telemetry features first
+make build-launcher
+
 AIFO_CODER_OTEL=1 \
 AIFO_CODER_TRACING_FMT=1 \
 RUST_LOG=aifo_coder=info \
-cargo run --features otel -- --help
+./aifo-coder --help
 ```
 
 Without `AIFO_CODER_TRACING_FMT=1`, the fmt layer is not installed and `RUST_LOG` has no
@@ -138,9 +154,11 @@ Environment variables:
 Example (dev exporters; traces to stderr, metrics to stderr/file):
 
 ```bash
+make build-launcher
+
 AIFO_CODER_OTEL=1 \
 AIFO_CODER_OTEL_METRICS=1 \
-cargo run --features otel -- --help
+./aifo-coder --help
 ```
 
 When `otel-otlp` is enabled and `OTEL_EXPORTER_OTLP_ENDPOINT` is set, metrics are exported via
@@ -217,7 +235,7 @@ otel-otlp-smoke:
   - Ensure telemetry is not disabled (`AIFO_CODER_OTEL` unset or set to `1`).
   - Set `OTEL_EXPORTER_OTLP_ENDPOINT` (HTTP/HTTPS, e.g., `https://localhost:4318`).
   - Ensure network connectivity from the host to the collector.
-  - For local visibility without an endpoint, enable the fmt layer (`AIFO_CODER_TRACING_FMT=1` and `RUST_LOG`).
+  - For local visibility without an endpoint, enable the fmt layer (`AIFO_CODER_TRACING_FMT=1` and `RUST_LOG`) and run `./aifo-coder` after `make build-launcher`.
 
 - **Unexpected stderr logs**  
   - Ensure `AIFO_CODER_TRACING_FMT` is not set (or set to `"0"`).
