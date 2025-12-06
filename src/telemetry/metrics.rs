@@ -137,12 +137,12 @@ pub fn record_proxy_request(tool: &str, result: &str) {
 
 pub fn record_sidecar_started(kind: &str) {
     let c = sidecars_started_total();
-    c.add(1, &[KeyValue::new("kind", kind.to_string())]);
+    c.add(1, &[KeyValue::new("aifo_coder_kind", kind.to_string())]);
 }
 
 pub fn record_sidecar_stopped(kind: &str) {
     let c = sidecars_stopped_total();
-    c.add(1, &[KeyValue::new("kind", kind.to_string())]);
+    c.add(1, &[KeyValue::new("aifo_coder_kind", kind.to_string())]);
 }
 
 pub fn record_docker_run_duration(agent: &str, secs: f64) {

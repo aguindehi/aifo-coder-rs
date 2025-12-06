@@ -114,11 +114,11 @@ impl ToolchainSession {
             err,
             skip(cli),
             fields(
-                toolchain_count = cli.toolchain.len(),
-                spec_count = cli.toolchain_spec.len(),
-                no_cache = %cli.no_toolchain_cache,
-                dry_run = %cli.dry_run,
-                verbose = %cli.verbose
+                aifo_coder_toolchain_count = cli.toolchain.len(),
+                aifo_coder_spec_count = cli.toolchain_spec.len(),
+                aifo_coder_no_cache = %cli.no_toolchain_cache,
+                aifo_coder_dry_run = %cli.dry_run,
+                aifo_coder_verbose = %cli.verbose
             )
         )
     )]

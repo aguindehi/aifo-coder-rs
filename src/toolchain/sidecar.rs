@@ -962,7 +962,11 @@ pub fn toolchain_run(
         level = "info",
         err,
         skip(overrides),
-        fields(kinds = ?kinds, no_cache = %no_cache, verbose = %verbose)
+        fields(
+            aifo_coder_kinds = ?kinds,
+            aifo_coder_no_cache = %no_cache,
+            aifo_coder_verbose = %verbose
+        )
     )
 )]
 pub fn toolchain_start_session(

@@ -74,7 +74,11 @@ fn apparmor_profile_available(_name: &str) -> bool {
 
 #[cfg_attr(
     feature = "otel",
-    instrument(level = "debug", skip(), fields(source = "noisy"))
+    instrument(
+        level = "debug",
+        skip(),
+        fields(aifo_coder_source = "noisy")
+    )
 )]
 pub fn desired_apparmor_profile() -> Option<String> {
     if !docker_supports_apparmor() {
@@ -117,7 +121,11 @@ pub fn desired_apparmor_profile() -> Option<String> {
 
 #[cfg_attr(
     feature = "otel",
-    instrument(level = "debug", skip(), fields(source = "quiet"))
+    instrument(
+        level = "debug",
+        skip(),
+        fields(aifo_coder_source = "quiet")
+    )
 )]
 pub fn desired_apparmor_profile_quiet() -> Option<String> {
     if !docker_supports_apparmor() {
