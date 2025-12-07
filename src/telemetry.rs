@@ -469,7 +469,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                 crate::log_info_stderr(
                     use_err,
                     &format!(
-                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
+                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export failures do not affect CLI)",
                         ep
                     ),
                 );
