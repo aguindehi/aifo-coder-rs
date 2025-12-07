@@ -475,7 +475,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::record_run_end(agent, 1, duration);
+            aifo_coder::record_run_end(agent, &toolchains_for_run, 1, duration);
         }
 
         return ExitCode::from(1);
@@ -487,7 +487,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::record_run_end(agent, 1, duration);
+            aifo_coder::record_run_end(agent, &toolchains_for_run, 1, duration);
         }
 
         return ExitCode::from(1);
@@ -670,7 +670,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::record_run_end(agent, 0, duration);
+            aifo_coder::record_run_end(agent, &toolchains_for_run, 0, duration);
         }
 
         return ExitCode::from(0);
@@ -720,7 +720,7 @@ fn main() -> ExitCode {
             #[cfg(feature = "otel")]
             {
                 let duration = run_start.elapsed();
-                aifo_coder::record_run_end(agent, code, duration);
+                aifo_coder::record_run_end(agent, &toolchains_for_run, code, duration);
             }
 
             ExitCode::from(code as u8)
@@ -738,7 +738,7 @@ fn main() -> ExitCode {
             #[cfg(feature = "otel")]
             {
                 let duration = run_start.elapsed();
-                aifo_coder::record_run_end(agent, i32::from(code), duration);
+                aifo_coder::record_run_end(agent, &toolchains_for_run, i32::from(code), duration);
             }
 
             ExitCode::from(code)
