@@ -6,7 +6,7 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::logs::{LogRecord, Logger};
+use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
@@ -230,7 +230,7 @@ struct OtelLogLayer {
 #[cfg(feature = "otel-otlp")]
 impl OtelLogLayer {
     fn new(provider: &SdkLoggerProvider) -> Self {
-        let logger = provider.logger("aifo-coder-logs");
+        let logger = LoggerProvider::logger(provider, "aifo-coder-logs");
         OtelLogLayer { logger }
     }
 }
@@ -273,12 +273,9 @@ where
 
         let mut record = opentelemetry_sdk::logs::SdkLogRecord::new();
         record.set_severity(severity);
-        record.set_body(buf.into());
-        record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
-        record.add_attribute(KeyValue::new(
-            "logger.level",
-            meta.level().as_str().to_string(),
-        ));
+        record.set_body(buf.clone().into());
+        record.add_attribute("logger.name", meta.target().to_string());
+        record.add_attribute("logger.level", meta.level().as_str().to_string());
 
         let _ = self.logger.emit(record);
     }
@@ -573,12 +570,14 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
     #[cfg(feature = "otel-otlp")]
-    {
-        if let Some(ref lp) = log_provider {
-            let log_layer = OtelLogLayer::new(lp);
-            base_subscriber = base_subscriber.with(log_layer);
-        }
-    }
+    let base_subscriber = if let Some(ref lp) = log_provider {
+        base_subscriber.with(OtelLogLayer::new(lp))
+    } else {
+        base_subscriber
+    };
+
+    #[cfg(not(feature = "otel-otlp"))]
+    let base_subscriber = base_subscriber;
 
     // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
     let base_subscriber = base_subscriber;
