@@ -16,6 +16,8 @@ use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Tempor
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
 use opentelemetry_sdk::Resource;
+use serde_json::{Map, Value};
+use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 
 #[cfg(feature = "otel-otlp")]
@@ -300,15 +302,78 @@ where
             }
         }
 
-        let mut buf = String::new();
-        use std::fmt::Write as _;
-        let _ = write!(&mut buf, "{:?}", event);
+        // Collect structured fields from the event into a JSON map.
+        struct JsonVisitor {
+            fields: Map<String, Value>,
+        }
+
+        impl Visit for JsonVisitor {
+            fn record_str(&mut self, field: &Field, value: &str) {
+                self.fields
+                    .insert(field.name().to_string(), Value::String(value.to_string()));
+            }
+
+            fn record_i64(&mut self, field: &Field, value: i64) {
+                self.fields
+                    .insert(field.name().to_string(), Value::from(value));
+            }
+
+            fn record_u64(&mut self, field: &Field, value: u64) {
+                self.fields
+                    .insert(field.name().to_string(), Value::from(value));
+            }
+
+            fn record_bool(&mut self, field: &Field, value: bool) {
+                self.fields
+                    .insert(field.name().to_string(), Value::from(value));
+            }
+
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                self.fields.insert(
+                    field.name().to_string(),
+                    Value::String(format!("{:?}", value)),
+                );
+            }
+        }
+
+        let mut visitor = JsonVisitor {
+            fields: Map::new(),
+        };
+        event.record(&mut visitor);
+
+        // Derive a human-readable message from the `message` field when present.
+        let message = visitor
+            .fields
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("aifo-coder event")
+            .to_string();
+
+        // Build the JSON object that will become the OTEL log body.
+        let mut obj = Map::new();
+        obj.insert("message".to_string(), Value::String(message));
+        obj.insert(
+            "level".to_string(),
+            Value::String(meta.level().as_str().to_string()),
+        );
+        obj.insert(
+            "target".to_string(),
+            Value::String(meta.target().to_string()),
+        );
+
+        // Merge all event fields (including aifo_coder_* fields) without clobbering core keys.
+        for (k, v) in visitor.fields {
+            obj.entry(k).or_insert(v);
+        }
+
+        let body_str =
+            serde_json::to_string(&Value::Object(obj)).unwrap_or_else(|_| "\"aifo-coder event\"".to_string());
 
         // Construct a log record via the Logger trait API.
         let mut record = self.logger.create_log_record();
         // Represent severity as text based on the tracing level.
         record.set_severity_text(level.as_str());
-        record.set_body(buf.into());
+        record.set_body(body_str.into());
         record.add_attribute("logger.name", meta.target().to_string());
         record.add_attribute("logger.level", meta.level().as_str().to_string());
 
