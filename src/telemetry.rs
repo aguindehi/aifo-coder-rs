@@ -437,7 +437,6 @@ fn build_metrics_provider_with_status(
     (None, MetricsStatus::DisabledLocalFlood)
 }
 
-
 pub fn telemetry_init() -> Option<TelemetryGuard> {
     if INIT.get().is_some() {
         return None;
