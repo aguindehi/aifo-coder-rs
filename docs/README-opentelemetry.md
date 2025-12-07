@@ -117,6 +117,32 @@ keeping the endpoint configurable outside the repo.
 
 Local builds can do the same by exporting `AIFO_OTEL_ENDPOINT`/`AIFO_OTEL_TRANSPORT` before running `cargo build`.
 
+### 2.3 OTEL logs
+
+When built with `--features otel-otlp`, OTEL logs are enabled by default whenever telemetry is enabled and an OTLP
+endpoint is configured. Log records are derived from `tracing` events and sent to the same OTLP HTTP endpoint as
+traces/metrics.
+
+Control:
+
+- `AIFO_CODER_OTEL_LOGS=0|false|no|off` disables OTEL log export (stderr logging is unchanged).
+- `RUST_LOG` controls which events are emitted (and thus are eligible to be sent as logs). By default, when fmt is
+  enabled, a `warn` filter is used so only warnings and errors are exported unless you explicitly widen it.
+- Internally, only INFO/WARN/ERROR events are bridged to OTEL logs to avoid flooding the collector even when
+  `RUST_LOG` is set to a verbose value.
+
+Example:
+
+```bash
+make build-launcher
+AIFO_CODER_OTEL=1 \
+AIFO_CODER_TRACING_FMT=1 \
+RUST_LOG=aifo_coder=info \
+./aifo-coder aider -- --help
+```
+
+This will send traces, metrics, and info/warn/error logs to the configured OTLP endpoint.
+
 ## 3. Logging and fmt layer
 
 By default, the OpenTelemetry integration only installs a `tracing_opentelemetry` layer bound to
