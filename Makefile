@@ -87,12 +87,17 @@ CARGO_FLAGS ?= --features otel-otlp
 AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url
 export AIFO_OTEL_ENDPOINT_FILE
 
+# How many threads to run?
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
 
 # Nextest niceness
 NICENESS_CARGO_NEXTEST =? 0
+
+# Agent build source: [git | release]
+AIDER_SOURCE ?= git
 
 # Agent version pins (default: latest). Pin for reproducible releases.
 CODEX_VERSION ?= latest
@@ -104,7 +109,6 @@ WITH_PLAYWRIGHT ?= 1
 
 # Source refs (git/tag/commit)
 PLANDEX_GIT_REF ?= main
-AIDER_SOURCE ?= release
 AIDER_GIT_REF ?= main
 
 # Help
