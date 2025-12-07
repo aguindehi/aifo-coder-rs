@@ -6,13 +6,9 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::logs::Logger;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
-use opentelemetry_sdk::logs::{
-    LoggerProvider as SdkLoggerProvider, LoggerProviderBuilder, SimpleLogProcessor,
-};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -30,8 +26,6 @@ pub struct TelemetryGuard {
     meter_provider: Option<SdkMeterProvider>,
     #[cfg(feature = "otel-otlp")]
     runtime: Option<tokio::runtime::Runtime>,
-    #[cfg(feature = "otel-otlp")]
-    log_provider: Option<SdkLoggerProvider>,
 }
 
 static INIT: OnceCell<()> = OnceCell::new();
@@ -340,85 +334,6 @@ fn build_metrics_provider_with_status(
     (None, MetricsStatus::DisabledLocalFlood)
 }
 
-#[cfg(feature = "otel-otlp")]
-fn build_logger_provider(use_otlp: bool) -> Option<SdkLoggerProvider> {
-    if !use_otlp {
-        return None;
-    }
-
-    let endpoint = effective_otlp_endpoint()?;
-    let exporter = opentelemetry_otlp::LogExporter::builder()
-        .with_http()
-        .with_endpoint(endpoint)
-        .build()
-        .ok()?;
-
-    let provider = LoggerProviderBuilder::default()
-        .with_resource(build_resource())
-        .with_log_processor(SimpleLogProcessor::new(exporter))
-        .build();
-
-    Some(provider)
-}
-
-#[cfg(feature = "otel-otlp")]
-struct OtelLogLayer {
-    logger: opentelemetry_sdk::logs::SdkLogger,
-}
-
-#[cfg(feature = "otel-otlp")]
-impl OtelLogLayer {
-    fn new(provider: &SdkLoggerProvider) -> Self {
-        let logger = provider.logger("aifo-coder-logs");
-        OtelLogLayer { logger }
-    }
-}
-
-#[cfg(feature = "otel-otlp")]
-impl<S> tracing_subscriber::Layer<S> for OtelLogLayer
-where
-    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
-{
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        use opentelemetry::logs::Severity;
-        use opentelemetry::KeyValue;
-
-        let level = *event.metadata().level();
-
-        // Flood control v1: send only INFO/WARN/ERROR to OTEL logs.
-        if level < tracing::Level::INFO {
-            return;
-        }
-
-        let severity = match level {
-            tracing::Level::ERROR => Severity::Error,
-            tracing::Level::WARN => Severity::Warn,
-            tracing::Level::INFO => Severity::Info,
-            tracing::Level::DEBUG => Severity::Debug,
-            tracing::Level::TRACE => Severity::Trace,
-        };
-
-        let mut buf = String::new();
-        use std::fmt::Write as _;
-        let _ = write!(&mut buf, "{:?}", event);
-
-        let meta = event.metadata();
-
-        let mut record = opentelemetry_sdk::logs::SdkLogRecord::new(severity);
-        record.set_body(buf.into());
-        record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
-        record.add_attribute(KeyValue::new(
-            "logger.level",
-            meta.level().as_str().to_string(),
-        ));
-
-        let _ = self.logger.emit(record);
-    }
-}
 
 pub fn telemetry_init() -> Option<TelemetryGuard> {
     if INIT.get().is_some() {
@@ -513,13 +428,6 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
     let (meter_provider, metrics_status) = build_metrics_provider_with_status(use_otlp, transport);
 
-    #[cfg(feature = "otel-otlp")]
-    let log_provider = if use_otlp && telemetry_logs_enabled_env() {
-        build_logger_provider(use_otlp)
-    } else {
-        None
-    };
-
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
     }
@@ -551,15 +459,9 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
+    let base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
-    #[cfg(feature = "otel-otlp")]
-    if let Some(ref lp) = log_provider {
-        let log_layer = OtelLogLayer::new(lp);
-        base_subscriber = base_subscriber.with(log_layer);
-    }
-
-    // Base subscriber: registry + OpenTelemetry (and optional logs) layers.
+    // Base subscriber: registry + OpenTelemetry layers (logs bridge is not yet implemented in v1).
     let base_subscriber = base_subscriber;
 
     let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1");
@@ -586,7 +488,6 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
         Some(TelemetryGuard {
             meter_provider,
             runtime,
-            log_provider,
         })
     }
 
