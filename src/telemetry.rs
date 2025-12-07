@@ -8,7 +8,9 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
+use opentelemetry::logs::{LogRecord, Logger};
 use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -27,7 +29,7 @@ pub struct TelemetryGuard {
     #[cfg(feature = "otel-otlp")]
     runtime: Option<tokio::runtime::Runtime>,
     #[cfg(feature = "otel-otlp")]
-    log_provider: Option<opentelemetry_sdk::logs::LoggerProvider>,
+    log_provider: Option<SdkLoggerProvider>,
 }
 
 static INIT: OnceCell<()> = OnceCell::new();
@@ -158,8 +160,7 @@ fn build_resource() -> Resource {
 }
 
 #[cfg(feature = "otel-otlp")]
-fn build_logger_provider(use_otlp: bool) -> Option<opentelemetry_sdk::logs::LoggerProvider> {
-    use opentelemetry_sdk::logs::LoggerProvider as SdkLoggerProvider;
+fn build_logger_provider(use_otlp: bool) -> Option<SdkLoggerProvider> {
     use opentelemetry_sdk::logs::LoggerProviderBuilder;
 
     if !use_otlp {
@@ -223,12 +224,12 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
 
 #[cfg(feature = "otel-otlp")]
 struct OtelLogLayer {
-    logger: opentelemetry_sdk::logs::SdkLogger,
+    logger: SdkLogger,
 }
 
 #[cfg(feature = "otel-otlp")]
 impl OtelLogLayer {
-    fn new(provider: &opentelemetry_sdk::logs::LoggerProvider) -> Self {
+    fn new(provider: &SdkLoggerProvider) -> Self {
         let logger = provider.logger("aifo-coder-logs");
         OtelLogLayer { logger }
     }
@@ -270,7 +271,8 @@ where
         use std::fmt::Write as _;
         let _ = write!(&mut buf, "{:?}", event);
 
-        let mut record = opentelemetry_sdk::logs::SdkLogRecord::new(severity);
+        let mut record = opentelemetry_sdk::logs::SdkLogRecord::new();
+        record.set_severity(severity);
         record.set_body(buf.into());
         record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
         record.add_attribute(KeyValue::new(
@@ -571,9 +573,11 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
     #[cfg(feature = "otel-otlp")]
-    if let Some(ref lp) = log_provider {
-        let log_layer = OtelLogLayer::new(lp);
-        base_subscriber = base_subscriber.with(log_layer);
+    {
+        if let Some(ref lp) = log_provider {
+            let log_layer = OtelLogLayer::new(lp);
+            base_subscriber = base_subscriber.with(log_layer);
+        }
     }
 
     // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
