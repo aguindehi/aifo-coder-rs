@@ -455,10 +455,7 @@ fn main() -> ExitCode {
     let toolchains_for_run: Vec<String> =
         if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
             let (kinds, _overrides) = crate::toolchain_session::plan_from_cli(&cli);
-            kinds
-                .iter()
-                .map(|k| k.as_str().to_string())
-                .collect()
+            kinds.iter().map(|k| k.as_str().to_string()).collect()
         } else {
             Vec::new()
         };
