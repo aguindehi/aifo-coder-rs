@@ -1030,6 +1030,10 @@ build-debug:
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
 	    --target "$$STAGE" \
 	    -t "$$OUT" $(CA_SECRET) .; \
 	fi
@@ -1347,7 +1351,14 @@ publish-aider-slim:
 	      --target aider-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-slim-$(REG_TAG).oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-slim-$(REG_TAG).oci.tar"; \
 	  else \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg KEEP_APT="$(KEEP_APT)" \
+	      --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	      --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	      --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	      --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	      --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	  fi; \
 	fi
 
