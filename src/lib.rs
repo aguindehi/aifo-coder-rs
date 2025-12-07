@@ -70,7 +70,7 @@ pub use util::id::create_session_id;
 pub use util::*;
 
 #[cfg(feature = "otel")]
-pub use telemetry::{telemetry_init, TelemetryGuard, record_run_start, record_run_end};
+pub use telemetry::{record_run_end, record_run_start, telemetry_init, TelemetryGuard};
 
 #[cfg(not(feature = "otel"))]
 pub fn telemetry_init() -> Option<()> {
