@@ -779,7 +779,7 @@ impl Drop for TelemetryGuard {
 }
 
 #[cfg(feature = "otel")]
-pub fn record_run_start(agent: &str) {
+pub fn record_run_start(agent: &str, toolchains: &[String]) {
     let cwd = std::env::current_dir()
         .ok()
         .and_then(|p| p.canonicalize().ok())
@@ -797,6 +797,8 @@ pub fn record_run_start(agent: &str) {
     if telemetry_pii_enabled() {
         tracing::info!(
             aifo_coder_agent = %agent,
+            aifo_coder_version = %env!("CARGO_PKG_VERSION"),
+            aifo_coder_toolchains = ?toolchains,
             aifo_coder_cwd = %cwd_str,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user = %user,
@@ -806,11 +808,16 @@ pub fn record_run_start(agent: &str) {
     } else {
         tracing::info!(
             aifo_coder_agent = %agent,
+            aifo_coder_version = %env!("CARGO_PKG_VERSION"),
+            aifo_coder_toolchains = ?toolchains,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user_hash = %user_hash,
             "aifo-coder run started"
         );
     }
+
+    crate::telemetry::metrics::record_run(agent);
+}
 
 #[cfg(feature = "otel")]
 pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
