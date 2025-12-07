@@ -264,7 +264,7 @@ where
         // Construct a log record via the Logger trait API.
         let mut record = self.logger.create_log_record();
         // Represent severity as text based on the tracing level.
-        record.set_severity_text(level.as_str().to_string());
+        record.set_severity_text(level.as_str());
         record.set_body(buf.into());
         record.add_attribute("logger.name", meta.target().to_string());
         record.add_attribute("logger.level", meta.level().as_str().to_string());
