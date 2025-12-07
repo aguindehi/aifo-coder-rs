@@ -794,11 +794,17 @@ pub fn record_run_start(agent: &str, toolchains: &[String]) {
         .unwrap_or_else(|_| "unknown".to_string());
     let user_hash = hash_string_hex(&user);
 
+    let toolchains_display = if toolchains.is_empty() {
+        "(none)".to_string()
+    } else {
+        toolchains.join(", ")
+    };
+
     if telemetry_pii_enabled() {
         tracing::info!(
             aifo_coder_agent = %agent,
             aifo_coder_version = %env!("CARGO_PKG_VERSION"),
-            aifo_coder_toolchains = ?toolchains,
+            aifo_coder_toolchains = %toolchains_display,
             aifo_coder_cwd = %cwd_str,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user = %user,
@@ -809,7 +815,7 @@ pub fn record_run_start(agent: &str, toolchains: &[String]) {
         tracing::info!(
             aifo_coder_agent = %agent,
             aifo_coder_version = %env!("CARGO_PKG_VERSION"),
-            aifo_coder_toolchains = ?toolchains,
+            aifo_coder_toolchains = %toolchains_display,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user_hash = %user_hash,
             "aifo-coder run started"
