@@ -470,6 +470,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
+ARG AIDER_VERSION=latest
 ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
@@ -823,6 +824,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
+ARG AIDER_VERSION=latest
 ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
