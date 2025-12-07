@@ -6,9 +6,11 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -26,6 +28,8 @@ pub struct TelemetryGuard {
     meter_provider: Option<SdkMeterProvider>,
     #[cfg(feature = "otel-otlp")]
     runtime: Option<tokio::runtime::Runtime>,
+    #[cfg(feature = "otel-otlp")]
+    log_provider: Option<SdkLoggerProvider>,
 }
 
 static INIT: OnceCell<()> = OnceCell::new();
@@ -58,6 +62,16 @@ fn telemetry_enabled_env() -> bool {
     }
 }
 
+fn telemetry_logs_enabled_env() -> bool {
+    match env::var("AIFO_CODER_OTEL_LOGS") {
+        Ok(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            !(v == "0" || v == "false" || v == "no" || v == "off")
+        }
+        Err(_) => true,
+    }
+}
+
 fn otel_transport() -> OtelTransport {
     // Force HTTP/HTTPS transport; ignore any grpc requests.
     OtelTransport::Http
@@ -81,6 +95,46 @@ fn effective_otlp_endpoint() -> Option<String> {
     }
 
     Some(t.to_string())
+}
+
+/// Normalize the configured OTLP endpoint into a base URL and a flag:
+/// - base_url: host+optional prefix, no trailing slash
+/// - trimmed_signal_suffix: true if we stripped a known /v1/{metrics,logs,traces} suffix
+fn effective_otlp_base_endpoint_normalized() -> Option<(String, bool)> {
+    let raw = effective_otlp_endpoint()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Remove trailing slashes for consistent handling.
+    let mut s = trimmed.trim_end_matches('/').to_string();
+
+    // Detect and strip known signal-specific suffixes.
+    let mut trimmed_signal_suffix = false;
+    for suffix in ["/v1/metrics", "/v1/logs", "/v1/traces"] {
+        if s.ends_with(suffix) {
+            s.truncate(s.len() - suffix.len());
+            trimmed_signal_suffix = true;
+            break;
+        }
+    }
+
+    if s.is_empty() {
+        None
+    } else {
+        Some((s, trimmed_signal_suffix))
+    }
+}
+
+fn effective_otlp_metrics_endpoint() -> Option<String> {
+    let (base, _) = effective_otlp_base_endpoint_normalized()?;
+    Some(format!("{}/v1/metrics", base))
+}
+
+fn effective_otlp_logs_endpoint() -> Option<String> {
+    let (base, _) = effective_otlp_base_endpoint_normalized()?;
+    Some(format!("{}/v1/logs", base))
 }
 
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
@@ -146,6 +200,45 @@ fn build_resource() -> Resource {
 }
 
 #[cfg(feature = "otel-otlp")]
+fn build_logger_provider(use_otlp: bool) -> Option<SdkLoggerProvider> {
+    use opentelemetry_sdk::logs::LoggerProviderBuilder;
+
+    if !use_otlp {
+        return None;
+    }
+
+    let endpoint = effective_otlp_logs_endpoint()?;
+
+    let exporter = match opentelemetry_otlp::LogExporter::builder()
+        .with_http()
+        .with_endpoint(endpoint)
+        .build()
+    {
+        Ok(exp) => exp,
+        Err(e) => {
+            if verbose_otel_enabled() {
+                let use_err = crate::color_enabled_stderr();
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: telemetry: failed to build OTLP log exporter: {}",
+                        e
+                    ),
+                );
+            }
+            return None;
+        }
+    };
+
+    let provider = LoggerProviderBuilder::default()
+        .with_resource(build_resource())
+        .with_batch_exporter(exporter)
+        .build();
+
+    Some(provider)
+}
+
+#[cfg(feature = "otel-otlp")]
 fn build_tracer(
     _use_otlp: bool,
     _transport: OtelTransport,
@@ -167,6 +260,69 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     sdktrace::SdkTracerProvider::builder()
         .with_resource(build_resource())
         .build()
+}
+
+#[cfg(feature = "otel-otlp")]
+struct OtelLogLayer {
+    logger: SdkLogger,
+}
+
+#[cfg(feature = "otel-otlp")]
+impl OtelLogLayer {
+    fn new(provider: &SdkLoggerProvider) -> Self {
+        let logger = LoggerProvider::logger(provider, "aifo-coder-logs");
+        OtelLogLayer { logger }
+    }
+}
+
+#[cfg(feature = "otel-otlp")]
+impl<S> tracing_subscriber::Layer<S> for OtelLogLayer
+where
+    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if !telemetry_logs_enabled_env() {
+            return;
+        }
+
+        let meta = event.metadata();
+        let level = *meta.level();
+
+        // Flood control: only INFO/WARN/ERROR events are exported to OTEL logs.
+        match level {
+            tracing::Level::INFO | tracing::Level::WARN | tracing::Level::ERROR => {}
+            tracing::Level::DEBUG | tracing::Level::TRACE => {
+                return;
+            }
+        }
+
+        let mut buf = String::new();
+        use std::fmt::Write as _;
+        let _ = write!(&mut buf, "{:?}", event);
+
+        // Construct a log record via the Logger trait API.
+        let mut record = self.logger.create_log_record();
+        // Represent severity as text based on the tracing level.
+        record.set_severity_text(level.as_str());
+        record.set_body(buf.into());
+        record.add_attribute("logger.name", meta.target().to_string());
+        record.add_attribute("logger.level", meta.level().as_str().to_string());
+
+        self.logger.emit(record);
+    }
+}
+
+#[cfg(feature = "otel-otlp")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum LogsStatus {
+    InstalledOtlpHttp,
+    DisabledEnv,
+    DisabledNoEndpoint,
+    DisabledCreateFailed,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -281,8 +437,8 @@ fn build_metrics_provider_with_status(
     if use_otlp {
         #[cfg(feature = "otel-otlp")]
         {
-            let ep =
-                effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
+            let ep = effective_otlp_metrics_endpoint()
+                .unwrap_or_else(|| "https://localhost:4318/v1/metrics".to_string());
             let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
                 .with_endpoint(ep)
                 .build_metrics_exporter(Temporality::Cumulative)
@@ -351,21 +507,37 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     if verbose_otel {
         let use_err = crate::color_enabled_stderr();
         if use_otlp {
-            // Try to show the *effective* OTLP endpoint (runtime or baked-in), not just the env var.
-            if let Some(ep) = effective_otlp_endpoint() {
+            if let Some(raw) = effective_otlp_endpoint() {
                 crate::log_info_stderr(
                     use_err,
-                    &format!(
-                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export errors ignored)",
-                        ep
-                    ),
-                );
-            } else {
-                crate::log_info_stderr(
-                    use_err,
-                    "aifo-coder: telemetry: OTLP enabled but no effective endpoint could be resolved",
+                    &format!("aifo-coder: telemetry: OTLP configured endpoint {}", raw),
                 );
             }
+
+            let (base, trimmed_signal) = effective_otlp_base_endpoint_normalized()
+                .unwrap_or_else(|| ("https://localhost:4318".to_string(), false));
+            let metrics_ep = effective_otlp_metrics_endpoint()
+                .unwrap_or_else(|| format!("{}/v1/metrics", base.clone()));
+            let logs_ep = effective_otlp_logs_endpoint()
+                .unwrap_or_else(|| format!("{}/v1/logs", base.clone()));
+
+            let base_msg = if trimmed_signal {
+                format!(
+                    "aifo-coder: telemetry: OTLP base endpoint {} (normalized from signal-specific URL)",
+                    base
+                )
+            } else {
+                format!("aifo-coder: telemetry: OTLP base endpoint {}", base)
+            };
+            crate::log_info_stderr(use_err, &base_msg);
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: telemetry: metrics endpoint {}", metrics_ep),
+            );
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: telemetry: logs endpoint {}", logs_ep),
+            );
             crate::log_info_stderr(
                 use_err,
                 &format!(
@@ -415,7 +587,20 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let tracer_provider = build_tracer(use_otlp, transport);
     let tracer = tracer_provider.tracer("aifo-coder");
 
+    #[cfg(feature = "otel-otlp")]
+    let (log_provider, logs_status) = if !use_otlp {
+        (None, LogsStatus::DisabledNoEndpoint)
+    } else if !telemetry_logs_enabled_env() {
+        (None, LogsStatus::DisabledEnv)
+    } else {
+        match build_logger_provider(use_otlp) {
+            Some(lp) => (Some(lp), LogsStatus::InstalledOtlpHttp),
+            None => (None, LogsStatus::DisabledCreateFailed),
+        }
+    };
+
     let (meter_provider, metrics_status) = build_metrics_provider_with_status(use_otlp, transport);
+
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
     }
@@ -442,13 +627,42 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             }
         };
         crate::log_info_stderr(use_err, msg);
+
+        #[cfg(feature = "otel-otlp")]
+        {
+            let msg = match logs_status {
+                LogsStatus::InstalledOtlpHttp => {
+                    "aifo-coder: telemetry: logs exporter: installed (otlp http)"
+                }
+                LogsStatus::DisabledEnv => "aifo-coder: telemetry: logs exporter: disabled (env)",
+                LogsStatus::DisabledNoEndpoint => {
+                    "aifo-coder: telemetry: logs exporter: disabled (no endpoint)"
+                }
+                LogsStatus::DisabledCreateFailed => {
+                    "aifo-coder: telemetry: logs exporter: disabled (exporter creation failed)"
+                }
+            };
+            crate::log_info_stderr(use_err, msg);
+        }
+        crate::log_info_stderr(use_err, "");
     }
 
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    // Base subscriber: registry + OpenTelemetry layer only.
+    #[cfg(feature = "otel-otlp")]
+    let base_subscriber = {
+        let log_layer = log_provider.as_ref().map(OtelLogLayer::new);
+        tracing_subscriber::registry()
+            .with(otel_layer)
+            .with(log_layer)
+    };
+
+    #[cfg(not(feature = "otel-otlp"))]
     let base_subscriber = tracing_subscriber::registry().with(otel_layer);
+
+    // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
+    let base_subscriber = base_subscriber;
 
     let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1");
 
@@ -474,6 +688,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
         Some(TelemetryGuard {
             meter_provider,
             runtime,
+            log_provider,
         })
     }
 
@@ -490,9 +705,33 @@ impl Drop for TelemetryGuard {
         }
         #[cfg(feature = "otel-otlp")]
         {
+            if let Some(ref lp) = self.log_provider {
+                let _ = lp.force_flush();
+            }
             if let Some(rt) = self.runtime.take() {
                 drop(rt);
             }
         }
     }
+}
+
+#[cfg(feature = "otel")]
+pub fn record_run_start(agent: &str) {
+    tracing::info!(
+        aifo_coder_agent = %agent,
+        "aifo-coder run started"
+    );
+    crate::telemetry::metrics::record_run(agent);
+}
+
+#[cfg(feature = "otel")]
+pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
+    let secs = duration.as_secs_f64();
+    tracing::info!(
+        aifo_coder_agent = %agent,
+        exit_code = exit_code,
+        run_duration_secs = secs,
+        "aifo-coder run finished"
+    );
+    crate::telemetry::metrics::record_run_duration(agent, secs);
 }
