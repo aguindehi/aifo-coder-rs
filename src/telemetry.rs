@@ -273,6 +273,15 @@ where
     }
 }
 
+#[cfg(feature = "otel-otlp")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum LogsStatus {
+    InstalledOtlpHttp,
+    DisabledEnv,
+    DisabledNoEndpoint,
+    DisabledCreateFailed,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum MetricsStatus {
     InstalledOtlpHttp,
@@ -520,10 +529,15 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let tracer = tracer_provider.tracer("aifo-coder");
 
     #[cfg(feature = "otel-otlp")]
-    let log_provider = if use_otlp && telemetry_logs_enabled_env() {
-        build_logger_provider(use_otlp)
+    let (log_provider, logs_status) = if !use_otlp {
+        (None, LogsStatus::DisabledNoEndpoint)
+    } else if !telemetry_logs_enabled_env() {
+        (None, LogsStatus::DisabledEnv)
     } else {
-        None
+        match build_logger_provider(use_otlp) {
+            Some(lp) => (Some(lp), LogsStatus::InstalledOtlpHttp),
+            None => (None, LogsStatus::DisabledCreateFailed),
+        }
     };
 
     let (meter_provider, metrics_status) = build_metrics_provider_with_status(use_otlp, transport);
@@ -554,6 +568,25 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             }
         };
         crate::log_info_stderr(use_err, msg);
+
+        #[cfg(feature = "otel-otlp")]
+        {
+            let msg = match logs_status {
+                LogsStatus::InstalledOtlpHttp => {
+                    "aifo-coder: telemetry: logs exporter: installed (otlp http)"
+                }
+                LogsStatus::DisabledEnv => {
+                    "aifo-coder: telemetry: logs exporter: disabled (env)"
+                }
+                LogsStatus::DisabledNoEndpoint => {
+                    "aifo-coder: telemetry: logs exporter: disabled (no endpoint)"
+                }
+                LogsStatus::DisabledCreateFailed => {
+                    "aifo-coder: telemetry: logs exporter: disabled (exporter creation failed)"
+                }
+            };
+            crate::log_info_stderr(use_err, msg);
+        }
     }
 
     global::set_tracer_provider(tracer_provider);
