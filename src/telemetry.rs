@@ -507,17 +507,12 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             if let Some(raw) = effective_otlp_endpoint() {
                 crate::log_info_stderr(
                     use_err,
-                    &format!(
-                        "aifo-coder: telemetry: OTLP configured endpoint {}",
-                        raw
-                    ),
+                    &format!("aifo-coder: telemetry: OTLP configured endpoint {}", raw),
                 );
             }
 
-            let (base, trimmed_signal) =
-                effective_otlp_base_endpoint_normalized().unwrap_or_else(|| {
-                    ("https://localhost:4318".to_string(), false)
-                });
+            let (base, trimmed_signal) = effective_otlp_base_endpoint_normalized()
+                .unwrap_or_else(|| ("https://localhost:4318".to_string(), false));
             let metrics_ep = effective_otlp_metrics_endpoint()
                 .unwrap_or_else(|| format!("{}/v1/metrics", base.clone()));
             let logs_ep = effective_otlp_logs_endpoint()
@@ -534,10 +529,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             crate::log_info_stderr(use_err, &base_msg);
             crate::log_info_stderr(
                 use_err,
-                &format!(
-                    "aifo-coder: telemetry: metrics endpoint {}",
-                    metrics_ep
-                ),
+                &format!("aifo-coder: telemetry: metrics endpoint {}", metrics_ep),
             );
             crate::log_info_stderr(
                 use_err,
@@ -639,9 +631,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                 LogsStatus::InstalledOtlpHttp => {
                     "aifo-coder: telemetry: logs exporter: installed (otlp http)"
                 }
-                LogsStatus::DisabledEnv => {
-                    "aifo-coder: telemetry: logs exporter: disabled (env)"
-                }
+                LogsStatus::DisabledEnv => "aifo-coder: telemetry: logs exporter: disabled (env)",
                 LogsStatus::DisabledNoEndpoint => {
                     "aifo-coder: telemetry: logs exporter: disabled (no endpoint)"
                 }
