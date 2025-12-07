@@ -97,6 +97,46 @@ fn effective_otlp_endpoint() -> Option<String> {
     Some(t.to_string())
 }
 
+/// Normalize the configured OTLP endpoint into a base URL and a flag:
+/// - base_url: host+optional prefix, no trailing slash
+/// - trimmed_signal_suffix: true if we stripped a known /v1/{metrics,logs,traces} suffix
+fn effective_otlp_base_endpoint_normalized() -> Option<(String, bool)> {
+    let raw = effective_otlp_endpoint()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Remove trailing slashes for consistent handling.
+    let mut s = trimmed.trim_end_matches('/').to_string();
+
+    // Detect and strip known signal-specific suffixes.
+    let mut trimmed_signal_suffix = false;
+    for suffix in ["/v1/metrics", "/v1/logs", "/v1/traces"] {
+        if s.ends_with(suffix) {
+            s.truncate(s.len() - suffix.len());
+            trimmed_signal_suffix = true;
+            break;
+        }
+    }
+
+    if s.is_empty() {
+        None
+    } else {
+        Some((s, trimmed_signal_suffix))
+    }
+}
+
+fn effective_otlp_metrics_endpoint() -> Option<String> {
+    let (base, _) = effective_otlp_base_endpoint_normalized()?;
+    Some(format!("{}/v1/metrics", base))
+}
+
+fn effective_otlp_logs_endpoint() -> Option<String> {
+    let (base, _) = effective_otlp_base_endpoint_normalized()?;
+    Some(format!("{}/v1/logs", base))
+}
+
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
 pub fn telemetry_pii_enabled() -> bool {
     env::var("AIFO_CODER_OTEL_PII").ok().as_deref() == Some("1")
@@ -167,7 +207,7 @@ fn build_logger_provider(use_otlp: bool) -> Option<SdkLoggerProvider> {
         return None;
     }
 
-    let endpoint = effective_otlp_endpoint()?;
+    let endpoint = effective_otlp_logs_endpoint()?;
 
     let exporter = match opentelemetry_otlp::LogExporter::builder()
         .with_http()
@@ -394,8 +434,8 @@ fn build_metrics_provider_with_status(
     if use_otlp {
         #[cfg(feature = "otel-otlp")]
         {
-            let ep =
-                effective_otlp_endpoint().unwrap_or_else(|| "https://localhost:4318".to_string());
+            let ep = effective_otlp_metrics_endpoint()
+                .unwrap_or_else(|| "https://localhost:4318/v1/metrics".to_string());
             let exporter = match opentelemetry_otlp::HttpExporterBuilder::default()
                 .with_endpoint(ep)
                 .build_metrics_exporter(Temporality::Cumulative)
@@ -464,21 +504,45 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     if verbose_otel {
         let use_err = crate::color_enabled_stderr();
         if use_otlp {
-            // Try to show the *effective* OTLP endpoint (runtime or baked-in), not just the env var.
-            if let Some(ep) = effective_otlp_endpoint() {
+            if let Some(raw) = effective_otlp_endpoint() {
                 crate::log_info_stderr(
                     use_err,
                     &format!(
-                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort)",
-                        ep
+                        "aifo-coder: telemetry: OTLP configured endpoint {}",
+                        raw
                     ),
                 );
-            } else {
-                crate::log_info_stderr(
-                    use_err,
-                    "aifo-coder: telemetry: OTLP enabled but no effective endpoint could be resolved",
-                );
             }
+
+            let (base, trimmed_signal) =
+                effective_otlp_base_endpoint_normalized().unwrap_or_else(|| {
+                    ("https://localhost:4318".to_string(), false)
+                });
+            let metrics_ep = effective_otlp_metrics_endpoint()
+                .unwrap_or_else(|| format!("{}/v1/metrics", base.clone()));
+            let logs_ep = effective_otlp_logs_endpoint()
+                .unwrap_or_else(|| format!("{}/v1/logs", base.clone()));
+
+            let base_msg = if trimmed_signal {
+                format!(
+                    "aifo-coder: telemetry: OTLP base endpoint {} (normalized from signal-specific URL)",
+                    base
+                )
+            } else {
+                format!("aifo-coder: telemetry: OTLP base endpoint {}", base)
+            };
+            crate::log_info_stderr(use_err, &base_msg);
+            crate::log_info_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: telemetry: metrics endpoint {}",
+                    metrics_ep
+                ),
+            );
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: telemetry: logs endpoint {}", logs_ep),
+            );
             crate::log_info_stderr(
                 use_err,
                 &format!(
