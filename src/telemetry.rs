@@ -6,9 +6,9 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+use opentelemetry::logs::{LogRecord, Logger};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
-use opentelemetry::logs::{LogRecord, Logger};
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
