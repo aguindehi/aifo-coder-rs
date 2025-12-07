@@ -623,3 +623,24 @@ impl Drop for TelemetryGuard {
         }
     }
 }
+
+#[cfg(feature = "otel")]
+pub fn record_run_start(agent: &str) {
+    tracing::info!(
+        aifo_coder_agent = %agent,
+        "aifo-coder run started"
+    );
+    crate::telemetry::metrics::record_run(agent);
+}
+
+#[cfg(feature = "otel")]
+pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
+    let secs = duration.as_secs_f64();
+    tracing::info!(
+        aifo_coder_agent = %agent,
+        exit_code = exit_code,
+        run_duration_secs = secs,
+        "aifo-coder run finished"
+    );
+    crate::telemetry::metrics::record_run_duration(agent, secs);
+}

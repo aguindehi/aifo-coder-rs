@@ -448,16 +448,36 @@ fn main() -> ExitCode {
     // Initialize optional OpenTelemetry telemetry if compiled and enabled via env.
     // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
     let _telemetry_guard = aifo_coder::telemetry_init();
+
+    let run_start = std::time::Instant::now();
+
+    #[cfg(feature = "otel")]
+    aifo_coder::telemetry::record_run_start(agent);
+
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
     // Abort early when working in a temp directory and the user declines
     if !warn_if_tmp_workspace(true) {
         aifo_coder::log_error_stderr(use_err, "aborted.");
+
+        #[cfg(feature = "otel")]
+        {
+            let duration = run_start.elapsed();
+            aifo_coder::telemetry::record_run_end(agent, 1, duration);
+        }
+
         return ExitCode::from(1);
     }
     // Warn and optionally block if LLM credentials are missing
     if !crate::warnings::warn_if_missing_llm_credentials(true) {
         aifo_coder::log_error_stderr(use_err, "aborted.");
+
+        #[cfg(feature = "otel")]
+        {
+            let duration = run_start.elapsed();
+            aifo_coder::telemetry::record_run_end(agent, 1, duration);
+        }
+
         return ExitCode::from(1);
     }
 
@@ -516,6 +536,12 @@ fn main() -> ExitCode {
                 Ok(None) => { /* no-op: no toolchains requested or dry-run */ }
                 Err(_) => {
                     // Errors are already printed inside start_if_requested() with exact strings
+
+                    #[cfg(feature = "otel")]
+                    {
+                        let duration = run_start.elapsed();
+                        aifo_coder::telemetry::record_run_end(agent, 1, duration);
+                    }
                     return ExitCode::from(1);
                 }
             }
@@ -628,6 +654,13 @@ fn main() -> ExitCode {
             "aifo-coder: dry-run requested; not executing Docker.",
         );
         aifo_coder::cleanup_aider_staging_from_env();
+
+        #[cfg(feature = "otel")]
+        {
+            let duration = run_start.elapsed();
+            aifo_coder::telemetry::record_run_end(agent, 0, duration);
+        }
+
         return ExitCode::from(0);
     }
 
@@ -670,7 +703,15 @@ fn main() -> ExitCode {
 
             // Toolchain session cleanup handled by Drop on ToolchainSession
 
-            ExitCode::from(status.code().unwrap_or(1) as u8)
+            let code = status.code().unwrap_or(1);
+
+            #[cfg(feature = "otel")]
+            {
+                let duration = run_start.elapsed();
+                aifo_coder::telemetry::record_run_end(agent, code, duration);
+            }
+
+            ExitCode::from(code as u8)
         }
         Err(e) => {
             {
@@ -681,6 +722,13 @@ fn main() -> ExitCode {
             aifo_coder::cleanup_aider_staging_from_env();
             // Toolchain session cleanup handled by Drop on ToolchainSession (also on error)
             let code = aifo_coder::exit_code_for_io_error(&e);
+
+            #[cfg(feature = "otel")]
+            {
+                let duration = run_start.elapsed();
+                aifo_coder::telemetry::record_run_end(agent, i32::from(code), duration);
+            }
+
             ExitCode::from(code)
         }
     }

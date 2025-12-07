@@ -8,6 +8,7 @@ static DOCKER_INVOCATIONS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static PROXY_REQUESTS_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static SIDECARS_STARTED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
 static SIDECARS_STOPPED_TOTAL: OnceCell<Counter<u64>> = OnceCell::new();
+static RUN_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static DOCKER_RUN_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static PROXY_EXEC_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
 static REGISTRY_PROBE_DURATION: OnceCell<Histogram<f64>> = OnceCell::new();
@@ -71,6 +72,18 @@ fn sidecars_stopped_total() -> Counter<u64> {
                 .u64_counter("aifo_coder_toolchain_sidecars_stopped_total")
                 .with_description("Total toolchain sidecars stopped by kind")
                 .with_unit("1")
+                .build()
+        })
+        .clone()
+}
+
+fn run_duration_hist() -> Histogram<f64> {
+    RUN_DURATION
+        .get_or_init(|| {
+            meter()
+                .f64_histogram("aifo_coder_run_duration_seconds")
+                .with_description("Total duration of aifo-coder CLI runs")
+                .with_unit("s")
                 .build()
         })
         .clone()
@@ -147,6 +160,14 @@ pub fn record_sidecar_stopped(kind: &str) {
 
 pub fn record_docker_run_duration(agent: &str, secs: f64) {
     let h = docker_run_duration_hist();
+    h.record(
+        secs,
+        &[KeyValue::new("aifo_coder_agent", agent.to_string())],
+    );
+}
+
+pub fn record_run_duration(agent: &str, secs: f64) {
+    let h = run_duration_hist();
     h.record(
         secs,
         &[KeyValue::new("aifo_coder_agent", agent.to_string())],
