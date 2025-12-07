@@ -9,7 +9,9 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
-use opentelemetry_sdk::logs::{LoggerProvider as SdkLoggerProvider, LoggerProviderBuilder, SdkLogRecord, SimpleLogProcessor};
+use opentelemetry_sdk::logs::{
+    LoggerProvider as SdkLoggerProvider, LoggerProviderBuilder, SdkLogRecord, SimpleLogProcessor,
+};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -408,10 +410,7 @@ where
         let mut record = SdkLogRecord::default();
         record.set_severity(severity);
         record.set_body(buf.into());
-        record.add_attribute(KeyValue::new(
-            "logger.name",
-            meta.target().to_string(),
-        ));
+        record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
         record.add_attribute(KeyValue::new(
             "logger.level",
             meta.level().as_str().to_string(),
