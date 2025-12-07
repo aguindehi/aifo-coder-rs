@@ -812,9 +812,6 @@ pub fn record_run_start(agent: &str) {
         );
     }
 
-    crate::telemetry::metrics::record_run(agent);
-}
-
 #[cfg(feature = "otel")]
 pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
     let secs = duration.as_secs_f64();

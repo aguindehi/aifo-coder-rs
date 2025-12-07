@@ -452,7 +452,16 @@ fn main() -> ExitCode {
     let run_start = std::time::Instant::now();
 
     #[cfg(feature = "otel")]
-    aifo_coder::record_run_start(agent);
+    let toolchains_for_run: Vec<String> =
+        if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+            let (kinds, _overrides) = crate::toolchain_session::plan_from_cli(&cli);
+            kinds
+        } else {
+            Vec::new()
+        };
+
+    #[cfg(feature = "otel")]
+    aifo_coder::record_run_start(agent, &toolchains_for_run);
 
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
