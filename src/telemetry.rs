@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+![allow(dead_code)]
 
 use std::env;
 use std::time::Duration;
@@ -469,7 +469,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
                 crate::log_info_stderr(
                     use_err,
                     &format!(
-                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort; export failures do not affect CLI)",
+                        "aifo-coder: telemetry: using OTLP endpoint {} (best-effort)",
                         ep
                     ),
                 );
