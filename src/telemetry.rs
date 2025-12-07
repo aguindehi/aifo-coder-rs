@@ -720,21 +720,31 @@ pub fn record_run_start(agent: &str) {
     let cwd = std::env::current_dir()
         .ok()
         .and_then(|p| p.canonicalize().ok())
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        });
     let cwd_str = cwd.display().to_string();
     let cwd_hash = hash_string_hex(&cwd_str);
+
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    let user_hash = hash_string_hex(&user);
 
     if telemetry_pii_enabled() {
         tracing::info!(
             aifo_coder_agent = %agent,
             aifo_coder_cwd = %cwd_str,
             aifo_coder_cwd_hash = %cwd_hash,
+            aifo_coder_user = %user,
+            aifo_coder_user_hash = %user_hash,
             "aifo-coder run started"
         );
     } else {
         tracing::info!(
             aifo_coder_agent = %agent,
             aifo_coder_cwd_hash = %cwd_hash,
+            aifo_coder_user_hash = %user_hash,
             "aifo-coder run started"
         );
     }
