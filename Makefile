@@ -2661,6 +2661,7 @@ release-for-target:
 	  rm -rf "$$STAGE"; install -d -m 0755 "$$STAGE"; \
 	  install -m 0755 "$$BINPATH" "$$STAGE/$$BIN"; \
 	  [ -f README.md ] && install -m 0644 README.md "$$STAGE/"; \
+	  [ -d docs ] && cp -a docs "$$STAGE/"; \
 	  [ -d examples ] && cp -a examples "$$STAGE/"; \
 	  chmod -R u=rwX,go=rX "$$STAGE" || true; \
 	  tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
@@ -2688,6 +2689,7 @@ release-for-target:
 	      rm -rf "$$STAGE"; install -d -m 0755 "$$STAGE"; \
 	      install -m 0755 "$$f" "$$STAGE/$$BIN"; \
 	      [ -f README.md ] && install -m 0644 README.md "$$STAGE/"; \
+	      [ -d docs ] && cp -a docs "$$STAGE/"; \
 	      [ -d examples ] && cp -a examples "$$STAGE/"; \
 	      chmod -R u=rwX,go=rX "$$STAGE" || true; \
 	      tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \

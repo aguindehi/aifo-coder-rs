@@ -868,6 +868,7 @@ publish-release:
       - README.md
       - NOTICE
       - LICENSE
+      - docs/
   release:
     tag_name: $CI_COMMIT_TAG
     name: "Release $CI_COMMIT_TAG"
