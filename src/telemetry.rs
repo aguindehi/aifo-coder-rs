@@ -826,8 +826,14 @@ pub fn record_run_start(agent: &str, toolchains: &[String]) {
 }
 
 #[cfg(feature = "otel")]
-pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
+pub fn record_run_end(agent: &str, toolchains: &[String], exit_code: i32, duration: Duration) {
     let secs = duration.as_secs_f64();
+
+    let toolchains_display = if toolchains.is_empty() {
+        "(none)".to_string()
+    } else {
+        toolchains.join(", ")
+    };
 
     let cwd = std::env::current_dir()
         .ok()
@@ -846,6 +852,8 @@ pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
     if telemetry_pii_enabled() {
         tracing::info!(
             aifo_coder_agent = %agent,
+            aifo_coder_version = %env!("CARGO_PKG_VERSION"),
+            aifo_coder_toolchains = %toolchains_display,
             aifo_coder_cwd = %cwd_str,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user = %user,
@@ -857,6 +865,8 @@ pub fn record_run_end(agent: &str, exit_code: i32, duration: Duration) {
     } else {
         tracing::info!(
             aifo_coder_agent = %agent,
+            aifo_coder_version = %env!("CARGO_PKG_VERSION"),
+            aifo_coder_toolchains = %toolchains_display,
             aifo_coder_cwd_hash = %cwd_hash,
             aifo_coder_user_hash = %user_hash,
             exit_code = exit_code,
