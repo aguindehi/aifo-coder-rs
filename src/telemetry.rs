@@ -6,11 +6,12 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+use opentelemetry::logs::Logger;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::logs::{
-    LoggerProvider as SdkLoggerProvider, LoggerProviderBuilder, SdkLogRecord, SimpleLogProcessor,
+    LoggerProvider as SdkLoggerProvider, LoggerProviderBuilder, SimpleLogProcessor,
 };
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
@@ -346,10 +347,10 @@ fn build_logger_provider(use_otlp: bool) -> Option<SdkLoggerProvider> {
     }
 
     let endpoint = effective_otlp_endpoint()?;
-    let exporter = opentelemetry_otlp::new_exporter()
-        .http()
+    let exporter = opentelemetry_otlp::LogExporter::builder()
+        .with_http()
         .with_endpoint(endpoint)
-        .build_log_exporter()
+        .build()
         .ok()?;
 
     let provider = LoggerProviderBuilder::default()
@@ -407,8 +408,7 @@ where
 
         let meta = event.metadata();
 
-        let mut record = SdkLogRecord::default();
-        record.set_severity(severity);
+        let mut record = opentelemetry_sdk::logs::SdkLogRecord::new(severity);
         record.set_body(buf.into());
         record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
         record.add_attribute(KeyValue::new(
@@ -551,21 +551,16 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let registry = tracing_subscriber::registry().with(otel_layer);
+    let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
     #[cfg(feature = "otel-otlp")]
-    let registry = if let Some(ref lp) = log_provider {
+    if let Some(ref lp) = log_provider {
         let log_layer = OtelLogLayer::new(lp);
-        registry.with(log_layer)
-    } else {
-        registry
-    };
-
-    #[cfg(not(feature = "otel-otlp"))]
-    let registry = registry;
+        base_subscriber = base_subscriber.with(log_layer);
+    }
 
     // Base subscriber: registry + OpenTelemetry (and optional logs) layers.
-    let base_subscriber = registry;
+    let base_subscriber = base_subscriber;
 
     let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1");
 
