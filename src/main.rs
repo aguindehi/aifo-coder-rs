@@ -449,6 +449,7 @@ fn main() -> ExitCode {
     // This is fully best-effort and must not change exit codes or stdout/stderr defaults.
     let _telemetry_guard = aifo_coder::telemetry_init();
 
+    #[cfg(feature = "otel")]
     let run_start = std::time::Instant::now();
 
     #[cfg(feature = "otel")]
