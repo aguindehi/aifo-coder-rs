@@ -737,15 +737,65 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
-    PKG="aider-chat"; \
-    if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
-    uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
-    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        PKGP="aider-chat[playwright]"; \
-        if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
-        uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
-        uv pip install --native-tls --python /opt/venv/bin/python playwright; \
-        /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+    mkdir -p /opt/venv/.build-info; \
+    if [ "${AIDER_SOURCE:-release}" = "git" ]; then \
+        echo "aider-builder: installing Aider from git ref '${AIDER_GIT_REF}'" >&2; \
+        if ! command -v git >/dev/null 2>&1; then \
+            echo "error: git is required in aider-builder but not found" >&2; \
+            exit 1; \
+        fi; \
+        if ! git clone --depth=1 https://github.com/Aider-AI/aider.git /tmp/aider-src; then \
+            echo "error: failed to clone https://github.com/Aider-AI/aider.git" >&2; \
+            exit 1; \
+        fi; \
+        cd /tmp/aider-src; \
+        SHALLOW_FAIL=0; \
+        if ! git fetch --depth=1 origin "${AIDER_GIT_REF}" 2>/dev/null; then \
+            SHALLOW_FAIL=1; \
+        fi; \
+        if [ "$SHALLOW_FAIL" -eq 1 ]; then \
+            echo "aider-builder: shallow fetch failed for ref '${AIDER_GIT_REF}', retrying without --depth" >&2; \
+            if ! git fetch origin "${AIDER_GIT_REF}"; then \
+                echo "error: failed to fetch ref '${AIDER_GIT_REF}' from origin" >&2; \
+                exit 2; \
+            fi; \
+        fi; \
+        if ! git -c advice.detachedHead=false checkout "${AIDER_GIT_REF}"; then \
+            echo "error: git checkout failed for ref '${AIDER_GIT_REF}'" >&2; \
+            exit 3; \
+        fi; \
+        RESOLVED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"; \
+        if [ -z "$RESOLVED_SHA" ]; then \
+            echo "error: unable to resolve Aider commit SHA" >&2; \
+            exit 4; \
+        fi; \
+        echo "aider-builder: resolved Aider ref '${AIDER_GIT_REF}' to ${RESOLVED_SHA}" >&2; \
+        AIDER_GIT_COMMIT="$RESOLVED_SHA"; \
+        PKG_PATH="/tmp/aider-src"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            if ! uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}[playwright]" 2>/dev/null; then \
+                uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
+            fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in git venv" >&2; exit 5; }; \
+        else \
+            uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
+        fi; \
+        printf 'source=git\nref=%s\ncommit=%s\n' "${AIDER_GIT_REF}" "${RESOLVED_SHA}" > /opt/venv/.build-info/aider-git.txt; \
+        rm -rf /tmp/aider-src; \
+        export AIDER_GIT_COMMIT="${RESOLVED_SHA}"; \
+    else \
+        PKG="aider-chat"; \
+        if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
+        uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            PKGP="aider-chat[playwright]"; \
+            if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+        fi; \
+        printf 'source=release\nversion=%s\n' "${AIDER_VERSION}" > /opt/venv/.build-info/aider-release.txt; \
     fi; \
     find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
