@@ -452,7 +452,7 @@ fn main() -> ExitCode {
     let run_start = std::time::Instant::now();
 
     #[cfg(feature = "otel")]
-    aifo_coder::telemetry::record_run_start(agent);
+    aifo_coder::record_run_start(agent);
 
     // Print agent-specific environment/toolchain hints when appropriate
     maybe_warn_missing_toolchain_agent(&cli, agent);
@@ -463,7 +463,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::telemetry::record_run_end(agent, 1, duration);
+            aifo_coder::record_run_end(agent, 1, duration);
         }
 
         return ExitCode::from(1);
@@ -475,7 +475,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::telemetry::record_run_end(agent, 1, duration);
+            aifo_coder::record_run_end(agent, 1, duration);
         }
 
         return ExitCode::from(1);
@@ -540,7 +540,7 @@ fn main() -> ExitCode {
                     #[cfg(feature = "otel")]
                     {
                         let duration = run_start.elapsed();
-                        aifo_coder::telemetry::record_run_end(agent, 1, duration);
+                        aifo_coder::record_run_end(agent, 1, duration);
                     }
                     return ExitCode::from(1);
                 }
@@ -658,7 +658,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "otel")]
         {
             let duration = run_start.elapsed();
-            aifo_coder::telemetry::record_run_end(agent, 0, duration);
+            aifo_coder::record_run_end(agent, 0, duration);
         }
 
         return ExitCode::from(0);
@@ -708,7 +708,7 @@ fn main() -> ExitCode {
             #[cfg(feature = "otel")]
             {
                 let duration = run_start.elapsed();
-                aifo_coder::telemetry::record_run_end(agent, code, duration);
+                aifo_coder::record_run_end(agent, code, duration);
             }
 
             ExitCode::from(code as u8)
@@ -726,7 +726,7 @@ fn main() -> ExitCode {
             #[cfg(feature = "otel")]
             {
                 let duration = run_start.elapsed();
-                aifo_coder::telemetry::record_run_end(agent, i32::from(code), duration);
+                aifo_coder::record_run_end(agent, i32::from(code), duration);
             }
 
             ExitCode::from(code)
