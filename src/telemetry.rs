@@ -520,6 +520,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     } else {
         None
     };
+
     if let Some(ref mp) = meter_provider {
         global::set_meter_provider(mp.clone());
     }
