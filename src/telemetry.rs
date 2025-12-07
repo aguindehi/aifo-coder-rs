@@ -139,7 +139,7 @@ fn effective_otlp_logs_endpoint() -> Option<String> {
 
 /// Return true if PII-rich telemetry is allowed (unsafe; for debugging only).
 pub fn telemetry_pii_enabled() -> bool {
-    env::var("AIFO_CODER_OTEL_PII").ok().as_deref() == Some("1")
+    env::var("AIFO_CODER_OTEL_PII").ok().as_deref() != Some("0")
 }
 
 /// Return true if debug mode should use stderr/file exporter for metrics.
@@ -717,10 +717,28 @@ impl Drop for TelemetryGuard {
 
 #[cfg(feature = "otel")]
 pub fn record_run_start(agent: &str) {
-    tracing::info!(
-        aifo_coder_agent = %agent,
-        "aifo-coder run started"
-    );
+    let cwd = std::env::current_dir()
+        .ok()
+        .and_then(|p| p.canonicalize().ok())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+    let cwd_str = cwd.display().to_string();
+    let cwd_hash = hash_string_hex(&cwd_str);
+
+    if telemetry_pii_enabled() {
+        tracing::info!(
+            aifo_coder_agent = %agent,
+            aifo_coder_cwd = %cwd_str,
+            aifo_coder_cwd_hash = %cwd_hash,
+            "aifo-coder run started"
+        );
+    } else {
+        tracing::info!(
+            aifo_coder_agent = %agent,
+            aifo_coder_cwd_hash = %cwd_hash,
+            "aifo-coder run started"
+        );
+    }
+
     crate::telemetry::metrics::record_run(agent);
 }
 
