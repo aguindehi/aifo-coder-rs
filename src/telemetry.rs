@@ -587,6 +587,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
             };
             crate::log_info_stderr(use_err, msg);
         }
+        crate::log_info_stderr(use_err, "");
     }
 
     global::set_tracer_provider(tracer_provider);
