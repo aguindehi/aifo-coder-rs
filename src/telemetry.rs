@@ -293,8 +293,11 @@ where
         let level = *meta.level();
 
         // Flood control: only INFO/WARN/ERROR events are exported to OTEL logs.
-        if level < tracing::Level::INFO {
-            return;
+        match level {
+            tracing::Level::INFO | tracing::Level::WARN | tracing::Level::ERROR => {}
+            tracing::Level::DEBUG | tracing::Level::TRACE => {
+                return;
+            }
         }
 
         let mut buf = String::new();
