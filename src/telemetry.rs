@@ -269,7 +269,7 @@ where
         record.add_attribute("logger.name", meta.target().to_string());
         record.add_attribute("logger.level", meta.level().as_str().to_string());
 
-        let _ = self.logger.emit(record);
+        self.logger.emit(record);
     }
 }
 
