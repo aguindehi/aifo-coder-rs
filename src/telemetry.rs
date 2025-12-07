@@ -271,8 +271,8 @@ where
         use std::fmt::Write as _;
         let _ = write!(&mut buf, "{:?}", event);
 
-        // SdkLogRecord::new is crate-private; use a default record and set severity/body via traits.
-        let mut record = opentelemetry_sdk::logs::SdkLogRecord::default();
+        // Construct a log record via the Logger trait API.
+        let mut record = self.logger.create_log_record();
         record.set_severity(severity);
         record.set_body(buf.into());
         record.add_attribute("logger.name", meta.target().to_string());
@@ -568,13 +568,17 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
+    let base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
     #[cfg(feature = "otel-otlp")]
-    if let Some(ref lp) = log_provider {
-        let log_layer = OtelLogLayer::new(lp);
-        base_subscriber = base_subscriber.with(log_layer);
-    }
+    let base_subscriber = if let Some(ref lp) = log_provider {
+        base_subscriber.with(OtelLogLayer::new(lp))
+    } else {
+        base_subscriber
+    };
+
+    #[cfg(not(feature = "otel-otlp"))]
+    let base_subscriber = base_subscriber;
 
     // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
     let base_subscriber = base_subscriber;
