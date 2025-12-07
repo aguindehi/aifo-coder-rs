@@ -549,7 +549,7 @@ fn main() -> ExitCode {
                     #[cfg(feature = "otel")]
                     {
                         let duration = run_start.elapsed();
-                        aifo_coder::record_run_end(agent, 1, duration);
+                        aifo_coder::record_run_end(agent, &toolchains_for_run, 1, duration);
                     }
                     return ExitCode::from(1);
                 }
