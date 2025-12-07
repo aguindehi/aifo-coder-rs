@@ -6,7 +6,7 @@ use std::time::SystemTime;
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
-use opentelemetry::logs::{LogRecord, Logger, LoggerProvider, Severity};
+use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
@@ -257,21 +257,14 @@ where
             return;
         }
 
-        let severity = match level {
-            tracing::Level::ERROR => Severity::Error,
-            tracing::Level::WARN => Severity::Warn,
-            tracing::Level::INFO => Severity::Info,
-            tracing::Level::DEBUG => Severity::Debug,
-            tracing::Level::TRACE => Severity::Trace,
-        };
-
         let mut buf = String::new();
         use std::fmt::Write as _;
         let _ = write!(&mut buf, "{:?}", event);
 
         // Construct a log record via the Logger trait API.
         let mut record = self.logger.create_log_record();
-        record.set_severity(severity);
+        // Represent severity as text based on the tracing level.
+        record.set_severity_text(level.as_str().to_string());
         record.set_body(buf.into());
         record.add_attribute("logger.name", meta.target().to_string());
         record.add_attribute("logger.level", meta.level().as_str().to_string());
@@ -566,17 +559,16 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let registry = tracing_subscriber::registry().with(otel_layer);
-
     #[cfg(feature = "otel-otlp")]
-    let base_subscriber = if let Some(ref lp) = log_provider {
-        registry.with(OtelLogLayer::new(lp))
-    } else {
-        registry
+    let base_subscriber = {
+        let log_layer = log_provider.as_ref().map(OtelLogLayer::new);
+        tracing_subscriber::registry()
+            .with(otel_layer)
+            .with(log_layer)
     };
 
     #[cfg(not(feature = "otel-otlp"))]
-    let base_subscriber = registry;
+    let base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
     // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
     let base_subscriber = base_subscriber;
