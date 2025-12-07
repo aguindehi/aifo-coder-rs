@@ -26,6 +26,8 @@ pub struct TelemetryGuard {
     meter_provider: Option<SdkMeterProvider>,
     #[cfg(feature = "otel-otlp")]
     runtime: Option<tokio::runtime::Runtime>,
+    #[cfg(feature = "otel-otlp")]
+    log_provider: Option<opentelemetry_sdk::logs::LoggerProvider>,
 }
 
 static INIT: OnceCell<()> = OnceCell::new();
@@ -156,6 +158,46 @@ fn build_resource() -> Resource {
 }
 
 #[cfg(feature = "otel-otlp")]
+fn build_logger_provider(use_otlp: bool) -> Option<opentelemetry_sdk::logs::LoggerProvider> {
+    use opentelemetry_sdk::logs::LoggerProvider as SdkLoggerProvider;
+    use opentelemetry_sdk::logs::LoggerProviderBuilder;
+
+    if !use_otlp {
+        return None;
+    }
+
+    let endpoint = effective_otlp_endpoint()?;
+
+    let exporter = match opentelemetry_otlp::LogExporter::builder()
+        .with_http()
+        .with_endpoint(endpoint)
+        .build()
+    {
+        Ok(exp) => exp,
+        Err(e) => {
+            if verbose_otel_enabled() {
+                let use_err = crate::color_enabled_stderr();
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: telemetry: failed to build OTLP log exporter: {}",
+                        e
+                    ),
+                );
+            }
+            return None;
+        }
+    };
+
+    let provider = LoggerProviderBuilder::default()
+        .with_resource(build_resource())
+        .with_batch_exporter(exporter)
+        .build();
+
+    Some(provider)
+}
+
+#[cfg(feature = "otel-otlp")]
 fn build_tracer(
     _use_otlp: bool,
     _transport: OtelTransport,
@@ -177,6 +219,67 @@ fn build_stderr_tracer() -> sdktrace::SdkTracerProvider {
     sdktrace::SdkTracerProvider::builder()
         .with_resource(build_resource())
         .build()
+}
+
+#[cfg(feature = "otel-otlp")]
+struct OtelLogLayer {
+    logger: opentelemetry_sdk::logs::SdkLogger,
+}
+
+#[cfg(feature = "otel-otlp")]
+impl OtelLogLayer {
+    fn new(provider: &opentelemetry_sdk::logs::LoggerProvider) -> Self {
+        let logger = provider.logger("aifo-coder-logs");
+        OtelLogLayer { logger }
+    }
+}
+
+#[cfg(feature = "otel-otlp")]
+impl<S> tracing_subscriber::Layer<S> for OtelLogLayer
+where
+    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        use opentelemetry::logs::Severity;
+
+        if !telemetry_logs_enabled_env() {
+            return;
+        }
+
+        let meta = event.metadata();
+        let level = *meta.level();
+
+        // Flood control: only INFO/WARN/ERROR events are exported to OTEL logs.
+        if level < tracing::Level::INFO {
+            return;
+        }
+
+        let severity = match level {
+            tracing::Level::ERROR => Severity::Error,
+            tracing::Level::WARN => Severity::Warn,
+            tracing::Level::INFO => Severity::Info,
+            tracing::Level::DEBUG => Severity::Debug,
+            tracing::Level::TRACE => Severity::Trace,
+        };
+
+        let mut buf = String::new();
+        use std::fmt::Write as _;
+        let _ = write!(&mut buf, "{:?}", event);
+
+        let mut record = opentelemetry_sdk::logs::SdkLogRecord::new(severity);
+        record.set_body(buf.into());
+        record.add_attribute(KeyValue::new("logger.name", meta.target().to_string()));
+        record.add_attribute(KeyValue::new(
+            "logger.level",
+            meta.level().as_str().to_string(),
+        ));
+
+        let _ = self.logger.emit(record);
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -426,6 +529,13 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     let tracer_provider = build_tracer(use_otlp, transport);
     let tracer = tracer_provider.tracer("aifo-coder");
 
+    #[cfg(feature = "otel-otlp")]
+    let log_provider = if use_otlp && telemetry_logs_enabled_env() {
+        build_logger_provider(use_otlp)
+    } else {
+        None
+    };
+
     let (meter_provider, metrics_status) = build_metrics_provider_with_status(use_otlp, transport);
 
     if let Some(ref mp) = meter_provider {
@@ -459,9 +569,15 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
     global::set_tracer_provider(tracer_provider);
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let base_subscriber = tracing_subscriber::registry().with(otel_layer);
+    let mut base_subscriber = tracing_subscriber::registry().with(otel_layer);
 
-    // Base subscriber: registry + OpenTelemetry layers (logs bridge is not yet implemented in v1).
+    #[cfg(feature = "otel-otlp")]
+    if let Some(ref lp) = log_provider {
+        let log_layer = OtelLogLayer::new(lp);
+        base_subscriber = base_subscriber.with(log_layer);
+    }
+
+    // Base subscriber: registry + OTEL trace + optional OTEL logs layers.
     let base_subscriber = base_subscriber;
 
     let fmt_enabled = env::var("AIFO_CODER_TRACING_FMT").ok().as_deref() == Some("1");
@@ -488,6 +604,7 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
         Some(TelemetryGuard {
             meter_provider,
             runtime,
+            log_provider,
         })
     }
 
@@ -504,6 +621,9 @@ impl Drop for TelemetryGuard {
         }
         #[cfg(feature = "otel-otlp")]
         {
+            if let Some(ref lp) = self.log_provider {
+                let _ = lp.force_flush();
+            }
             if let Some(rt) = self.runtime.take() {
                 drop(rt);
             }
