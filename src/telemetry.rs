@@ -336,9 +336,7 @@ where
             }
         }
 
-        let mut visitor = JsonVisitor {
-            fields: Map::new(),
-        };
+        let mut visitor = JsonVisitor { fields: Map::new() };
         event.record(&mut visitor);
 
         // Derive a human-readable message from the `message` field when present.
@@ -366,8 +364,8 @@ where
             obj.entry(k).or_insert(v);
         }
 
-        let body_str =
-            serde_json::to_string(&Value::Object(obj)).unwrap_or_else(|_| "\"aifo-coder event\"".to_string());
+        let body_str = serde_json::to_string(&Value::Object(obj))
+            .unwrap_or_else(|_| "\"aifo-coder event\"".to_string());
 
         // Construct a log record via the Logger trait API.
         let mut record = self.logger.create_log_record();
