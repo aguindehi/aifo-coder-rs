@@ -522,10 +522,7 @@ fn build_metrics_provider_with_status(
                 let res = fut.await;
                 if let Err(ref err) = res {
                     if verbose_otel_enabled() {
-                        let msg = format!(
-                            "aifo-coder: telemetry: metrics export failed: {}",
-                            err
-                        );
+                        let msg = format!("aifo-coder: telemetry: metrics export failed: {}", err);
                         log_metrics_error_once(&msg);
                     }
                 }
