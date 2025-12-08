@@ -435,8 +435,8 @@ fn build_metrics_provider_with_status(
         // Helper: print a barrier-colored warning separated from surrounding CLI lines.
         let warn_barrier = |s: &str| {
             let colored = crate::paint(use_err, "\x1b[33;1m", s);
-            // Ensure separation before and after, honoring terminals that require \n\r.
-            crate::log_warn_stderr(use_err, &format!("\n\r\n\r{}\n\r\n\r", colored));
+            // Single blank line before and a proper line ending after, honoring terminals that require \n\r.
+            crate::log_warn_stderr(use_err, &format!("\n\r{}\n\r", colored));
         };
 
         // Same message within the repeat window: increment and optionally emit a suppression summary.
