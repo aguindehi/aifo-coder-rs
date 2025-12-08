@@ -3,10 +3,7 @@ fn unit_test_normalize_toolchain_kind_aliases() {
     assert_eq!(aifo_coder::normalize_toolchain_kind("rust"), "rust");
     assert_eq!(aifo_coder::normalize_toolchain_kind("node"), "node");
     assert_eq!(aifo_coder::normalize_toolchain_kind("ts"), "node");
-    assert_eq!(
-        aifo_coder::normalize_toolchain_kind("TypeScript"),
-        "node"
-    );
+    assert_eq!(aifo_coder::normalize_toolchain_kind("TypeScript"), "node");
     assert_eq!(aifo_coder::normalize_toolchain_kind("py"), "python");
     assert_eq!(aifo_coder::normalize_toolchain_kind("python"), "python");
     assert_eq!(aifo_coder::normalize_toolchain_kind("c"), "c-cpp");
