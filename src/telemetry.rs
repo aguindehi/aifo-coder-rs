@@ -432,38 +432,38 @@ fn build_metrics_provider_with_status(
 
         let use_err = crate::color_enabled_stderr();
 
-        // Same message within the repeat window: increment and optionally emit a summary.
+        // Helper: print a barrier-colored warning separated from surrounding CLI lines.
+        let warn_barrier = |s: &str| {
+            let colored = crate::paint(use_err, "\x1b[33;1m", s);
+            // Ensure separation before and after, honoring terminals that require \n\r.
+            crate::log_warn_stderr(use_err, &format!("\n\r\n\r{}\n\r\n\r", colored));
+        };
+
+        // Same message within the repeat window: increment and optionally emit a suppression summary.
         if st.last_msg == msg && now.duration_since(st.last_ts) <= MAX_REPEAT_WINDOW {
             st.count = st.count.saturating_add(1);
             st.last_ts = now;
 
             if st.count == SUPPRESS_AFTER {
-                crate::log_warn_stderr(
-                    use_err,
-                    &format!(
-                        "\raifo-coder: telemetry: last metrics export error repeated {} times; \
-                         suppressing further repeats",
-                        st.count - 1,
-                    ),
-                );
+                warn_barrier(&format!(
+                    "aifo-coder: telemetry: last metrics export error repeated {} times; suppressing further repeats",
+                    st.count - 1,
+                ));
             }
             // After SUPPRESS_AFTER, stay silent for this message.
             return;
         }
 
-        // New or stale message: if the previous one repeated a bit, summarize it.
+        // New or stale message: if the previous one repeated a bit, summarize it with a barrier.
         if st.count > 1 && st.count < SUPPRESS_AFTER {
-            crate::log_warn_stderr(
-                use_err,
-                &format!(
-                    "\raifo-coder: telemetry: last metrics export error repeated {} times",
-                    st.count - 1,
-                ),
-            );
+            warn_barrier(&format!(
+                "aifo-coder: telemetry: last metrics export error repeated {} times",
+                st.count - 1,
+            ));
         }
 
-        // Print the new message at the start of the current line (no extra newline).
-        crate::log_warn_stderr(use_err, &format!("\r{}", msg));
+        // Print the new message with a barrier so it stands out inside interactive agent streams.
+        warn_barrier(msg);
 
         st.last_msg = msg.to_string();
         st.count = 1;
