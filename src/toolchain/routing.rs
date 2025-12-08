@@ -48,6 +48,7 @@ const ALLOW_NODE: &[&str] = &[
     "yarn",
     "pnpm",
     "deno",
+    "bun",
     "tsc",
     "ts-node",
     "make",
@@ -125,7 +126,7 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
         // rust
         "cargo" | "rustc" => "rust",
         // node/typescript and related managers
-        "node" | "npm" | "npx" | "yarn" | "pnpm" | "deno" | "tsc" | "ts-node" => "node",
+        "node" | "npm" | "npx" | "yarn" | "pnpm" | "deno" | "bun" | "tsc" | "ts-node" => "node",
         // python
         "python" | "python3" | "pip" | "pip3" => "python",
         // c/c++

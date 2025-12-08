@@ -14,7 +14,7 @@
 #     - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.
 #     - Seccomp and cgroup namespaces as reported by Docker.
 #     - Per-pane isolated state for forks.
-#     - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy.
+#     - Language toolchain sidecars (rust, node (ts/deno/bun), python, c/cpp, go) via secure proxy.
 #     - Optional unix:// proxy on Linux; host-gateway bridging when needed.
 #     - Minimal mounts: project workspace, config files, optional GnuPG keyrings.
 # ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -45,6 +45,10 @@ CACHE_DIR ?= .buildx-cache
 ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always
 NEXTEST_VERSION ?= 0.9.114
 CARGO_FLAGS ?= --features otel-otlp
+
+# Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
+MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
+
 
 # OpenTelemetry configuration
 # ---------------------------
@@ -111,6 +115,20 @@ WITH_PLAYWRIGHT ?= 1
 PLANDEX_GIT_REF ?= main
 AIDER_GIT_REF ?= main
 
+# Toolchain tags
+RUST_TOOLCHAIN_TAG ?= latest
+NODE_TOOLCHAIN_TAG ?= latest
+CPP_TOOLCHAIN_TAG ?= latest
+
+# Toolchain base tags
+RUST_BASE_TAG ?= 1-slim-bookworm
+NODE_BASE_TAG ?= 22-bookworm-slim
+
+# Toolchain repos/images (centralized)
+TC_REPO_RUST ?= aifo-coder-toolchain-rust
+TC_REPO_NODE ?= aifo-coder-toolchain-node
+TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
+
 # Help
 .PHONY: help banner
 .DEFAULT_GOAL := help
@@ -130,8 +148,10 @@ title = @printf '%b\n' "$(C_TITLE)$(1)$(C_RESET)"
 title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
-export CPP_TOOLCHAIN_TAG TS_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
+export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+
+# Publish release prefix/postfix
 RELEASE_PREFIX ?= release
 RELEASE_POSTFIX ?=
 
@@ -182,7 +202,6 @@ help: banner
 	@echo "  RUST_TOOLCHAIN_TAG .......... Tag for rust toolchain image (default: latest)"
 	@echo "  NODE_TOOLCHAIN_TAG .......... Tag for node toolchain image (default: latest)"
 	@echo "  CPP_TOOLCHAIN_TAG ........... Tag for c-cpp toolchain image (default: latest)"
-	@echo "  TS_TOOLCHAIN_TAG ............ Tag for typescript toolchain image (default: latest)"
 	@echo "  RELEASE_PREFIX .............. Tag prefix for publish-release defaults (default: release)"
 	@echo "  RELEASE_POSTFIX ............. Optional suffix for publish-release defaults (e.g., rc1; default: empty)"
 	@echo "  RUST_BASE_TAG ............... Base rust image tag (default: 1-slim-bookworm)"
@@ -290,10 +309,9 @@ help: banner
 	@echo "  build-opencode-slim ......... Build only the OpenCode slim image ($${IMAGE_PREFIX}-opencode-slim:$${TAG})"
 	@echo "  build-plandex-slim .......... Build only the Plandex slim image ($${IMAGE_PREFIX}-plandex-slim:$${TAG})"
 	@echo ""
-	@echo "  build-toolchain ............. Build all toolchain sidecar images (rust/node/ts/cpp)"
+	@echo "  build-toolchain ............. Build all toolchain sidecar images (rust/node/cpp)"
 	@echo "  build-toolchain-rust ........ Build the Rust toolchain sidecar image ($(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG))"
 	@echo "  build-toolchain-node ........ Build the Node toolchain sidecar image ($(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG))"
-	@echo "  build-toolchain-ts .......... Build the TypeScript toolchain sidecar image ($(TC_REPO_TS):$(TS_TOOLCHAIN_TAG))"
 	@echo "  build-toolchain-cpp ......... Build the C-CPP toolchain sidecar image ($(TC_REPO_CPP):$(CPP_TOOLCHAIN_TAG))"
 	@echo ""
 	@echo "  build-rust-builder .......... Build the Rust cross-compile builder image ($${IMAGE_PREFIX}-rust-builder:$${TAG})"
@@ -327,7 +345,6 @@ help: banner
 	@echo "  rebuild-toolchain ........... Rebuild all toolchain sidecar images without cache"
 	@echo "  rebuild-toolchain-rust ...... Rebuild only the Rust toolchain image without cache"
 	@echo "  rebuild-toolchain-node ...... Rebuild only the Node toolchain image without cache"
-	@echo "  rebuild-toolchain-ts ........ Rebuild only the TypeScript toolchain image without cache"
 	@echo "  rebuild-toolchain-cpp ....... Rebuild only the C-CPP toolchain image without cache"
 	@echo ""
 	@echo "  rebuild-rust-builder ........ Rebuild only the Rust builder image without cache"
@@ -358,7 +375,6 @@ help: banner
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-toolchain-ts ........ Buildx multi-arch and push TypeScript toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-cpp ....... Buildx multi-arch and push C-CPP toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo ""
 	@echo "  publish-codex ............... Buildx multi-arch and push Codex (full; set PLATFORMS=... PUSH=1)"
@@ -467,7 +483,7 @@ help: banner
 	@echo ""
 	@echo "    aifo-coder --toolchain rust aider -- --watch-files"
 	@echo "    aifo-coder --toolchain node codex -- resume"
-	@echo "    aifo-coder --toolchain ts crush -- --version"
+	@echo "    aifo-coder --toolchain node crush -- --version"
 	@echo ""
 	$(call title_ul,Fork mode:)
 	@echo ""
@@ -537,21 +553,25 @@ else
   DOCKER_BUILD = docker build
 endif
 
+# Coding agent images fat/slim
 CODEX_IMAGE ?= $(IMAGE_PREFIX)-codex:$(TAG)
 CRUSH_IMAGE ?= $(IMAGE_PREFIX)-crush:$(TAG)
 AIDER_IMAGE ?= $(IMAGE_PREFIX)-aider:$(TAG)
 OPENHANDS_IMAGE ?= $(IMAGE_PREFIX)-openhands:$(TAG)
 OPENCODE_IMAGE ?= $(IMAGE_PREFIX)-opencode:$(TAG)
 PLANDEX_IMAGE ?= $(IMAGE_PREFIX)-plandex:$(TAG)
+
 CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
 CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
+
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
 OSX_SDK_FILENAME ?= MacOSX.sdk.tar.xz
+
 # Include Windows cross toolchain (mingw) automatically on Windows shells
 RUST_BUILDER_WITH_WIN ?= 0
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
@@ -560,24 +580,8 @@ ifeq ($(OS),Windows_NT)
 else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S)))
   RUST_BUILDER_WITH_WIN := 1
 endif
-RUST_TOOLCHAIN_TAG ?= latest
-NODE_TOOLCHAIN_TAG ?= latest
-CPP_TOOLCHAIN_TAG ?= latest
-TS_TOOLCHAIN_TAG ?= latest
-TS_TOOLCHAIN_TAG_EFF := $(if $(strip $(TS_TOOLCHAIN_TAG)),$(TS_TOOLCHAIN_TAG),latest)
-RUST_BASE_TAG ?= 1-slim-bookworm
-NODE_BASE_TAG ?= 22-bookworm-slim
-# Toolchain repos/images (centralized)
-TC_REPO_RUST ?= aifo-coder-toolchain-rust
-TC_REPO_NODE ?= aifo-coder-toolchain-node
-TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
-TC_REPO_TS   ?= aifo-coder-toolchain-ts
-TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG)
-TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG)
-TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(CPP_TOOLCHAIN_TAG)
-TC_IMAGE_TS   ?= $(TC_REPO_TS):$(TS_TOOLCHAIN_TAG_EFF)
+
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
-MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
@@ -622,11 +626,6 @@ ifeq ($(ADD_ARCH_IN_TAG)$(SINGLE_PLAT),11)
   CPP_REG_TAG := $(CPP_TOOLCHAIN_TAG)-$(ARCH_SUFFIX)
 endif
 
-TS_REG_TAG := $(TS_TOOLCHAIN_TAG_EFF)
-ifeq ($(ADD_ARCH_IN_TAG)$(SINGLE_PLAT),11)
-  TS_REG_TAG := $(TS_TOOLCHAIN_TAG_EFF)-$(ARCH_SUFFIX)
-endif
-
 # Registry-tagged image names (used only for push/archive); local tags remain unchanged
 CODEX_IMAGE_REG ?= $(IMAGE_PREFIX)-codex:$(REG_TAG)
 CRUSH_IMAGE_REG ?= $(IMAGE_PREFIX)-crush:$(REG_TAG)
@@ -641,10 +640,13 @@ OPENHANDS_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-openhands-slim:$(REG_TAG)
 OPENCODE_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-opencode-slim:$(REG_TAG)
 PLANDEX_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-plandex-slim:$(REG_TAG)
 
+TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(if $(strip $(RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),latest)
+TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(if $(strip $(NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),latest)
+TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(if $(strip $(CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),latest)
+
 TC_IMAGE_RUST_REG ?= $(TC_REPO_RUST):$(RUST_REG_TAG)
 TC_IMAGE_NODE_REG ?= $(TC_REPO_NODE):$(NODE_REG_TAG)
 TC_IMAGE_CPP_REG  ?= $(TC_REPO_CPP):$(CPP_REG_TAG)
-TC_IMAGE_TS_REG   ?= $(TC_REPO_TS):$(TS_REG_TAG)
 
 # Centralized registry reachability and tagging prefix logic
 MIRROR_REGISTRY ?= repository.migros.net
@@ -1090,10 +1092,10 @@ rebuild-toolchain-node:
 	fi
 
 .PHONY: build-toolchain
-build-toolchain: build-toolchain-rust build-toolchain-node build-toolchain-ts build-toolchain-cpp
+build-toolchain: build-toolchain-rust build-toolchain-node build-toolchain-cpp
 
 .PHONY: rebuild-toolchain
-rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolchain-ts rebuild-toolchain-cpp
+rebuild-toolchain: rebuild-toolchain-rust rebuild-toolchain-node rebuild-toolchain-cpp
 
 .PHONY: publish-toolchain-rust
 publish-toolchain-rust:
@@ -1116,31 +1118,13 @@ publish-toolchain-rust:
 	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg RUST_TAG="$(RUST_BASE_TAG)" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg NEXTEST_VERSION="$(NEXTEST_VERSION)" -f toolchains/rust/Dockerfile -t $(TC_IMAGE_RUST) $(RUST_CA_SECRET) .; \
 	fi
 
-.PHONY: build-toolchain-ts rebuild-toolchain-ts build-toolchain-cpp rebuild-toolchain-cpp
-build-toolchain-ts:
-	@set -e; \
-	echo "Building $(TC_IMAGE_TS) ..."; \
-	$(MIRROR_CHECK_STRICT); \
-	$(INTERNAL_REG_SETUP); \
-	if [ -n "$$REG" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t $(TC_IMAGE_TS) -t "$${REG}$(TC_IMAGE_TS)" $(CA_SECRET) .; \
-	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t $(TC_IMAGE_TS) $(CA_SECRET) .; \
-	fi
+.PHONY: build-toolchain-cpp rebuild-toolchain-cpp
 
-rebuild-toolchain-ts:
-	@set -e; \
-	echo "Rebuilding $(TC_IMAGE_TS) (no cache) ..."; \
-	$(MIRROR_CHECK_STRICT); \
-	$(INTERNAL_REG_SETUP); \
-	if [ -n "$$REG" ]; then \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t $(TC_IMAGE_TS) -t "$${REG}$(TC_IMAGE_TS)" $(CA_SECRET) .; \
-	else \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t $(TC_IMAGE_TS) $(CA_SECRET) .; \
-	fi
 
 build-toolchain-cpp:
-	@$(MIRROR_CHECK_STRICT); \
+	@set -e; \
+	echo "Building $(TC_IMAGE_CPP) ..."; \
+	$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
@@ -1149,7 +1133,9 @@ build-toolchain-cpp:
 	fi
 
 rebuild-toolchain-cpp:
-	@$(MIRROR_CHECK_STRICT); \
+	@set -e; \
+	echo "Rebuilding $(TC_IMAGE_CPP) (no cache) ..."; \
+	$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
@@ -1157,26 +1143,7 @@ rebuild-toolchain-cpp:
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) $(CA_SECRET) .; \
 	fi
 
-.PHONY: publish-toolchain-ts publish-toolchain-cpp
-publish-toolchain-ts:
-	@set -e; \
-	echo "Publishing $(TC_IMAGE_TS) with buildx (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1) ..."; \
-	$(INTERNAL_REG_SETUP); \
-	$(MIRROR_CHECK_LAX); \
-	if [ "$(PUSH)" = "1" ]; then \
-	  if [ -n "$$REG" ]; then \
-	    echo "PUSH=1 and REGISTRY specified: pushing to $$REG ..."; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t "$${REG}$(TC_IMAGE_TS_REG)" $(CA_SECRET) .; \
-	  else \
-	    echo "PUSH=1 but no REGISTRY specified; refusing to push to docker.io. Writing multi-arch OCI archive instead."; \
-	    mkdir -p dist; \
-	    DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile --output type=oci,dest=dist/$(TC_REPO_TS)-$(TS_REG_TAG).oci.tar $(CA_SECRET) .; \
-	    echo "Wrote dist/$(TC_REPO_TS)-$(TS_REG_TAG).oci.tar"; \
-	  fi; \
-	else \
-	  echo "PUSH=0: building locally (single-arch loads into Docker when supported) ..."; \
-	  DOCKER_BUILDKIT=1 $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/ts/Dockerfile -t $(TC_IMAGE_TS) $(CA_SECRET) .; \
-	fi
+.PHONY: publish-toolchain-cpp
 
 publish-toolchain-cpp:
 	@set -e; \
@@ -1483,7 +1450,6 @@ publish:
 	@echo "RUST_TOOLCHAIN_TAG (eff.): $(RUST_TOOLCHAIN_TAG)"
 	@echo "NODE_TOOLCHAIN_TAG (eff.): $(NODE_TOOLCHAIN_TAG)"
 	@echo "CPP_TOOLCHAIN_TAG (eff.) : $(CPP_TOOLCHAIN_TAG)"
-	@echo "TS_TOOLCHAIN_TAG (eff.)  : $(TS_TOOLCHAIN_TAG)"
 	@echo "PLATFORMS                : $(PLATFORMS)"
 	@echo "PUSH                     : $(PUSH)"
 	@echo "KEEP_APT                 : $(KEEP_APT)"
@@ -1507,7 +1473,6 @@ publish:
 	@$(MAKE) publish-plandex-slim
 	@$(MAKE) publish-toolchain-rust
 	@$(MAKE) publish-toolchain-node
-	@$(MAKE) publish-toolchain-ts
 	@$(MAKE) publish-toolchain-cpp
 
 .PHONY: publish-release
@@ -1523,7 +1488,6 @@ publish-release:
 	  RUST_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
-	  TS_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin TS_TOOLCHAIN_TAG)),$(TS_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
@@ -2440,17 +2404,17 @@ rebuild-existing-nocache:
 .PHONY: clean
 clean:
 	@set -e; \
-	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) $(TC_IMAGE_RUST) $(TC_IMAGE_NODE) $(TC_IMAGE_TS) $(TC_IMAGE_CPP) 2>/dev/null || true; \
+	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) $(TC_IMAGE_RUST) $(TC_IMAGE_NODE) $(TC_IMAGE_CPP) 2>/dev/null || true; \
 	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
 	REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
 	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
 	RP="repository.migros.net/"; \
 	if [ -n "$$REG" ]; then \
-	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}$(TC_IMAGE_RUST)" "$${REG}$(TC_IMAGE_NODE)" "$${REG}$(TC_IMAGE_TS)" "$${REG}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
+	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}$(TC_IMAGE_RUST)" "$${REG}$(TC_IMAGE_NODE)" "$${REG}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
 	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	if [ "$$RP" != "$$REG" ]; then \
-	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}$(TC_IMAGE_RUST)" "$${RP}$(TC_IMAGE_NODE)" "$${RP}$(TC_IMAGE_TS)" "$${RP}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
+	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}$(TC_IMAGE_RUST)" "$${RP}$(TC_IMAGE_NODE)" "$${RP}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
 	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -2985,7 +2949,6 @@ lint-docker:
 	  if [ -f toolchains/rust/Dockerfile ]; then hadolint toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then hadolint toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then hadolint toolchains/node/Dockerfile || true; fi; \
-	  if [ -f toolchains/ts/Dockerfile ]; then hadolint toolchains/ts/Dockerfile || true; fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo; \
 	  echo "hadolint not found; using hadolint/hadolint container ..."; \
@@ -2993,7 +2956,6 @@ lint-docker:
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
-	  if [ -f toolchains/ts/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/ts/Dockerfile || true; fi; \
 	else \
 	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
 	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \

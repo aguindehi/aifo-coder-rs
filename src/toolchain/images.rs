@@ -62,9 +62,10 @@ fn is_first_party(image: &str) -> bool {
 const TOOLCHAIN_ALIASES: &[(&str, &str)] = &[
     ("rust", "rust"),
     ("node", "node"),
-    // Keep TypeScript as its own canonical kind so we can use a dedicated toolchain image
-    ("ts", "typescript"),
-    ("typescript", "typescript"),
+    // TypeScript and Bun share the Node toolchain image
+    ("ts", "node"),
+    ("typescript", "node"),
+    ("bun", "node"),
     ("python", "python"),
     ("py", "python"),
     ("c", "c-cpp"),
@@ -92,13 +93,6 @@ const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
             env!("CARGO_PKG_VERSION")
         ),
     ),
-    (
-        "typescript",
-        concat!(
-            "aifo-coder-toolchain-ts:release-",
-            env!("CARGO_PKG_VERSION")
-        ),
-    ),
     ("python", "python:3.12-slim"),
     (
         "c-cpp",
@@ -114,7 +108,6 @@ const DEFAULT_IMAGE_BY_KIND: &[(&str, &str)] = &[
 const DEFAULT_IMAGE_FMT_BY_KIND: &[(&str, &str)] = &[
     ("rust", "aifo-coder-toolchain-rust:{version}"),
     ("node", "aifo-coder-toolchain-node:{version}"),
-    ("typescript", "aifo-coder-toolchain-ts:{version}"),
     ("python", "python:{version}-slim"),
     ("go", "golang:{version}-bookworm"),
     ("c-cpp", "aifo-coder-toolchain-cpp:{version}"),

@@ -17,9 +17,9 @@ pub(crate) enum Flavor {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
 pub(crate) enum ToolchainKind {
     Rust,
-    Node,
     #[value(alias = "ts")]
-    Typescript,
+    #[value(alias = "bun")]
+    Node,
     Python,
     #[value(alias = "ccpp")]
     #[value(alias = "c")]
@@ -35,7 +35,6 @@ impl ToolchainKind {
         match self {
             ToolchainKind::Rust => "rust",
             ToolchainKind::Node => "node",
-            ToolchainKind::Typescript => "typescript",
             ToolchainKind::Python => "python",
             ToolchainKind::CCpp => "c-cpp",
             ToolchainKind::Go => "go",
