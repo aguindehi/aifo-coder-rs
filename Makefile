@@ -1122,7 +1122,9 @@ publish-toolchain-rust:
 
 
 build-toolchain-cpp:
-	@$(MIRROR_CHECK_STRICT); \
+	@set -e; \
+	echo "Building $(TC_IMAGE_CPP) ..."; \
+	$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
@@ -1131,7 +1133,9 @@ build-toolchain-cpp:
 	fi
 
 rebuild-toolchain-cpp:
-	@$(MIRROR_CHECK_STRICT); \
+	@set -e; \
+	echo "Rebuilding $(TC_IMAGE_CPP) (no cache) ..."; \
+	$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
 	  $(DOCKER_BUILD) --no-cache --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" -f toolchains/cpp/Dockerfile -t $(TC_IMAGE_CPP) -t "$${REG}$(TC_IMAGE_CPP)" $(CA_SECRET) .; \
