@@ -46,6 +46,10 @@ ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-
 NEXTEST_VERSION ?= 0.9.114
 CARGO_FLAGS ?= --features otel-otlp
 
+# Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
+MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
+
+
 # OpenTelemetry configuration
 # ---------------------------
 # Compile-time:
@@ -111,6 +115,20 @@ WITH_PLAYWRIGHT ?= 1
 PLANDEX_GIT_REF ?= main
 AIDER_GIT_REF ?= main
 
+# Toolchain tags
+RUST_TOOLCHAIN_TAG ?= latest
+NODE_TOOLCHAIN_TAG ?= latest
+CPP_TOOLCHAIN_TAG ?= latest
+
+# Toolchain base tags
+RUST_BASE_TAG ?= 1-slim-bookworm
+NODE_BASE_TAG ?= 22-bookworm-slim
+
+# Toolchain repos/images (centralized)
+TC_REPO_RUST ?= aifo-coder-toolchain-rust
+TC_REPO_NODE ?= aifo-coder-toolchain-node
+TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
+
 # Help
 .PHONY: help banner
 .DEFAULT_GOAL := help
@@ -132,6 +150,8 @@ title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
 export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+
+# Publish release prefix/postfix
 RELEASE_PREFIX ?= release
 RELEASE_POSTFIX ?=
 
@@ -533,21 +553,25 @@ else
   DOCKER_BUILD = docker build
 endif
 
+# Coding agent images fat/slim
 CODEX_IMAGE ?= $(IMAGE_PREFIX)-codex:$(TAG)
 CRUSH_IMAGE ?= $(IMAGE_PREFIX)-crush:$(TAG)
 AIDER_IMAGE ?= $(IMAGE_PREFIX)-aider:$(TAG)
 OPENHANDS_IMAGE ?= $(IMAGE_PREFIX)-openhands:$(TAG)
 OPENCODE_IMAGE ?= $(IMAGE_PREFIX)-opencode:$(TAG)
 PLANDEX_IMAGE ?= $(IMAGE_PREFIX)-plandex:$(TAG)
+
 CODEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-codex-slim:$(TAG)
 CRUSH_IMAGE_SLIM ?= $(IMAGE_PREFIX)-crush-slim:$(TAG)
 AIDER_IMAGE_SLIM ?= $(IMAGE_PREFIX)-aider-slim:$(TAG)
 OPENHANDS_IMAGE_SLIM ?= $(IMAGE_PREFIX)-openhands-slim:$(TAG)
 OPENCODE_IMAGE_SLIM ?= $(IMAGE_PREFIX)-opencode-slim:$(TAG)
 PLANDEX_IMAGE_SLIM ?= $(IMAGE_PREFIX)-plandex-slim:$(TAG)
+
 RUST_BUILDER_IMAGE ?= $(IMAGE_PREFIX)-rust-builder:$(TAG)
 MACOS_CROSS_IMAGE ?= $(IMAGE_PREFIX)-macos-cross-rust-builder:$(TAG)
 OSX_SDK_FILENAME ?= MacOSX.sdk.tar.xz
+
 # Include Windows cross toolchain (mingw) automatically on Windows shells
 RUST_BUILDER_WITH_WIN ?= 0
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
@@ -556,20 +580,8 @@ ifeq ($(OS),Windows_NT)
 else ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S)))
   RUST_BUILDER_WITH_WIN := 1
 endif
-RUST_TOOLCHAIN_TAG ?= latest
-NODE_TOOLCHAIN_TAG ?= latest
-CPP_TOOLCHAIN_TAG ?= latest
-RUST_BASE_TAG ?= 1-slim-bookworm
-NODE_BASE_TAG ?= 22-bookworm-slim
-# Toolchain repos/images (centralized)
-TC_REPO_RUST ?= aifo-coder-toolchain-rust
-TC_REPO_NODE ?= aifo-coder-toolchain-node
-TC_REPO_CPP  ?= aifo-coder-toolchain-cpp
-TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(RUST_TOOLCHAIN_TAG)
-TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(NODE_TOOLCHAIN_TAG)
-TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(CPP_TOOLCHAIN_TAG)
+
 # Optional corporate CA for rust toolchain build; if present, pass as BuildKit secret
-MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 COMMA := ,
 RUST_CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
 CA_SECRET := $(if $(wildcard $(MIGROS_CA)),--secret id=migros_root_ca$(COMMA)src=$(MIGROS_CA),)
@@ -614,7 +626,6 @@ ifeq ($(ADD_ARCH_IN_TAG)$(SINGLE_PLAT),11)
   CPP_REG_TAG := $(CPP_TOOLCHAIN_TAG)-$(ARCH_SUFFIX)
 endif
 
-
 # Registry-tagged image names (used only for push/archive); local tags remain unchanged
 CODEX_IMAGE_REG ?= $(IMAGE_PREFIX)-codex:$(REG_TAG)
 CRUSH_IMAGE_REG ?= $(IMAGE_PREFIX)-crush:$(REG_TAG)
@@ -628,6 +639,10 @@ AIDER_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-aider-slim:$(REG_TAG)
 OPENHANDS_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-openhands-slim:$(REG_TAG)
 OPENCODE_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-opencode-slim:$(REG_TAG)
 PLANDEX_IMAGE_SLIM_REG ?= $(IMAGE_PREFIX)-plandex-slim:$(REG_TAG)
+
+TC_IMAGE_RUST ?= $(TC_REPO_RUST):$(if $(strip $(RUST_TOOLCHAIN_TAG)),$(RUST_TOOLCHAIN_TAG),latest)
+TC_IMAGE_NODE ?= $(TC_REPO_NODE):$(if $(strip $(NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),latest)
+TC_IMAGE_CPP  ?= $(TC_REPO_CPP):$(if $(strip $(CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),latest)
 
 TC_IMAGE_RUST_REG ?= $(TC_REPO_RUST):$(RUST_REG_TAG)
 TC_IMAGE_NODE_REG ?= $(TC_REPO_NODE):$(NODE_REG_TAG)
