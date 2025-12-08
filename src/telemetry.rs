@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use std::env;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
@@ -402,6 +403,72 @@ fn build_metrics_provider_with_status(
     use_otlp: bool,
     _transport: OtelTransport,
 ) -> (Option<SdkMeterProvider>, MetricsStatus) {
+    // Flood-control state for metrics exporter errors.
+    struct RepeatState {
+        last_msg: String,
+        count: u64,
+        last_ts: Instant,
+    }
+
+    static METRIC_ERR_STATE: OnceLock<Mutex<RepeatState>> = OnceLock::new();
+
+    fn log_metrics_error_once(msg: &str) {
+        const MAX_REPEAT_WINDOW: Duration = Duration::from_secs(60);
+        const SUPPRESS_AFTER: u64 = 5;
+
+        let now = Instant::now();
+        let state_lock = METRIC_ERR_STATE.get_or_init(|| {
+            Mutex::new(RepeatState {
+                last_msg: String::new(),
+                count: 0,
+                last_ts: Instant::now(),
+            })
+        });
+
+        let mut st = match state_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let use_err = crate::color_enabled_stderr();
+
+        // Same message within the repeat window: increment and optionally emit a summary.
+        if st.last_msg == msg && now.duration_since(st.last_ts) <= MAX_REPEAT_WINDOW {
+            st.count = st.count.saturating_add(1);
+            st.last_ts = now;
+
+            if st.count == SUPPRESS_AFTER {
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "\raifo-coder: telemetry: last metrics export error repeated {} times; \
+                         suppressing further repeats",
+                        st.count - 1,
+                    ),
+                );
+            }
+            // After SUPPRESS_AFTER, stay silent for this message.
+            return;
+        }
+
+        // New or stale message: if the previous one repeated a bit, summarize it.
+        if st.count > 1 && st.count < SUPPRESS_AFTER {
+            crate::log_warn_stderr(
+                use_err,
+                &format!(
+                    "\raifo-coder: telemetry: last metrics export error repeated {} times",
+                    st.count - 1,
+                ),
+            );
+        }
+
+        // Print the new message at the start of the current line (no extra newline).
+        crate::log_warn_stderr(use_err, &format!("\r{}", msg));
+
+        st.last_msg = msg.to_string();
+        st.count = 1;
+        st.last_ts = now;
+    }
     // Default: metrics enabled unless explicitly disabled via AIFO_CODER_OTEL_METRICS=0|false|no|off
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
@@ -455,11 +522,11 @@ fn build_metrics_provider_with_status(
                 let res = fut.await;
                 if let Err(ref err) = res {
                     if verbose_otel_enabled() {
-                        let use_err = crate::color_enabled_stderr();
-                        crate::log_warn_stderr(
-                            use_err,
-                            &format!("aifo-coder: telemetry: metrics export failed: {}", err),
+                        let msg = format!(
+                            "aifo-coder: telemetry: metrics export failed: {}",
+                            err
                         );
+                        log_metrics_error_once(&msg);
                     }
                 }
                 res
@@ -470,14 +537,11 @@ fn build_metrics_provider_with_status(
             let res = self.inner.force_flush();
             if let Err(ref err) = res {
                 if verbose_otel_enabled() {
-                    let use_err = crate::color_enabled_stderr();
-                    crate::log_warn_stderr(
-                        use_err,
-                        &format!(
-                            "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
-                            err
-                        ),
+                    let msg = format!(
+                        "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
+                        err
                     );
+                    log_metrics_error_once(&msg);
                 }
             }
             res
