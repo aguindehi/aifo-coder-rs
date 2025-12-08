@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use std::env;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
@@ -398,10 +399,122 @@ enum MetricsStatus {
     DisabledLocalFlood,
 }
 
+// Batched metrics export error logging (module-scoped)
+struct RepeatState {
+    last_msg: String,
+    count: u64,
+    first_ts: Instant,
+    last_ts: Instant,
+    printed: bool,
+}
+
+static METRIC_ERR_STATE: OnceLock<Mutex<RepeatState>> = OnceLock::new();
+
+const MAX_REPEAT_WINDOW: Duration = Duration::from_secs(60);
+const BATCH_BEFORE_PRINT: u64 = 4;
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(20);
+
+fn error_flush_policy_print() -> bool {
+    match env::var("AIFO_CODER_OTEL_ERROR_FLUSH") {
+        Ok(v) => {
+            let t = v.trim();
+            t.is_empty() || t.eq_ignore_ascii_case("print")
+        }
+        Err(_) => true,
+    }
+}
+
+fn warn_barrier_colored(msg: &str) {
+    let use_err = crate::color_enabled_stderr();
+    let colored = crate::paint(use_err, "\x1b[33;1m", msg);
+    // Single blank line before and a proper line ending after, honoring terminals that require \n\r.
+    crate::log_warn_stderr(use_err, &format!("\n\r{}\n\r", colored));
+}
+
+fn metrics_error_event(msg: &str) {
+    let now = Instant::now();
+    let lock = METRIC_ERR_STATE.get_or_init(|| {
+        Mutex::new(RepeatState {
+            last_msg: String::new(),
+            count: 0,
+            first_ts: now,
+            last_ts: now,
+            printed: false,
+        })
+    });
+
+    let mut st = match lock.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+
+    if st.count == 0 {
+        st.last_msg = msg.to_string();
+        st.count = 1;
+        st.first_ts = now;
+        st.last_ts = now;
+        st.printed = false;
+        return;
+    }
+
+    if st.last_msg == msg && now.duration_since(st.last_ts) <= MAX_REPEAT_WINDOW {
+        st.count = st.count.saturating_add(1);
+        st.last_ts = now;
+
+        if !st.printed && st.count == BATCH_BEFORE_PRINT {
+            let combined = format!(
+                "{}\n\raifo-coder: telemetry: last metrics export error repeated {} times; suppressing further repeats",
+                st.last_msg,
+                st.count
+            );
+            warn_barrier_colored(&combined);
+            st.printed = true;
+        }
+        return;
+    }
+
+    // Different or stale message: flush pending if appropriate
+    if st.count > 0
+        && !st.printed
+        && error_flush_policy_print()
+        && now.duration_since(st.first_ts) >= FLUSH_TIMEOUT
+    {
+        // Print just the original message to avoid noise
+        warn_barrier_colored(&st.last_msg);
+    }
+
+    // Reset for the new message
+    st.last_msg = msg.to_string();
+    st.count = 1;
+    st.first_ts = now;
+    st.last_ts = now;
+    st.printed = false;
+}
+
+fn metrics_error_flush_pending(final_flush: bool) {
+    if let Some(lock) = METRIC_ERR_STATE.get() {
+        if let Ok(mut st) = lock.lock() {
+            if st.count > 0 && !st.printed {
+                if error_flush_policy_print() || final_flush {
+                    warn_barrier_colored(&st.last_msg);
+                }
+                // Reset state
+                st.count = 0;
+                st.last_msg.clear();
+                st.printed = true;
+            }
+        }
+    }
+}
+
 fn build_metrics_provider_with_status(
     use_otlp: bool,
     _transport: OtelTransport,
 ) -> (Option<SdkMeterProvider>, MetricsStatus) {
+    // Flood-control state moved to module scope; batch and printing handled by metrics_error_event().
+    fn log_metrics_error_once(msg: &str) {
+        metrics_error_event(msg);
+    }
     // Default: metrics enabled unless explicitly disabled via AIFO_CODER_OTEL_METRICS=0|false|no|off
     let metrics_enabled = env::var("AIFO_CODER_OTEL_METRICS")
         .ok()
@@ -455,11 +568,8 @@ fn build_metrics_provider_with_status(
                 let res = fut.await;
                 if let Err(ref err) = res {
                     if verbose_otel_enabled() {
-                        let use_err = crate::color_enabled_stderr();
-                        crate::log_warn_stderr(
-                            use_err,
-                            &format!("aifo-coder: telemetry: metrics export failed: {}", err),
-                        );
+                        let msg = format!("aifo-coder: telemetry: metrics export failed: {}", err);
+                        log_metrics_error_once(&msg);
                     }
                 }
                 res
@@ -470,14 +580,11 @@ fn build_metrics_provider_with_status(
             let res = self.inner.force_flush();
             if let Err(ref err) = res {
                 if verbose_otel_enabled() {
-                    let use_err = crate::color_enabled_stderr();
-                    crate::log_warn_stderr(
-                        use_err,
-                        &format!(
-                            "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
-                            err
-                        ),
+                    let msg = format!(
+                        "aifo-coder: telemetry: metrics exporter force_flush failed: {}",
+                        err
                     );
+                    log_metrics_error_once(&msg);
                 }
             }
             res
@@ -763,6 +870,9 @@ pub fn telemetry_init() -> Option<TelemetryGuard> {
 
 impl Drop for TelemetryGuard {
     fn drop(&mut self) {
+        // Flush any pending batched metrics export errors on shutdown
+        metrics_error_flush_pending(true);
+
         if let Some(ref mp) = self.meter_provider {
             let _ = mp.force_flush();
         }
