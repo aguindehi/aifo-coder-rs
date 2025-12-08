@@ -360,6 +360,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ARG WITH_PLAYWRIGHT=1
 ARG AIDER_VERSION=latest
 ARG KEEP_APT=0
+ARG AIDER_SOURCE=release
+ARG AIDER_GIT_REF=main
+ARG AIDER_GIT_COMMIT=""
 ENV KEEP_APT=${KEEP_APT}
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
@@ -381,21 +384,75 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
-    PKG="aider-chat"; \
-    if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
-    uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
-    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        PKGP="aider-chat[playwright]"; \
-        if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
-        uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
-        uv pip install --native-tls --python /opt/venv/bin/python playwright; \
-        /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+    mkdir -p /opt/venv/.build-info; \
+    if [ "${AIDER_SOURCE:-release}" = "git" ]; then \
+        echo "aider-builder-slim: installing Aider from git ref '${AIDER_GIT_REF}'" >&2; \
+        if ! command -v git >/dev/null 2>&1; then \
+            echo "error: git is required in aider-builder-slim but not found" >&2; \
+            exit 1; \
+        fi; \
+        if ! git clone --depth=1 https://github.com/Aider-AI/aider.git /tmp/aider-src; then \
+            echo "error: failed to clone https://github.com/Aider-AI/aider.git" >&2; \
+            exit 1; \
+        fi; \
+        cd /tmp/aider-src; \
+        SHALLOW_FAIL=0; \
+        if ! git fetch --depth=1 origin "${AIDER_GIT_REF}" 2>/dev/null; then \
+            SHALLOW_FAIL=1; \
+        fi; \
+        if [ "$SHALLOW_FAIL" -eq 1 ]; then \
+            echo "aider-builder-slim: shallow fetch failed for ref '${AIDER_GIT_REF}', retrying without --depth" >&2; \
+            if ! git fetch origin "${AIDER_GIT_REF}"; then \
+                echo "error: failed to fetch ref '${AIDER_GIT_REF}' from origin" >&2; \
+                exit 2; \
+            fi; \
+        fi; \
+        if ! git -c advice.detachedHead=false checkout "${AIDER_GIT_REF}"; then \
+            echo "error: git checkout failed for ref '${AIDER_GIT_REF}'" >&2; \
+            exit 3; \
+        fi; \
+        RESOLVED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"; \
+        if [ -z "$RESOLVED_SHA" ]; then \
+            echo "error: unable to resolve Aider commit SHA" >&2; \
+            exit 4; \
+        fi; \
+        echo "aider-builder-slim: resolved Aider ref '${AIDER_GIT_REF}' to ${RESOLVED_SHA}" >&2; \
+        AIDER_GIT_COMMIT="$RESOLVED_SHA"; \
+        PKG_PATH="/tmp/aider-src"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            if ! uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}[playwright]" 2>/dev/null; then \
+                uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
+            fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in git venv" >&2; exit 5; }; \
+        else \
+            uv pip install --native-tls --python /opt/venv/bin.python "${PKG_PATH}"; \
+        fi; \
+        printf 'source=git\nref=%s\ncommit=%s\n' "${AIDER_GIT_REF}" "${RESOLVED_SHA}" > /opt/venv/.build-info/aider-git.txt; \
+        rm -rf /tmp/aider-src; \
+        export AIDER_GIT_COMMIT="${RESOLVED_SHA}"; \
+    else \
+        PKG="aider-chat"; \
+        if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
+        uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            PKGP="aider-chat[playwright]"; \
+            if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+        fi; \
+        printf 'source=release\nversion=%s\n' "${AIDER_VERSION}" > /opt/venv/.build-info/aider-release.txt; \
     fi; \
     find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi; \
+    if [ -n "${AIDER_GIT_COMMIT}" ]; then \
+        echo "aider-builder: exporting AIDER_GIT_COMMIT=${AIDER_GIT_COMMIT}" >&2; \
+        printf '%s\n' "${AIDER_GIT_COMMIT}" > /opt/venv/.build-info/aider-git-commit.txt || true; \
     fi; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
@@ -413,9 +470,19 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider runtime stage (no compilers; only Python runtime + venv) ---
 FROM base AS aider
+ARG AIDER_VERSION=latest
+ARG AIDER_SOURCE=release
+ARG AIDER_GIT_REF=main
+ARG AIDER_GIT_COMMIT=""
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ENV AIDER_SOURCE=${AIDER_SOURCE}
+ENV AIDER_GIT_REF=${AIDER_GIT_REF}
+ENV AIDER_GIT_COMMIT=${AIDER_GIT_COMMIT}
+LABEL org.opencontainers.image.title="aifo-coder-aider"
+LABEL org.opencontainers.image.version="aider-${AIDER_SOURCE}-${AIDER_VERSION}"
+LABEL org.opencontainers.image.revision="${AIDER_GIT_COMMIT}"
 # Inherit /opt/aifo/bin PATH from base
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
@@ -649,6 +716,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 ARG WITH_PLAYWRIGHT=1
 ARG AIDER_VERSION=latest
 ARG KEEP_APT=0
+ARG AIDER_SOURCE=release
+ARG AIDER_GIT_REF=main
+ARG AIDER_GIT_COMMIT=""
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
@@ -668,21 +738,75 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     mv /root/.local/bin/uv /usr/local/bin/uv; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
-    PKG="aider-chat"; \
-    if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
-    uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
-    if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
-        PKGP="aider-chat[playwright]"; \
-        if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
-        uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
-        uv pip install --native-tls --python /opt/venv/bin/python playwright; \
-        /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+    mkdir -p /opt/venv/.build-info; \
+    if [ "${AIDER_SOURCE:-release}" = "git" ]; then \
+        echo "aider-builder: installing Aider from git ref '${AIDER_GIT_REF}'" >&2; \
+        if ! command -v git >/dev/null 2>&1; then \
+            echo "error: git is required in aider-builder but not found" >&2; \
+            exit 1; \
+        fi; \
+        if ! git clone --depth=1 https://github.com/Aider-AI/aider.git /tmp/aider-src; then \
+            echo "error: failed to clone https://github.com/Aider-AI/aider.git" >&2; \
+            exit 1; \
+        fi; \
+        cd /tmp/aider-src; \
+        SHALLOW_FAIL=0; \
+        if ! git fetch --depth=1 origin "${AIDER_GIT_REF}" 2>/dev/null; then \
+            SHALLOW_FAIL=1; \
+        fi; \
+        if [ "$SHALLOW_FAIL" -eq 1 ]; then \
+            echo "aider-builder: shallow fetch failed for ref '${AIDER_GIT_REF}', retrying without --depth" >&2; \
+            if ! git fetch origin "${AIDER_GIT_REF}"; then \
+                echo "error: failed to fetch ref '${AIDER_GIT_REF}' from origin" >&2; \
+                exit 2; \
+            fi; \
+        fi; \
+        if ! git -c advice.detachedHead=false checkout "${AIDER_GIT_REF}"; then \
+            echo "error: git checkout failed for ref '${AIDER_GIT_REF}'" >&2; \
+            exit 3; \
+        fi; \
+        RESOLVED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"; \
+        if [ -z "$RESOLVED_SHA" ]; then \
+            echo "error: unable to resolve Aider commit SHA" >&2; \
+            exit 4; \
+        fi; \
+        echo "aider-builder: resolved Aider ref '${AIDER_GIT_REF}' to ${RESOLVED_SHA}" >&2; \
+        AIDER_GIT_COMMIT="$RESOLVED_SHA"; \
+        PKG_PATH="/tmp/aider-src"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            if ! uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}[playwright]" 2>/dev/null; then \
+                uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
+            fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in git venv" >&2; exit 5; }; \
+        else \
+            uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
+        fi; \
+        printf 'source=git\nref=%s\ncommit=%s\n' "${AIDER_GIT_REF}" "${RESOLVED_SHA}" > /opt/venv/.build-info/aider-git.txt; \
+        rm -rf /tmp/aider-src; \
+        export AIDER_GIT_COMMIT="${RESOLVED_SHA}"; \
+    else \
+        PKG="aider-chat"; \
+        if [ "${AIDER_VERSION}" != "latest" ]; then PKG="aider-chat==${AIDER_VERSION}"; fi; \
+        uv pip install --native-tls --python /opt/venv/bin/python "$PKG"; \
+        if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
+            PKGP="aider-chat[playwright]"; \
+            if [ "${AIDER_VERSION}" != "latest" ]; then PKGP="aider-chat[playwright]==${AIDER_VERSION}"; fi; \
+            uv pip install --native-tls --python /opt/venv/bin/python "$PKGP"; \
+            uv pip install --native-tls --python /opt/venv/bin/python playwright; \
+            /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in venv" >&2; exit 3; }; \
+        fi; \
+        printf 'source=release\nversion=%s\n' "${AIDER_VERSION}" > /opt/venv/.build-info/aider-release.txt; \
     fi; \
     find /opt/venv -name "pycache" -type d -exec rm -rf {} +; find /opt/venv -name "*.pyc" -delete; \
     rm -rf /root/.cache/uv /root/.cache/pip; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
         rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
         command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+    fi; \
+    if [ -n "${AIDER_GIT_COMMIT}" ]; then \
+        echo "aider-builder-slim: exporting AIDER_GIT_COMMIT=${AIDER_GIT_COMMIT}" >&2; \
+        printf '%s\n' "${AIDER_GIT_COMMIT}" > /opt/venv/.build-info/aider-git-commit.txt || true; \
     fi; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
@@ -700,9 +824,19 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
 
 # --- Aider slim runtime stage ---
 FROM base-slim AS aider-slim
+ARG AIDER_VERSION=latest
+ARG AIDER_SOURCE=release
+ARG AIDER_GIT_REF=main
+ARG AIDER_GIT_COMMIT=""
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ENV AIDER_SOURCE=${AIDER_SOURCE}
+ENV AIDER_GIT_REF=${AIDER_GIT_REF}
+ENV AIDER_GIT_COMMIT=${AIDER_GIT_COMMIT}
+LABEL org.opencontainers.image.title="aifo-coder-aider"
+LABEL org.opencontainers.image.version="aider-${AIDER_SOURCE}-${AIDER_VERSION}"
+LABEL org.opencontainers.image.revision="${AIDER_GIT_COMMIT}"
 # Inherit /opt/aifo/bin PATH from base
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1

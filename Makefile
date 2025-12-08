@@ -87,12 +87,17 @@ CARGO_FLAGS ?= --features otel-otlp
 AIFO_OTEL_ENDPOINT_FILE=otel-otlp.url
 export AIFO_OTEL_ENDPOINT_FILE
 
+# How many threads to run?
 THREADS_GRCOV ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
 # Restrict grcov to Rust sources recursively (all .rs files, incl. build.rs, src/**, tests/**)
 KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
 
 # Nextest niceness
 NICENESS_CARGO_NEXTEST =? 0
+
+# Agent build source: [git | release]
+AIDER_SOURCE ?= git
 
 # Agent version pins (default: latest). Pin for reproducible releases.
 CODEX_VERSION ?= latest
@@ -104,6 +109,7 @@ WITH_PLAYWRIGHT ?= 1
 
 # Source refs (git/tag/commit)
 PLANDEX_GIT_REF ?= main
+AIDER_GIT_REF ?= main
 
 # Help
 .PHONY: help banner
@@ -187,7 +193,9 @@ help: banner
 	@echo "  WITH_PLAYWRIGHT ............. Install Playwright in Aider images (1=yes, 0=no; default: 1)"
 	@echo "  CODEX_VERSION ............... Pin @openai/codex npm version (default: latest)"
 	@echo "  CRUSH_VERSION ............... Pin @charmland/crush npm version (default: latest)"
-	@echo "  AIDER_VERSION ............... Pin aider-chat pip version (default: latest)"
+	@echo "  AIDER_VERSION ............... Pin aider-chat pip version in release mode (default: latest)"
+	@echo "  AIDER_SOURCE ................ Source for Aider: release (PyPI, default) or git (clone from upstream)"
+	@echo "  AIDER_GIT_REF ............... Git ref for Aider when AIDER_SOURCE=git (branch/tag/commit; default: main)"
 	@echo "  OPENHANDS_VERSION ........... Pin openhands-ai pip version (default: latest)"
 	@echo "  OPENCODE_VERSION ............ Pin opencode-ai npm version (default: latest)"
 	@echo "  PLANDEX_GIT_REF ............. Plandex CLI git ref (branch/tag/commit; default: main)"
@@ -710,9 +718,23 @@ build-aider:
 	@$(MIRROR_CHECK_STRICT); \
 	$(INTERNAL_REG_SETUP); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 build-openhands:
@@ -1012,6 +1034,10 @@ build-debug:
 	  docker buildx build --progress=plain --load \
 	    --build-arg REGISTRY_PREFIX="$$RP" \
 	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
 	    --target "$$STAGE" \
 	    -t "$$OUT" $(CA_SECRET) .; \
 	fi
@@ -1270,14 +1296,35 @@ publish-aider:
 	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider -t "$${REG}$(AIDER_IMAGE_REG)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider -t "$${REG}$(AIDER_IMAGE_REG)" $(CA_SECRET) .; \
 	else \
 	  if [ "$(PUSH)" = "1" ]; then \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-$(REG_TAG).oci.tar $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg KEEP_APT="$(KEEP_APT)" \
+	      --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	      --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	      --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	      --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	      --target aider --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-$(REG_TAG).oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-$(REG_TAG).oci.tar"; \
 	  else \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg KEEP_APT="$(KEEP_APT)" \
+	      --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	      --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	      --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	      --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	      --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	  fi; \
 	fi
 
@@ -1287,14 +1334,35 @@ publish-aider-slim:
 	$(INTERNAL_REG_SETUP); \
 	$(MIRROR_CHECK_LAX); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider-slim -t "$${REG}$(AIDER_IMAGE_SLIM_REG)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider-slim -t "$${REG}$(AIDER_IMAGE_SLIM_REG)" $(CA_SECRET) .; \
 	else \
 	  if [ "$(PUSH)" = "1" ]; then \
 	    mkdir -p dist; \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-slim-$(REG_TAG).oci.tar $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg KEEP_APT="$(KEEP_APT)" \
+	      --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	      --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	      --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	      --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	      --target aider-slim --output type=oci,dest=dist/$(IMAGE_PREFIX)-aider-slim-$(REG_TAG).oci.tar $(CA_SECRET) .; \
 	    echo "Wrote dist/$(IMAGE_PREFIX)-aider-slim-$(REG_TAG).oci.tar"; \
 	  else \
-	    $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	    $(DOCKER_BUILD) \
+	      --build-arg REGISTRY_PREFIX="$$RP" \
+	      --build-arg KEEP_APT="$(KEEP_APT)" \
+	      --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	      --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	      --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	      --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	      --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	  fi; \
 	fi
 
@@ -1483,9 +1551,23 @@ build-aider-slim:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 build-openhands-slim:
@@ -2199,9 +2281,23 @@ rebuild-aider:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --no-cache --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --no-cache --target aider -t $(AIDER_IMAGE) -t "$${REG}$(AIDER_IMAGE)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" --no-cache --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --no-cache --target aider -t $(AIDER_IMAGE) $(CA_SECRET) .; \
 	fi
 
 rebuild-openhands:
@@ -2265,9 +2361,23 @@ rebuild-aider-slim:
 	@$(MIRROR_CHECK_STRICT); \
 	$(REG_SETUP_WITH_FALLBACK); \
 	if [ -n "$$REG" ]; then \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) -t "$${REG}$(AIDER_IMAGE_SLIM)" $(CA_SECRET) .; \
 	else \
-	  $(DOCKER_BUILD) --build-arg REGISTRY_PREFIX="$$RP" --build-arg KEEP_APT="$(KEEP_APT)" --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
+	  $(DOCKER_BUILD) \
+	    --build-arg REGISTRY_PREFIX="$$RP" \
+	    --build-arg KEEP_APT="$(KEEP_APT)" \
+	    --build-arg WITH_PLAYWRIGHT="$(WITH_PLAYWRIGHT)" \
+	    --build-arg AIDER_VERSION="$(AIDER_VERSION)" \
+	    --build-arg AIDER_SOURCE="$(AIDER_SOURCE)" \
+	    --build-arg AIDER_GIT_REF="$(AIDER_GIT_REF)" \
+	    --no-cache --target aider-slim -t $(AIDER_IMAGE_SLIM) $(CA_SECRET) .; \
 	fi
 
 rebuild-openhands-slim:
