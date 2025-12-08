@@ -31,6 +31,7 @@ ENV HOME=/home/coder \
     PNPM_STORE_PATH=/home/coder/.cache/pnpm-store \
     PNPM_HOME=/home/coder/.local/share/pnpm \
     DENO_DIR=/home/coder/.cache/deno \
+    BUN_CACHE_DIR=/home/coder/.cache/bun \
     PATH="/usr/local/bin:/home/coder/.local/share/pnpm/bin:${PATH}"
 
 # Prepare world-writable directories for arbitrary uid:gid at runtime
@@ -45,7 +46,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
       install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
       export NODE_EXTRA_CA_CERTS="$CAF"; \
       export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
       export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
@@ -86,6 +86,22 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     # Best-effort strip to reduce size \
     strip /usr/local/bin/deno 2>/dev/null || true; \
+    # Install TypeScript globally and clean npm caches \
+    npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional typescript; \
+    npm cache clean --force || true; \
+    rm -rf /root/.npm /root/.cache || true; \
+    # Install Bun runtime (direct binary) \
+    arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"; \
+    case "$arch" in aarch64|arm64) bun_zip="bun-linux-aarch64.zip" ;; x86_64|amd64) bun_zip="bun-linux-x64.zip" ;; *) bun_zip="" ;; esac; \
+    if [ -n "$bun_zip" ]; then \
+      mkdir -p /tmp/bun && cd /tmp/bun; \
+      if curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/${bun_zip}" -o bun.zip; then \
+        unzip -q bun.zip; \
+        if [ -f bun-linux-aarch64/bun ]; then install -m 0755 bun-linux-aarch64/bun /usr/local/bin/bun; elif [ -f bun-linux-x64/bun ]; then install -m 0755 bun-linux-x64/bun /usr/local/bin/bun; elif [ -f bun ]; then install -m 0755 bun /usr/local/bin/bun; fi; \
+        cd /; rm -rf /tmp/bun; \
+        strip /usr/local/bin/bun 2>/dev/null || true; \
+      fi; \
+    fi; \
     # Remove injected enterprise CA (best-effort) \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
       rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
