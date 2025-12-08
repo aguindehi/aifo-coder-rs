@@ -105,7 +105,6 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     # Remove injected enterprise CA (best-effort) \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
       rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
-      command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
     fi'
 
 # Consolidated into the previous RUN (corepack + yarn/pnpm + deno + CA cleanup)

@@ -18,6 +18,7 @@ pub(crate) enum Flavor {
 pub(crate) enum ToolchainKind {
     Rust,
     #[value(alias = "ts")]
+    #[value(alias = "bun")]
     Node,
     Python,
     #[value(alias = "ccpp")]

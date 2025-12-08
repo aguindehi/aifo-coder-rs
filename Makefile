@@ -14,7 +14,7 @@
 #     - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.
 #     - Seccomp and cgroup namespaces as reported by Docker.
 #     - Per-pane isolated state for forks.
-#     - Language toolchain sidecars (rust, node/ts, python, c/cpp, go) via secure proxy.
+#     - Language toolchain sidecars (rust, node (ts/deno/bun), python, c/cpp, go) via secure proxy.
 #     - Optional unix:// proxy on Linux; host-gateway bridging when needed.
 #     - Minimal mounts: project workspace, config files, optional GnuPG keyrings.
 # ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -463,7 +463,7 @@ help: banner
 	@echo ""
 	@echo "    aifo-coder --toolchain rust aider -- --watch-files"
 	@echo "    aifo-coder --toolchain node codex -- resume"
-	@echo "    aifo-coder --toolchain ts crush -- --version"
+	@echo "    aifo-coder --toolchain node crush -- --version"
 	@echo ""
 	$(call title_ul,Fork mode:)
 	@echo ""
@@ -2937,7 +2937,6 @@ lint-docker:
 	  if [ -f toolchains/rust/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/rust/Dockerfile || true; fi; \
 	  if [ -f toolchains/cpp/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/cpp/Dockerfile || true; fi; \
 	  if [ -f toolchains/node/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/node/Dockerfile || true; fi; \
-	  if [ -f toolchains/ts/Dockerfile ]; then docker run --rm -i hadolint/hadolint < toolchains/ts/Dockerfile || true; fi; \
 	else \
 	  echo "Warning: hadolint not installed and docker unavailable; skipping Dockerfile lint."; \
 	  echo "Install hadolint locally or rely on CI's lint-dockerfiles job."; \
