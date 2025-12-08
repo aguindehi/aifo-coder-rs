@@ -474,11 +474,13 @@ fn metrics_error_event(msg: &str) {
     }
 
     // Different or stale message: flush pending if appropriate
-    if st.count > 0 && !st.printed {
-        if error_flush_policy_print() && now.duration_since(st.first_ts) >= FLUSH_TIMEOUT {
-            // Print just the original message to avoid noise
-            warn_barrier_colored(&st.last_msg);
-        }
+    if st.count > 0
+        && !st.printed
+        && error_flush_policy_print()
+        && now.duration_since(st.first_ts) >= FLUSH_TIMEOUT
+    {
+        // Print just the original message to avoid noise
+        warn_barrier_colored(&st.last_msg);
     }
 
     // Reset for the new message
