@@ -20,6 +20,35 @@
   system_prompt_prefix: null
   accepts_settings: null
 
+- name: azure/mgb-aifo-model-gpt-5.1-codex
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-mini
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings: ["reasoning_effort"]
+
+- name: azure/mgb-aifo-model-gpt-5.1
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-mini
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings: ["reasoning_effort"]
+  overeager: true
+
+- name: azure/gpt-5.1-chat
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-mini
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings: ["reasoning_effort"]
+
+- name: azure/mgb-aifo-model-gpt-5-codex
+  edit_format: diff
+  weak_model_name: azure/mgb-aifo-model-gpt-5-mini
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings: ["reasoning_effort"]
+
 - name: azure/mgb-aifo-model-gpt-5
   edit_format: diff
   weak_model_name: azure/mgb-aifo-model-gpt-5-mini
