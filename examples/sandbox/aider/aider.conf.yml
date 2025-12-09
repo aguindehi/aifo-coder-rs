@@ -7,6 +7,7 @@ weak-model: azure/mgb-aifo-model-gpt-5-mini
 editor: "emacs -nw"
 
 read: [AGENT.md, CONVENTIONS.md]
+load: .aider.mcp.cmd
 
 no-show-release-notes: true
 

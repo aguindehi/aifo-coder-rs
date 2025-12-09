@@ -312,6 +312,18 @@ if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
     [ -n "$K" ] && sed -i -E "s|\"api_key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_key\": \"$K\"|g" "$SETTINGS"
   fi
 fi
+# Claude config: link AIFO_CODER_CONFIG_DIR/claude/claude_desktop_config.json to the real Claude config
+if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
+  REAL="$HOME/.config/claude/claude_desktop_config.json"
+  LINK_DIR="$AIFO_CODER_CONFIG_DIR/claude"
+  LINK="$LINK_DIR/claude_desktop_config.json"
+  if [ -f "$REAL" ] || [ -L "$REAL" ]; then
+    if [ ! -e "$LINK" ]; then
+      install -d -m 0700 "$LINK_DIR" >/dev/null 2>&1 || true
+      ln -s "$REAL" "$LINK" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
 exec "$@"
 SH
 
@@ -426,7 +438,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             uv pip install --native-tls --python /opt/venv/bin/python playwright; \
             /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in git venv" >&2; exit 5; }; \
         else \
-            uv pip install --native-tls --python /opt/venv/bin.python "${PKG_PATH}"; \
+            uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
         fi; \
         printf 'source=git\nref=%s\ncommit=%s\n' "${AIDER_GIT_REF}" "${RESOLVED_SHA}" > /opt/venv/.build-info/aider-git.txt; \
         rm -rf /tmp/aider-src; \
@@ -463,7 +475,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
-        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        if [ "${WITH_MCPM_AIDER:-1}" != "1" ]; then rm -f /usr/local/bin/node /usr/local/bin/nodejs; fi; \
+        rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
     fi'
@@ -474,6 +487,7 @@ ARG AIDER_VERSION=latest
 ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
+ARG WITH_MCPM_AIDER=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
@@ -487,7 +501,9 @@ LABEL org.opencontainers.image.revision="${AIDER_GIT_COMMIT}"
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
+# hadolint ignore=SC2016,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
         CAF=/run/secrets/migros_root_ca; \
         if [ -f "$CAF" ]; then \
@@ -503,6 +519,49 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
         fi; \
     fi; \
+    # Optional: install uv and mcpm-aider when enabled \
+    if [ "${WITH_MCPM_AIDER:-1}" = "1" ]; then \
+        CAF=/run/secrets/migros_root_ca; \
+        if [ -f "$CAF" ]; then \
+            install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+            command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+            export NODE_EXTRA_CA_CERTS="$CAF"; \
+            export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+            export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+            export SSL_CERT_DIR=/etc/ssl/certs; \
+            export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+        fi; \
+        if command -v curl >/dev/null 2>&1; then \
+            curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
+        else \
+            /opt/venv/bin/python -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
+        fi; \
+        sh /tmp/uv.sh; \
+        mv /root/.local/bin/uv /usr/local/bin/uv; \
+        npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
+        npm cache clean --force >/dev/null 2>&1 || true; \
+        rm -rf /root/.npm /root/.cache; \
+        rm -f /usr/local/bin/mcpm-aider; \
+        { \
+          echo "#!/bin/sh"; \
+          echo "JS=\"/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js\""; \
+          echo "if [ ! -f \"\$JS\" ]; then"; \
+          echo "  echo \"mcpm-aider: CLI not installed (expected: \$JS)\""; \
+          echo "  exit 127"; \
+          echo "fi"; \
+          echo "BASE=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\""; \
+          echo "CLEAN=\"\""; \
+          echo "IFS=':'; for p in \${PATH:-}; do [ \"\$p\" = \"/opt/aifo/bin\" ] && continue; [ -n \"\$p\" ] && CLEAN=\"\${CLEAN:+\$CLEAN:}\$p\"; done; unset IFS"; \
+          echo "export PATH=\"\$BASE\${CLEAN:+:}\$CLEAN\""; \
+          echo "export AIFO_SH_WRAP_DISABLE=1"; \
+          echo "exec /usr/local/bin/node \"\$JS\" \"\$@\""; \
+        } > /usr/local/bin/mcpm-aider; \
+        chmod 0755 /usr/local/bin/mcpm-aider; \
+        if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+            rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+            command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+        fi; \
+    fi; \
     if [ "$KEEP_APT" = "0" ]; then \
         apt-get remove -y procps || true; \
         apt-get autoremove -y; \
@@ -512,7 +571,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
-        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        if [ "${WITH_MCPM_AIDER:-1}" != "1" ]; then rm -f /usr/local/bin/node /usr/local/bin/nodejs; fi; \
+        rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
     fi'
@@ -828,6 +888,7 @@ ARG AIDER_VERSION=latest
 ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
+ARG WITH_MCPM_AIDER=1
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends python3; rm -rf /var/lib/apt/lists/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
 COPY --from=aider-builder-slim /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
@@ -842,6 +903,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# hadolint ignore=SC2016,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
         if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
@@ -860,6 +922,49 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
             fi; \
         fi; \
+        # Optional: install uv and mcpm-aider when enabled \
+        if [ "${WITH_MCPM_AIDER:-1}" = "1" ]; then \
+            CAF=/run/secrets/migros_root_ca; \
+            if [ -f "$CAF" ]; then \
+                install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+                command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+                export NODE_EXTRA_CA_CERTS="$CAF"; \
+                export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-openssl-ca"; \
+                export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; \
+                export SSL_CERT_DIR=/etc/ssl/certs; \
+                export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
+            fi; \
+            if command -v curl >/dev/null 2>&1; then \
+                curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
+            else \
+                /opt/venv/bin/python -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
+            fi; \
+            sh /tmp/uv.sh; \
+            mv /root/.local/bin/uv /usr/local/bin/uv; \
+            npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
+            npm cache clean --force >/dev/null 2>&1 || true; \
+            rm -rf /root/.npm /root/.cache; \
+            rm -f /usr/local/bin/mcpm-aider; \
+            { \
+              echo "#!/bin/sh"; \
+              echo "JS=\"/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js\""; \
+              echo "if [ ! -f \"\$JS\" ]; then"; \
+              echo "  echo \"mcpm-aider: CLI not installed (expected: \$JS)\""; \
+              echo "  exit 127"; \
+              echo "fi"; \
+              echo "BASE=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\""; \
+              echo "CLEAN=\"\""; \
+              echo "IFS=':'; for p in \${PATH:-}; do [ \"\$p\" = \"/opt/aifo/bin\" ] && continue; [ -n \"\$p\" ] && CLEAN=\"\${CLEAN:+\$CLEAN:}\$p\"; done; unset IFS"; \
+              echo "export PATH=\"\$BASE\${CLEAN:+:}\$CLEAN\""; \
+              echo "export AIFO_SH_WRAP_DISABLE=1"; \
+              echo "exec /usr/local/bin/node \"\$JS\" \"\$@\""; \
+            } > /usr/local/bin/mcpm-aider; \
+            chmod 0755 /usr/local/bin/mcpm-aider; \
+            if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+                rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+                command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+            fi; \
+        fi; \
         if [ "$KEEP_APT" = "0" ]; then \
                 apt-get remove -y procps curl || true; \
                 apt-get autoremove -y; \
@@ -869,7 +974,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
                 rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
                 rm -rf /var/lib/apt/lists/*; \
                 rm -rf /var/cache/apt/apt-file/; \
-                rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+                if [ "${WITH_MCPM_AIDER:-1}" != "1" ]; then rm -f /usr/local/bin/node /usr/local/bin/nodejs; fi; \
+                rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
                 rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
                 rm -rf /opt/yarn-v1.22.22; \
         fi'

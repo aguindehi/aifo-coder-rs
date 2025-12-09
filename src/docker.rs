@@ -251,6 +251,48 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     env_flags
 }
 
+fn host_claude_config_path(host_home: &Path) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if let Ok(appdata) = env::var("APPDATA") {
+            if !appdata.trim().is_empty() {
+                return Some(
+                    PathBuf::from(appdata)
+                        .join("Claude")
+                        .join("claude_desktop_config.json"),
+                );
+            }
+        }
+        // Fallback: derive from host_home if APPDATA is missing
+        return Some(
+            host_home
+                .join("AppData")
+                .join("Roaming")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+        );
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Some(
+            host_home
+                .join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+        )
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Some(
+            host_home
+                .join(".config")
+                .join("claude")
+                .join("claude_desktop_config.json"),
+        )
+    }
+}
+
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
@@ -668,6 +710,39 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     fs::create_dir_all(&host_logs_dir).ok();
     volume_flags.push(OsString::from("-v"));
     volume_flags.push(path_pair(&host_logs_dir, "/var/log/host"));
+
+    // Claude desktop config: ensure host file exists and bind-mount it into the agent home.
+    if let Some(host_claude_cfg) = host_claude_config_path(host_home) {
+        let needs_create = !host_claude_cfg.exists();
+        if needs_create {
+            if let Some(parent) = host_claude_cfg.parent() {
+                let _ = fs::create_dir_all(parent);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+                }
+            }
+            // Boilerplate content when the file does not exist yet.
+            let content = r#"{"mcpServers": {}}"#;
+            let _ = fs::write(&host_claude_cfg, content);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                // Treat as potentially sensitive; default to 0600.
+                let _ = fs::set_permissions(&host_claude_cfg, fs::Permissions::from_mode(0o600));
+            }
+        }
+        if host_claude_cfg.exists() {
+            let container_claude_cfg = "/home/coder/.config/claude/claude_desktop_config.json";
+            volume_flags.push(OsString::from("-v"));
+            volume_flags.push(OsString::from(format!(
+                "{}:{}",
+                host_claude_cfg.display(),
+                container_claude_cfg
+            )));
+        }
+    }
 
     // GnuPG (read-only host mount)
     let gnupg_dir = host_home.join(".gnupg");
