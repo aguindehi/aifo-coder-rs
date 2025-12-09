@@ -27,8 +27,11 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm@9
 
-      - name: Host-side pnpm install (shared .pnpm-store)
-        run: make node-install
+      - name: Host-side pnpm fetch (warm store for offline installs)
+        run: pnpm fetch
+
+      - name: Host-side pnpm install (shared .pnpm-store, offline when cache present)
+        run: pnpm install --offline --frozen-lockfile || pnpm install --frozen-lockfile
 
       - name: Run Node tests inside toolchain sidecar
         run: ./aifo-coder toolchain node -- pnpm test
