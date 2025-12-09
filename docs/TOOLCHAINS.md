@@ -8,6 +8,12 @@ with the tool-exec proxy and shims.
 Details for the Rust toolchain sidecar are documented alongside the Node toolchain; see
 `docs/README-contributing.md` for cache layout and image override environment variables.
 
+Key environment variables for the Rust toolchain include:
+
+- `CARGO_HOME=/home/coder/.cargo`
+- `RUSTUP_HOME=/home/coder/.rustup`
+- `RUST_BACKTRACE=1` (default; can be overridden)
+
 ## Node toolchain: pnpm, shared store, and per-OS node_modules
 
 The Node sidecar is designed to support pnpm with:
