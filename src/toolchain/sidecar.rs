@@ -475,8 +475,11 @@ if [ ! -f \"");
     args
 }
 
-// Helper: determine if the node_modules overlay looks empty (no non-hidden files).
-fn overlay_empty_or_missing(runtime: &Path, container_name: &str, verbose: bool) -> bool {
+fn node_overlay_state_and_guard(
+    runtime: &Path,
+    container_name: &str,
+    verbose: bool,
+) -> io::Result<bool> {
     let use_err = crate::color_enabled_stderr();
     let mut cmd = Command::new(runtime);
     cmd.arg("exec")
@@ -484,12 +487,25 @@ fn overlay_empty_or_missing(runtime: &Path, container_name: &str, verbose: bool)
         .arg("sh")
         .arg("-lc")
         .arg(
-            "d=\"/workspace/node_modules\"; \
-             [ ! -d \"$d\" ] && echo missing && exit 0; \
-             if find \"$d\" -mindepth 1 -maxdepth 1 ! -name '.*' | head -n 1 | grep -q .; then \
-               echo nonempty; \
+            "set -e; \
+             wd=\"/workspace\"; \
+             nd=\"/workspace/node_modules\"; \
+             s=\"/workspace/node_modules/.aifo-node-overlay\"; \
+             if [ ! -d \"$nd\" ]; then \
+               echo \"error:overlay-missing\"; \
+               exit 0; \
+             fi; \
+             if [ -f \"$s\" ]; then \
+               if [ \"$(stat -c '%d:%i' \"$wd\" 2>/dev/null || echo '?')\" \
+                    = \"$(stat -c '%d:%i' \"$nd\" 2>/dev/null || echo '!')\" ]; then \
+                 echo \"error:overlay-device-mismatch\"; \
+                 exit 0; \
+               fi; \
+             fi; \
+             if find \"$nd\" -mindepth 1 -maxdepth 1 ! -name '.*' | head -n 1 | grep -q .; then \
+               echo \"nonempty\"; \
              else \
-               echo empty; \
+               echo \"empty\"; \
              fi",
         )
         .stdout(Stdio::piped())
@@ -498,32 +514,34 @@ fn overlay_empty_or_missing(runtime: &Path, container_name: &str, verbose: bool)
         } else {
             Stdio::null()
         });
-    match cmd.output() {
-        Ok(out) => {
-            let s = String::from_utf8_lossy(&out.stdout);
-            let trimmed = s.trim();
-            if trimmed == "missing" || trimmed == "empty" {
-                true
-            } else {
-                false
-            }
+    let out = cmd.output().map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            crate::display_for_toolchain_error(&ToolchainError::Message(format!(
+                "failed to inspect node_modules overlay: {e}"
+            ))),
+        )
+    })?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    let trimmed = s.trim();
+    match trimmed {
+        "empty" => Ok(true),
+        "nonempty" => Ok(false),
+        "error:overlay-missing" | "error:overlay-device-mismatch" => {
+            let msg = "aifo-coder: error: node toolchain overlay misconfigured: \
+                       /workspace/node_modules must be a dedicated container volume or tmpfs, \
+                       not a bind mount of host node_modules. \
+                       Please update your Docker/colima configuration to mount a volume at \
+                       /workspace/node_modules.";
+            crate::log_error_stderr(use_err, msg);
+            Err(io::Error::other(crate::display_for_toolchain_error(
+                &ToolchainError::Message(msg.to_string()),
+            )))
         }
-        Err(e) => {
-            if verbose {
-                crate::log_warn_stderr(
-                    use_err,
-                    &format!(
-                        "aifo-coder: warning: failed to inspect node_modules overlay: {}",
-                        e
-                    ),
-                );
-            }
-            false
-        }
+        _ => Ok(false),
     }
 }
 
-// Helper: create overlay sentinel and run pnpm install inside an existing node sidecar.
 fn ensure_node_overlay_and_install(
     runtime: &Path,
     container_name: &str,
@@ -540,8 +558,20 @@ fn ensure_node_overlay_and_install(
              d=\"/workspace/node_modules\"; \
              s=\"/workspace/node_modules/.aifo-node-overlay\"; \
              lock=\"/workspace/pnpm-lock.yaml\"; \
+             hash_file=\"/workspace/node_modules/.aifo-pnpm-lock.hash\"; \
              mkdir -p \"$d\"; \
-             if [ -f \"$lock\" ] && command -v pnpm >/dev/null 2>&1; then \
+             if [ -f \"$lock\" ] && command -v sha256sum >/dev/null 2>&1; then \
+               new_hash=\"$(sha256sum \"$lock\" 2>/dev/null | awk '{print $1}')\"; \
+               old_hash=\"\"; \
+               if [ -f \"$hash_file\" ]; then \
+                 old_hash=\"$(cat \"$hash_file\" 2>/dev/null || echo '')\"; \
+               fi; \
+               if [ \"$new_hash\" != \"$old_hash\" ] && command -v pnpm >/dev/null 2>&1; then \
+                 echo \"aifo-coder: node sidecar: pnpm-lock.yaml changed; running pnpm install --frozen-lockfile\" >&2; \
+                 PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
+                 printf '%s\\n' \"$new_hash\" >\"$hash_file\" 2>/dev/null || true; \
+               fi; \
+             elif [ -f \"$lock\" ] && command -v pnpm >/dev/null 2>&1; then \
                echo \"aifo-coder: node sidecar: ensuring node_modules via pnpm install --frozen-lockfile\" >&2; \
                PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
              fi; \
@@ -1012,10 +1042,23 @@ pub fn toolchain_run(
                 }
             }
             // Node overlay/bootstrap: if node sidecar was just created, ensure per-OS node_modules
-            // overlay is initialized and sentinel is present.
+            // overlay is initialized, sentinel is present, and lockfile changes trigger installs.
             if sidecar_kind == "node" {
-                if overlay_empty_or_missing(&runtime, &name, verbose) {
-                    let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
+                match node_overlay_state_and_guard(&runtime, &name, verbose) {
+                    Ok(need_install) => {
+                        if need_install {
+                            let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
+                        } else {
+                            let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
+                        }
+                    }
+                    Err(_) => {
+                        return Err(io::Error::other(crate::display_for_toolchain_error(
+                            &ToolchainError::Message(
+                                "node toolchain overlay guard failed; see error above".to_string(),
+                            ),
+                        )));
+                    }
                 }
             }
         }
@@ -1228,6 +1271,26 @@ pub fn toolchain_start_session(
                     return Err(io::Error::other(crate::display_for_toolchain_error(
                         &ToolchainError::Message(
                             "failed to start one or more sidecars".to_string(),
+                        ),
+                    )));
+                }
+            }
+        }
+
+        // Node overlay/bootstrap for sessions: ensure per-OS node_modules overlay and lock hash.
+        if kind == "node" {
+            match node_overlay_state_and_guard(&runtime, &name, verbose) {
+                Ok(need_install) => {
+                    if need_install {
+                        let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
+                    } else {
+                        let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
+                    }
+                }
+                Err(_) => {
+                    return Err(io::Error::other(crate::display_for_toolchain_error(
+                        &ToolchainError::Message(
+                            "node toolchain overlay guard failed; see error above".to_string(),
                         ),
                     )));
                 }
