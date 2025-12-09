@@ -96,7 +96,7 @@ Node
 - YARN_CACHE_FOLDER=/home/coder/.cache/yarn
 - DENO_DIR=/home/coder/.cache/deno
 - PNPM_HOME=/home/coder/.local/share/pnpm
-- Shared pnpm store (repo-local): <repo>/.pnpm-store
+- Shared pnpm store (repo-local): <repo>/.pnpm-store (mounted at /workspace/.pnpm-store)
 - Per-OS node_modules overlay (container): /workspace/node_modules
 - Volumes:
   - aifo-node-cache:/home/coder/.cache
