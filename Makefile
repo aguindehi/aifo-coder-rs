@@ -109,11 +109,14 @@ CRUSH_VERSION ?= latest
 AIDER_VERSION ?= latest
 OPENHANDS_VERSION ?= latest
 OPENCODE_VERSION ?= latest
-WITH_PLAYWRIGHT ?= 1
 
-# Source refs (git/tag/commit)
+# Agent source refs (git/tag/commit)
 PLANDEX_GIT_REF ?= main
 AIDER_GIT_REF ?= main
+
+# Agent optional features
+WITH_PLAYWRIGHT ?= 1
+WITH_MCPM_AIDER ?= 1
 
 # Toolchain tags
 RUST_TOOLCHAIN_TAG ?= latest
