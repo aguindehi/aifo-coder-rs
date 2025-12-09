@@ -530,15 +530,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
         rm -f /usr/local/bin/mcpm-aider; \
-        cat > /usr/local/bin/mcpm-aider <<"SH"
-#!/bin/sh
-JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
-if [ ! -f "$JS" ]; then
-  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
-  exit 127
-fi
-exec /usr/local/bin/node "$JS" "$@"
-SH
+        { \
+          echo "#!/bin/sh"; \
+          echo "JS=\"/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js\""; \
+          echo "if [ ! -f \"\\$JS\" ]; then"; \
+          echo "  echo \"mcpm-aider: CLI not installed (expected: \\$JS)\" >&2"; \
+          echo "  exit 127"; \
+          echo "fi"; \
+          echo "exec /usr/local/bin/node \"\\$JS\" \"\\$@\""; \
+        } > /usr/local/bin/mcpm-aider; \
         chmod 0755 /usr/local/bin/mcpm-aider; \
         if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
             rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
@@ -928,15 +928,15 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
             rm -f /usr/local/bin/mcpm-aider; \
-            cat > /usr/local/bin/mcpm-aider <<"SH"
-#!/bin/sh
-JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
-if [ ! -f "$JS" ]; then
-  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
-  exit 127
-fi
-exec /usr/local/bin/node "$JS" "$@"
-SH
+            { \
+              echo "#!/bin/sh"; \
+              echo "JS=\"/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js\""; \
+              echo "if [ ! -f \"\\$JS\" ]; then"; \
+              echo "  echo \"mcpm-aider: CLI not installed (expected: \\$JS)\" >&2"; \
+              echo "  exit 127"; \
+              echo "fi"; \
+              echo "exec /usr/local/bin/node \"\\$JS\" \"\\$@\""; \
+            } > /usr/local/bin/mcpm-aider; \
             chmod 0755 /usr/local/bin/mcpm-aider; \
             if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
                 rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
