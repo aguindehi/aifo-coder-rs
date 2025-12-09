@@ -3,25 +3,213 @@
 This document explains how the toolchain sidecars (rust, node, python, c/cpp, go) are used together
 with the tool-exec proxy and shims.
 
+- Toolchains run in dedicated containers (sidecars) with `/workspace` mounted.
+- Agents talk to a **tool-exec proxy** which routes tools (cargo, pnpm, python, gcc, go, etc.)
+  into the correct sidecar.
+- PATH shims inside the agent container make tools “just work” as if they were installed locally.
+
+Use this guide as the primary user-facing documentation for all toolchains. For low-level
+implementation details, see `docs/README-contributing.md` and the `src/toolchain/*` modules.
+
+---
+
+## Common behavior for all toolchains
+
+### How toolchains are attached
+
+You attach toolchains to any agent command via the `--toolchain` or `--toolchain-spec` flags:
+
+```bash
+# Attach Rust toolchain to Aider
+aifo-coder --toolchain rust aider -- cargo --version
+
+# Attach Node + Python toolchains
+aifo-coder --toolchain node --toolchain python aider -- npx --version
+
+# Attach specific versions (where supported)
+aifo-coder --toolchain-spec rust@1.80 --toolchain-spec node@22 aider -- cargo --help
+```
+
+- `--toolchain <kind>` (repeatable): attaches one or more toolchains.
+- `--toolchain-spec <kind@ver>`: picks a versioned toolchain image when supported.
+- The launcher:
+  - Starts sidecar containers (one per requested kind).
+  - Starts the tool-exec proxy.
+  - Exports `AIFO_TOOLEEXEC_URL` and `AIFO_TOOLEEXEC_TOKEN` into the agent container.
+  - Injects PATH shims that route tools into sidecars.
+
+Toolchains share a per-session network (`aifo-net-<id>`) so agents and sidecars can talk only
+to each other, not directly to each other’s inner services.
+
+### Workspace mount and home layout
+
+All toolchains:
+
+- Mount the current project directory as:
+  - `$PWD` → `/workspace` (read/write, working directory).
+- Standard home:
+  - `HOME=/home/coder`
+  - `GNUPGHOME=/home/coder/.gnupg`
+- Caches:
+  - Consolidated under `XDG_CACHE_HOME=/home/coder/.cache` where possible.
+
+### Caches and named volumes
+
+Each toolchain uses Docker named volumes for caches (see per-toolchain sections):
+
+- Rust: cargo registry/git caches.
+- Node: pnpm/npm/yarn/deno cache + pnpm store.
+- Python: pip cache.
+- C/C++: ccache (and optionally sccache).
+- Go: go build/module cache.
+
+You can purge all toolchain caches via:
+
+```bash
+aifo-coder toolchain-cache-clear
+```
+
+or equivalently:
+
+```bash
+make toolchain-cache-clear
+```
+
+### Proxy and routing (high level)
+
+The tool-exec proxy:
+
+- Receives tool execution requests from shims in the agent container.
+- Routes tools to the first sidecar that can handle them, using allowlists:
+  - Rust: `cargo`, `rustc`, `rustup`, `cargo-nextest`, etc.
+  - Node: `node`, `npm`, `npx`, `pnpm`, `yarn`, `deno`, `tsc`, `ts-node`, `bun` (via node).
+  - Python: `python`, `python3`, `pip`, `pip3`.
+  - Go: `go`, `gofmt`.
+  - C/C++: `gcc`, `g++`, `clang`, `clang++`, `cc`, `c++`, `cmake`, `make`, `ninja`, `pkg-config`.
+- Dev tools are routed with a preference order (roughly: `c-cpp`, rust, go, node, python).
+
+Protocol details and error semantics (401/403/409/426/504) are documented in
+`docs/README-toolexec.md`.
+
+---
+
 ## AIFO Rust Toolchain
 
-Details for the Rust toolchain sidecar are documented alongside the Node toolchain; see
-`docs/README-contributing.md` for cache layout and image override environment variables.
+The Rust toolchain sidecar provides a consistent Rust environment with:
 
-Key environment variables for the Rust toolchain include:
+- `cargo`, `rustc`, `rustup`, `cargo-nextest`, `clippy`, `rustfmt`.
+- Optional `sccache` for faster builds.
+- Stable caches and named volumes for registries and git checkouts.
+
+### When to use
+
+Use the Rust toolchain when:
+
+- You want to compile or test Rust code (`cargo build`, `cargo test`, `cargo nextest`).
+- You want to avoid polluting your host toolchain with project-specific dependencies.
+- You want builds and tests to run in a predictable container environment.
+
+### Image and overrides
+
+Default image:
+
+- `aifo-coder-toolchain-rust:<tag>` where `<tag>` is `RUST_TOOLCHAIN_TAG` or `latest`.
+
+Override via environment (from `docs/README-contributing.md`):
+
+- `AIFO_RUST_TOOLCHAIN_IMAGE` – full image reference.
+- `AIFO_RUST_TOOLCHAIN_VERSION` – logical version to map to an image tag.
+- `AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1` – prefer official `rust:<ver>` images where supported.
+
+### Environment and caches
+
+Key environment variables:
 
 - `CARGO_HOME=/home/coder/.cargo`
-- `RUSTUP_HOME=/home/coder/.rustup`
+- `RUSTUP_HOME=/usr/local/rustup` (default)
 - `RUST_BACKTRACE=1` (default; can be overridden)
-- `SCCACHE_DIR=/home/coder/.cache/sccache` (when sccache is enabled for Rust builds)
+- `SCCACHE_DIR=/home/coder/.cache/sccache` (when sccache is enabled)
+- `CC=gcc`, `CXX=g++` (linker defaults)
 
-Image override environment for Rust:
+Cache volumes (see `docs/README-contributing.md`):
 
-- `AIFO_RUST_TOOLCHAIN_IMAGE` – override the Rust toolchain sidecar image (full ref).
-- `AIFO_RUST_TOOLCHAIN_VERSION` – logical Rust version that maps to a default sidecar tag.
-- `AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1` – force official `rust:<ver>` images where supported.
+- `aifo-cargo-registry:/home/coder/.cargo/registry`
+- `aifo-cargo-git:/home/coder/.cargo/git`
+- Consolidated cache under `XDG_CACHE_HOME=/home/coder/.cache` when configured.
+
+Ownership initialization:
+
+- `init_rust_named_volumes_if_needed(...)` runs a short helper container that:
+  - Ensures the target dir exists (registry/git).
+  - Chowns it to the invoking UID:GID.
+  - Writes `.aifo-init-done` to avoid repeated work.
+
+### Official Rust image mode
+
+When `AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1` or using an official `rust:<ver>` image:
+
+- `CARGO_HOME`/`RUSTUP_HOME` are aligned to the image defaults (`/usr/local/cargo`, `/usr/local/rustup`).
+- The launcher avoids forcing `RUSTUP_TOOLCHAIN` to reduce channel sync chatter.
+- A `BootstrapGuard` (`AIFO_RUST_OFFICIAL_BOOTSTRAP=1`) coordinates bootstrap for:
+  - `cargo-nextest` installation.
+  - `clippy`/`rustfmt` components.
+  - Optional `sccache` presence checks.
+
+### sccache integration
+
+When `AIFO_RUST_SCCACHE=1`:
+
+- The Rust sidecar configures `RUSTC_WRAPPER=sccache`.
+- `SCCACHE_DIR=/home/coder/.cache/sccache`.
+- You are responsible for ensuring `sccache` is installed in the image; the launcher emits warnings
+  when requested but not present.
+
+### Example usage
+
+Basic Rust version:
+
+```bash
+aifo-coder --toolchain rust aider -- cargo --version
+aifo-coder --toolchain rust aider -- rustc --version
+```
+
+Run tests with nextest:
+
+```bash
+aifo-coder --toolchain rust aider -- cargo nextest run
+```
+
+Force official `rust:1.80`:
+
+```bash
+AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1 \
+AIFO_RUST_TOOLCHAIN_VERSION=1.80 \
+aifo-coder --toolchain rust aider -- cargo --version
+```
+
+### Troubleshooting (Rust)
+
+Common issues:
+
+- **Slow first run due to rustup sync**:
+  - Prefer official images or set `AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1` to use rust:<ver>.
+- **Permissions on cargo volumes**:
+  - The helper chown logic should fix this; if it fails, check Docker logs and rerun with `--verbose`.
+- **Missing `cargo-nextest`**:
+  - The bootstrap path installs it automatically into `/usr/local/cargo/bin` when needed.
+
+---
 
 ## Node toolchain: pnpm, shared store, and per-OS node_modules
+
+The Node sidecar is designed to support pnpm with:
+
+- A **shared, repo-local store** under `<repo>/.pnpm-store` that is reused across:
+  - macOS hosts
+  - Linux toolchain sidecars
+  - CI jobs
+- A **per-OS `node_modules` overlay** mounted at `/workspace/node_modules` so native artifacts
+  are always built for the correct platform and never shared across OSes.
 
 The Node sidecar is designed to support pnpm with:
 
