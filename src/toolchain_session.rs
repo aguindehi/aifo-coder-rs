@@ -182,6 +182,7 @@ Do you want to perform this one-shot migration now? [y/N] ";
     }
 
     // Perform migration (mirrors Makefile node-migrate-to-pnpm)
+    let has_node_modules = cwd.join("node_modules").is_dir();
     if has_node_modules {
         let _ = writeln!(
             out,
