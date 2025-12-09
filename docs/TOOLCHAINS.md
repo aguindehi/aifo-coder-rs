@@ -3,6 +3,11 @@
 This document explains how the toolchain sidecars (rust, node, python, c/cpp, go) are used together
 with the tool-exec proxy and shims.
 
+## AIFO Rust Toolchain
+
+Details for the Rust toolchain sidecar are documented alongside the Node toolchain; see
+`docs/README-contributing.md` for cache layout and image override environment variables.
+
 ## Node toolchain: pnpm, shared store, and per-OS node_modules
 
 The Node sidecar is designed to support pnpm with:
