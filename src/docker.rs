@@ -1526,8 +1526,9 @@ pub fn build_docker_cmd(
         cmd.arg(f);
     }
 
-    // image: prefer local ":latest" when present, else resolved remote
-    let effective_image = compute_effective_agent_image_for_run(image)?;
+    // Use the image passed in exactly; do not rewrite an explicit CLI override here.
+    // Defaults and local :latest preferences are handled upstream in main.rs when --image is not provided.
+    let effective_image = image.to_string();
     // Pre-pull image and auto-login on permission denied (interactive)
     if !image_exists_locally(runtime.as_path(), &effective_image) {
         let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false, Some(agent));

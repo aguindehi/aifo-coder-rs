@@ -594,6 +594,7 @@ fn main() -> ExitCode {
             aifo_coder::resolve_image(&image)
         }
     } else {
+        // When CLI provides an explicit image, honor it exactly and do not retag or rewrite it.
         image.clone()
     };
 
@@ -608,7 +609,8 @@ fn main() -> ExitCode {
         })
         .is_some();
 
-    // Finalize run image: CLI override wins; else respect tag env; else prefer local ':latest' when present.
+    // Finalize run image: CLI override wins and is used as-is;
+    // else respect tag env; else prefer local ':latest' when present.
     let run_image_final = if cli.image.is_some() {
         image.clone()
     } else if tag_env_present {
