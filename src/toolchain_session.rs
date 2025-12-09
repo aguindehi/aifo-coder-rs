@@ -129,12 +129,19 @@ fn maybe_migrate_node_to_pnpm_interactive() {
         Err(_) => return,
     };
 
+    // Strong signal that this repo is pnpm-first: require pnpm-lock.yaml
+    let has_pnpm_lock = cwd.join("pnpm-lock.yaml").is_file();
+    if !has_pnpm_lock {
+        // Repo is not clearly pnpm-first; do not offer migration
+        return;
+    }
+
     let has_package_lock = cwd.join("package-lock.json").is_file();
     let has_yarn_lock = cwd.join("yarn.lock").is_file();
-    let has_node_modules = cwd.join("node_modules").is_dir();
 
-    if !has_package_lock && !has_yarn_lock && !has_node_modules {
-        // Nothing to migrate
+    if !has_package_lock && !has_yarn_lock {
+        // Nothing to migrate: pnpm-lock.yaml is already the source of truth,
+        // and there are no legacy npm/yarn lockfiles to clean up.
         return;
     }
 
