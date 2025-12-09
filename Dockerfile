@@ -529,7 +529,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
-        cat >/usr/local/bin/mcpm-aider <<\SH
+        cat >/usr/local/bin/mcpm-aider <<'SH'
 #!/bin/sh
 JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
 if [ ! -f "$JS" ]; then
@@ -926,7 +926,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
-            cat >/usr/local/bin/mcpm-aider <<\SH
+            cat >/usr/local/bin/mcpm-aider <<'SH'
 #!/bin/sh
 JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
 if [ ! -f "$JS" ]; then
