@@ -154,17 +154,38 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     let use_err = aifo_coder::color_enabled_stderr();
     let mut out = io::stderr();
 
-    // Explain what will happen (mirrors Makefile semantics)
-    let msg =
-        "aifo-coder: detected npm/yarn artifacts (node_modules, package-lock.json or yarn.lock).\n\
-aifo-coder: this repository is pnpm-first.\n\
+    // Explain what will happen (mirrors Makefile semantics), but report actual artifacts found.
+    let has_node_modules = cwd.join("node_modules").is_dir();
+    let mut artifacts: Vec<&str> = Vec::new();
+    if has_node_modules {
+        artifacts.push("node_modules/");
+    }
+    if has_package_lock {
+        artifacts.push("package-lock.json");
+    }
+    if has_yarn_lock {
+        artifacts.push("yarn.lock");
+    }
+    let detected_line = if artifacts.is_empty() {
+        "aifo-coder: detected npm/yarn artifacts.\n".to_string()
+    } else {
+        format!(
+            "aifo-coder: detected npm/yarn artifacts: {}.\n",
+            artifacts.join(", ")
+        )
+    };
+
+    let msg = format!(
+        "{detected}aifo-coder: this repository is pnpm-first.\n\
 aifo-coder: we can migrate your project to pnpm by:\n\
   - Removing node_modules/\n\
   - Removing package-lock.json and yarn.lock (if present)\n\
   - Creating .pnpm-store/ with group-writable permissions\n\
   - Running 'pnpm install --frozen-lockfile'\n\n\
-Do you want to perform this one-shot migration now? [y/N] ";
-    let painted = aifo_coder::paint(use_err, "\x1b[33m", msg);
+Do you want to perform this one-shot migration now? [y/N] ",
+        detected = detected_line
+    );
+    let painted = aifo_coder::paint(use_err, "\x1b[33m", &msg);
     let _ = write!(out, "{}", painted);
     let _ = out.flush();
 
@@ -187,8 +208,19 @@ Do you want to perform this one-shot migration now? [y/N] ";
         return;
     }
 
+    // Inform user that migration is starting and may take a while
+    let _ = writeln!(
+        out,
+        "{}",
+        aifo_coder::paint(
+            use_err,
+            "\x1b[33m",
+            "aifo-coder: migration start (do not interrupt) ..."
+        )
+    );
+    let _ = out.flush();
+
     // Perform migration (mirrors Makefile node-migrate-to-pnpm)
-    let has_node_modules = cwd.join("node_modules").is_dir();
     if has_node_modules {
         let _ = writeln!(
             out,
