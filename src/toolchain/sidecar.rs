@@ -317,15 +317,20 @@ pub fn build_sidecar_run_preview_with_overrides(
                 // Consolidated Node caches under XDG_CACHE_HOME
                 push_mount(&mut args, "aifo-node-cache:/home/coder/.cache");
             }
+            // Shared pnpm store inside /workspace so host/container can reuse it across installs.
+            // This matches the pnpm plan: per-OS node_modules overlay, shared content-addressable store.
+            push_mount(&mut args, "/workspace/.pnpm-store:/workspace/.pnpm-store");
+            // Per-OS node_modules overlay: keep host and container installs isolated.
+            // The orchestrator/toolchain image is expected to mount a dedicated volume at this path.
+            // For test previews and best-effort safety, we still add an explicit mount when not provided.
+            push_mount(&mut args, "aifo-node-modules:/workspace/node_modules");
+
             // Cache envs for Node ecosystem tools
             push_env(&mut args, "XDG_CACHE_HOME", "/home/coder/.cache");
             push_env(&mut args, "NPM_CONFIG_CACHE", "/home/coder/.cache/npm");
             push_env(&mut args, "YARN_CACHE_FOLDER", "/home/coder/.cache/yarn");
-            push_env(
-                &mut args,
-                "PNPM_STORE_PATH",
-                "/home/coder/.cache/pnpm-store",
-            );
+            // Point pnpm store to the shared repo-local store
+            push_env(&mut args, "PNPM_STORE_PATH", "/workspace/.pnpm-store");
             push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
             push_env(&mut args, "DENO_DIR", "/home/coder/.cache/deno");
             // Ensure pnpm-managed binaries are on PATH
@@ -336,6 +341,12 @@ pub fn build_sidecar_run_preview_with_overrides(
             );
             // Pass-through proxies for node sidecar
             apply_passthrough_envs(&mut args, PROXY_ENV_NAMES);
+            // Overlay sentinel for guard logic (container-only; host must not see this file).
+            push_env(
+                &mut args,
+                "AIFO_NODE_OVERLAY_SENTINEL",
+                "/workspace/node_modules/.aifo-node-overlay",
+            );
         }
         "python" => {
             if !no_cache {
