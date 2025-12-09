@@ -441,6 +441,16 @@ Tip: Maintenance commands help manage sessions:
 - aifo-coder fork list [--json] [--all-repos]
 - aifo-coder fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]
 
+### pnpm preparation (Phase 0)
+
+We completed the groundwork required to adopt pnpm across host, container, and CI workflows:
+
+- **Workflow audit:** confirmed Node dependencies are exercised via the host `aifo-coder toolchain node` path, containerized sidecars, and CI `make check` lanes (which run toolchain commands through the same interface). No other entry points manage `node_modules`.
+- **pnpm baseline:** pinned to pnpm **9.x** (minimum 9.0.0). Install with `npm install -g pnpm@9` (or use Homebrew/Volta equivalents) so all developers and CI hosts run a consistent client that supports shared content-addressable stores.
+- **UID/GID strategy:** containers continue to run as the invoking host UID/GID, so the shared `<repo>/.pnpm-store` stays writable by both host and container. Named volume bootstrap code (`init_node_cache_volume_if_needed`) will align ownership automatically when Docker allocates a new volume.
+
+These decisions unblock Phase 1 by guaranteeing determinism in the package manager, clarifying how the shared store will stay writable, and ensuring every workflow entry point is known before guardrails are added.
+
 ### Toolchain sidecars (Phase 1)
 
 Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
