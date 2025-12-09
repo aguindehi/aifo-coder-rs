@@ -328,8 +328,12 @@ pub fn build_sidecar_run_preview_with_overrides(
             push_env(&mut args, "XDG_CACHE_HOME", "/home/coder/.cache");
             push_env(&mut args, "NPM_CONFIG_CACHE", "/home/coder/.cache/npm");
             push_env(&mut args, "YARN_CACHE_FOLDER", "/home/coder/.cache/yarn");
-            // Point pnpm store to the shared repo-local store
-            push_env(&mut args, "PNPM_STORE_PATH", "/workspace/.pnpm-store");
+            // Point pnpm store to the shared repo-local store; prefer env override when present.
+            let store_path = std_env::var("PNPM_STORE_PATH")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "/workspace/.pnpm-store".to_string());
+            push_env(&mut args, "PNPM_STORE_PATH", &store_path);
             push_env(&mut args, "PNPM_HOME", "/home/coder/.local/share/pnpm");
             push_env(&mut args, "DENO_DIR", "/home/coder/.cache/deno");
             // Ensure pnpm-managed binaries are on PATH
