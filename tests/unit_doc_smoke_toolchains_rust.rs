@@ -19,7 +19,9 @@ fn unit_doc_smoke_toolchains_rust() {
     // Key phrases/headings expected by the spec
     let needles = [
         "AIFO Rust Toolchain",
+        // We only require mention of the key Rust env var names, not exact formatting
         "CARGO_HOME",
+        "RUSTUP_HOME",
         "sccache",
         "AIFO_RUST_TOOLCHAIN_IMAGE",
         "ownership initialization",
