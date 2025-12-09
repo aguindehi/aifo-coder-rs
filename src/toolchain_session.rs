@@ -129,20 +129,26 @@ fn maybe_migrate_node_to_pnpm_interactive() {
         Err(_) => return,
     };
 
-    // Strong signal that this repo is pnpm-first: require pnpm-lock.yaml
+    // Detect lockfiles and package manifest
     let has_pnpm_lock = cwd.join("pnpm-lock.yaml").is_file();
-    if !has_pnpm_lock {
-        // Repo is not clearly pnpm-first; do not offer migration
-        return;
-    }
-
     let has_package_lock = cwd.join("package-lock.json").is_file();
     let has_yarn_lock = cwd.join("yarn.lock").is_file();
+    let has_package_json = cwd.join("package.json").is_file();
 
-    if !has_package_lock && !has_yarn_lock {
-        // Nothing to migrate: pnpm-lock.yaml is already the source of truth,
-        // and there are no legacy npm/yarn lockfiles to clean up.
-        return;
+    // Mode A: pnpm-first repo with legacy npm/yarn lockfiles to clean up
+    if has_pnpm_lock {
+        if !has_package_lock && !has_yarn_lock {
+            // Nothing to migrate: pnpm-lock.yaml is already the source of truth and there are
+            // no legacy npm/yarn lockfiles to clean up.
+            return;
+        }
+    } else {
+        // Mode B: clearly npm-based repo (package.json + package-lock.json, no pnpm lock yet)
+        if !(has_package_json && has_package_lock && !has_pnpm_lock) {
+            // Neither pnpm-first-with-legacy-locks nor npm-only with package-lock.json:
+            // do not offer migration.
+            return;
+        }
     }
 
     let use_err = aifo_coder::color_enabled_stderr();
