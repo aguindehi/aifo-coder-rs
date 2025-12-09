@@ -501,7 +501,7 @@ LABEL org.opencontainers.image.revision="${AIDER_GIT_COMMIT}"
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
-# hadolint ignore=SC2016
+# hadolint ignore=SC2016,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
@@ -903,7 +903,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
-# hadolint ignore=SC2016
+# hadolint ignore=SC2016,SC2026
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
         if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
