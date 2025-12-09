@@ -65,7 +65,7 @@ fn docker_run(tag: &str, shell: &str, script: &str) -> Result<(), String> {
 }
 
 #[test]
-fn integration_aider_mcpm_enabled_presence() {
+fn int_aider_mcpm_enabled_presence() {
     if std::env::var("AIFO_TEST_DOCKER").unwrap_or_default() != "1" || !have_docker() {
         eprintln!("skipping: docker tests disabled or docker unavailable");
         return;
@@ -90,7 +90,7 @@ fn integration_aider_mcpm_enabled_presence() {
 }
 
 #[test]
-fn integration_aider_slim_mcpm_enabled_presence() {
+fn int_aider_slim_mcpm_enabled_presence() {
     if std::env::var("AIFO_TEST_DOCKER").unwrap_or_default() != "1" || !have_docker() {
         eprintln!("skipping: docker tests disabled or docker unavailable");
         return;
@@ -115,7 +115,7 @@ fn integration_aider_slim_mcpm_enabled_presence() {
 }
 
 #[test]
-fn integration_aider_mcpm_disabled_absence() {
+fn int_aider_mcpm_disabled_absence() {
     if std::env::var("AIFO_TEST_DOCKER").unwrap_or_default() != "1" || !have_docker() {
         eprintln!("skipping: docker tests disabled or docker unavailable");
         return;
@@ -155,7 +155,7 @@ fn integration_aider_mcpm_disabled_absence() {
 }
 
 #[test]
-fn integration_aider_slim_mcpm_disabled_absence() {
+fn int_aider_slim_mcpm_disabled_absence() {
     if std::env::var("AIFO_TEST_DOCKER").unwrap_or_default() != "1" || !have_docker() {
         eprintln!("skipping: docker tests disabled or docker unavailable");
         return;

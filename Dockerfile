@@ -426,7 +426,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             uv pip install --native-tls --python /opt/venv/bin/python playwright; \
             /opt/venv/bin/python -c "import playwright" >/dev/null 2>&1 || { echo "error: playwright module missing in git venv" >&2; exit 5; }; \
         else \
-            uv pip install --native-tls --python /opt/venv/bin.python "${PKG_PATH}"; \
+            uv pip install --native-tls --python /opt/venv/bin/python "${PKG_PATH}"; \
         fi; \
         printf 'source=git\nref=%s\ncommit=%s\n' "${AIDER_GIT_REF}" "${RESOLVED_SHA}" > /opt/venv/.build-info/aider-git.txt; \
         rm -rf /tmp/aider-src; \
@@ -489,6 +489,7 @@ LABEL org.opencontainers.image.revision="${AIDER_GIT_COMMIT}"
 ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
+# hadolint ignore=SC2016
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
@@ -530,15 +531,16 @@ PY \
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
-        printf '%s\n' \
-          '#!/bin/sh' \
-          'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"' \
-          'if [ ! -f "$JS" ]; then' \
-          '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2' \
-          '  exit 127' \
-          'fi' \
-          'exec /usr/local/bin/node "$JS" "$@"' \
-          > /usr/local/bin/mcpm-aider && chmod 0755 /usr/local/bin/mcpm-aider; \
+        cat >/usr/local/bin/mcpm-aider <<SH
+#!/bin/sh
+JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
+if [ ! -f "$JS" ]; then
+  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
+  exit 127
+fi
+exec /usr/local/bin/node "$JS" "$@"
+SH
+        chmod 0755 /usr/local/bin/mcpm-aider; \
         if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
             rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
             command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -884,6 +886,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ARG WITH_PLAYWRIGHT=1
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# hadolint ignore=SC2016
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
         export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
         if [ "$WITH_PLAYWRIGHT" = "1" ]; then \
@@ -926,15 +929,16 @@ PY \
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
-            printf '%s\n' \
-              '#!/bin/sh' \
-              'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"' \
-              'if [ ! -f "$JS" ]; then' \
-              '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2' \
-              '  exit 127' \
-              'fi' \
-              'exec /usr/local/bin/node "$JS" "$@"' \
-              > /usr/local/bin/mcpm-aider && chmod 0755 /usr/local/bin/mcpm-aider; \
+            cat >/usr/local/bin/mcpm-aider <<SH
+#!/bin/sh
+JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
+if [ ! -f "$JS" ]; then
+  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
+  exit 127
+fi
+exec /usr/local/bin/node "$JS" "$@"
+SH
+            chmod 0755 /usr/local/bin/mcpm-aider; \
             if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
                 rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
                 command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
