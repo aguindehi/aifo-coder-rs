@@ -531,7 +531,7 @@ PY \
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
-        cat >/usr/local/bin/mcpm-aider <<SH
+        cat >/usr/local/bin/mcpm-aider <<'SH'
 #!/bin/sh
 JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
 if [ ! -f "$JS" ]; then
@@ -555,7 +555,8 @@ SH
         rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
         rm -rf /var/lib/apt/lists/*; \
         rm -rf /var/cache/apt/apt-file/; \
-        rm -f /usr/local/bin/node /usr/local/bin/nodejs /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
+        if [ "${WITH_MCPM_AIDER:-1}" != "1" ]; then rm -f /usr/local/bin/node /usr/local/bin/nodejs; fi; \
+        rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg; \
         rm -rf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/lib/node_modules/npm/bin/npx-cli.js; \
         rm -rf /opt/yarn-v1.22.22; \
     fi'
@@ -929,7 +930,7 @@ PY \
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
-            cat >/usr/local/bin/mcpm-aider <<SH
+            cat >/usr/local/bin/mcpm-aider <<'SH'
 #!/bin/sh
 JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
 if [ ! -f "$JS" ]; then
