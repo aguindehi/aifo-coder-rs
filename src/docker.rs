@@ -734,8 +734,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
             }
         }
         if host_claude_cfg.exists() {
-            let container_claude_cfg =
-                "/home/coder/.config/claude/claude_desktop_config.json";
+            let container_claude_cfg = "/home/coder/.config/claude/claude_desktop_config.json";
             volume_flags.push(OsString::from("-v"));
             volume_flags.push(OsString::from(format!(
                 "{}:{}",
