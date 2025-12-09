@@ -104,7 +104,6 @@ pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
 // One-shot npm/yarn → pnpm migration helper integrated into node toolchain startup.
 fn maybe_migrate_node_to_pnpm_interactive() {
     use std::io::{self, Write};
-    use std::path::Path;
 
     // Do not run in CI or when non-interactive mode is requested
     if std::env::var("CI").ok().as_deref() == Some("true")
