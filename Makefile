@@ -101,7 +101,7 @@ KEEP_ONLY_GRCOV ?= --keep-only "**/*.rs"
 NICENESS_CARGO_NEXTEST =? 0
 
 # Agent build source: [git | release]
-AIDER_SOURCE ?= git
+AIDER_SOURCE ?= release
 
 # Agent version pins (default: latest). Pin for reproducible releases.
 CODEX_VERSION ?= latest
