@@ -114,6 +114,7 @@ Global flags:
 - --no-toolchain-cache            Disable named cache volumes for toolchain sidecars
 - --toolchain-unix-socket         Linux: use unix:/// socket transport for the proxy
 - --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global
+- --non-interactive               Disable interactive LLM prompt (same as AIFO_CODER_SUPPRESS_LLM_WARNING=1)
 
 Subcommands:
 - codex [args...]                Run OpenAI Codex CLI inside container
