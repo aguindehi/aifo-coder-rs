@@ -118,7 +118,7 @@ Global flags:
 
 > **Node: pnpm-only guard.** Repository tooling is designed for pnpm. Avoid `npm install`/`yarn install`
 > directly in this repo; use `make node-install` or run `pnpm install --frozen-lockfile` in the repo
-> root.
+> root. For CI or local preflight, you can run `make node-guard` to check for accidental npm/yarn use.
 
 Subcommands:
 - codex [args...]                Run OpenAI Codex CLI inside container
@@ -482,7 +482,7 @@ Host and container workflows for Node are prepared for pnpm:
   - `/workspace/.pnpm-store` (shared store, reused across host/container/CI)
   - `/workspace/node_modules` (per-OS overlay backed by a Docker volume)
 - The sidecar sets:
-  - `PNPM_STORE_PATH=/workspace/.pnpm-store`
+  - `PNPM_STORE_PATH=/workspace/.pnpm-store` (overridable via host `PNPM_STORE_PATH`)
   - `PNPM_HOME=/home/coder/.local/share/pnpm`
 
 Examples:
@@ -496,6 +496,9 @@ Examples:
 
 # Host-side Node setup using shared .pnpm-store (per-OS node_modules)
 make node-install
+
+# Optional guardrail to detect npm/yarn usage touching node_modules
+make node-guard
 
 # Python toolchain sidecar
 ./aifo-coder toolchain python -- python -m pip --version

@@ -399,6 +399,7 @@ help: banner
 	@echo "  clean ....................... Remove built and base images (ignores errors if not present)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
 	@echo "  node-install ................ Host-side pnpm preflight + pnpm install --frozen-lockfile"
+	@echo "  node-guard .................. Check for npm/yarn installs touching node_modules (pnpm-only guardrail)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -2251,6 +2252,21 @@ node-install:
 	  echo "Running pnpm install --frozen-lockfile ..."; \
 	fi; \
 	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile
+
+# Simple guardrail to detect npm/yarn installs touching node_modules.
+# Intended for local checks and CI preflight (Phase 1 lockfile enforcement).
+.PHONY: node-guard
+node-guard:
+	@set -e; \
+	if [ -f package-lock.json ]; then \
+	  echo "warning: package-lock.json present; this repository is pnpm-only (pnpm-lock.yaml is canonical)."; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "warning: yarn.lock present; this repository is pnpm-only (pnpm-lock.yaml is canonical)."; \
+	fi; \
+	if [ -d node_modules ] && [ ! -f node_modules/.aifo-node-overlay ]; then \
+	  echo "note: node_modules/ exists without overlay sentinel; ensure it was created via pnpm on this host."; \
+	fi
 
 .PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex rebuild-rust-builder
 rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
