@@ -116,6 +116,10 @@ Global flags:
 - --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global
 - --non-interactive               Disable interactive LLM prompt (same as AIFO_CODER_SUPPRESS_LLM_WARNING=1)
 
+> **Node: pnpm-only guard.** Repository tooling is designed for pnpm. Avoid `npm install`/`yarn install`
+> directly in this repo; use `make node-install` or run `pnpm install --frozen-lockfile` in the repo
+> root.
+
 Subcommands:
 - codex [args...]                Run OpenAI Codex CLI inside container
 - crush [args...]                Run Charmbracelet Crush inside container
@@ -446,11 +450,24 @@ Tip: Maintenance commands help manage sessions:
 
 We completed the groundwork required to adopt pnpm across host, container, and CI workflows:
 
-- **Workflow audit:** confirmed Node dependencies are exercised via the host `aifo-coder toolchain node` path, containerized sidecars, and CI `make check` lanes (which run toolchain commands through the same interface). No other entry points manage `node_modules`.
-- **pnpm baseline:** pinned to pnpm **9.x** (minimum 9.0.0). Install with `npm install -g pnpm@9` (or use Homebrew/Volta equivalents) so all developers and CI hosts run a consistent client that supports shared content-addressable stores.
-- **UID/GID strategy:** containers continue to run as the invoking host UID/GID, so the shared `<repo>/.pnpm-store` stays writable by both host and container. Named volume bootstrap code (`init_node_cache_volume_if_needed`) will align ownership automatically when Docker allocates a new volume.
+- **Workflow audit:** confirmed Node dependencies are exercised via the host `aifo-coder toolchain node`
+  path, containerized sidecars, and CI `make check` lanes (which run toolchain commands through the same
+  interface). No other entry points manage `node_modules`.
+- **pnpm baseline:** pinned to pnpm **9.x** (minimum 9.0.0). Install with
+  `npm install -g pnpm@9` (or use Homebrew/Volta equivalents) so all developers and CI hosts run a
+  consistent client that supports shared content-addressable stores.
+- **UID/GID strategy:** containers continue to run as the invoking host UID/GID, so the shared
+  `<repo>/.pnpm-store` stays writable by both host and container. Named volume bootstrap code
+  (`init_node_cache_volume_if_needed`) will align ownership automatically when Docker allocates a new
+  volume.
 
-These decisions unblock Phase 1 by guaranteeing determinism in the package manager, clarifying how the shared store will stay writable, and ensuring every workflow entry point is known before guardrails are added.
+These decisions unblock Phase 1 by guaranteeing determinism in the package manager, clarifying how the
+shared store will stay writable, and ensuring every workflow entry point is known before guardrails are
+added.
+
+> **Canonical package manager for Node:** pnpm is the required and supported package manager for all
+> Node-based workflows in this repository (host, container, and CI). Do not use `npm install` or
+> `yarn install` in this repo; use `pnpm install` or the `make node-install` target instead.
 
 ### Toolchain sidecars (Phase 1)
 
@@ -476,6 +493,9 @@ Examples:
 # Node toolchain sidecar; pnpm/npm/yarn will see the shared store at /workspace/.pnpm-store
 ./aifo-coder toolchain node -- pnpm install
 ./aifo-coder toolchain node -- npx --version
+
+# Host-side Node setup using shared .pnpm-store (per-OS node_modules)
+make node-install
 
 # Python toolchain sidecar
 ./aifo-coder toolchain python -- python -m pip --version

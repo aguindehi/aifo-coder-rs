@@ -398,6 +398,7 @@ help: banner
 	@echo ""
 	@echo "  clean ....................... Remove built and base images (ignores errors if not present)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
+	@echo "  node-install ................ Host-side pnpm preflight + pnpm install --frozen-lockfile"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -2218,6 +2219,38 @@ toolchain-cache-clear:
 	@echo "Purging toolchain cache volumes (cargo registry/git, node/npm, pip, ccache, go) ..."
 	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-node-cache aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
 	@echo "Done."
+
+# Host-side Node preflight and install using pnpm and shared .pnpm-store.
+# - Creates .pnpm-store with safe permissions when missing
+# - Warns if npm/yarn installs are detected
+# - Runs pnpm install with frozen lockfile
+.PHONY: node-install
+node-install:
+	@set -e; \
+	if ! command -v pnpm >/dev/null 2>&1; then \
+	  echo "error: pnpm is required but was not found on PATH."; \
+	  echo "       Install with: npm install -g pnpm@9"; \
+	  exit 1; \
+	fi; \
+	if [ -f package-lock.json ]; then \
+	  echo "warning: package-lock.json detected; this repository uses pnpm and pnpm-lock.yaml as the"; \
+	  echo "         source of truth. Please avoid 'npm install' and use 'pnpm install' instead."; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "warning: yarn.lock detected; this repository uses pnpm and pnpm-lock.yaml as the"; \
+	  echo "         source of truth. Please avoid 'yarn install' and use 'pnpm install' instead."; \
+	fi; \
+	if [ ! -d ".pnpm-store" ]; then \
+	  echo "Creating .pnpm-store with group-writable permissions ..."; \
+	  mkdir -p .pnpm-store; \
+	  chmod 775 .pnpm-store || true; \
+	fi; \
+	if [ -n "$$CI" ]; then \
+	  echo "Running pnpm install --frozen-lockfile (CI mode) ..."; \
+	else \
+	  echo "Running pnpm install --frozen-lockfile ..."; \
+	fi; \
+	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile
 
 .PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex rebuild-rust-builder
 rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
