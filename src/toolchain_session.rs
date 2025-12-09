@@ -78,6 +78,243 @@ pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
     (kinds, overrides)
 }
 
+/// Return true if a node-family toolchain is requested via --toolchain/--toolchain-spec.
+pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
+    // Direct toolchain flag (matches ToolchainKind::Node)
+    if cli.toolchain.iter().any(|k| k.as_str() == "node") {
+        return true;
+    }
+
+    // Specs: node@XX, ts@YY, bun@ZZ (ToolchainKind::Node has aliases)
+    for s in &cli.toolchain_spec {
+        let t = s.trim();
+        let kind = if let Some((k, _v)) = t.split_once('@') {
+            k.trim()
+        } else {
+            t
+        };
+        let lower = kind.to_ascii_lowercase();
+        if lower == "node" || lower == "ts" || lower == "bun" {
+            return true;
+        }
+    }
+    false
+}
+
+// One-shot npm/yarn → pnpm migration helper integrated into node toolchain startup.
+fn maybe_migrate_node_to_pnpm_interactive() {
+    use std::io::{self, Write};
+    use std::path::Path;
+
+    // Do not run in CI or when non-interactive mode is requested
+    if std::env::var("CI").ok().as_deref() == Some("true")
+        || std::env::var("AIFO_CODER_NON_INTERACTIVE")
+            .ok()
+            .as_deref()
+            == Some("1")
+    {
+        return;
+    }
+
+    // Require pnpm to be available
+    let pnpm_ok = std::process::Command::new("pnpm")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !pnpm_ok {
+        return;
+    }
+
+    let cwd = match std::env::current_dir() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+
+    let has_package_lock = cwd.join("package-lock.json").is_file();
+    let has_yarn_lock = cwd.join("yarn.lock").is_file();
+    let has_node_modules = cwd.join("node_modules").is_dir();
+
+    if !has_package_lock && !has_yarn_lock && !has_node_modules {
+        // Nothing to migrate
+        return;
+    }
+
+    let use_err = aifo_coder::color_enabled_stderr();
+    let mut out = io::stderr();
+
+    // Explain what will happen (mirrors Makefile semantics)
+    let msg = "aifo-coder: detected npm/yarn artifacts (node_modules, package-lock.json or yarn.lock).\n\
+aifo-coder: this repository is pnpm-first.\n\
+aifo-coder: we can migrate your project to pnpm by:\n\
+  - Removing node_modules/\n\
+  - Removing package-lock.json and yarn.lock (if present)\n\
+  - Creating .pnpm-store/ with group-writable permissions\n\
+  - Running 'pnpm install --frozen-lockfile'\n\n\
+Do you want to perform this one-shot migration now? [y/N] ";
+    let painted = aifo_coder::paint(use_err, "\x1b[33m", msg);
+    let _ = write!(out, "{}", painted);
+    let _ = out.flush();
+
+    let mut answer = String::new();
+    if io::stdin().read_line(&mut answer).is_err() {
+        return;
+    }
+    let ans = answer.trim();
+    if ans != "y" && ans != "Y" {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(
+                use_err,
+                "\x1b[33m",
+                "aifo-coder: skipping pnpm migration; continuing with existing layout."
+            )
+        );
+        let _ = out.flush();
+        return;
+    }
+
+    // Perform migration (mirrors Makefile node-migrate-to-pnpm)
+    if has_node_modules {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(use_err, "\x1b[33m", "aifo-coder: removing node_modules/ ...")
+        );
+        let _ = out.flush();
+        let _ = std::fs::remove_dir_all(cwd.join("node_modules"));
+    }
+    if has_package_lock {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(
+                use_err,
+                "\x1b[33m",
+                "aifo-coder: removing package-lock.json ..."
+            )
+        );
+        let _ = out.flush();
+        let _ = std::fs::remove_file(cwd.join("package-lock.json"));
+    }
+    if has_yarn_lock {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(use_err, "\x1b[33m", "aifo-coder: removing yarn.lock ...")
+        );
+        let _ = out.flush();
+        let _ = std::fs::remove_file(cwd.join("yarn.lock"));
+    }
+
+    let pnpm_store = cwd.join(".pnpm-store");
+    if !pnpm_store.is_dir() {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(
+                use_err,
+                "\x1b[33m",
+                "aifo-coder: creating .pnpm-store with group-writable permissions ..."
+            )
+        );
+        let _ = out.flush();
+        if let Err(e) = std::fs::create_dir_all(&pnpm_store) {
+            let _ = writeln!(
+                out,
+                "{}",
+                aifo_coder::paint(
+                    use_err,
+                    "\x1b[31m",
+                    &format!(
+                        "aifo-coder: warning: failed to create .pnpm-store directory: {}",
+                        e
+                    )
+                )
+            );
+            let _ = out.flush();
+            return;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(
+                &pnpm_store,
+                std::fs::Permissions::from_mode(0o775),
+            );
+        }
+    }
+
+    let msg_run = "aifo-coder: running 'pnpm install --frozen-lockfile' using .pnpm-store/ ...";
+    let _ = writeln!(
+        out,
+        "{}",
+        aifo_coder::paint(use_err, "\x1b[32m", msg_run)
+    );
+    let _ = out.flush();
+
+    let store_path = pnpm_store
+        .as_path()
+        .to_str()
+        .unwrap_or(".pnpm-store")
+        .to_string();
+
+    let status = std::process::Command::new("pnpm")
+        .arg("install")
+        .arg("--frozen-lockfile")
+        .env("PNPM_STORE_PATH", &store_path)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            let _ = writeln!(
+                out,
+                "{}",
+                aifo_coder::paint(
+                    use_err,
+                    "\x1b[32m",
+                    "aifo-coder: pnpm migration completed successfully."
+                )
+            );
+            let _ = out.flush();
+        }
+        Ok(s) => {
+            let _ = writeln!(
+                out,
+                "{}",
+                aifo_coder::paint(
+                    use_err,
+                    "\x1b[33m",
+                    &format!(
+                        "aifo-coder: warning: pnpm install exited with status {:?}; \
+please check the output above.",
+                        s.code()
+                    )
+                )
+            );
+            let _ = out.flush();
+        }
+        Err(e) => {
+            let _ = writeln!(
+                out,
+                "{}",
+                aifo_coder::paint(
+                    use_err,
+                    "\x1b[31m",
+                    &format!(
+                        "aifo-coder: warning: failed to run pnpm install: {}",
+                        e
+                    )
+                )
+            );
+            let _ = out.flush();
+        }
+    }
+}
+
 // Best-effort: check if a toolchain image exists locally (by ref).
 fn toolchain_image_exists_local(image: &str) -> bool {
     if let Ok(runtime) = aifo_coder::container_runtime_path() {
@@ -128,6 +365,11 @@ impl ToolchainSession {
         }
         if cli.dry_run {
             return Ok(None);
+        }
+
+        // Interactive node → pnpm migration when node toolchain is requested
+        if node_toolchain_requested(cli) {
+            maybe_migrate_node_to_pnpm_interactive();
         }
 
         // Inform about embedded shims (same text)
