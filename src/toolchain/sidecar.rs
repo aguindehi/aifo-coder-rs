@@ -350,6 +350,29 @@ pub fn build_sidecar_run_preview_with_overrides(
                 "AIFO_NODE_OVERLAY_SENTINEL",
                 "/workspace/node_modules/.aifo-node-overlay",
             );
+            // Best-effort overlay guard and bootstrap: if overlay is empty, seed sentinel and
+            // run pnpm install using the shared /workspace/.pnpm-store. This keeps native
+            // artifacts per-OS while reusing the content-addressable store.
+            let sentinel = "/workspace/node_modules/.aifo-node-overlay";
+            let mut bootstrap = String::from(
+                "set -e; d=\"/workspace/node_modules\"; s=\"/workspace/pnpm-lock.yaml\"; \
+if [ ! -d \"$d\" ] || [ -z \"$(ls -A \"$d\" 2>/dev/null || true)\" ]; then \
+  mkdir -p \"$d\"; \
+  if [ -f \"$s\" ]; then \
+    if command -v pnpm >/dev/null 2>&1; then \
+      echo \"aifo-coder: node sidecar: bootstrapping node_modules via pnpm install --frozen-lockfile\" >&2; \
+      PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
+    else \
+      echo \"aifo-coder: warning: pnpm not found in node toolchain image; skipping automatic install\" >&2; \
+    fi; \
+  fi; \
+fi; \
+if [ ! -f \"");
+            bootstrap.push_str(sentinel);
+            bootstrap.push_str("\" ]; then printf '%s\\n' 'overlay' > \"");
+            bootstrap.push_str(sentinel);
+            bootstrap.push_str("\" || true; fi; exec \"$@\"");
+            push_env(&mut args, "AIFO_NODE_OVERLAY_BOOTSTRAP", &bootstrap);
         }
         "python" => {
             if !no_cache {
