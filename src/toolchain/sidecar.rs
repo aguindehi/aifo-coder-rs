@@ -1045,12 +1045,8 @@ pub fn toolchain_run(
             // overlay is initialized, sentinel is present, and lockfile changes trigger installs.
             if sidecar_kind == "node" {
                 match node_overlay_state_and_guard(&runtime, &name, verbose) {
-                    Ok(need_install) => {
-                        if need_install {
-                            let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
-                        } else {
-                            let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
-                        }
+                    Ok(_need_install) => {
+                        let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
                     }
                     Err(_) => {
                         return Err(io::Error::other(crate::display_for_toolchain_error(
@@ -1280,12 +1276,8 @@ pub fn toolchain_start_session(
         // Node overlay/bootstrap for sessions: ensure per-OS node_modules overlay and lock hash.
         if kind == "node" {
             match node_overlay_state_and_guard(&runtime, &name, verbose) {
-                Ok(need_install) => {
-                    if need_install {
-                        let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
-                    } else {
-                        let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
-                    }
+                Ok(_need_install) => {
+                    let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
                 }
                 Err(_) => {
                     return Err(io::Error::other(crate::display_for_toolchain_error(
