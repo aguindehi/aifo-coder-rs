@@ -16,15 +16,17 @@ fn unit_doc_smoke_toolchains_rust() {
             panic!("failed to read docs/TOOLCHAINS.md: {}", e);
         }
     };
-    // Key phrases/headings expected by the spec
+    // Key phrases/headings expected by the spec and docs/TOOLCHAINS.md
     let needles = [
+        // Rust toolchain section heading
         "AIFO Rust Toolchain",
-        // We only require mention of the key Rust env var names, not exact formatting
+        // Key Rust env vars mentioned in TOOLCHAINS.md
         "CARGO_HOME",
         "RUSTUP_HOME",
-        "sccache",
+        "RUST_BACKTRACE",
+        "SCCACHE_DIR",
+        // Image override env for Rust
         "AIFO_RUST_TOOLCHAIN_IMAGE",
-        "ownership initialization",
     ];
     for n in needles {
         assert!(
