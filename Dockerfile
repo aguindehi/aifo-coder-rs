@@ -531,16 +531,15 @@ PY \
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
-        cat >/usr/local/bin/mcpm-aider <<'SH'
-#!/bin/sh
-JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
-if [ ! -f "$JS" ]; then
-  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
-  exit 127
-fi
-exec /usr/local/bin/node "$JS" "$@"
-SH
-        chmod 0755 /usr/local/bin/mcpm-aider; \
+        printf '%s\n' \
+          '#!/bin/sh' \
+          'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"' \
+          'if [ ! -f "$JS" ]; then' \
+          '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2' \
+          '  exit 127' \
+          'fi' \
+          'exec /usr/local/bin/node "$JS" "$@"' \
+          > /usr/local/bin/mcpm-aider && chmod 0755 /usr/local/bin/mcpm-aider; \
         if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
             rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
             command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
@@ -930,16 +929,15 @@ PY \
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
-            cat >/usr/local/bin/mcpm-aider <<'SH'
-#!/bin/sh
-JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"
-if [ ! -f "$JS" ]; then
-  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2
-  exit 127
-fi
-exec /usr/local/bin/node "$JS" "$@"
-SH
-            chmod 0755 /usr/local/bin/mcpm-aider; \
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"' \
+              'if [ ! -f "$JS" ]; then' \
+              '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2' \
+              '  exit 127' \
+              'fi' \
+              'exec /usr/local/bin/node "$JS" "$@"' \
+              > /usr/local/bin/mcpm-aider && chmod 0755 /usr/local/bin/mcpm-aider; \
             if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
                 rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
                 command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
