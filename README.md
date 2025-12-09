@@ -453,23 +453,43 @@ These decisions unblock Phase 1 by guaranteeing determinism in the package manag
 
 ### Toolchain sidecars (Phase 1)
 
-Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
+Use a dedicated sidecar container that mounts your current workspace and persistent caches for the
+selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
+
+Host and container workflows for Node are prepared for pnpm:
+
+- The shared pnpm content-addressable store lives under `<repo>/.pnpm-store` and is ignored by git.
+- The Node toolchain sidecar mounts:
+  - `/workspace` (your current project)
+  - `/workspace/.pnpm-store` (shared store, reused across host/container/CI)
+  - `/workspace/node_modules` (per-OS overlay backed by a Docker volume)
+- The sidecar sets:
+  - `PNPM_STORE_PATH=/workspace/.pnpm-store`
+  - `PNPM_HOME=/home/coder/.local/share/pnpm`
 
 Examples:
 ```bash
+# Rust toolchain sidecar
 ./aifo-coder toolchain rust -- cargo --version
+
+# Node toolchain sidecar; pnpm/npm/yarn will see the shared store at /workspace/.pnpm-store
+./aifo-coder toolchain node -- pnpm install
 ./aifo-coder toolchain node -- npx --version
+
+# Python toolchain sidecar
 ./aifo-coder toolchain python -- python -m pip --version
-# override the image for a run:
+
+# Override the image for a single run:
 ./aifo-coder toolchain rust --toolchain-image rust:1.80-slim -- cargo --help
-# disable named cache volumes (e.g., to avoid creating volumes on CI):
-./aifo-coder toolchain node --no-toolchain-cache -- npm ci
+
+# Disable named cache volumes (e.g., to avoid creating volumes on CI):
+./aifo-coder toolchain node --no-toolchain-cache -- pnpm install
 ```
 
 Running tests for toolchain sidecars (Phase 1)
 - Run the full test suite:
 ```bash
-cargo test
+make check
 ```
 - Run only the toolchain Phase 1 integration tests (note: use --test target name, not a file path filter):
 ```bash
