@@ -312,6 +312,18 @@ if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
     [ -n "$K" ] && sed -i -E "s|\"api_key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_key\": \"$K\"|g" "$SETTINGS"
   fi
 fi
+# Claude config: link AIFO_CODER_CONFIG_DIR/claude/claude_desktop_config.json to the real Claude config
+if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
+  REAL="$HOME/.config/claude/claude_desktop_config.json"
+  LINK_DIR="$AIFO_CODER_CONFIG_DIR/claude"
+  LINK="$LINK_DIR/claude_desktop_config.json"
+  if [ -f "$REAL" ] || [ -L "$REAL" ]; then
+    if [ ! -e "$LINK" ]; then
+      install -d -m 0700 "$LINK_DIR" >/dev/null 2>&1 || true
+      ln -s "$REAL" "$LINK" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
 exec "$@"
 SH
 
