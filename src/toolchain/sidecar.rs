@@ -475,6 +475,101 @@ if [ ! -f \"");
     args
 }
 
+// Helper: determine if the node_modules overlay looks empty (no non-hidden files).
+fn overlay_empty_or_missing(runtime: &Path, container_name: &str, verbose: bool) -> bool {
+    let use_err = crate::color_enabled_stderr();
+    let mut cmd = Command::new(runtime);
+    cmd.arg("exec")
+        .arg(container_name)
+        .arg("sh")
+        .arg("-lc")
+        .arg(
+            "d=\"/workspace/node_modules\"; \
+             [ ! -d \"$d\" ] && echo missing && exit 0; \
+             if find \"$d\" -mindepth 1 -maxdepth 1 ! -name '.*' | head -n 1 | grep -q .; then \
+               echo nonempty; \
+             else \
+               echo empty; \
+             fi",
+        )
+        .stdout(Stdio::piped())
+        .stderr(if verbose {
+            Stdio::inherit()
+        } else {
+            Stdio::null()
+        });
+    match cmd.output() {
+        Ok(out) => {
+            let s = String::from_utf8_lossy(&out.stdout);
+            let trimmed = s.trim();
+            if trimmed == "missing" || trimmed == "empty" {
+                true
+            } else {
+                false
+            }
+        }
+        Err(e) => {
+            if verbose {
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: warning: failed to inspect node_modules overlay: {}",
+                        e
+                    ),
+                );
+            }
+            false
+        }
+    }
+}
+
+// Helper: create overlay sentinel and run pnpm install inside an existing node sidecar.
+fn ensure_node_overlay_and_install(
+    runtime: &Path,
+    container_name: &str,
+    verbose: bool,
+) -> io::Result<()> {
+    let use_err = crate::color_enabled_stderr();
+    let mut cmd = Command::new(runtime);
+    cmd.arg("exec")
+        .arg(container_name)
+        .arg("sh")
+        .arg("-lc")
+        .arg(
+            "set -e; \
+             d=\"/workspace/node_modules\"; \
+             s=\"/workspace/node_modules/.aifo-node-overlay\"; \
+             lock=\"/workspace/pnpm-lock.yaml\"; \
+             mkdir -p \"$d\"; \
+             if [ -f \"$lock\" ] && command -v pnpm >/dev/null 2>&1; then \
+               echo \"aifo-coder: node sidecar: ensuring node_modules via pnpm install --frozen-lockfile\" >&2; \
+               PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
+             fi; \
+             if [ ! -f \"$s\" ]; then printf '%s\\n' 'overlay' > \"$s\" || true; fi",
+        )
+        .stdout(if verbose {
+            Stdio::inherit()
+        } else {
+            Stdio::null()
+        })
+        .stderr(if verbose {
+            Stdio::inherit()
+        } else {
+            Stdio::null()
+        });
+    let status = cmd.status()?;
+    if !status.success() && verbose {
+        crate::log_warn_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: warning: pnpm bootstrap in node sidecar exited with status {:?}",
+                status.code()
+            ),
+        );
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn build_sidecar_run_preview(
     name: &str,
@@ -914,6 +1009,13 @@ pub fn toolchain_run(
                             status.code()
                         )),
                     )));
+                }
+            }
+            // Node overlay/bootstrap: if node sidecar was just created, ensure per-OS node_modules
+            // overlay is initialized and sentinel is present.
+            if sidecar_kind == "node" {
+                if overlay_empty_or_missing(&runtime, &name, verbose) {
+                    let _ = ensure_node_overlay_and_install(&runtime, &name, verbose);
                 }
             }
         }
