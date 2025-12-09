@@ -522,9 +522,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         if command -v curl >/dev/null 2>&1; then \
             curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
         else \
-            /opt/venv/bin/python - <<PY \
-import urllib.request; open("/tmp/uv.sh","wb").write(urllib.request.urlopen("https://astral.sh/uv/install.sh").read()) \
-PY \
+            /opt/venv/bin/python -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
         fi; \
         sh /tmp/uv.sh; \
         mv /root/.local/bin/uv /usr/local/bin/uv; \
@@ -920,9 +918,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             if command -v curl >/dev/null 2>&1; then \
                 curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
             else \
-                /opt/venv/bin/python - <<PY \
-import urllib.request; open("/tmp/uv.sh","wb").write(urllib.request.urlopen("https://astral.sh/uv/install.sh").read()) \
-PY \
+                /opt/venv/bin/python -c "import urllib.request; open('/tmp/uv.sh','wb').write(urllib.request.urlopen('https://astral.sh/uv/install.sh').read())"; \
             fi; \
             sh /tmp/uv.sh; \
             mv /root/.local/bin/uv /usr/local/bin/uv; \
