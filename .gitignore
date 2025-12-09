@@ -9,6 +9,7 @@
 .buildx-cache
 .DS_Store
 .venv/**
+.pnpm-store/
 aifo-coder.cdx.*
 build/**
 dist
