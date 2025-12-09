@@ -400,6 +400,7 @@ help: banner
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
 	@echo "  node-install ................ Host-side pnpm preflight + pnpm install --frozen-lockfile"
 	@echo "  node-guard .................. Check for npm/yarn installs touching node_modules (pnpm-only guardrail)"
+	@echo "  node-migrate-to-pnpm ........ One-shot migration: npm/yarn → pnpm (removes node_modules + old locks)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
 	@echo "  checksums ................... Generate dist/SHA256SUMS.txt for current artifacts"
@@ -2267,6 +2268,59 @@ node-guard:
 	if [ -d node_modules ] && [ ! -f node_modules/.aifo-node-overlay ]; then \
 	  echo "note: node_modules/ exists without overlay sentinel; ensure it was created via pnpm on this host."; \
 	fi
+
+# One-shot npm/yarn → pnpm migration helper.
+# - Removes node_modules, package-lock.json, yarn.lock (if present)
+# - Ensures .pnpm-store exists with safe permissions
+# - Runs pnpm install --frozen-lockfile using the shared store
+.PHONY: node-migrate-to-pnpm
+node-migrate-to-pnpm:
+	@set -e; \
+	if ! command -v pnpm >/dev/null 2>&1; then \
+	  echo "error: pnpm is required but was not found on PATH."; \
+	  echo "       Install with: npm install -g pnpm@9"; \
+	  exit 1; \
+	fi; \
+	found_any=0; \
+	if [ -f package-lock.json ]; then echo "found: package-lock.json"; found_any=1; fi; \
+	if [ -f yarn.lock ]; then echo "found: yarn.lock"; found_any=1; fi; \
+	if [ -d node_modules ]; then echo "found: node_modules/"; found_any=1; fi; \
+	if [ "$$found_any" -eq 0 ]; then \
+	  echo "No npm/yarn artifacts detected (node_modules, package-lock.json, yarn.lock)."; \
+	  echo "Nothing to migrate."; \
+	  exit 0; \
+	fi; \
+	if [ -z "$$CI" ]; then \
+	  printf "This will REMOVE node_modules/, package-lock.json and yarn.lock (if present), then run pnpm install.\n"; \
+	  printf "Continue? [y/N] "; \
+	  read ans || ans=""; \
+	  case "$$ans" in \
+	    y|Y) ;; \
+	    *) echo "Aborted."; exit 1;; \
+	  esac; \
+	else \
+	  echo "CI mode: migrating to pnpm without interactive prompt."; \
+	fi; \
+	if [ -d node_modules ]; then \
+	  echo "Removing node_modules/ ..."; \
+	  rm -rf node_modules; \
+	fi; \
+	if [ -f package-lock.json ]; then \
+	  echo "Removing package-lock.json ..."; \
+	  rm -f package-lock.json; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "Removing yarn.lock ..."; \
+	  rm -f yarn.lock; \
+	fi; \
+	if [ ! -d ".pnpm-store" ]; then \
+	  echo "Creating .pnpm-store with group-writable permissions ..."; \
+	  mkdir -p .pnpm-store; \
+	  chmod 775 .pnpm-store || true; \
+	fi; \
+	echo "Running pnpm install --frozen-lockfile ..."; \
+	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile; \
+	echo "pnpm migration completed. Commit pnpm-lock.yaml and keep .pnpm-store/ ignored in git."
 
 .PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex rebuild-rust-builder
 rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain
