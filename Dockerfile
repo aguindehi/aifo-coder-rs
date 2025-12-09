@@ -549,6 +549,11 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
           echo "  echo \"mcpm-aider: CLI not installed (expected: \$JS)\""; \
           echo "  exit 127"; \
           echo "fi"; \
+          echo "BASE=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\""; \
+          echo "CLEAN=\"\""; \
+          echo "IFS=':'; for p in \${PATH:-}; do [ \"\$p\" = \"/opt/aifo/bin\" ] && continue; [ -n \"\$p\" ] && CLEAN=\"\${CLEAN:+\$CLEAN:}\$p\"; done; unset IFS"; \
+          echo "export PATH=\"\$BASE\${CLEAN:+:}\$CLEAN\""; \
+          echo "export AIFO_SH_WRAP_DISABLE=1"; \
           echo "exec /usr/local/bin/node \"\$JS\" \"\$@\""; \
         } > /usr/local/bin/mcpm-aider; \
         chmod 0755 /usr/local/bin/mcpm-aider; \
@@ -947,6 +952,11 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
               echo "  echo \"mcpm-aider: CLI not installed (expected: \$JS)\""; \
               echo "  exit 127"; \
               echo "fi"; \
+              echo "BASE=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\""; \
+              echo "CLEAN=\"\""; \
+              echo "IFS=':'; for p in \${PATH:-}; do [ \"\$p\" = \"/opt/aifo/bin\" ] && continue; [ -n \"\$p\" ] && CLEAN=\"\${CLEAN:+\$CLEAN:}\$p\"; done; unset IFS"; \
+              echo "export PATH=\"\$BASE\${CLEAN:+:}\$CLEAN\""; \
+              echo "export AIFO_SH_WRAP_DISABLE=1"; \
               echo "exec /usr/local/bin/node \"\$JS\" \"\$@\""; \
             } > /usr/local/bin/mcpm-aider; \
             chmod 0755 /usr/local/bin/mcpm-aider; \
