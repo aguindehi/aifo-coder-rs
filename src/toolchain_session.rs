@@ -108,10 +108,7 @@ fn maybe_migrate_node_to_pnpm_interactive() {
 
     // Do not run in CI or when non-interactive mode is requested
     if std::env::var("CI").ok().as_deref() == Some("true")
-        || std::env::var("AIFO_CODER_NON_INTERACTIVE")
-            .ok()
-            .as_deref()
-            == Some("1")
+        || std::env::var("AIFO_CODER_NON_INTERACTIVE").ok().as_deref() == Some("1")
     {
         return;
     }
@@ -146,7 +143,8 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     let mut out = io::stderr();
 
     // Explain what will happen (mirrors Makefile semantics)
-    let msg = "aifo-coder: detected npm/yarn artifacts (node_modules, package-lock.json or yarn.lock).\n\
+    let msg =
+        "aifo-coder: detected npm/yarn artifacts (node_modules, package-lock.json or yarn.lock).\n\
 aifo-coder: this repository is pnpm-first.\n\
 aifo-coder: we can migrate your project to pnpm by:\n\
   - Removing node_modules/\n\
@@ -182,7 +180,11 @@ Do you want to perform this one-shot migration now? [y/N] ";
         let _ = writeln!(
             out,
             "{}",
-            aifo_coder::paint(use_err, "\x1b[33m", "aifo-coder: removing node_modules/ ...")
+            aifo_coder::paint(
+                use_err,
+                "\x1b[33m",
+                "aifo-coder: removing node_modules/ ..."
+            )
         );
         let _ = out.flush();
         let _ = std::fs::remove_dir_all(cwd.join("node_modules"));
@@ -241,19 +243,12 @@ Do you want to perform this one-shot migration now? [y/N] ";
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &pnpm_store,
-                std::fs::Permissions::from_mode(0o775),
-            );
+            let _ = std::fs::set_permissions(&pnpm_store, std::fs::Permissions::from_mode(0o775));
         }
     }
 
     let msg_run = "aifo-coder: running 'pnpm install --frozen-lockfile' using .pnpm-store/ ...";
-    let _ = writeln!(
-        out,
-        "{}",
-        aifo_coder::paint(use_err, "\x1b[32m", msg_run)
-    );
+    let _ = writeln!(out, "{}", aifo_coder::paint(use_err, "\x1b[32m", msg_run));
     let _ = out.flush();
 
     let store_path = pnpm_store
@@ -304,10 +299,7 @@ please check the output above.",
                 aifo_coder::paint(
                     use_err,
                     "\x1b[31m",
-                    &format!(
-                        "aifo-coder: warning: failed to run pnpm install: {}",
-                        e
-                    )
+                    &format!("aifo-coder: warning: failed to run pnpm install: {}", e)
                 )
             );
             let _ = out.flush();
