@@ -42,6 +42,29 @@ Node (includes TypeScript)
   - AIFO_NODE_TOOLCHAIN_IMAGE=aifo-coder-toolchain-node:latest
   - AIFO_NODE_TOOLCHAIN_VERSION=22
 
+Node + pnpm migration notes
+- This repository is pnpm-only for Node workloads:
+  - `pnpm-lock.yaml` is the canonical lockfile.
+  - `npm install` / `yarn install` are discouraged; use `pnpm install` or `make node-install`.
+- Migrating an existing project:
+  - Remove any existing `node_modules` and legacy lockfiles:
+    - `rm -rf node_modules package-lock.json yarn.lock`
+  - Run `pnpm install` once to generate `pnpm-lock.yaml`.
+  - Commit `pnpm-lock.yaml` and ensure `.pnpm-store/` is in .gitignore (already configured here).
+- Host workflow:
+  - Run `make node-install` to:
+    - Create `.pnpm-store` with safe permissions when missing.
+    - Warn if `package-lock.json` or `yarn.lock` are present.
+    - Run `pnpm install --frozen-lockfile` using the shared `.pnpm-store`.
+- Container / toolchain workflow:
+  - Use the Node toolchain sidecar:
+    - `./aifo-coder toolchain node -- pnpm test`
+  - The sidecar:
+    - Mounts `<repo>/.pnpm-store` to `/workspace/.pnpm-store`.
+    - Uses `aifo-node-modules:/workspace/node_modules` as a per-OS overlay.
+    - Enforces overlay guardrails and auto-runs `pnpm install --frozen-lockfile` when the overlay
+      is empty or when the `pnpm-lock.yaml` hash changes.
+
 Python
 - Environment:
   - AIFO_PYTHON_TOOLCHAIN_IMAGE
@@ -71,10 +94,13 @@ Node
 - XDG_CACHE_HOME=/home/coder/.cache
 - NPM_CONFIG_CACHE=/home/coder/.cache/npm
 - YARN_CACHE_FOLDER=/home/coder/.cache/yarn
-- PNPM_STORE_PATH=/home/coder/.cache/pnpm-store
 - DENO_DIR=/home/coder/.cache/deno
 - PNPM_HOME=/home/coder/.local/share/pnpm
-- Volume: aifo-node-cache:/home/coder/.cache
+- Shared pnpm store (repo-local): <repo>/.pnpm-store
+- Per-OS node_modules overlay (container): /workspace/node_modules
+- Volumes:
+  - aifo-node-cache:/home/coder/.cache
+  - aifo-node-modules:/workspace/node_modules
 - Legacy volume (purged for back-compat): aifo-npm-cache
 
 Rust
