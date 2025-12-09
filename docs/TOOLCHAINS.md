@@ -13,6 +13,7 @@ Key environment variables for the Rust toolchain include:
 - `CARGO_HOME=/home/coder/.cargo`
 - `RUSTUP_HOME=/home/coder/.rustup`
 - `RUST_BACKTRACE=1` (default; can be overridden)
+- `SCCACHE_DIR=/home/coder/.cache/sccache` (when sccache is enabled for Rust builds)
 
 ## Node toolchain: pnpm, shared store, and per-OS node_modules
 
