@@ -15,6 +15,12 @@ Key environment variables for the Rust toolchain include:
 - `RUST_BACKTRACE=1` (default; can be overridden)
 - `SCCACHE_DIR=/home/coder/.cache/sccache` (when sccache is enabled for Rust builds)
 
+Image override environment for Rust:
+
+- `AIFO_RUST_TOOLCHAIN_IMAGE` – override the Rust toolchain sidecar image (full ref).
+- `AIFO_RUST_TOOLCHAIN_VERSION` – logical Rust version that maps to a default sidecar tag.
+- `AIFO_RUST_TOOLCHAIN_USE_OFFICIAL=1` – force official `rust:<ver>` images where supported.
+
 ## Node toolchain: pnpm, shared store, and per-OS node_modules
 
 The Node sidecar is designed to support pnpm with:
