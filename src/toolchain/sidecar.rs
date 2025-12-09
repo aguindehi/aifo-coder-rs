@@ -321,8 +321,7 @@ pub fn build_sidecar_run_preview_with_overrides(
             // This matches the pnpm plan: per-OS node_modules overlay, shared content-addressable store.
             push_mount(&mut args, "/workspace/.pnpm-store:/workspace/.pnpm-store");
             // Per-OS node_modules overlay: keep host and container installs isolated.
-            // The orchestrator/toolchain image is expected to mount a dedicated volume at this path.
-            // For test previews and best-effort safety, we still add an explicit mount when not provided.
+            // The orchestrator/toolchain plan expects a dedicated volume at this path.
             push_mount(&mut args, "aifo-node-modules:/workspace/node_modules");
 
             // Cache envs for Node ecosystem tools
