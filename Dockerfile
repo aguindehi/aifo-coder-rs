@@ -534,7 +534,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
           echo '#!/bin/sh'; \
           echo 'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"'; \
           echo 'if [ ! -f "$JS" ]; then'; \
-          echo '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2'; \
+          echo '  echo "mcpm-aider: CLI not installed (expected: $JS)"'; \
           echo '  exit 127'; \
           echo 'fi'; \
           echo 'exec /usr/local/bin/node "$JS" "$@"'; \
@@ -932,7 +932,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
               echo '#!/bin/sh'; \
               echo 'JS="/usr/local/lib/node_modules/@poai/mcpm-aider/bin/index.js"'; \
               echo 'if [ ! -f "$JS" ]; then'; \
-              echo '  echo "mcpm-aider: CLI not installed (expected: $JS)" >&2'; \
+              echo '  echo "mcpm-aider: CLI not installed (expected: $JS)"'; \
               echo '  exit 127'; \
               echo 'fi'; \
               echo 'exec /usr/local/bin/node "$JS" "$@"'; \
