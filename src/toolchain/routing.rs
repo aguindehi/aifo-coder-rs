@@ -68,6 +68,8 @@ const ALLOW_PYTHON: &[&str] = &[
     "python3",
     "pip",
     "pip3",
+    "uv",
+    "uvx",
     "make",
     "cmake",
     "ninja",
@@ -127,8 +129,8 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
         "cargo" | "rustc" => "rust",
         // node/typescript and related managers
         "node" | "npm" | "npx" | "yarn" | "pnpm" | "deno" | "bun" | "tsc" | "ts-node" => "node",
-        // python
-        "python" | "python3" | "pip" | "pip3" => "python",
+        // python and uv/uvx tools
+        "python" | "python3" | "pip" | "pip3" | "uv" | "uvx" => "python",
         // c/c++
         "gcc" | "g++" | "clang" | "clang++" | "make" | "cmake" | "ninja" | "pkg-config" => "c-cpp",
         // go

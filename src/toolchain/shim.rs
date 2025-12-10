@@ -40,6 +40,8 @@ const SHIM_TOOLS: &[&str] = &[
     "go",
     "gofmt",
     "say",
+    "uv",
+    "uvx",
 ];
 
 /// Expose shim tool list for tests and image checks.

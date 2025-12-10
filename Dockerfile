@@ -333,6 +333,7 @@ RUN chmod +x /usr/local/bin/aifo-entrypoint
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -394,6 +395,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
+    if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
     mkdir -p /opt/venv/.build-info; \
@@ -538,6 +540,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         fi; \
         sh /tmp/uv.sh; \
         mv /root/.local/bin/uv /usr/local/bin/uv; \
+        if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
@@ -597,6 +600,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
+  if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
   install -d -m 0755 /opt/uv-home; \
   # Ensure a stable Python toolchain (3.12) to avoid building packages from source under 3.14 \
   HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
@@ -740,6 +744,7 @@ RUN sh -lc 'set -e; \
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -796,6 +801,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
+    if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
     mkdir -p /opt/venv/.build-info; \
@@ -941,6 +947,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             fi; \
             sh /tmp/uv.sh; \
             mv /root/.local/bin/uv /usr/local/bin/uv; \
+            if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
@@ -1000,6 +1007,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
+  if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
   install -d -m 0755 /opt/uv-home; \
   HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
   VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \
