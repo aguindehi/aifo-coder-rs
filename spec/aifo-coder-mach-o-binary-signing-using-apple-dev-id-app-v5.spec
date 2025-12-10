@@ -181,16 +181,16 @@ Relationship to existing targets:
 2.3 New local-only signing/packaging targets (Darwin-only for signing/notarization)
 We add three new targets plus one aggregate, all Darwin-guarded:
 
-- sign-macos-binaries
-- zip-macos-binaries
-- notarize-macos-binary-zips
+- release-macos-binaries-sign
+- release-macos-binaries-zips
+- release-macos-binaries-zips-notarize
 - release-macos-binary-signed (aggregate)
 
 These targets:
 - Operate on dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64.
 - Do NOT build binaries themselves; they assume normalize-macos-binaries-local and/or osxcross-based builds have populated dist/.
 
-2.3.1 sign-macos-binaries (Darwin-only)
+2.3.1 release-macos-binaries-sign (Darwin-only)
 Purpose:
 - Sign dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64 inplace using SIGN_IDENTITY.
 
@@ -262,7 +262,7 @@ Outcome:
   - Binaries are signed with hardened runtime and ready for notarization.
   - Misconfiguration causes a clear error (no ad-hoc).
 
-2.3.2 zip-macos-binaries (platform-independent)
+2.3.2 release-macos-binaries-zips (platform-independent)
 Purpose:
 - Create per-arch .zip archives containing signed binaries and documentation.
 
@@ -292,7 +292,7 @@ Behavior:
   - Do not rebuild binaries.
   - Do not require both arches; handle whichever exist.
 
-2.3.3 notarize-macos-binary-zips (Darwin-only, optional)
+2.3.3 release-macos-binaries-zips-notarize (Darwin-only, optional)
 Purpose:
 - Notarize the per-arch zips and staple tickets.
 
@@ -343,9 +343,9 @@ Behavior:
 - Sequence:
   - make build-launcher        # builds native macOS binary for host arch (arm64 or x86_64).
   - make normalize-macos-binaries-local
-  - make sign-macos-binaries
-  - make zip-macos-binaries
-  - make notarize-macos-binary-zips
+  - make release-macos-binaries-sign
+  - make release-macos-binaries-zips
+  - make release-macos-binaries-zips-notarize
 - Notes:
   - If developer wants both arches:
     - They can separately build both (e.g. via osxcross on Linux or on macOS with appropriate toolchains) and copy/normalize before signing.
@@ -403,9 +403,9 @@ Steps:
 2) Pipeline:
    - build-launcher (host arch).
    - normalize-macos-binaries-local.
-   - sign-macos-binaries (with hardened runtime).
-   - zip-macos-binaries.
-   - notarize-macos-binary-zips.
+   - release-macos-binaries-sign (with hardened runtime).
+   - release-macos-binaries-zips.
+   - release-macos-binaries-zips-notarize.
 
 Result:
 - dist/aifo-coder-macos-<arch>       (signed, notarized or at least notarizable).
@@ -534,7 +534,7 @@ Phase 6 – Developer checklist and troubleshooting
 
 6.2 Common issues
 - “code object is not signed at all”:
-  - Run make sign-macos-binaries and verify with codesign.
+  - Run make release-macos-binaries-sign and verify with codesign.
 - “codesign: invalid signature” or “resource fork, Finder info, or similar detritus not allowed”:
   - Apply xattr -cr before signing and zipping.
 - “notarytool: error ... invalid signature”:
@@ -548,9 +548,9 @@ Phase 6 – Developer checklist and troubleshooting
 - On macOS:
   - make build-launcher
   - make normalize-macos-binaries-local
-  - make sign-macos-binaries
-  - make zip-macos-binaries
-  - Optionally: make notarize-macos-binary-zips
+  - make release-macos-binaries-sign
+  - make release-macos-binaries-zips
+  - Optionally: make release-macos-binaries-zips-notarize
 - Validate:
   - codesign --verify --deep --strict --verbose=4 dist/aifo-coder-macos-*
   - xcrun stapler validate dist/aifo-coder-macos-*.zip || true
