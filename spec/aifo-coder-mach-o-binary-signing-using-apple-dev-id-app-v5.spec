@@ -176,7 +176,7 @@ Relationship to existing targets:
   - or:
     - directly run release-app/release-dmg-sign for DMG, plus normalize for raw binaries.
 - On Linux:
-  - normalize-macos-binaries-local is not intended to run; signing/notarization is macOS-only.
+  - release-macos-binaries-normalize-local is not intended to run; signing/notarization is macOS-only.
 
 2.3 New local-only signing/packaging targets (Darwin-only for signing/notarization)
 We add three new targets plus one aggregate, all Darwin-guarded:
