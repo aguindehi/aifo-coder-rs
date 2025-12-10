@@ -13,7 +13,7 @@ wire_api = "responses"
 [profiles.gpt-5]
 model_provider = "azure"
 model = "gpt-5.1"
-model_context_window = 270000
+model_context_window = 272000
 model_max_output_tokens = 128000
 model_verbosity = "low"
 
@@ -21,8 +21,12 @@ model_verbosity = "low"
 model_provider = "azure"
 model = "gpt-5.1"
 model_reasoning_effort = "high"
-model_context_window = 270000
+model_context_window = 272000
 model_max_output_tokens = 128000
 
 [features]
-web_search_request = true
+web_search_request = false
+
+[notice]
+hide_gpt5_1_migration_prompt = true
+"hide_gpt-5.1-codex-max_migration_prompt" = true
