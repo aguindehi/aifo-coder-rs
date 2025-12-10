@@ -106,7 +106,7 @@ pub(crate) fn init_rust_named_volumes_if_needed(
 ///// Best-effort ownership initialization for the consolidated Node cache volume.
 ///// Runs a short helper container that ensures /home/coder/.cache exists, chowns to uid:gid,
 ///// and stamps the directory to avoid repeated work.
-pub(crate) fn init_node_cache_volume(
+fn init_node_cache_volume(
     runtime: &Path,
     image: &str,
     uid: u32,
@@ -247,10 +247,10 @@ pub(crate) fn ensure_pnpm_store_host_writable(
     }
 }
 
-/// Best-effort ownership initialization for the consolidated Node cache volume.
-/// Runs a short helper container that ensures /home/coder/.cache exists, chowns to uid:gid,
-/// and stamps the directory to avoid repeated work.
-pub(crate) fn init_node_cache_volume(
+///// Best-effort ownership initialization for the consolidated Node cache volume.
+///// Runs a short helper container that ensures /home/coder/.cache exists, chowns to uid:gid,
+///// and stamps the directory to avoid repeated work.
+pub(crate) fn init_node_cache_volume_if_needed(
     runtime: &Path,
     image: &str,
     run_args: &[String],
