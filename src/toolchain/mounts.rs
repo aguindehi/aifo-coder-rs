@@ -201,13 +201,20 @@ pub(crate) fn ensure_pnpm_store_host_writable(
 
     #[cfg(unix)]
     if let Some((uid, gid)) = uidgid {
-        use std::os::unix::fs::PermissionsExt;
         use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
         if let Ok(meta) = std::fs::metadata(&dir) {
             if meta.uid() != uid || meta.gid() != gid {
                 // Best-effort recursive chown; fall back silently on error.
-                let _ = nix::unistd::chown(&dir, Some(nix::unistd::Uid::from_raw(uid)), Some(nix::unistd::Gid::from_raw(gid)));
-                if let Ok(iter) = walkdir::WalkDir::new(&dir).into_iter().collect::<Result<Vec<_>, _>>() {
+                let _ = nix::unistd::chown(
+                    &dir,
+                    Some(nix::unistd::Uid::from_raw(uid)),
+                    Some(nix::unistd::Gid::from_raw(gid)),
+                );
+                if let Ok(iter) = walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()
+                {
                     for entry in iter {
                         let _ = nix::unistd::chown(
                             entry.path(),
@@ -223,7 +230,8 @@ pub(crate) fn ensure_pnpm_store_host_writable(
         if let Ok(meta) = std::fs::metadata(&dir) {
             let mode = meta.permissions().mode() & 0o777;
             if mode & 0o20 == 0 {
-                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode | 0o20));
+                let _ =
+                    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode | 0o20));
             }
         }
     }
@@ -272,13 +280,7 @@ pub(crate) fn init_node_cache_volume(
 /// Best-effort ownership initialization for the node_modules overlay volume.
 /// Ensures /workspace/node_modules exists, is owned by uid:gid, and is stamped
 /// to avoid repeated work.
-fn init_node_modules_volume(
-    runtime: &Path,
-    image: &str,
-    uid: u32,
-    gid: u32,
-    verbose: bool,
-) {
+fn init_node_modules_volume(runtime: &Path, image: &str, uid: u32, gid: u32, verbose: bool) {
     let use_err = crate::color_enabled_stderr();
     let mount = "aifo-node-modules:/workspace/node_modules".to_string();
     let script = format!(
