@@ -149,7 +149,7 @@ Phase 2 – Makefile extensions (normalize + local signing/zipping)
 Goal:
 - Use the binaries already produced by existing targets (`build-launcher` or osxcross) and standardize the signing inputs.
 
-New target: normalize-macos-binaries-local (Darwin-only)
+New target: release-macos-binaries-normalize-local (Darwin-only)
 - Behavior:
   - Only runs on macOS (uname -s == Darwin); otherwise print message and exit 1.
   - Checks for existing local macOS binaries in target/:
@@ -172,7 +172,7 @@ Relationship to existing targets:
 - On macOS:
   - Developer runs:
     - make build-launcher
-    - make normalize-macos-binaries-local
+    - make release-macos-binaries-normalize-local
   - or:
     - directly run release-app/release-dmg-sign for DMG, plus normalize for raw binaries.
 - On Linux:
@@ -202,7 +202,7 @@ Behavior:
     - At least one of dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64 to exist.
   - If both are missing:
     - Error out and suggest running:
-      - make build-launcher (on macOS) and normalize-macos-binaries-local
+      - make build-launcher (on macOS) and release-macos-binaries-normalize-local
       - or using osxcross and copying into dist/.
 - Extended attributes:
   - xattr -cr dist/aifo-coder-macos-arm64  || true
@@ -342,7 +342,7 @@ Behavior:
   - If uname -s != Darwin: print message and exit 1.
 - Sequence:
   - make build-launcher        # builds native macOS binary for host arch (arm64 or x86_64).
-  - make normalize-macos-binaries-local
+  - make release-macos-binaries-normalize-local
   - make release-macos-binaries-sign
   - make release-macos-binaries-zips
   - make release-macos-binaries-zips-notarize
@@ -402,7 +402,7 @@ Steps:
    - make release-macos-binary-signed
 2) Pipeline:
    - build-launcher (host arch).
-   - normalize-macos-binaries-local.
+   - release-macos-binaries-normalize-local.
    - release-macos-binaries-sign (with hardened runtime).
    - release-macos-binaries-zips.
    - release-macos-binaries-zips-notarize.
@@ -547,7 +547,7 @@ Phase 6 – Developer checklist and troubleshooting
 6.3 Local regression testing
 - On macOS:
   - make build-launcher
-  - make normalize-macos-binaries-local
+  - make release-macos-binaries-normalize-local
   - make release-macos-binaries-sign
   - make release-macos-binaries-zips
   - Optionally: make release-macos-binaries-zips-notarize
