@@ -980,9 +980,24 @@ pub fn toolchain_run(
                 verbose,
             );
         }
-        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        // Ensure host .pnpm-store exists and is writable for node sidecar
+        if sidecar_kind == "node" {
+            super::mounts::ensure_pnpm_store_host_writable(
+                &pwd,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
+        // Phase 5: initialize node cache and node_modules overlay volumes ownership (best-effort)
         if sidecar_kind == "node" && !no_cache {
             init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &run_preview_args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+            super::mounts::init_node_modules_volume_if_needed(
                 &runtime,
                 &image,
                 &run_preview_args,
@@ -1203,9 +1218,24 @@ pub fn toolchain_start_session(
                 &format!("aifo-coder: docker: {}", shell_join(&args)),
             );
         }
-        // Phase 5: initialize node cache volume ownership (best-effort) before starting sidecar
+        // Ensure host .pnpm-store exists and is writable for node session sidecar
+        if kind == "node" {
+            super::mounts::ensure_pnpm_store_host_writable(
+                &pwd,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+        }
+        // Phase 5: initialize node cache and node_modules overlay volumes ownership (best-effort)
         if kind == "node" && !no_cache {
             init_node_cache_volume_if_needed(
+                &runtime,
+                &image,
+                &args,
+                if cfg!(unix) { Some((uid, gid)) } else { None },
+                verbose,
+            );
+            super::mounts::init_node_modules_volume_if_needed(
                 &runtime,
                 &image,
                 &args,
