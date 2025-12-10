@@ -785,6 +785,7 @@ ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
