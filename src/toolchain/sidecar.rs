@@ -319,7 +319,11 @@ pub fn build_sidecar_run_preview_with_overrides(
             }
             // Shared pnpm store inside /workspace so host/container can reuse it across installs.
             // This matches the pnpm plan: per-OS node_modules overlay, shared content-addressable store.
-            push_mount(&mut args, "/workspace/.pnpm-store:/workspace/.pnpm-store");
+            let store_host = pwd.join(".pnpm-store");
+            push_mount(
+                &mut args,
+                &format!("{}:/workspace/.pnpm-store", store_host.display()),
+            );
             // Per-OS node_modules overlay: keep host and container installs isolated.
             // The orchestrator/toolchain plan expects a dedicated volume at this path.
             push_mount(&mut args, "aifo-node-modules:/workspace/node_modules");
