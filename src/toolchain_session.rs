@@ -319,6 +319,7 @@ Do you want to perform this one-shot migration now? [y/N] ",
                     "aifo-coder: pnpm migration completed successfully."
                 )
             );
+            let _ = writeln!(out);
             let _ = out.flush();
         }
         Ok(s) => {
