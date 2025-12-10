@@ -106,13 +106,7 @@ pub(crate) fn init_rust_named_volumes_if_needed(
 ///// Best-effort ownership initialization for the consolidated Node cache volume.
 ///// Runs a short helper container that ensures /home/coder/.cache exists, chowns to uid:gid,
 ///// and stamps the directory to avoid repeated work.
-fn init_node_cache_volume(
-    runtime: &Path,
-    image: &str,
-    uid: u32,
-    gid: u32,
-    verbose: bool,
-) {
+fn init_node_cache_volume(runtime: &Path, image: &str, uid: u32, gid: u32, verbose: bool) {
     let use_err = crate::color_enabled_stderr();
     let mount = "aifo-node-cache:/home/coder/.cache".to_string();
     let script = format!(
