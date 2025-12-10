@@ -174,6 +174,12 @@ mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true
 # Ensure a private runtime dir for gpg-agent sockets if system one is unavailable
 if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi
 mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true
+# Ensure writable HOME subtrees for arbitrary uid (uv/uvx, pnpm, etc.)
+for d in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
+         "$HOME/.local/share/uv" "$HOME/.local/share/pnpm"; do
+  install -d -m 0777 "$d" >/dev/null 2>&1 || true
+  chmod 0777 "$d" >/dev/null 2>&1 || true
+done
 # Copy keyrings from mounted host dir if present and not already in place
 if [ -d "$HOME/.gnupg-host" ]; then
   for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do
