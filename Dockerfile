@@ -167,7 +167,7 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   cat >/usr/local/bin/aifo-entrypoint <<'SH'
 #!/bin/sh
 set -e
-if [ -z "$HOME" ]; then export HOME="/home/coder"; fi
+if [ -z "$HOME" ] || [ "$HOME" = "/" ] || [ ! -w "$HOME" ]; then export HOME="/home/coder"; fi
 if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi
 if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi
 mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true
