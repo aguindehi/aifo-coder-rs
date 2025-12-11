@@ -107,10 +107,7 @@ fi
         if let Some((uid, gid)) = uidgid {
             cmd.arg("-u").arg(format!("{uid}:{gid}"));
         }
-        cmd.arg(image)
-            .arg("sh")
-            .arg("-lc")
-            .arg(script);
+        cmd.arg(image).arg("sh").arg("-lc").arg(script);
 
         match cmd.output() {
             Ok(out) => {
@@ -127,8 +124,7 @@ fi
     }
 
     fn img(agent: &str) -> String {
-        let prefix =
-            std::env::var("IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
+        let prefix = std::env::var("IMAGE_PREFIX").unwrap_or_else(|_| "aifo-coder".to_string());
         let tag = std::env::var("TAG").unwrap_or_else(|_| "latest".to_string());
         format!("{prefix}-{agent}:{tag}")
     }
@@ -146,8 +142,7 @@ fi
         assert!(
             ok,
             "HOME subtree writability failed for image: {}\n{}",
-            image,
-            out
+            image, out
         );
     }
 
