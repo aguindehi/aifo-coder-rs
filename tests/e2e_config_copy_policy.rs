@@ -8,7 +8,6 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::{thread, time::Duration};
 use tempfile::Builder;
 
 fn image_for_aider() -> Option<String> {

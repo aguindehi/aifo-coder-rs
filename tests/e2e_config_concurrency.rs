@@ -6,7 +6,6 @@ mod support;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::{thread, time::Duration};
 use tempfile::Builder;
 
 fn image_for_aider() -> Option<String> {
@@ -37,6 +36,10 @@ fn image_exists(runtime: &PathBuf, image: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn docker() -> Option<PathBuf> {
+    support::docker_runtime()
 }
 
 fn run_detached_sleep_container(
@@ -124,8 +127,8 @@ fn e2e_config_concurrent_isolation() {
     // Wait for config readiness in container 1
     let mut ready1 = support::wait_for_config_copied(runtime.as_path(), &name1);
     if !ready1 {
-        let _ = exec_sh(
-            &runtime,
+        let _ = support::docker_exec_sh(
+            runtime.as_path(),
             &name1,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
@@ -136,8 +139,8 @@ fn e2e_config_concurrent_isolation() {
     // Wait for config readiness in container 2
     let mut ready2 = support::wait_for_config_copied(runtime.as_path(), &name2);
     if !ready2 {
-        let _ = exec_sh(
-            &runtime,
+        let _ = support::docker_exec_sh(
+            runtime.as_path(),
             &name2,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
