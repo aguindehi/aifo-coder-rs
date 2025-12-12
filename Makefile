@@ -209,9 +209,19 @@ RELEASE_POSTFIX ?=
 
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
-# If HEAD is exactly at a tag, prefer the tag name for zip versioning (avoids collisions in releases).
-# Fallback: Cargo.toml version (or git describe fallback already used by VERSION).
-MACOS_ZIP_VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo $(VERSION))
+
+# Effective release tag used for publishing (matches publish-release defaulting behavior).
+# If TAG is explicitly overridden, it wins. Otherwise derive from Cargo.toml version.
+RELEASE_TAG_EFFECTIVE := $(if \
+  $(filter command% environment override,$(origin TAG)), \
+  $(TAG), \
+  $(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),) \
+)
+
+# Version string embedded into signed macOS zip names.
+# Defaults to RELEASE_TAG_EFFECTIVE so artifacts match GitLab tag names like "release-0.6.6".
+MACOS_ZIP_VERSION ?= $(RELEASE_TAG_EFFECTIVE)
+
 MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
 MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
 
@@ -525,7 +535,9 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-release ............. Release wrapper: use defaults (multi-arch, push, tags, cargo version) then run publish"
+	@echo "  publish-release ............. Release wrapper: derive TAG from Cargo.toml (release-<version>), then run publish"
+	@echo "  publish-release-macos-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish signed macOS zips"
+	@echo "                                Requires GITLAB_API_TOKEN; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
 	@echo ""
 	@echo "                                Single-arch CI pushes are tagged with -linux-<arch> suffix to avoid colliding with multi-arch release tags."
 	@echo "                                Multi-arch releases keep clean tags. Override behavior with ADD_ARCH_IN_TAG=0 or 1"
@@ -1660,6 +1672,18 @@ publish-release:
 	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
+
+.PHONY: publish-release-macos-signed
+publish-release-macos-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
+	echo "Publishing signed macOS zips for $(RELEASE_TAG_EFFECTIVE) ..."; \
+	$(MAKE) release-macos-binary-signed; \
+	$(MAKE) publish-macos-signed-zips-local; \
+	echo "Done. Create/push the git tag '\''$(RELEASE_TAG_EFFECTIVE)'\'' to trigger CI release + link attachment."; \
+	'
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
@@ -3476,12 +3500,7 @@ publish-macos-signed-zips-local:
 	  echo "Error: failed to resolve project id via GitLab API for $$PROJ (host $$HOST)." >&2; \
 	  exit 1; \
 	fi; \
-	TAG="$$(git describe --tags --exact-match 2>/dev/null || true)"; \
-	if [ -z "$$TAG" ]; then \
-	  echo "Error: HEAD is not at an exact tag; refusing to upload to tag registry path." >&2; \
-	  echo "Hint: checkout the release tag (e.g. git checkout vX.Y.Z) and retry." >&2; \
-	  exit 1; \
-	fi; \
+	UPLOAD_TAG="$(RELEASE_TAG_EFFECTIVE)"; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
 	X86="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
@@ -3489,7 +3508,7 @@ publish-macos-signed-zips-local:
 	  echo "Hint: run '\''make release-macos-binary-signed'\'' first." >&2; \
 	  exit 1; \
 	fi; \
-	BASE="$$API_V4/projects/$$PID/packages/generic/$(BIN_NAME)/$$TAG"; \
+	BASE="$$API_V4/projects/$$PID/packages/generic/$(BIN_NAME)/$$UPLOAD_TAG"; \
 	echo "Uploading to: $$BASE"; \
 	up() { \
 	  f="$$1"; \
