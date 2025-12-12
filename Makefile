@@ -3475,6 +3475,7 @@ release-macos-binary-signed:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-binary-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
+	$(MAKE) release-for-mac; \
 	$(MAKE) build-launcher; \
 	$(MAKE) release-macos-binaries-normalize-local; \
 	$(MAKE) release-macos-binaries-sign; \
