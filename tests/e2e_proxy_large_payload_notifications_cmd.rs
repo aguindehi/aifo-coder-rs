@@ -83,9 +83,13 @@ fn e2e_proxy_handles_large_payload_notifications_cmd() {
             Err(_) => break,
         }
     }
+    // Large form bodies should be rejected safely. With the current hardening, the proxy can
+    // respond 400 (bad request) due to per-field caps even if the overall body cap allows it.
     assert!(
-        resp.starts_with("HTTP/1.1 403") || resp.starts_with("HTTP/1.1 200"),
-        "expected a valid HTTP response (403 or 200), got:\n{}",
+        resp.starts_with("HTTP/1.1 400")
+            || resp.starts_with("HTTP/1.1 403")
+            || resp.starts_with("HTTP/1.1 200"),
+        "expected a valid HTTP response (400/403/200), got:\n{}",
         resp
     );
 
