@@ -158,6 +158,11 @@ export DOCKER_BUILDKIT ?= 1
 RELEASE_PREFIX ?= release
 RELEASE_POSTFIX ?=
 
+# Optional local developer overrides (not committed): load .env if present.
+# Typical use: RELEASE_ASSETS_API_TOKEN, SIGN_IDENTITY, NOTARY_PROFILE.
+-include .env
+export RELEASE_ASSETS_API_TOKEN
+
 # -----------------------------------------------------------------------------
 # macOS binary signing / notarization (local-only) – prerequisites & invariants
 # -----------------------------------------------------------------------------
@@ -185,8 +190,9 @@ RELEASE_POSTFIX ?=
 #   flows fall back to ad-hoc signing for local testing.
 # - NOTARY_PROFILE: xcrun notarytool keychain profile. If empty/unset, notarize
 #   steps are a no-op with clear logging and exit 0.
-# - GITLAB_API_TOKEN: token used by publish-macos-signed-zips-local to upload
-#   signed zips to the GitLab Generic Package Registry.
+# - RELEASE_ASSETS_API_TOKEN: local token (typically provided via .env) used by
+#   publish-macos-signed-zips-local to upload signed zips to the GitLab Generic
+#   Package Registry.
 #
 # Platform constraints:
 # - codesign/notarytool/stapler operations are macOS-only (Darwin). Any target
@@ -537,7 +543,7 @@ help: banner
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-release ............. Release wrapper: derive TAG from Cargo.toml (release-<version>), then run publish"
 	@echo "  publish-release-macos-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish signed macOS zips"
-	@echo "                                Requires GITLAB_API_TOKEN; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
+	@echo "                                Requires RELEASE_ASSETS_API_TOKEN (typically from .env); uses SIGN_IDENTITY and optional NOTARY_PROFILE."
 	@echo ""
 	@echo "                                Single-arch CI pushes are tagged with -linux-<arch> suffix to avoid colliding with multi-arch release tags."
 	@echo "                                Multi-arch releases keep clean tags. Override behavior with ADD_ARCH_IN_TAG=0 or 1"
@@ -1679,6 +1685,11 @@ publish-release-macos-signed:
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
+	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required to upload signed macOS zips." >&2; \
+	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
+	  exit 1; \
+	fi; \
 	echo "Publishing signed macOS zips for $(RELEASE_TAG_EFFECTIVE) ..."; \
 	$(MAKE) release-macos-binary-signed; \
 	$(MAKE) publish-macos-signed-zips-local; \
@@ -3476,8 +3487,9 @@ publish-macos-signed-zips-local:
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
-	if [ -z "$${GITLAB_API_TOKEN:-}" ]; then \
-	  echo "Error: GITLAB_API_TOKEN is required to upload to GitLab Package Registry." >&2; \
+	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload to GitLab Package Registry." >&2; \
+	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
 	ORIGIN="$$(git remote -v | grep -E '\''^origin[[:space:]]'\'' | head -n1 | awk '\''{print $$2}'\'')"; \
@@ -3494,7 +3506,7 @@ publish-macos-signed-zips-local:
 	fi; \
 	API_V4="https://$$HOST/api/v4"; \
 	PROJ_ENC="$$(printf "%s" "$$PROJ" | sed '\''s#/#%2F#g'\'')"; \
-	PID="$$(curl -sS -H "PRIVATE-TOKEN: $$GITLAB_API_TOKEN" "$$API_V4/projects/$$PROJ_ENC" \
+	PID="$$(curl -sS -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$API_V4/projects/$$PROJ_ENC" \
 	  | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' | head -n1)"; \
 	if [ -z "$$PID" ]; then \
 	  echo "Error: failed to resolve project id via GitLab API for $$PROJ (host $$HOST)." >&2; \
@@ -3516,7 +3528,7 @@ publish-macos-signed-zips-local:
 	  name="$$(basename "$$f")"; \
 	  url="$$BASE/$$name"; \
 	  echo "Uploading $$f -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$GITLAB_API_TOKEN" --upload-file "$$f" "$$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$f" "$$url"; \
 	}; \
 	up "$$ARM"; \
 	up "$$X86"; \
