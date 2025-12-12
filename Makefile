@@ -3118,7 +3118,7 @@ release-for-target:
 	fi
 
 release-for-mac:
-	@$(MAKE) RELEASE_TARGETS=aarch64-apple-darwin release-for-target
+	@$(MAKE) RELEASE_TARGETS=aarch64-apple-darwin
 
 release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
