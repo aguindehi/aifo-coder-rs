@@ -3358,6 +3358,7 @@ EOF \
 # then rebuilds the DMG so it contains the signed app, then signs the DMG.
 release-dmg-sign: release-app
 	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_DARWIN); \
 	APP="$(APP_NAME)"; \
 	BIN="$(BIN_NAME)"; \
 	DIST="$(DIST_DIR)"; \
@@ -3369,120 +3370,76 @@ release-dmg-sign: release-app
 	if [ ! -d "$$APPROOT" ]; then echo "Error: app bundle not found at $$APPROOT. Run '"'"'make release-app'"'"' first." >&2; exit 1; fi; \
 	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)"; exit 1; }; \
 	command -v codesign >/dev/null 2>&1 || { echo "Error: codesign tool not found (Xcode Command Line Tools)"; exit 1; }; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	SIGN_IDENTITY="$$SIGN_ID_NAME"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	$(MACOS_SET_SIGN_FLAGS); \
 	echo "Using signing identity name: $$SIGN_ID_NAME"; \
-	echo "Keychains (user):"; security list-keychains -d user || true; \
 	echo "Default keychain (user):"; security default-keychain -d user || true; \
-	echo "Available code signing identities (may be empty for self-signed certs):"; \
-	security find-identity -p codesigning -v || true; \
-	echo "Available identities (basic listing, may include self-signed):"; \
-	security find-identity -p basic -v || true; \
-	echo "Searching for certificate by common name (including self-signed/untrusted):"; \
-	security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | sed -n "1,12p" || true; \
-	CERT_MATCH_COUNT="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | grep -c "^SHA-1 hash:" || true)"; \
-	if [ "$$CERT_MATCH_COUNT" -eq 0 ]; then \
-	  echo "Error: No certificate with common name $$SIGN_ID_NAME found in your keychains." >&2; \
-	  echo "Hint: Ensure the certificate AND its private key are in the login keychain and unlocked, or override SIGN_IDENTITY." >&2; \
-	  exit 1; \
-	fi; \
-	KEYCHAIN="$$(security default-keychain -d user | sed -e "s/[ \"]//g")"; \
-	echo "Default keychain (path): $${KEYCHAIN:-unknown}"; \
-	SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
-	if [ -n "$$SIG_SHA1" ]; then \
-	  echo "Found certificate SHA-1: $$SIG_SHA1"; \
+	echo "Available code signing identities (codesigning):"; security find-identity -p codesigning -v || true; \
+	echo "Certificate lookup (first match):"; security find-certificate -a -c "$$SIGN_ID_NAME" -Z --keychain "$$KEYCHAIN" 2>/dev/null | sed -n "1,12p" || true; \
+	if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	  echo "Detected Apple Developer identity; ad-hoc fallback is disabled."; \
 	else \
-	  echo "Warning: Could not extract SHA-1 hash from certificate lookup."; \
-	fi; \
-	APPLE_DEV=0; \
-	if command -v openssl >/dev/null 2>&1; then \
-	  SUBJ="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -p 2>/dev/null | openssl x509 -noout -subject 2>/dev/null | head -n1)"; \
-	  echo "Certificate subject: $${SUBJ:-unknown}"; \
-	  case "$$SUBJ" in *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; esac; \
-	fi; \
-	if [ "$$APPLE_DEV" -eq 1 ]; then \
-	  SIGN_FLAGS="--force --verbose=4 --options runtime --timestamp"; \
-	  echo "Using hardened runtime signing flags (Apple Developer identity detected)."; \
-	else \
-	  SIGN_FLAGS="--force --verbose=4"; \
-	  echo "Using basic signing flags (self-signed or non-Apple certificate)."; \
+	  echo "Using non-Apple/local identity; ad-hoc fallback may be used if codesign fails."; \
 	fi; \
 	BIN_EXEC="$$APPROOT/Contents/MacOS/$$BIN"; \
 	if [ ! -x "$$BIN_EXEC" ]; then echo "Error: app executable not found at $$BIN_EXEC" >&2; exit 1; fi; \
 	echo "Clearing extended attributes on app bundle (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$APPROOT" || true; fi; \
 	echo "Signing inner executable: $$BIN_EXEC"; \
-	if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with identity name (no explicit keychain)."; \
-	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for inner executable; falling back to ad-hoc." >&2; \
-	  if codesign $$SIGN_FLAGS -s - "$$BIN_EXEC"; then \
-	    echo "Ad-hoc signed inner executable (no identity)."; \
-	  else \
-	    echo "codesign inner executable failed" >&2; exit 1; \
-	  fi; \
-	fi; \
+	$(MACOS_SIGN_ONE_BINARY); \
 	echo "Signing app bundle: $$APPROOT"; \
-	echo "Use --deep to ensure nested components are signed if present" >/dev/null; \
-	if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS --deep -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with identity name (no explicit keychain)."; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	  echo "SIGN_IDENTITY not set; ad-hoc signing app bundle for local use."; \
+	  codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; \
 	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for app bundle; falling back to ad-hoc." >&2; \
-	  if codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; then \
-	    echo "Ad-hoc signed app bundle (no identity)."; \
+	  if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT"; then \
+	    :; \
 	  else \
-	    echo "codesign app bundle failed" >&2; exit 1; \
+	    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z --keychain "$$KEYCHAIN" 2>/dev/null \
+	      | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
+	    if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT"; then \
+	      :; \
+	    else \
+	      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	        echo "Error: codesign failed for Apple Developer identity '$$SIGN_ID_NAME'." >&2; \
+	        echo "Hint: inspect identities with: security find-identity -p codesigning -v" >&2; \
+	        exit 1; \
+	      fi; \
+	      echo "Warning: could not use SIGN_IDENTITY '$$SIGN_ID_NAME' for app bundle; falling back to ad-hoc (-s -)." >&2; \
+	      codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; \
+	    fi; \
 	  fi; \
 	fi; \
 	echo "Verifying app signature (deep/strict) ..."; \
-	if ! codesign --verify --deep --strict --verbose=4 "$$APPROOT"; then \
-	  echo "codesign verification failed for app" >&2; exit 1; \
-	fi; \
+	codesign --verify --deep --strict --verbose=4 "$$APPROOT"; \
 	echo "Building DMG from signed app ..."; \
 	$(MAKE) release-dmg; \
 	if [ ! -f "$$DMG_PATH" ]; then echo "Error: DMG not found at $$DMG_PATH" >&2; exit 1; fi; \
 	echo "Clearing extended attributes on DMG (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$DMG_PATH" || true; fi; \
 	echo "Signing DMG at $$DMG_PATH ..."; \
-	if codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with certificate SHA-1 via default keychain."; \
-	elif codesign --force --verbose=4 -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with identity name (no explicit keychain)."; \
-	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for DMG; falling back to ad-hoc." >&2; \
-	  if codesign --force --verbose=4 -s - "$$DMG_PATH"; then \
-	    echo "Ad-hoc signed DMG (no identity)."; \
-	  else \
-	    echo "codesign DMG failed" >&2; exit 1; \
-	  fi; \
-	fi; \
+	SIGN_BIN="$$DMG_PATH"; \
+	$(MACOS_SIGN_ONE_BINARY); \
 	NOTARY="$(NOTARY_PROFILE)"; \
-	DMG_ADHOC=0; APP_ADHOC=0; \
-	DSIG="$$(codesign -dv --verbose=4 "$$DMG_PATH" 2>&1 || true)"; \
-	ASIG="$$(codesign -dv --verbose=4 "$$APPROOT" 2>&1 || true)"; \
-	echo "$$DSIG" | grep -q "^Authority=" || DMG_ADHOC=1; \
-	echo "$$ASIG" | grep -q "^Authority=" || APP_ADHOC=1; \
-	if [ "$$DMG_ADHOC" -eq 1 ] || [ "$$APP_ADHOC" -eq 1 ]; then \
-	  echo "Skipping notarization: app or DMG were ad-hoc signed (no Apple identity)."; \
-	elif [ "$$APPLE_DEV" -eq 1 ] && [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
-	  echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
-	  if ! xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait; then \
-	    echo "Notarization failed" >&2; exit 1; \
-	  fi; \
-	  echo "Stapling notarization ticket to DMG and app ..."; \
-	  xcrun stapler staple "$$DMG_PATH" || true; \
-	  xcrun stapler staple "$$APPROOT" || true; \
-	else \
-	  echo "Skipping notarization (NOTARY_PROFILE unset, notarytool unavailable, or non-Apple identity)."; \
+	if [ -z "$$NOTARY" ]; then \
+	  echo "NOTARY_PROFILE unset; skipping notarization and stapling."; \
+	  exit 0; \
 	fi; \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID. Skipping."; \
+	  exit 0; \
+	fi; \
+	if ! command -v xcrun >/dev/null 2>&1 || ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
+	  exit 0; \
+	fi; \
+	echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
+	xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait; \
+	echo "Stapling notarization ticket to DMG and app ..."; \
+	xcrun stapler staple "$$DMG_PATH" || true; \
+	xcrun stapler staple "$$APPROOT" || true; \
 	echo "Signing steps completed: $$APPROOT and $$DMG_PATH"; \
 	'
 
