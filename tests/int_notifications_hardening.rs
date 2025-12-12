@@ -48,7 +48,7 @@ mod notifications_hardening_tests {
 
         // Request uses cmd='say' (allowlist default) which should match canonicalized basename
         let argv: Vec<String> = Vec::new();
-        let res = aifo_coder::notifications_handle_request(&argv, false, 2)
+        let res = aifo_coder::notifications_handle_request(&argv, false, 10)
             .expect("handle request via symlink canonicalized");
         let (code, body) = res;
         assert_eq!(code, 0, "expected exit 0, got {}", code);
@@ -99,7 +99,7 @@ exit 0
         // Invoke with arg to print the secret; expect 'missing'
         let argv = vec!["print-secret".to_string()];
         let (code1, body1) =
-            aifo_coder::notifications_handle_request(&argv, false, 2).expect("trim run");
+            aifo_coder::notifications_handle_request(&argv, false, 10).expect("trim run");
         assert_eq!(code1, 0, "expected exit 0 on trimmed run");
         let out1 = String::from_utf8_lossy(&body1).trim().to_string();
         assert_eq!(
@@ -110,7 +110,7 @@ exit 0
         // Allow SECRET_VAR explicitly and expect it to pass through
         std::env::set_var("AIFO_NOTIFICATIONS_ENV_ALLOW", "SECRET_VAR");
         let (code2, body2) =
-            aifo_coder::notifications_handle_request(&argv, false, 2).expect("allowed run");
+            aifo_coder::notifications_handle_request(&argv, false, 10).expect("allowed run");
         assert_eq!(code2, 0, "expected exit 0 on allowed run");
         let out2 = String::from_utf8_lossy(&body2).trim().to_string();
         assert_eq!(

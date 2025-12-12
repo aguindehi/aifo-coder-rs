@@ -116,7 +116,7 @@ fn int_allowlist_env_extension_notify_send() {
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
     std::env::set_var("AIFO_NOTIFICATIONS_ALLOWLIST", "say,notify-send");
 
-    let (code, out) = aifo_coder::notifications_handle_request(&[], false, 2).expect("notify ok");
+    let (code, out) = aifo_coder::notifications_handle_request(&[], false, 10).expect("notify ok");
     assert_eq!(code, 0, "expected exit 0");
     let s = String::from_utf8_lossy(&out);
     assert!(s.contains("ns"), "expected stub output, got: {}", s);
@@ -170,7 +170,7 @@ fn int_max_args_truncation_with_placeholder() {
 
     let args = vec!["A".to_string(), "B".to_string(), "C".to_string()];
     let (_code, out) =
-        aifo_coder::notifications_handle_request(&args, false, 2).expect("notify ok");
+        aifo_coder::notifications_handle_request(&args, false, 10).expect("notify ok");
     let s = String::from_utf8_lossy(&out);
     assert!(
         s.contains("args:-- A B"),
