@@ -1396,17 +1396,37 @@ glab-smoke:
 	echo "glab version:"; \
 	glab --version; \
 	echo; \
-	echo "glab auth status:"; \
-	glab auth status || true; \
-	echo; \
-	echo "glab api probe (requires auth):"; \
-	if glab api user >/dev/null 2>&1; then \
-	  echo "OK: glab api user"; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -n "$$ORIGIN" ]; then \
+	  case "$$ORIGIN" in \
+	    git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}" ;; \
+	    ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}" ;; \
+	    https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}" ;; \
+	    http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}" ;; \
+	    * ) HOST="" ;; \
+	  esac; \
 	else \
-	  echo "glab api user failed. You likely need to authenticate:"; \
+	  HOST=""; \
+	fi; \
+	if [ -n "$$HOST" ]; then \
+	  echo "glab auth status (host: $$HOST):"; \
+	  STATUS_OUT="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	  printf "%s\n" "$$STATUS_OUT"; \
+	  echo; \
+	  printf "%s\n" "$$STATUS_OUT" | grep -q "Logged in to $$HOST" || { \
+	    echo "Not authenticated for $$HOST."; \
+	    echo "Run: glab auth login --hostname $$HOST"; \
+	    exit 2; \
+	  }; \
+	else \
+	  echo "glab auth status (all hosts):"; \
+	  glab auth status || true; \
+	  echo; \
+	  echo "Could not derive host from origin remote; authenticate with:"; \
 	  echo "  glab auth login --hostname git.intern.migros.net"; \
 	  exit 2; \
 	fi; \
+	echo "OK: glab is authenticated for $$HOST"; \
 	echo "Done."; \
 	'
 
@@ -3574,17 +3594,53 @@ publish-macos-signed-zips-local-glab:
 	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
 	  exit 1; \
 	fi; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ORIGIN" in \
+	  git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}" ;; \
+	  ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}" ;; \
+	  https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}" ;; \
+	  http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}" ;; \
+	  * ) HOST="" ;; \
+	esac; \
+	if [ -z "$$HOST" ]; then \
+	  echo "Error: could not derive GitLab host from origin remote: $$ORIGIN" >&2; \
+	  exit 1; \
+	fi; \
+	echo "Checking glab auth for host $$HOST ..."; \
+	STATUS_OUT="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	printf "%s\n" "$$STATUS_OUT"; \
+	printf "%s\n" "$$STATUS_OUT" | grep -q "Logged in to $$HOST" || { \
+	  if [ "$${AIFO_GLAB_AUTOLOGIN:-0}" = "1" ] && [ -t 0 ]; then \
+	    echo "Not authenticated; attempting interactive glab auth login for $$HOST ..."; \
+	    glab auth login --hostname "$$HOST"; \
+	    STATUS_OUT2="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	    printf "%s\n" "$$STATUS_OUT2"; \
+	    printf "%s\n" "$$STATUS_OUT2" | grep -q "Logged in to $$HOST" || { \
+	      echo "Error: glab authentication still not configured for $$HOST." >&2; \
+	      exit 2; \
+	    }; \
+	  else \
+	    echo "Error: glab is not authenticated for $$HOST." >&2; \
+	    echo "Run: glab auth login --hostname $$HOST" >&2; \
+	    echo "Or set AIFO_GLAB_AUTOLOGIN=1 to prompt automatically (TTY only)." >&2; \
+	    exit 2; \
+	  fi; \
+	}; \
 	echo "Resolving project id via glab (current repo context) ..."; \
-	PID="$$(glab api projects/:id --jq .id)"; \
+	PID="$$(glab api --hostname "$$HOST" projects/:id --jq .id)"; \
 	if [ -z "$$PID" ]; then \
-	  echo "Error: could not resolve project id via glab. Ensure you are in a git repo with a configured remote for this project and glab is authenticated to the correct host." >&2; \
+	  echo "Error: could not resolve project id via glab." >&2; \
 	  exit 1; \
 	fi; \
 	UPLOAD_AND_GET_URL() { \
 	  file="$$1"; \
 	  [ -f "$$file" ] || { echo ""; return 0; }; \
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
-	  glab api -X POST "projects/$$PID/uploads" -F "file=@$$file" --jq .url; \
+	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" --jq .url; \
 	}; \
 	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
 	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
@@ -3592,13 +3648,13 @@ publish-macos-signed-zips-local-glab:
 	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
 	  exit 1; \
 	fi; \
-	BASE_WEB="$$(glab api projects/$$PID --jq .web_url)"; \
+	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID --jq .web_url)"; \
 	if [ -z "$$BASE_WEB" ]; then \
 	  echo "Error: could not resolve project web_url via glab." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
-	EXISTING_URLS="$$(glab api "projects/$$PID/releases/$$TAG" --jq '.assets.links[].url' 2>/dev/null | tr "\n" " " || true)"; \
+	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" --jq '.assets.links[].url' 2>/dev/null | tr "\n" " " || true)"; \
 	ADD_LINK() { \
 	  name="$$1"; rel_path="$$2"; \
 	  [ -n "$$rel_path" ] || return 0; \
@@ -3613,7 +3669,7 @@ publish-macos-signed-zips-local-glab:
 	      return 0 ;; \
 	  esac; \
 	  echo "Adding release link: $$name -> $$full_url"; \
-	  glab api -X POST "projects/$$PID/releases/$$TAG/assets/links" --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
+	  glab api --hostname "$$HOST" -X POST "projects/$$PID/releases/$$TAG/assets/links" --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
 	}; \
 	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
 	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
