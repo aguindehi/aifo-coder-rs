@@ -1,7 +1,7 @@
 /*!
 Docker SecurityOptions parsing helper.
 
-Parses the JSON-ish array returned by:
+Parses the JSON array returned by:
   docker info --format "{{json .SecurityOptions}}"
 
 Extracts:
@@ -13,18 +13,13 @@ Extracts:
 Also exposes the raw string items to allow callers to render a pretty list.
 */
 
-#[derive(Debug, Clone)]
-pub struct DockerSecurityOptions {
-    pub items: Vec<String>,
-    pub has_apparmor: bool,
-    pub seccomp_profile: String,
-    pub cgroupns_mode: String,
-    pub rootless: bool,
-}
+fn parse_items_best_effort(raw_json_str: &str) -> Vec<String> {
+    // Best practice: try strict JSON parsing first.
+    if let Ok(v) = serde_json::from_str::<Vec<String>>(raw_json_str) {
+        return v;
+    }
 
-/// Parse Docker SecurityOptions JSON-ish output into a structured summary and raw items.
-pub fn docker_security_options_parse(raw_json_str: &str) -> DockerSecurityOptions {
-    // Extract quoted items from a JSON string array without external deps
+    // Fallback: Extract quoted items from a JSON-ish string array (kept for robustness).
     let mut items: Vec<String> = Vec::new();
     let mut in_str = false;
     let mut esc = false;
@@ -47,6 +42,21 @@ pub fn docker_security_options_parse(raw_json_str: &str) -> DockerSecurityOption
             in_str = true;
         }
     }
+    items
+}
+
+#[derive(Debug, Clone)]
+pub struct DockerSecurityOptions {
+    pub items: Vec<String>,
+    pub has_apparmor: bool,
+    pub seccomp_profile: String,
+    pub cgroupns_mode: String,
+    pub rootless: bool,
+}
+
+/// Parse Docker SecurityOptions JSON output into a structured summary and raw items.
+pub fn docker_security_options_parse(raw_json_str: &str) -> DockerSecurityOptions {
+    let items = parse_items_best_effort(raw_json_str);
 
     // Defaults
     let mut has_apparmor = false;
