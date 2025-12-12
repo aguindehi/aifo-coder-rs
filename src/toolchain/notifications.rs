@@ -144,20 +144,10 @@ fn compute_allowlist_basenames() -> Vec<String> {
 }
 
 fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
-    // Default allowlist of "safe" host directories.
+    // Default allowlist of "safe" host directories for notifications executables.
     //
-    // NOTE: tests commonly create a temporary stub `say` executable under /tmp or platform temp
-    // dirs (e.g. macOS /private/var/folders/...), so we treat the default safe-dir policy as
-    // opt-in. This preserves production hardening when explicitly enabled, while keeping the
-    // existing test harness behavior stable.
-    let enforce = std::env::var("AIFO_NOTIFICATIONS_ENFORCE_SAFE_DIRS")
-        .ok()
-        .as_deref()
-        == Some("1");
-    if !enforce {
-        return true;
-    }
-
+    // The list can be overridden via AIFO_NOTIFICATIONS_SAFE_DIRS, but only when
+    // AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST=1 is set.
     let defaults = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
     let allow_override = std::env::var("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST")
         .ok()
