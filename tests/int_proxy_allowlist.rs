@@ -1,3 +1,5 @@
+mod support;
+
 #[test]
 fn int_test_proxy_allowlist_rejects_disallowed_tool() {
     // Skip if docker isn't available on this host (proxy still needs to bind)
