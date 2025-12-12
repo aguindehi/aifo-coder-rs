@@ -1,5 +1,5 @@
 fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
-    aifo_coder::docker::image_exists(runtime, image)
+    aifo_coder::image_exists(runtime, image)
 }
 
 #[test]
