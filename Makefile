@@ -235,6 +235,13 @@ if [ "$$OS" != "Darwin" ]; then \
 fi
 endef
 
+define MACOS_REQUIRE_ZIP
+command -v zip >/dev/null 2>&1 || { \
+  echo "Error: zip tool not found; install zip (e.g., 'brew install zip' on macOS)." >&2; \
+  exit 1; \
+}
+endef
+
 define MACOS_DETECT_APPLE_DEV
 APPLE_DEV=0; \
 if [ -n "$${SIGN_IDENTITY:-}" ]; then \
@@ -3292,7 +3299,13 @@ release-macos-binaries-sign:
 	    SIGN_BIN="$$B"; \
 	    $(MACOS_SIGN_ONE_BINARY); \
 	    echo "Verifying $$B ..."; \
-	    codesign --verify --strict --verbose=4 "$$B"; \
+	    if ! codesign --verify --strict --verbose=4 "$$B"; then \
+	      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	        exit 1; \
+	      fi; \
+	      echo "Warning: codesign verification failed for $$B." >&2; \
+	      exit 1; \
+	    fi; \
 	    codesign -dv --verbose=4 "$$B" >/dev/null 2>&1 || true; \
 	    if command -v spctl >/dev/null 2>&1; then spctl --assess --type exec --verbose=4 "$$B" >/dev/null 2>&1 || true; fi; \
 	  fi; \
@@ -3302,6 +3315,7 @@ release-macos-binaries-sign:
 .PHONY: release-macos-binaries-zips
 release-macos-binaries-zips:
 	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_ZIP); \
 	DIST="$(DIST_DIR)"; \
 	mkdir -p "$$DIST"; \
 	if [ ! -f "README.md" ] || [ ! -f "NOTICE" ] || [ ! -f "LICENSE" ]; then \
@@ -3320,7 +3334,7 @@ release-macos-binaries-zips:
 	    mkdir -p "$$STAGE"; \
 	    cp "$$B" "$$STAGE/$(BIN_NAME)-macos-$$arch"; \
 	    cp README.md NOTICE LICENSE "$$STAGE/"; \
-	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-macos-$$arch.zip" . >/dev/null); \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-macos-$$arch.zip" .); \
 	    rm -rf "$$STAGE"; \
 	    echo "Wrote $$DIST/$(BIN_NAME)-macos-$$arch.zip"; \
 	    ANY=1; \
@@ -3365,7 +3379,10 @@ release-macos-binaries-zips-notarize:
 	for Z in "$$Z1" "$$Z2"; do \
 	  if [ -f "$$Z" ]; then \
 	    echo "Submitting $$Z for notarization with profile $$NOTARY ..."; \
-	    xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait; \
+	    if ! xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait; then \
+	      echo "Error: notarization failed for $$Z" >&2; \
+	      exit 1; \
+	    fi; \
 	  fi; \
 	done; \
 	for Z in "$$Z1" "$$Z2"; do \
