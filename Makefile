@@ -3588,6 +3588,7 @@ publish-macos-signed-zips-local-glab:
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-glab; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
+	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
 	X86="$(MACOS_ZIP_X86_64)"; \
@@ -3608,14 +3609,14 @@ publish-macos-signed-zips-local-glab:
 	  exit 1; \
 	fi; \
 	case "$$ORIGIN" in \
-	  git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}" ;; \
-	  ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}" ;; \
-	  https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}" ;; \
-	  http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}" ;; \
-	  * ) HOST="" ;; \
+	  git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}"; PROJ_PATH="$${ORIGIN#*:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#ssh://git@$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#https://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#http://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  * ) HOST=""; PROJ_PATH="" ;; \
 	esac; \
-	if [ -z "$$HOST" ]; then \
-	  echo "Error: could not derive GitLab host from origin remote: $$ORIGIN" >&2; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: could not derive GitLab host/project path from origin remote: $$ORIGIN" >&2; \
 	  exit 1; \
 	fi; \
 	echo "Checking glab auth for host $$HOST ..."; \
@@ -3638,13 +3639,18 @@ publish-macos-signed-zips-local-glab:
 	    exit 2; \
 	  fi; \
 	}; \
-	echo "Resolving project id via glab (current repo context) ..."; \
-	PID="$$(glab api --hostname "$$HOST" projects/:id \
-	  | tr -d "\n" \
-	  | sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" \
-	  | head -n1)"; \
+	echo "Resolving project id via glab (from origin remote path) ..."; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
+	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>/dev/null || true)"; \
+	PID="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" | head -n1)"; \
 	if [ -z "$$PID" ]; then \
-	  echo "Error: could not resolve project id via glab (missing id in API response)." >&2; \
+	  echo "Error: could not resolve project id via glab for $$PROJ_PATH on $$HOST." >&2; \
+	  echo "Hint: ensure your origin remote matches the authenticated GitLab host and project." >&2; \
+	  exit 1; \
+	fi; \
+	BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"web_url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
+	if [ -z "$$BASE_WEB" ]; then \
+	  echo "Error: could not resolve project web_url via glab." >&2; \
 	  exit 1; \
 	fi; \
 	UPLOAD_AND_GET_URL() { \
@@ -3660,14 +3666,6 @@ publish-macos-signed-zips-local-glab:
 	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
 	if [ -z "$$ARM_URL" ] && [ -z "$$X86_URL" ]; then \
 	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
-	  exit 1; \
-	fi; \
-	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID \
-	  | tr -d "\n" \
-	  | sed -nE "s/.*\"web_url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
-	  | head -n1)"; \
-	if [ -z "$$BASE_WEB" ]; then \
-	  echo "Error: could not resolve project web_url via glab." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
