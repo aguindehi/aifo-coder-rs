@@ -3389,6 +3389,7 @@ release-dmg-sign: release-app
 	echo "Clearing extended attributes on app bundle (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$APPROOT" || true; fi; \
 	echo "Signing inner executable: $$BIN_EXEC"; \
+	SIGN_BIN="$$BIN_EXEC"; \
 	$(MACOS_SIGN_ONE_BINARY); \
 	echo "Signing app bundle: $$APPROOT"; \
 	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
