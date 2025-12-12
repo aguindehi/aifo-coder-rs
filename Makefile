@@ -3533,6 +3533,82 @@ publish-macos-signed-zips-local:
 	@set -eu; \
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
 	$(MACOS_REQUIRE_DARWIN); \
+	if command -v glab >/dev/null 2>&1; then \
+	  $(MAKE) publish-macos-signed-zips-local-glab; \
+	else \
+	  $(MAKE) publish-macos-signed-zips-local-curl; \
+	fi
+
+.PHONY: publish-macos-signed-zips-local-glab
+publish-macos-signed-zips-local-glab:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-glab; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git glab); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	ARM="$(MACOS_ZIP_ARM64)"; \
+	X86="$(MACOS_ZIP_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS zip artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-binary-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Resolving project id via glab ..."; \
+	PID="$$(glab api projects/:id --jq .id)"; \
+	if [ -z "$$PID" ]; then \
+	  echo "Error: could not resolve project id via glab. Ensure you are in a git repo with a configured remote for this project." >&2; \
+	  exit 1; \
+	fi; \
+	UPLOAD_AND_GET_URL() { \
+	  file="$$1"; \
+	  [ -f "$$file" ] || { echo ""; return 0; }; \
+	  echo "Uploading $$file via glab api (project uploads) ..."; \
+	  glab api -X POST "projects/$$PID/uploads" -F "file=@$$file" --jq .url; \
+	}; \
+	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
+	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
+	if [ -z "$$ARM_URL" ] && [ -z "$$X86_URL" ]; then \
+	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
+	  exit 1; \
+	fi; \
+	BASE_WEB="$$(glab api projects/$$PID --jq .web_url)"; \
+	if [ -z "$$BASE_WEB" ]; then \
+	  echo "Error: could not resolve project web_url via glab." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
+	EXISTING_URLS="$$(glab api "projects/$$PID/releases/$$TAG" --jq '.assets.links[].url' 2>/dev/null | tr "\n" " " || true)"; \
+	ADD_LINK() { \
+	  name="$$1"; rel_path="$$2"; \
+	  [ -n "$$rel_path" ] || return 0; \
+	  case "$$rel_path" in \
+	    http://*|https://*) full_url="$$rel_path" ;; \
+	    /*) full_url="$$BASE_WEB$$rel_path" ;; \
+	    *) full_url="$$BASE_WEB/$$rel_path" ;; \
+	  esac; \
+	  case " $$EXISTING_URLS " in \
+	    *" $$full_url "*) \
+	      echo "Release link already present: $$name -> $$full_url"; \
+	      return 0 ;; \
+	  esac; \
+	  echo "Adding release link: $$name -> $$full_url"; \
+	  glab api -X POST "projects/$$PID/releases/$$TAG/assets/links" --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
+	}; \
+	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
+	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
+	echo "Upload and release link attachment complete (glab)."
+
+.PHONY: publish-macos-signed-zips-local-curl
+publish-macos-signed-zips-local-curl:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-curl; \
+	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
@@ -3636,7 +3712,7 @@ publish-macos-signed-zips-local:
 	}; \
 	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
 	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
-	echo "Upload and release link attachment complete."
+	echo "Upload and release link attachment complete (curl)."
 
 .PHONY: verify-macos-signed
 verify-macos-signed:
