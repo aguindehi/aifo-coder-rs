@@ -27,6 +27,12 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
+# If RELEASE_PREFIX is set in the environment (even to empty), GNU Make will treat it as defined.
+# That can accidentally produce tags like "-0.6.6". Normalize empty/whitespace-only to default.
+ifeq ($(strip $(RELEASE_PREFIX)),)
+  RELEASE_PREFIX := release
+endif
+
 # Set to 0 to drop apt/procps in final images (local default keeps them; CI overrides to 0)
 KEEP_APT ?= 1
 
@@ -1386,7 +1392,13 @@ glab-smoke:
 	glab auth status || true; \
 	echo; \
 	echo "glab api probe (requires auth):"; \
-	glab api user >/dev/null && echo "OK: glab api user" || { echo "glab api user failed"; exit 2; }; \
+	if glab api user >/dev/null 2>&1; then \
+	  echo "OK: glab api user"; \
+	else \
+	  echo "glab api user failed. You likely need to authenticate:"; \
+	  echo "  glab auth login --hostname git.intern.migros.net"; \
+	  exit 2; \
+	fi; \
 	echo "Done."; \
 	'
 
