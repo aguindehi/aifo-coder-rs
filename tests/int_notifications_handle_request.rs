@@ -32,7 +32,10 @@ fn int_notifications_handle_request_with_stub_say() {
 
     // Save and set environment (use EnvGuard to ensure restoration even on panic)
     let _env_guard = support::notifications_allow_test_exec_from(&bindir)
-        .set("AIFO_NOTIFICATIONS_CONFIG", cfg.to_string_lossy().to_string())
+        .set(
+            "AIFO_NOTIFICATIONS_CONFIG",
+            cfg.to_string_lossy().to_string(),
+        )
         .set(
             "PATH",
             format!(
