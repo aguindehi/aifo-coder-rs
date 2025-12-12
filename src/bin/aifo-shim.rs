@@ -426,13 +426,9 @@ fn try_run_native(
     // can race with the server’s chunked writes and cause a broken pipe/RST on the next write.
 
     // Now read response and stream stdout
-    // Helper to read until headers end
+    // Use the shared header terminator helper from the main crate (CRLFCRLF or LFLF).
     fn find_header_end(buf: &[u8]) -> Option<usize> {
-        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-            Some(i + 4)
-        } else {
-            buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
-        }
+        aifo_coder::find_header_end(buf)
     }
 
     // Reader abstraction
@@ -1599,11 +1595,7 @@ mod tests {
     use std::net::{TcpListener, TcpStream};
 
     fn find_header_end(buf: &[u8]) -> Option<usize> {
-        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-            Some(i + 4)
-        } else {
-            buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
-        }
+        aifo_coder::find_header_end(buf)
     }
 
     #[allow(dead_code)]

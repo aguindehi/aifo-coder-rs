@@ -170,6 +170,12 @@ B5) `build.rs`:
 - Notifications rejects executables outside safe dirs unless explicitly unsafe override is enabled.
 - warn prompt does not execute PATH-based stty when absolute stty is available.
 
+## Status (Implementation Notes)
+- Phase A (tests consolidation): completed. Tests now prefer `tests/support/mod.rs` helpers for URL/port
+  parsing, docker helpers, and raw HTTP helpers. The large-payload test intentionally uses raw HTTP
+  to craft an oversized `arg=` flood to validate rejection behavior.
+- Phase B (production hardening): completed as specified.
+
 ## Run Commands
 - Run formatting: ./x fmt (if available in this repo) otherwise cargo fmt
 - Run tests: make check
