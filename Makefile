@@ -3536,7 +3536,11 @@ publish-macos-signed-zips-local:
 	  name="$$(basename "$$ARM")"; \
 	  url="$$BASE/$$name"; \
 	  echo "Uploading $$ARM -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" "$$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" "$$url" || { \
+	    echo "Upload failed. Note: this GitLab may not expose project package listing (projects/:id/packages returns 404)." >&2; \
+	    echo "If uploads continue to 404, switch to GitLab uploads API as fallback." >&2; \
+	    exit 1; \
+	  }; \
 	fi; \
 	if [ -f "$$X86" ]; then \
 	  name="$$(basename "$$X86")"; \
