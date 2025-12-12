@@ -112,6 +112,11 @@ NICENESS_CARGO_NEXTEST =? 0
 # Agent build source: [git | release]
 AIDER_SOURCE ?= release
 
+# glab authentication behavior:
+# - When uploading signed macOS zips via glab, we can optionally prompt for interactive login.
+# - Default: enabled (TTY-only). Disable with AIFO_GLAB_AUTOLOGIN=0.
+AIFO_GLAB_AUTOLOGIN ?= 1
+
 # Agent version pins (default: latest). Pin for reproducible releases.
 CODEX_VERSION ?= latest
 CRUSH_VERSION ?= latest
