@@ -143,6 +143,70 @@ fn compute_allowlist_basenames() -> Vec<String> {
     out
 }
 
+fn notifications_exec_in_safe_dir(exec_abs: &PathBuf) -> bool {
+    let defaults = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+    let allow_override = std::env::var("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    let dirs: Vec<PathBuf> = if allow_override {
+        if let Ok(v) = std::env::var("AIFO_NOTIFICATIONS_SAFE_DIRS") {
+            let mut out = Vec::new();
+            for part in v.split(',') {
+                let p = part.trim();
+                if p.is_empty() {
+                    continue;
+                }
+                out.push(PathBuf::from(p));
+                if out.len() >= 16 {
+                    break;
+                }
+            }
+            if !out.is_empty() {
+                out
+            } else {
+                defaults.iter().map(|d| PathBuf::from(d)).collect()
+            }
+        } else {
+            defaults.iter().map(|d| PathBuf::from(d)).collect()
+        }
+    } else {
+        defaults.iter().map(|d| PathBuf::from(d)).collect()
+    };
+
+    dirs.iter().any(|d| exec_abs.starts_with(d))
+}
+
+fn parse_env_allowlist() -> Vec<String> {
+    let list = match std::env::var("AIFO_NOTIFICATIONS_ENV_ALLOW") {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut out: Vec<String> = Vec::new();
+    for part in list.split(',') {
+        let key = part.trim();
+        if key.is_empty() || key.len() > 64 {
+            continue;
+        }
+        if !key
+            .bytes()
+            .all(|b| matches!(b, b'A'..=b'Z' | b'0'..=b'9' | b'_'))
+        {
+            continue;
+        }
+        let ks = key.to_string();
+        if !out.contains(&ks) {
+            out.push(ks);
+        }
+        if out.len() >= 16 {
+            break;
+        }
+    }
+    out
+}
+
 fn clamp_max_args() -> usize {
     let mut max_args = 8usize;
     if let Ok(v) = std::env::var("AIFO_NOTIFICATIONS_MAX_ARGS") {
@@ -193,15 +257,9 @@ fn run_with_timeout(
             }
         }
         // User-requested additional variables allowlist (comma-separated names)
-        if let Ok(list) = std::env::var("AIFO_NOTIFICATIONS_ENV_ALLOW") {
-            for name in list.split(',') {
-                let key = name.trim();
-                if key.is_empty() {
-                    continue;
-                }
-                if let Ok(val) = std::env::var(key) {
-                    cmd.env(key, val);
-                }
+        for key in parse_env_allowlist() {
+            if let Ok(val) = std::env::var(&key) {
+                cmd.env(&key, val);
             }
         }
     }
@@ -430,6 +488,13 @@ pub(crate) fn notifications_handle_request(
     timeout_secs: u64,
 ) -> Result<(i32, Vec<u8>), NotifyError> {
     let cfg = parse_notif_cfg()?;
+
+    if !notifications_exec_in_safe_dir(&cfg.exec_abs) {
+        return Err(NotifyError::Policy(format!(
+            "notifications executable '{}' is not in a safe directory",
+            cfg.exec_abs.display()
+        )));
+    }
 
     // Allowlist: default ["say"] with env extension
     let allowed = compute_allowlist_basenames();

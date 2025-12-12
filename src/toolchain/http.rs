@@ -100,11 +100,8 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
     let headers = parse_headers(all_lines.iter().copied().skip(1));
 
     // Support Transfer-Encoding: chunked by de-chunking into body; otherwise honor Content-Length.
-    let te = headers
-        .get("transfer-encoding")
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or_default();
-    if te.contains("chunked") {
+    let is_chunked = transfer_encoding_is_chunked_and_supported(&headers)?;
+    if is_chunked {
         // Initialize a buffer with any bytes already read after headers
         let mut rbuf: Vec<u8> = Vec::new();
         if buf.len() > body_start {
@@ -310,6 +307,31 @@ fn parse_headers<'a, I: Iterator<Item = &'a str>>(lines: I) -> HeaderMap {
         }
     }
     map
+}
+
+fn transfer_encoding_is_chunked_and_supported(headers: &HeaderMap) -> io::Result<bool> {
+    let te = headers
+        .get("transfer-encoding")
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    if te.is_empty() {
+        return Ok(false);
+    }
+
+    let mut has_chunked = false;
+    for token in te.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+        match token {
+            "chunked" => has_chunked = true,
+            "identity" => {}
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unsupported transfer-encoding",
+                ));
+            }
+        }
+    }
+    Ok(has_chunked)
 }
 
 fn parse_request_line_and_query(request_line: &str) -> (Method, String, Vec<(String, String)>) {

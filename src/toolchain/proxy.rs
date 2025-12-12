@@ -811,27 +811,56 @@ fn normalize_and_validate_cwd(raw: &str) -> Option<String> {
 fn redact_argv_for_logs(argv: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(argv.len());
     let mut redact_next = false;
+
     for a in argv {
-        let lower = a.to_ascii_lowercase();
         if redact_next {
             out.push("***".to_string());
             redact_next = false;
             continue;
         }
-        if matches!(
-            lower.as_str(),
-            "--token" | "--password" | "--api-key" | "--key"
-        ) {
-            out.push(a.clone());
-            redact_next = true;
-            continue;
-        }
-        if let Some(rest) = lower.strip_prefix("bearer ") {
-            if !rest.is_empty() {
-                out.push("bearer ***".to_string());
-                continue;
+
+        // Redact common flag forms:
+        //   --token SECRET
+        //   --token=SECRET
+        // and similarly for password/api-key/key.
+        let lower = a.to_ascii_lowercase();
+        let mut handled = false;
+        for key in ["--token", "--password", "--api-key", "--key"] {
+            if lower == key {
+                out.push(a.clone());
+                redact_next = true;
+                handled = true;
+                break;
+            }
+            let pref = format!("{key}=");
+            if lower.starts_with(&pref) {
+                out.push(format!("{key}=***"));
+                handled = true;
+                break;
             }
         }
+        if handled {
+            continue;
+        }
+
+        // Redact bearer tokens in-arg, best-effort (case-insensitive).
+        let lower_bytes = lower.as_bytes();
+        let needle = b"bearer ";
+        if let Some(pos) = lower_bytes
+            .windows(needle.len())
+            .position(|w| w == needle)
+        {
+            let mut s = a.clone();
+            let after = pos + needle.len();
+            if after < s.len() {
+                s.replace_range(after.., "***");
+            } else {
+                s.push_str("***");
+            }
+            out.push(s);
+            continue;
+        }
+
         out.push(a.clone());
     }
     out

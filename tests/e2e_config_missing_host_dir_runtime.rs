@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
 
-
 fn image_for_aider() -> Option<String> {
     if let Ok(img) = std::env::var("AIDER_IMAGE") {
         let img = img.trim().to_string();
