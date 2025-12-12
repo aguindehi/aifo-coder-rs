@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 use std::process::ExitCode;
+
 // Internal modules
 mod agent_images;
 mod banner;
@@ -12,6 +13,7 @@ mod guidance;
 mod support;
 mod toolchain_session;
 mod warnings;
+
 // Fork orchestration modules
 mod fork {
     pub mod cleanup;
@@ -28,6 +30,7 @@ mod fork {
     pub mod summary;
     pub mod types;
 }
+
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
 use crate::cli::{Agent, Cli, Flavor, ForkCmd};
