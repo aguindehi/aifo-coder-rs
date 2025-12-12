@@ -3017,7 +3017,6 @@ release-for-target:
 	      || echo "Warning: build failed for $$t";; \
 	  esac; \
 	done; \
-	[ -n "$$BIN" ] || BIN="$$( $(CARGO_NAME_CMD) )"; \
 	D="$${DIST:-$(DIST_DIR)}"; \
 	V="$${VERSION:-$(VERSION)}"; \
 	mkdir -p "$$D"; \
@@ -3098,7 +3097,7 @@ release-for-target:
 	fi; \
 	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  PKG="$$( $(CARGO_NAME_CMD) )"; \
+	  PKG="$$BIN"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
 	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
 	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
