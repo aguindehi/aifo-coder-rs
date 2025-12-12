@@ -370,6 +370,7 @@ impl EnvGuard {
         self
     }
 
+    #[allow(dead_code)]
     pub fn remove<K: Into<String>>(mut self, key: K) -> Self {
         let k = key.into();
         if !self.saved.iter().any(|(kk, _)| kk == &k) {

@@ -1,3 +1,5 @@
+mod support;
+
 #[cfg(unix)]
 #[test]
 fn int_notifications_handle_request_with_stub_say() {
