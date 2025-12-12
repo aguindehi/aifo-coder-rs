@@ -2,6 +2,7 @@ mod support;
 
 #[cfg(unix)]
 mod notifications_hardening_tests {
+    use crate::support;
     use std::fs;
     use std::io::Write;
     use std::os::unix::fs::symlink;
