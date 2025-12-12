@@ -1683,7 +1683,7 @@ publish-release-macos-signed:
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
-	TAG_EFF="$(RELEASE_TAG_EFFECTIVE)"; \
+	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	if [ -z "$$TAG_EFF" ]; then \
 	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
 	  exit 1; \
@@ -2927,11 +2927,10 @@ endif
 # NOTE: This must be a recursively-expanded variable (=) and must be defined after
 # VERSION/RELEASE_PREFIX/RELEASE_POSTFIX so older GNU Make versions (e.g. 3.81) don't
 # freeze it to empty via := immediate expansion.
-RELEASE_TAG_EFFECTIVE = $(if \
-  $(filter command% environment,$(origin TAG)), \
-  $(TAG), \
-  $(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),) \
-)
+#
+# IMPORTANT: Keep this as a *single line* to avoid embedding whitespace/newlines into the tag value,
+# which would corrupt downstream shell commands and Docker image refs.
+RELEASE_TAG_EFFECTIVE = $(if $(filter command% environment,$(origin TAG)),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))
 
 
 # macOS app packaging variables
