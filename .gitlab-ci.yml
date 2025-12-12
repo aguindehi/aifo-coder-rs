@@ -861,9 +861,9 @@ publish-release:
       mv aifo-coder aifo-coder-linux-x86_64
       # Create per-OS archives including docs
       tar -czf aifo-coder-linux-x86_64.tar.gz \
-        aifo-coder-linux-x86_64 README.md NOTICE LICENSE
+        aifo-coder-linux-x86_64 README.md NOTICE LICENSE docs
       tar -czf aifo-coder-macos.tar.gz \
-        aifo-coder-macos-arm64 aifo-coder-macos-x86_64 README.md NOTICE LICENSE
+        aifo-coder-macos-arm64 aifo-coder-macos-x86_64 README.md NOTICE LICENSE docs
       echo "Artifacts ready:"
       ls -lh aifo-coder-linux-x86_64 aifo-coder-macos-arm64 aifo-coder-macos-x86_64
       ls -lh aifo-coder-linux-x86_64.tar.gz aifo-coder-macos.tar.gz
