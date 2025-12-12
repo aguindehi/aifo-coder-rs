@@ -168,15 +168,39 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
                 }
             }
             if !out.is_empty() {
-                out
+                // Canonicalize override dirs (best-effort) to align with exec canonicalization
+                out.into_iter()
+                    .map(|p| fs::canonicalize(&p).unwrap_or(p))
+                    .collect()
             } else {
-                defaults.iter().map(PathBuf::from).collect()
+                // Fallback to defaults, canonicalized
+                defaults
+                    .iter()
+                    .map(|d| {
+                        let p = PathBuf::from(d);
+                        fs::canonicalize(&p).unwrap_or(p)
+                    })
+                    .collect()
             }
         } else {
-            defaults.iter().map(PathBuf::from).collect()
+            // No override value; use defaults, canonicalized
+            defaults
+                .iter()
+                .map(|d| {
+                    let p = PathBuf::from(d);
+                    fs::canonicalize(&p).unwrap_or(p)
+                })
+                .collect()
         }
     } else {
-        defaults.iter().map(PathBuf::from).collect()
+        // Enforced defaults without override; canonicalize to robustly match exec_abs
+        defaults
+            .iter()
+            .map(|d| {
+                let p = PathBuf::from(d);
+                fs::canonicalize(&p).unwrap_or(p)
+            })
+            .collect()
     };
 
     dirs.iter().any(|d| exec_abs.starts_with(d))

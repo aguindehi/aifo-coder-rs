@@ -396,9 +396,20 @@ impl Drop for EnvGuard {
 /// Opt into notifications safe-dir overrides for tests that execute stub binaries from temp dirs.
 #[allow(dead_code)]
 pub fn notifications_allow_test_exec_from(dir: &Path) -> EnvGuard {
+    // Use canonical form of the directory (best-effort) to match parse_notif_cfg canonicalization,
+    // and include the original path if it differs (e.g., macOS /private/var/... vs /var/...).
+    let dir_str = dir.to_string_lossy().to_string();
+    let dir_canon = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let dir_canon_str = dir_canon.to_string_lossy().to_string();
+    let safe_dirs = if dir_canon_str != dir_str {
+        format!("{},{}", dir_canon_str, dir_str)
+    } else {
+        dir_canon_str
+    };
+
     EnvGuard {
         saved: Vec::new(),
     }
     .set("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST", "1")
-    .set("AIFO_NOTIFICATIONS_SAFE_DIRS", dir.to_string_lossy().to_string())
+    .set("AIFO_NOTIFICATIONS_SAFE_DIRS", safe_dirs)
 }
