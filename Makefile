@@ -3483,7 +3483,7 @@ release-macos-binary-signed:
 
 .PHONY: publish-macos-signed-zips-local
 publish-macos-signed-zips-local:
-	@/bin/sh -ec '\
+	@set -eu; \
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
@@ -3492,13 +3492,13 @@ publish-macos-signed-zips-local:
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
-	ORIGIN="$$(git remote -v | grep -E '\''^origin[[:space:]]'\'' | head -n1 | awk '\''{print $$2}'\'')"; \
+	ORIGIN="$$(git remote -v | grep -E "^origin[[:space:]]" | head -n1 | awk "{print \$$2}")"; \
 	if [ -z "$$ORIGIN" ]; then \
-	  echo "Error: could not determine origin remote from '\''git remote -v'\''." >&2; \
+	  echo "Error: could not determine origin remote from 'git remote -v'." >&2; \
 	  exit 1; \
 	fi; \
-	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE '\''s#^git@([^:]+):.*#\1#p'\'')"; \
-	PROJ="$$(printf "%s" "$$ORIGIN" | sed -nE '\''s#^git@[^:]+:([^ ]+?)(\.git)?$$#\1#p'\'')"; \
+	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@([^:]+):.*#\1#p")"; \
+	PROJ="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@[^:]+:([^ ]+?)(\.git)?\$$#\1#p")"; \
 	PROJ="$${PROJ%.git}"; \
 	if [ -z "$$HOST" ] || [ -z "$$PROJ" ]; then \
 	  echo "Error: unsupported origin remote format: $$ORIGIN" >&2; \
@@ -3506,15 +3506,16 @@ publish-macos-signed-zips-local:
 	  exit 1; \
 	fi; \
 	API_V4="https://$$HOST/api/v4"; \
-	PROJ_ENC="$$(printf "%s" "$$PROJ" | sed '\''s#/#%2F#g'\'')"; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ" | sed "s#/#%2F#g")"; \
 	RES="$$(mktemp)"; \
-	STATUS="$$(curl -sS -w '%{http_code}' -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
-	PID="$$(sed -nE 's/.*\"id\":[[:space:]]*([0-9]+).*/\1/p' "$$RES" | head -n1)"; \
+	STATUS="$$(curl -sS -w "%{http_code}" -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	  "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
+	PID="$$(sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" "$$RES" | head -n1)"; \
 	if [ -z "$$PID" ]; then \
 	  echo "Error: failed to resolve project id via GitLab API for $$PROJ (host $$HOST)." >&2; \
 	  echo "HTTP status: $$STATUS" >&2; \
 	  echo "Response body (first 80 lines):" >&2; \
-	  sed -n '1,80p' "$$RES" >&2; \
+	  sed -n "1,80p" "$$RES" >&2; \
 	  rm -f "$$RES"; \
 	  exit 1; \
 	fi; \
@@ -3524,7 +3525,7 @@ publish-macos-signed-zips-local:
 	X86="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
 	  echo "No macOS zip artifacts found to upload under $(DIST_DIR)." >&2; \
-	  echo "Hint: run '\''make release-macos-binary-signed'\'' first." >&2; \
+	  echo "Hint: run 'make release-macos-binary-signed' first." >&2; \
 	  exit 1; \
 	fi; \
 	BASE="$$API_V4/projects/$$PID/packages/generic/$(BIN_NAME)/$$UPLOAD_TAG"; \
@@ -3541,8 +3542,7 @@ publish-macos-signed-zips-local:
 	  echo "Uploading $$X86 -> $$url"; \
 	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$X86" "$$url"; \
 	fi; \
-	echo "Upload complete."; \
-	'
+	echo "Upload complete."
 
 .PHONY: verify-macos-signed
 verify-macos-signed:
