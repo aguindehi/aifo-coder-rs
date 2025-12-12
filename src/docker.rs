@@ -697,27 +697,67 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
         gnupg_dir.display()
     )));
 
+    fn validate_mount_source_dir(path_str: &str, purpose: &str) -> Option<PathBuf> {
+        let p = PathBuf::from(path_str.trim());
+        if p.as_os_str().is_empty() {
+            return None;
+        }
+        if !p.is_absolute() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount non-absolute path for {}: {}",
+                purpose,
+                p.display()
+            ));
+            return None;
+        }
+        let canon = match fs::canonicalize(&p) {
+            Ok(c) => c,
+            Err(e) => {
+                crate::warn_print(&format!(
+                    "aifo-coder: warning: refusing to mount {}: cannot canonicalize {}: {}",
+                    purpose,
+                    p.display(),
+                    e
+                ));
+                return None;
+            }
+        };
+        if !canon.exists() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount {}: path does not exist: {}",
+                purpose,
+                canon.display()
+            ));
+            return None;
+        }
+        if !canon.is_dir() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount {}: not a directory: {}",
+                purpose,
+                canon.display()
+            ));
+            return None;
+        }
+        Some(canon)
+    }
+
     // Phase 1: Coding agent config root (read-only host mount) for global or explicit configs.
     // Resolve host config dir: explicit env (AIFO_CONFIG_HOST_DIR or AIFO_CODER_CONFIG_HOST_DIR),
     // else ~/.config/aifo-coder, else ~/.aifo-coder. Mount policy:
-    // - If an explicit env override is provided and points to an existing directory: always mount.
+    // - If an explicit env override is provided and passes validation: always mount.
     // - If using auto-resolved defaults: mount only when the directory contains at least one file
     //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
     let (cfg_host_dir, cfg_is_override) = {
         if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
-            let p = PathBuf::from(v.trim());
-            if !p.as_os_str().is_empty() && p.is_dir() {
-                (Some(p), true)
-            } else {
-                (None, false)
-            }
+            (
+                validate_mount_source_dir(&v, "AIFO_CONFIG_HOST_DIR"),
+                true,
+            )
         } else if let Ok(v) = env::var("AIFO_CODER_CONFIG_HOST_DIR") {
-            let p = PathBuf::from(v.trim());
-            if !p.as_os_str().is_empty() && p.is_dir() {
-                (Some(p), true)
-            } else {
-                (None, false)
-            }
+            (
+                validate_mount_source_dir(&v, "AIFO_CODER_CONFIG_HOST_DIR"),
+                true,
+            )
         } else {
             let p1 = host_home.join(".config").join("aifo-coder");
             if p1.is_dir() {
