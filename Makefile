@@ -3455,7 +3455,7 @@ verify-macos-signed:
 	    ANY=1; \
 	  fi; \
 	done; \
-	if command -v xcrun >/dev/null 2>&1 && command -v stapler >/dev/null 2>&1; then \
+	if command -v xcrun >/dev/null 2>&1 && xcrun stapler -h >/dev/null 2>&1; then \
 	  for Z in "$$Z1" "$$Z2"; do \
 	    if [ -f "$$Z" ]; then \
 	      echo "Validating staple ticket (best-effort): $$Z"; \
