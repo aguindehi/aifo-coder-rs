@@ -27,8 +27,11 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
+# Release tags use a prefix like "release" by default.
 # If RELEASE_PREFIX is set in the environment (even to empty), GNU Make will treat it as defined.
 # That can accidentally produce tags like "-0.6.6". Normalize empty/whitespace-only to default.
+#
+# IMPORTANT: Keep this consistent with the later `RELEASE_PREFIX ?= release` block.
 ifeq ($(strip $(RELEASE_PREFIX)),)
   RELEASE_PREFIX := release
 endif
@@ -162,6 +165,11 @@ export DOCKER_BUILDKIT ?= 1
 
 # Publish release prefix/postfix
 RELEASE_PREFIX ?= release
+# If environment defines RELEASE_PREFIX but it is empty/whitespace, default back to "release".
+# (This handles cases where a caller exports RELEASE_PREFIX="" which would otherwise override ?=.)
+ifeq ($(strip $(RELEASE_PREFIX)),)
+  RELEASE_PREFIX := release
+endif
 RELEASE_POSTFIX ?=
 
 # Optional local developer overrides (not committed).
@@ -1710,22 +1718,23 @@ publish-release-macos-signed:
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
-	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
-	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required to upload signed macOS zips and update the GitLab Release." >&2; \
-	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
+	# For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed). \
+	# For curl fallback, we require RELEASE_ASSETS_API_TOKEN. \
+	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
+	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
 	  exit 1; \
 	fi; \
 	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
+	    exit 1 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
 	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_TAG_EFFECTIVE|^TAG[[:space:]]*\\?=\" " >&2; \
 	    exit 2 ;; \
 	esac; \
-	if [ -z "$$TAG_EFF" ]; then \
-	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
-	  exit 1; \
-	fi; \
 	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
 	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
 	$(MAKE) TAG="$$TAG_EFF" publish-macos-signed-zips-local; \
@@ -3536,6 +3545,12 @@ publish-macos-signed-zips-local:
 	if command -v glab >/dev/null 2>&1; then \
 	  $(MAKE) publish-macos-signed-zips-local-glab; \
 	else \
+	  # curl path requires an explicit token; keep the failure localized here. \
+	  if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	    echo "Error: glab not found and RELEASE_ASSETS_API_TOKEN not set; cannot upload." >&2; \
+	    echo "Hint: install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
+	    exit 1; \
+	  fi; \
 	  $(MAKE) publish-macos-signed-zips-local-curl; \
 	fi
 
@@ -3559,10 +3574,10 @@ publish-macos-signed-zips-local-glab:
 	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
 	  exit 1; \
 	fi; \
-	echo "Resolving project id via glab ..."; \
+	echo "Resolving project id via glab (current repo context) ..."; \
 	PID="$$(glab api projects/:id --jq .id)"; \
 	if [ -z "$$PID" ]; then \
-	  echo "Error: could not resolve project id via glab. Ensure you are in a git repo with a configured remote for this project." >&2; \
+	  echo "Error: could not resolve project id via glab. Ensure you are in a git repo with a configured remote for this project and glab is authenticated to the correct host." >&2; \
 	  exit 1; \
 	fi; \
 	UPLOAD_AND_GET_URL() { \
