@@ -1,3 +1,5 @@
+mod support;
+
 #[test]
 fn int_proxy_notify_say_noauth_tcp() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
