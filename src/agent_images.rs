@@ -22,7 +22,7 @@ fn env_trim(k: &str) -> Option<String> {
 fn docker_image_exists_local(image: &str) -> bool {
     container_runtime_path()
         .ok()
-        .map(|rt| aifo_coder::util::docker::image_exists(&rt, image))
+        .map(|rt| aifo_coder::docker::image_exists(&rt, image))
         .unwrap_or(false)
 }
 
