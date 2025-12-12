@@ -61,6 +61,19 @@ pub fn container_runtime_path() -> io::Result<PathBuf> {
     ))
 }
 
+/// Return true if a docker image exists locally (without pulling).
+pub fn image_exists(runtime: &Path, image: &str) -> bool {
+    Command::new(runtime)
+        .arg("image")
+        .arg("inspect")
+        .arg(image)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",
@@ -938,7 +951,7 @@ fn parse_registry_host(image: &str) -> Option<String> {
 
 /// Check if an image exists locally via `docker image inspect`.
 fn image_exists_locally(runtime: &Path, image: &str) -> bool {
-    crate::docker::image_exists(runtime, image)
+    crate::image_exists(runtime, image)
 }
 
 /// Pull image and on auth failure interactively run `docker login` then retry once.
