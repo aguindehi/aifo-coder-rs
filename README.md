@@ -670,9 +670,13 @@ Outputs (versioned to avoid collisions):
 - `dist/aifo-coder-<version>-macos-x86_64.zip` (if produced)
 
 Tip (tagged releases):
-- To produce zip filenames that match a Git tag without renaming, set:
+- If HEAD is exactly at a Git tag, zip filenames automatically use that tag.
+- You can still override explicitly with:
   - `MACOS_ZIP_VERSION=<tag>`
-  - Example: `make release-macos-binary-signed MACOS_ZIP_VERSION=v1.2.3`
+
+One-command publish (local macOS -> GitLab Release links):
+- Build/sign/notarize, upload to the GitLab Generic Package Registry, and let CI attach links:
+  - `make publish-macos-signed-zips-local GITLAB_API_TOKEN=<token>`
 
 Verification (recommended):
 - `make verify-macos-signed`

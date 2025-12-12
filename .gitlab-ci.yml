@@ -915,8 +915,7 @@ publish-macos-signed-zips:
     - publish-release
   rules:
     - if: $CI_COMMIT_TAG
-      when: manual
-      allow_failure: false
+      when: on_success
   variables:
     # Requires a project/group token with api scope and permission to edit releases.
     # Use a protected/masked CI variable.
@@ -926,8 +925,8 @@ publish-macos-signed-zips:
       set -euo pipefail
       apk add --no-cache curl jq >/dev/null
       if [ -z "${GITLAB_API_TOKEN:-}" ]; then
-        echo "Error: GITLAB_API_TOKEN is required (api scope) to attach release links." >&2
-        exit 1
+        echo "GITLAB_API_TOKEN not set; skipping signed macOS zip link attachment."
+        exit 0
       fi
 
       ARM_ZIP="${SIGNED_MACOS_ARM64_ZIP}"
@@ -949,11 +948,8 @@ publish-macos-signed-zips:
       x86_status="$(curl -sS -o /dev/null -w '%{http_code}' -I -H "${auth_hdr}" "${x86_url}" || echo 000)"
 
       if [ "${arm_status}" != "200" ] && [ "${x86_status}" != "200" ]; then
-        echo "Error: neither signed zip was found in package registry (HTTP ${arm_status}, ${x86_status})." >&2
-        echo "Upload them first, e.g. from macOS:" >&2
-        echo "  curl --header \"PRIVATE-TOKEN: ${GITLAB_API_TOKEN}\" --upload-file dist/${ARM_ZIP} \"${arm_url}\"" >&2
-        echo "  curl --header \"PRIVATE-TOKEN: ${GITLAB_API_TOKEN}\" --upload-file dist/${X86_ZIP} \"${x86_url}\"" >&2
-        exit 1
+        echo "No signed macOS zip artifacts found in package registry for tag ${CI_COMMIT_TAG}; skipping."
+        exit 0
       fi
 
       # Create (or update) release asset links pointing at the package registry URLs.
