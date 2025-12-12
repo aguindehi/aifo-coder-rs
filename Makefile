@@ -3634,7 +3634,10 @@ publish-macos-signed-zips-local-glab:
 	  fi; \
 	}; \
 	echo "Resolving project id via glab (current repo context) ..."; \
-	PID="$$(glab api --hostname "$$HOST" projects/:id | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' | head -n1)"; \
+	PID="$$(glab api --hostname "$$HOST" projects/:id \
+	  | tr -d "\n" \
+	  | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' \
+	  | head -n1)"; \
 	if [ -z "$$PID" ]; then \
 	  echo "Error: could not resolve project id via glab (missing id in API response)." >&2; \
 	  exit 1; \
@@ -3644,7 +3647,9 @@ publish-macos-signed-zips-local-glab:
 	  [ -f "$$file" ] || { echo ""; return 0; }; \
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
 	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" \
-	    | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' | head -n1; \
+	    | tr -d "\n" \
+	    | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	    | head -n1; \
 	}; \
 	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
 	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
@@ -3652,14 +3657,19 @@ publish-macos-signed-zips-local-glab:
 	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
 	  exit 1; \
 	fi; \
-	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID | sed -nE '\''s/.*"web_url":[[:space:]]*"([^"]+)".*/\1/p'\'' | head -n1)"; \
+	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID \
+	  | tr -d "\n" \
+	  | sed -nE '\''s/.*"web_url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	  | head -n1)"; \
 	if [ -z "$$BASE_WEB" ]; then \
 	  echo "Error: could not resolve project web_url via glab." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
 	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" 2>/dev/null \
-	  | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' | tr "\n" " " || true)"; \
+	  | tr -d "\n" \
+	  | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	  | tr "\n" " " || true)"; \
 	ADD_LINK() { \
 	  name="$$1"; rel_path="$$2"; \
 	  [ -n "$$rel_path" ] || return 0; \
