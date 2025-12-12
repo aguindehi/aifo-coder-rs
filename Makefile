@@ -3529,16 +3529,18 @@ publish-macos-signed-zips-local:
 	fi; \
 	BASE="$$API_V4/projects/$$PID/packages/generic/$(BIN_NAME)/$$UPLOAD_TAG"; \
 	echo "Uploading to: $$BASE"; \
-	up() { \
-	  f="$$1"; \
-	  [ -f "$$f" ] || return 0; \
-	  name="$$(basename "$$f")"; \
+	if [ -f "$$ARM" ]; then \
+	  name="$$(basename "$$ARM")"; \
 	  url="$$BASE/$$name"; \
-	  echo "Uploading $$f -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$f" "$$url"; \
-	}; \
-	up "$$ARM"; \
-	up "$$X86"; \
+	  echo "Uploading $$ARM -> $$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" "$$url"; \
+	fi; \
+	if [ -f "$$X86" ]; then \
+	  name="$$(basename "$$X86")"; \
+	  url="$$BASE/$$name"; \
+	  echo "Uploading $$X86 -> $$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$X86" "$$url"; \
+	fi; \
 	echo "Upload complete."; \
 	'
 
