@@ -13,7 +13,7 @@ use std::env;
 fn docker_image_exists_local(image: &str) -> bool {
     container_runtime_path()
         .ok()
-        .map(|rt| crate::util::docker::image_exists(&rt, image))
+        .map(|rt| crate::docker::image_exists(&rt, image))
         .unwrap_or(false)
 }
 
