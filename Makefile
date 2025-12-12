@@ -3081,7 +3081,12 @@ release-for-target:
 	    *apple-darwin) \
 	      if [ "$$(uname -s 2>/dev/null)" = "Darwin" ]; then \
 	        echo "Building macOS target $$t with host Rust toolchain ..."; \
-	        if command -v rustup >/dev/null 2>&1; then rustup target add "$$t" >/dev/null 2>&1 || true; rustup run "$$CHANNEL" cargo build --release --target "$$t"; else cargo build --release --target "$$t"; fi; \
+	        if command -v rustup >/dev/null 2>&1; then \
+	          rustup target add "$$t"; \
+	          rustup run "$$CHANNEL" cargo build --release --target "$$t"; \
+	        else \
+	          cargo build --release --target "$$t"; \
+	        fi; \
 	      else \
 	        echo "Skipping macOS target $$t on non-Darwin host"; \
 	      fi ;; \
