@@ -268,6 +268,7 @@ endef
 
 define MACOS_SIGN_ONE_BINARY
 B="$$1"; \
+if [ -z "$$B" ] && [ -n "$${SIGN_BIN:-}" ]; then B="$$SIGN_BIN"; fi; \
 [ -n "$$B" ] || { echo "Error: missing binary path to sign" >&2; exit 2; }; \
 if [ ! -e "$$B" ]; then echo "Error: file not found: $$B" >&2; exit 2; fi; \
 if [ -z "$${SIGN_IDENTITY:-}" ]; then \
