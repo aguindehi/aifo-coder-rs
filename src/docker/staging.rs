@@ -4,10 +4,10 @@
 use std::env;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::docker::images::image_exists;
-use crate::docker::runtime::container_runtime_path;
+use crate::docker_mod::docker::images::image_exists;
+use crate::docker_mod::docker::runtime::container_runtime_path;
 
 /// Helper: set/replace tag on an image reference (strip any digest, replace last tag after '/').
 fn set_image_tag(image: &str, new_tag: &str) -> String {
@@ -55,7 +55,7 @@ fn maybe_override_agent_image(image: &str) -> String {
 pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> {
     // Allow tests to exercise tag logic without requiring Docker by honoring
     // AIFO_CODER_TEST_DISABLE_DOCKER: when set, skip local existence checks.
-    let runtime = match container_runtime_path() {
+    let runtime: Option<std::path::PathBuf> = match container_runtime_path() {
         Ok(p) => Some(p),
         Err(e) => {
             if env::var("AIFO_CODER_TEST_DISABLE_DOCKER").ok().as_deref() == Some("1") {

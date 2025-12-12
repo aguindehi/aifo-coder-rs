@@ -14,12 +14,10 @@ use nix::unistd::{getgid, getuid};
 #[cfg(feature = "otel")]
 use tracing::instrument;
 
-use crate::docker::env::{push_env_if_set, push_env_kv, push_env_kv_if_set, PASS_ENV_VARS};
-use crate::docker::images::image_exists;
-use crate::docker::mounts::{validate_mount_source_dir, validate_unix_socket_dir_owner_mode};
-use crate::docker::runtime::container_runtime_path;
-use crate::ensure_file_exists;
-use crate::path_pair;
+use crate::docker_mod::docker::env::{push_env_if_set, push_env_kv, push_env_kv_if_set, PASS_ENV_VARS};
+use crate::docker_mod::docker::images::image_exists;
+use crate::docker_mod::docker::mounts::{validate_mount_source_dir, validate_unix_socket_dir_owner_mode};
+use crate::docker_mod::docker::runtime::container_runtime_path;
 
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
