@@ -1,6 +1,8 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
+mod support;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
