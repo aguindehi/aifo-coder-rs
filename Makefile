@@ -3258,6 +3258,141 @@ release-macos-binaries-normalize-local:
 	echo "Normalized macOS binaries into $$DIST."; \
 	'
 
+.PHONY: release-macos-binaries-sign
+release-macos-binaries-sign:
+	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_DARWIN); \
+	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)" >&2; exit 1; }; \
+	command -v codesign >/dev/null 2>&1 || { echo "Error: codesign tool not found (Xcode Command Line Tools)" >&2; exit 1; }; \
+	B1="$(MACOS_DIST_ARM64)"; \
+	B2="$(MACOS_DIST_X86_64)"; \
+	if [ ! -f "$$B1" ] && [ ! -f "$$B2" ]; then \
+	  echo "No $(DIST_DIR)/$(BIN_NAME)-macos-* binaries to sign." >&2; \
+	  echo "Hint: run '\''make build-launcher'\'' and '\''make release-macos-binaries-normalize-local'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	  APPLE_DEV=0; export APPLE_DEV; \
+	  echo "SIGN_IDENTITY not set; attempting ad-hoc signing for local use."; \
+	else \
+	  $(MACOS_DETECT_APPLE_DEV); \
+	  if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	    echo "Detected Apple Developer identity."; \
+	  else \
+	    echo "Using non-Apple/local identity."; \
+	  fi; \
+	fi; \
+	$(MACOS_SET_SIGN_FLAGS); \
+	for B in "$$B1" "$$B2"; do \
+	  if [ -f "$$B" ]; then \
+	    if command -v xattr >/dev/null 2>&1; then xattr -cr "$$B" 2>/dev/null || true; fi; \
+	    echo "Signing $$B ..."; \
+	    SIGN_BIN="$$B"; \
+	    $(MACOS_SIGN_ONE_BINARY); \
+	    echo "Verifying $$B ..."; \
+	    codesign --verify --strict --verbose=4 "$$B"; \
+	    codesign -dv --verbose=4 "$$B" >/dev/null 2>&1 || true; \
+	    if command -v spctl >/dev/null 2>&1; then spctl --assess --type exec --verbose=4 "$$B" >/dev/null 2>&1 || true; fi; \
+	  fi; \
+	done; \
+	'
+
+.PHONY: release-macos-binaries-zips
+release-macos-binaries-zips:
+	@/bin/sh -ec '\
+	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
+	if [ ! -f "README.md" ] || [ ! -f "NOTICE" ] || [ ! -f "LICENSE" ]; then \
+	  echo "Error: missing required docs for zip packaging. Require README.md, NOTICE, LICENSE." >&2; \
+	  [ -f "README.md" ] || echo "Missing: README.md" >&2; \
+	  [ -f "NOTICE" ] || echo "Missing: NOTICE" >&2; \
+	  [ -f "LICENSE" ] || echo "Missing: LICENSE" >&2; \
+	  exit 1; \
+	fi; \
+	ANY=0; \
+	for arch in arm64 x86_64; do \
+	  B="$$DIST/$(BIN_NAME)-macos-$$arch"; \
+	  if [ -f "$$B" ]; then \
+	    STAGE="$$DIST/.zip-stage-$$arch"; \
+	    rm -rf "$$STAGE"; \
+	    mkdir -p "$$STAGE"; \
+	    cp "$$B" "$$STAGE/$(BIN_NAME)-macos-$$arch"; \
+	    cp README.md NOTICE LICENSE "$$STAGE/"; \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-macos-$$arch.zip" . >/dev/null); \
+	    rm -rf "$$STAGE"; \
+	    echo "Wrote $$DIST/$(BIN_NAME)-macos-$$arch.zip"; \
+	    ANY=1; \
+	  else \
+	    echo "$$B missing; skipping zip for $$arch."; \
+	  fi; \
+	done; \
+	if [ "$$ANY" -eq 0 ]; then \
+	  echo "No macOS binaries in dist/ to zip; run normalization and signing first." >&2; \
+	  exit 1; \
+	fi; \
+	'
+
+.PHONY: release-macos-binaries-zips-notarize
+release-macos-binaries-zips-notarize:
+	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_DARWIN); \
+	NOTARY="$(NOTARY_PROFILE)"; \
+	if [ -z "$$NOTARY" ]; then \
+	  echo "NOTARY_PROFILE unset; skipping macOS notarization and stapling."; \
+	  exit 0; \
+	fi; \
+	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)" >&2; exit 1; }; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID. Skipping."; \
+	  exit 0; \
+	fi; \
+	if ! command -v xcrun >/dev/null 2>&1 || ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
+	  exit 0; \
+	fi; \
+	DIST="$(DIST_DIR)"; \
+	Z1="$(MACOS_ZIP_ARM64)"; \
+	Z2="$(MACOS_ZIP_X86_64)"; \
+	if [ ! -f "$$Z1" ] && [ ! -f "$$Z2" ]; then \
+	  echo "No macOS binary zips found in dist/ to notarize." >&2; \
+	  exit 1; \
+	fi; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    echo "Submitting $$Z for notarization with profile $$NOTARY ..."; \
+	    xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait; \
+	  fi; \
+	done; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    xcrun stapler staple "$$Z" || true; \
+	  fi; \
+	done; \
+	if [ -f "$(MACOS_DIST_ARM64)" ]; then xcrun stapler staple "$(MACOS_DIST_ARM64)" || true; fi; \
+	if [ -f "$(MACOS_DIST_X86_64)" ]; then xcrun stapler staple "$(MACOS_DIST_X86_64)" || true; fi; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    xcrun stapler validate "$$Z" || true; \
+	  fi; \
+	done; \
+	'
+
+.PHONY: release-macos-binary-signed
+release-macos-binary-signed:
+	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_DARWIN); \
+	$(MAKE) build-launcher; \
+	$(MAKE) release-macos-binaries-normalize-local; \
+	$(MAKE) release-macos-binaries-sign; \
+	$(MAKE) release-macos-binaries-zips; \
+	$(MAKE) release-macos-binaries-zips-notarize; \
+	'
+
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 

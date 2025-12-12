@@ -588,6 +588,24 @@ Summary:
 
 There are two common paths to sign macOS artifacts:
 
+#### Per-arch signed binaries (zip release assets)
+
+You can also sign and package the already-built per-arch macOS launcher binaries into `dist/`:
+
+- Normalize existing `target/*-apple-darwin/release/$(BIN_NAME)` into canonical dist names:
+  - `make release-macos-binaries-normalize-local`
+- Sign those dist binaries in place:
+  - `make release-macos-binaries-sign`
+- Create per-arch zip files including required docs:
+  - `make release-macos-binaries-zips`
+- Optional notarization (Developer ID + NOTARY_PROFILE required):
+  - `make release-macos-binaries-zips-notarize`
+- One-shot helper (build host arch + normalize + sign + zip + optional notarize):
+  - `make release-macos-binary-signed`
+
+These targets do not invoke Cargo builds directly (except `release-macos-binary-signed`, which calls
+`make build-launcher` first).
+
 1) Apple Developer identity (Apple Distribution / Developer ID Application):
 - Produces artifacts eligible for notarization.
 - The Makefile target release-dmg-sign will detect an Apple identity and use hardened runtime flags and timestamps automatically.
