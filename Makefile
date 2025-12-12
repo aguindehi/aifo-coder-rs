@@ -239,8 +239,8 @@ MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 # Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
 MACOS_ZIP_VERSION ?= $(VERSION)
 
-MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
-MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
+MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64-signed.zip
+MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64-signed.zip
 
 # -----------------------------------------------------------------------------
 # macOS signing helpers (local-only)
@@ -3488,9 +3488,9 @@ release-macos-binaries-zips:
 	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch"; \
 	    cp README.md NOTICE LICENSE "$$STAGE/"; \
 	    if [ -d docs ]; then cp -a docs "$$STAGE/"; fi; \
-	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip" .); \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch-signed.zip" .); \
 	    rm -rf "$$STAGE"; \
-	    echo "Wrote $$DIST/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip"; \
+	    echo "Wrote $$DIST/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch-signed.zip"; \
 	    ANY=1; \
 	  else \
 	    echo "$$B missing; skipping zip for $${B##*-macos-}."; \

@@ -18,10 +18,10 @@ variables:
   #   ${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/
   #
   # Expected filenames are versioned to avoid collisions:
-  # - aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip
-  # - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
-  SIGNED_MACOS_ARM64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip
-  SIGNED_MACOS_X86_64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
+  # - aifo-coder-${CI_COMMIT_TAG}-macos-arm64-signed.zip
+  # - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64-signed.zip
+  SIGNED_MACOS_ARM64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-arm64-signed.zip
+  SIGNED_MACOS_X86_64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-x86_64-signed.zip
   KEEP_APT: "0"
   DOCKER_BUILDKIT: "0"
 
