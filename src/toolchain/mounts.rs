@@ -51,7 +51,10 @@ fn init_named_volume_with_stamp(
     ];
 
     if verbose {
-        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", shell_join(&args)));
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: {}", shell_join(&args)),
+        );
     }
 
     let mut cmd = Command::new(runtime);
