@@ -167,8 +167,8 @@ RELEASE_POSTFIX ?=
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 # - Corresponding zip artifacts:
-#   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64.zip
-#   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64.zip
+#   - $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-arm64.zip
+#   - $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-x86_64.zip
 #
 # Source binaries (produced by existing build targets; signing targets MUST NOT
 # invoke cargo directly):
@@ -203,8 +203,8 @@ RELEASE_POSTFIX ?=
 
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
-MACOS_ZIP_ARM64 ?= $(MACOS_DIST_ARM64).zip
-MACOS_ZIP_X86_64 ?= $(MACOS_DIST_X86_64).zip
+MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-arm64.zip
+MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-x86_64.zip
 
 # -----------------------------------------------------------------------------
 # macOS signing helpers (local-only)
@@ -3349,11 +3349,11 @@ release-macos-binaries-zips:
 	    STAGE="$$DIST/.zip-stage-$$arch"; \
 	    rm -rf "$$STAGE"; \
 	    mkdir -p "$$STAGE"; \
-	    cp "$$B" "$$STAGE/$(BIN_NAME)-macos-$$arch"; \
+	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(VERSION)-macos-$$arch"; \
 	    cp README.md NOTICE LICENSE "$$STAGE/"; \
-	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-macos-$$arch.zip" .); \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(VERSION)-macos-$$arch.zip" .); \
 	    rm -rf "$$STAGE"; \
-	    echo "Wrote $$DIST/$(BIN_NAME)-macos-$$arch.zip"; \
+	    echo "Wrote $$DIST/$(BIN_NAME)-$(VERSION)-macos-$$arch.zip"; \
 	    ANY=1; \
 	  else \
 	    echo "$$B missing; skipping zip for $${B##*-macos-}."; \
@@ -3395,6 +3395,7 @@ release-macos-binaries-zips-notarize:
 	Z2="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$Z1" ] && [ ! -f "$$Z2" ]; then \
 	  echo "No macOS binary zips found in dist/ to notarize." >&2; \
+	  echo "Hint: run '\''make release-macos-binaries-zips'\'' first." >&2; \
 	  exit 1; \
 	fi; \
 	for Z in "$$Z1" "$$Z2"; do \

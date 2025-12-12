@@ -611,7 +611,7 @@ Two supported local workflows:
 - Run:
   - `make release-macos-binary-signed`
 - Result:
-  - `dist/aifo-coder-macos-*.zip` containing signed (but not notarized) per-arch binaries.
+  - `dist/aifo-coder-<version>-macos-*.zip` containing signed (but not notarized) per-arch binaries.
 - Note:
   - Notarization is skipped automatically for non-Apple identities.
 
@@ -638,8 +638,8 @@ After producing artifacts, the recommended release assets are:
 - Linux:
   - `aifo-coder-linux-x86_64.tar.gz` (contains the Linux binary + README.md + NOTICE + LICENSE)
 - macOS (per-arch, preferred for CLI users):
-  - `dist/aifo-coder-macos-arm64.zip`
-  - `dist/aifo-coder-macos-x86_64.zip` (if produced)
+  - `dist/aifo-coder-<version>-macos-arm64.zip`
+  - `dist/aifo-coder-<version>-macos-x86_64.zip` (if produced)
   - Optional raw signed binaries:
     - `dist/aifo-coder-macos-arm64`
     - `dist/aifo-coder-macos-x86_64`

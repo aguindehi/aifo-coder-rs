@@ -662,14 +662,47 @@ Phase 6 – Release packaging and documentation
 After running make release-macos-binary-signed with Developer ID + NOTARY_PROFILE, the recommended release assets are:
 
 - macOS:
-  - aifo-coder-macos-arm64.zip    (signed; notarized and stapled when Apple Dev ID used)
-  - aifo-coder-macos-x86_64.zip   (same, if produced)
+  - aifo-coder-<version>-macos-arm64.zip    (signed; notarized and stapled when Apple Dev ID used)
+  - aifo-coder-<version>-macos-x86_64.zip   (same, if produced)
   - Optionally:
     - aifo-coder-macos-arm64      (signed raw binary)
     - aifo-coder-macos-x86_64     (signed raw binary)
   - DMG from release-dmg-sign     (recommended for GUI users)
 - Linux:
   - Existing CI artifacts (unchanged).
+
+6.4 Attaching signed macOS zip assets to GitLab Releases (local-only signing)
+Goal:
+- Keep CI unsigned while still publishing signed/notarized per-arch zip assets as release links.
+
+Approach:
+- Upload locally-produced signed zips to the GitLab Generic Package Registry for the tag, then add release links.
+
+Conventions (MUST):
+- Signed zip filenames MUST be versioned to avoid collisions:
+  - aifo-coder-<version>-macos-arm64.zip
+  - aifo-coder-<version>-macos-x86_64.zip
+- The Generic Package Registry path SHOULD be:
+  - /projects/<id>/packages/generic/<project>/<tag>/<filename>
+
+Workflow:
+1) On macOS, produce signed/notarized zips:
+   - make release-macos-binary-signed SIGN_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE="<profile>"
+2) Rename (or generate) the zips to include the release version/tag:
+   - dist/aifo-coder-<version>-macos-*.zip
+3) Upload to the Generic Package Registry (token with api scope):
+   - curl --header "PRIVATE-TOKEN: <token>" --upload-file dist/aifo-coder-<version>-macos-arm64.zip \
+       "<CI_API_V4_URL>/projects/<id>/packages/generic/<project>/<tag>/aifo-coder-<version>-macos-arm64.zip"
+   - curl --header "PRIVATE-TOKEN: <token>" --upload-file dist/aifo-coder-<version>-macos-x86_64.zip \
+       "<CI_API_V4_URL>/projects/<id>/packages/generic/<project>/<tag>/aifo-coder-<version>-macos-x86_64.zip"
+4) In the tag pipeline, run a manual CI job that:
+   - Verifies the uploaded zips exist (HEAD request).
+   - Adds release asset links pointing to those package registry URLs.
+
+Invariants:
+- CI MUST NOT run codesign/notarytool/stapler.
+- CI MUST NOT require SIGN_IDENTITY or NOTARY_PROFILE.
+- The “attach signed zips” job MUST only link already-uploaded artifacts.
 
 6.2 Documentation expectations
 - README / INSTALL (or equivalent user-facing docs) SHOULD be updated (outside this spec’s scope) to state:
