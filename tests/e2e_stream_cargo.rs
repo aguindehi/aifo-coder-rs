@@ -3,7 +3,7 @@ use std::net::TcpStream;
 use std::time::Duration;
 
 fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
-    aifo_coder::docker::image_exists(runtime, image)
+    aifo_coder::image_exists(runtime, image)
 }
 
 fn parse_host_port_from_http_url(url: &str) -> Option<(String, u16, String)> {
