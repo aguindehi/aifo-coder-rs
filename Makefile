@@ -273,6 +273,17 @@ KEYCHAIN="$$(security default-keychain -d user | tr -d " \"")"; \
 export KEYCHAIN
 endef
 
+define MACOS_REQUIRE_TOOLS
+missing=""; \
+for t in $$@; do \
+  command -v "$$t" >/dev/null 2>&1 || missing="$$missing $$t"; \
+done; \
+if [ -n "$$missing" ]; then \
+  echo "Error: missing required tools:$$missing" >&2; \
+  exit 1; \
+fi
+endef
+
 define MACOS_SIGN_ONE_BINARY
 B="$$1"; \
 if [ -z "$$B" ] && [ -n "$${SIGN_BIN:-}" ]; then B="$$SIGN_BIN"; fi; \
@@ -3271,8 +3282,7 @@ release-macos-binaries-sign:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-sign; \
 	$(MACOS_REQUIRE_DARWIN); \
-	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)" >&2; exit 1; }; \
-	command -v codesign >/dev/null 2>&1 || { echo "Error: codesign tool not found (Xcode Command Line Tools)" >&2; exit 1; }; \
+	$(MACOS_REQUIRE_TOOLS) security codesign; \
 	B1="$(MACOS_DIST_ARM64)"; \
 	B2="$(MACOS_DIST_X86_64)"; \
 	if [ ! -f "$$B1" ] && [ ! -f "$$B2" ]; then \
@@ -3281,6 +3291,10 @@ release-macos-binaries-sign:
 	  exit 1; \
 	fi; \
 	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
 	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
 	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
 	  APPLE_DEV=0; export APPLE_DEV; \
@@ -3361,19 +3375,22 @@ release-macos-binaries-zips-notarize:
 	  echo "NOTARY_PROFILE unset; skipping macOS notarization and stapling."; \
 	  exit 0; \
 	fi; \
-	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)" >&2; exit 1; }; \
+	$(MACOS_REQUIRE_TOOLS) security xcrun; \
+	if ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
+	  exit 0; \
+	fi; \
 	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
 	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
 	$(MACOS_DETECT_APPLE_DEV); \
 	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
 	  echo "SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID. Skipping."; \
 	  exit 0; \
 	fi; \
-	if ! command -v xcrun >/dev/null 2>&1 || ! xcrun notarytool --help >/dev/null 2>&1; then \
-	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
-	  exit 0; \
-	fi; \
-	DIST="$(DIST_DIR)"; \
 	Z1="$(MACOS_ZIP_ARM64)"; \
 	Z2="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$Z1" ] && [ ! -f "$$Z2" ]; then \
