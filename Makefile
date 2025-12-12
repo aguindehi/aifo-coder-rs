@@ -2971,7 +2971,7 @@ release-for-target:
 	  TARGETS="$$RELEASE_TARGETS"; \
 	  echo "Using RELEASE_TARGETS from environment: $$TARGETS"; \
 	else \
-	  RUSTC_HOST="$$(rustc -vV 2>/dev/null | awk '\''/^host:/{print $$2}'\'')"; \
+	  RUSTC_HOST="$$(rustc -vV 2>/dev/null | awk '/^host:/{print $$2}')"; \
 	  if [ -n "$$RUSTC_HOST" ]; then \
 	    TARGETS="$$RUSTC_HOST"; \
 	  else \
