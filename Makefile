@@ -3282,10 +3282,9 @@ release-macos-binaries-sign:
 	fi; \
 	$(MACOS_DEFAULT_KEYCHAIN); \
 	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
-	if [ -z "$${SIGN_IDENTITY:-}" ] || [ "$$SIGN_IDENTITY" = "Migros AI Foundation Code Signer" ]; then \
-	  SIGN_IDENTITY=""; export SIGN_IDENTITY; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
 	  APPLE_DEV=0; export APPLE_DEV; \
-	  echo "SIGN_IDENTITY unset/empty (or default placeholder); using ad-hoc signing for local use."; \
+	  echo "SIGN_IDENTITY not set; using ad-hoc signing for local use."; \
 	else \
 	  $(MACOS_DETECT_APPLE_DEV); \
 	  if [ "$${APPLE_DEV:-0}" = "1" ]; then \
@@ -3568,6 +3567,7 @@ EOF \
 # then rebuilds the DMG so it contains the signed app, then signs the DMG.
 release-dmg-sign: release-app
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-dmg-sign; \
 	$(MACOS_REQUIRE_DARWIN); \
 	APP="$(APP_NAME)"; \
 	BIN="$(BIN_NAME)"; \
