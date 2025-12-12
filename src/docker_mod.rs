@@ -1039,7 +1039,6 @@ fn parse_registry_host(image: &str) -> Option<String> {
     None
 }
 
-
 /// Pull image and on auth failure interactively run `docker login` then retry once.
 /// Verbose runs stream docker pull output; non-verbose prints a short notice before quiet pull.
 fn pull_image_with_autologin(
