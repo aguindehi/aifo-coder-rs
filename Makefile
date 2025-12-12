@@ -3495,7 +3495,7 @@ publish-macos-signed-zips-local:
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
-	ORIGIN="$$(git remote -v | grep -E "^origin[[:space:]]" | head -n1 | awk "{print \$$2}")"; \
+	ORIGIN="$$(git remote -v | grep -E '^origin[[:space:]]' | head -n1 | awk '{print $$2}')"; \
 	if [ -z "$$ORIGIN" ]; then \
 	  echo "Error: could not determine origin remote from 'git remote -v'." >&2; \
 	  exit 1; \
