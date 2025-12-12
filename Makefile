@@ -3646,10 +3646,15 @@ publish-macos-signed-zips-local-glab:
 	echo "Resolving project via glab (from origin remote path) ..."; \
 	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
 	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>&1)"; \
-	PID="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" | head -n1)"; \
-	BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"web_url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
+	if command -v python3 >/dev/null 2>&1; then \
+	  PID="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || true)"; \
+	  BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('web_url',''))" 2>/dev/null || true)"; \
+	else \
+	  PID=""; BASE_WEB=""; \
+	fi; \
 	if [ -z "$$PID" ] || [ -z "$$BASE_WEB" ]; then \
 	  echo "Error: could not resolve project via glab for $$PROJ_PATH on $$HOST." >&2; \
+	  echo "Hint: python3 is required to parse glab JSON reliably on macOS (avoids matching nested ids)." >&2; \
 	  echo "glab response (first 60 lines):" >&2; \
 	  printf "%s\n" "$$PROJ_JSON" | sed -n "1,60p" >&2; \
 	  exit 1; \
@@ -3660,7 +3665,11 @@ publish-macos-signed-zips-local-glab:
 	  [ -f "$$file" ] || { echo ""; return 0; }; \
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
 	  out="$$(glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" 2>&1)"; \
-	  url="$$(printf "%s" "$$out" | tr -d "\n" | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
+	  if command -v python3 >/dev/null 2>&1; then \
+	    url="$$(printf "%s" "$$out" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('url',''))" 2>/dev/null || true)"; \
+	  else \
+	    url="$$(printf "%s" "$$out" | tr -d "\n" | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
+	  fi; \
 	  if [ -z "$$url" ]; then \
 	    echo "Error: upload failed or could not parse upload URL for $$file" >&2; \
 	    echo "glab response (first 60 lines):" >&2; \
