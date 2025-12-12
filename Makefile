@@ -1370,6 +1370,26 @@ publish-toolchain-node:
 # Publish agent images (full and slim). Tags both local and registry-prefixed refs when REGISTRY is set.
 .PHONY: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim
 
+.PHONY: glab-smoke
+glab-smoke:
+	@/bin/sh -ec '\
+	set -e; \
+	if ! command -v glab >/dev/null 2>&1; then \
+	  echo "glab not found on PATH."; \
+	  echo "Install (macOS): brew install glab"; \
+	  exit 1; \
+	fi; \
+	echo "glab version:"; \
+	glab --version; \
+	echo; \
+	echo "glab auth status:"; \
+	glab auth status || true; \
+	echo; \
+	echo "glab api probe (requires auth):"; \
+	glab api user >/dev/null && echo "OK: glab api user" || { echo "glab api user failed"; exit 2; }; \
+	echo "Done."; \
+	'
+
 publish-codex:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
@@ -1684,6 +1704,12 @@ publish-release-macos-signed:
 	  exit 1; \
 	fi; \
 	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  -* ) \
+	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_TAG_EFFECTIVE|^TAG[[:space:]]*\\?=\" " >&2; \
+	    exit 2 ;; \
+	esac; \
 	if [ -z "$$TAG_EFF" ]; then \
 	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
 	  exit 1; \
@@ -2930,7 +2956,7 @@ endif
 #
 # IMPORTANT: Keep this as a *single line* to avoid embedding whitespace/newlines into the tag value,
 # which would corrupt downstream shell commands and Docker image refs.
-RELEASE_TAG_EFFECTIVE = $(if $(filter command% environment,$(origin TAG)),$(TAG),$(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))
+RELEASE_TAG_EFFECTIVE = $(if $(filter command% environment,$(origin TAG)),$(TAG),$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),))
 
 
 # macOS app packaging variables
