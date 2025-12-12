@@ -309,6 +309,90 @@ fn host_claude_config_path(host_home: &Path) -> Option<PathBuf> {
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
+    fn validate_mount_source_dir(path_str: &str, purpose: &str) -> Option<PathBuf> {
+        let p = PathBuf::from(path_str.trim());
+        if p.as_os_str().is_empty() {
+            return None;
+        }
+        if !p.is_absolute() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount non-absolute path for {}: {}",
+                purpose,
+                p.display()
+            ));
+            return None;
+        }
+        let canon = match fs::canonicalize(&p) {
+            Ok(c) => c,
+            Err(e) => {
+                crate::warn_print(&format!(
+                    "aifo-coder: warning: refusing to mount {}: cannot canonicalize {}: {}",
+                    purpose,
+                    p.display(),
+                    e
+                ));
+                return None;
+            }
+        };
+        if !canon.exists() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount {}: path does not exist: {}",
+                purpose,
+                canon.display()
+            ));
+            return None;
+        }
+        if !canon.is_dir() {
+            crate::warn_print(&format!(
+                "aifo-coder: warning: refusing to mount {}: not a directory: {}",
+                purpose,
+                canon.display()
+            ));
+            return None;
+        }
+        Some(canon)
+    }
+
+    #[cfg(unix)]
+    fn validate_unix_socket_dir_owner_mode(dir: &Path, purpose: &str) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
+
+        let use_err = crate::color_enabled_stderr();
+        let uid = u32::from(getuid());
+
+        let md = match fs::metadata(dir) {
+            Ok(m) => m,
+            Err(_) => return false,
+        };
+        if md.uid() != uid {
+            crate::log_warn_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: warning: refusing to mount {}: not owned by current user: {}",
+                    purpose,
+                    dir.display()
+                ),
+            );
+            return false;
+        }
+        let mode = md.permissions().mode() & 0o777;
+        // Accept 0700 or 0750. (Reject group/other writable.)
+        let ok = mode == 0o700 || mode == 0o750;
+        if !ok {
+            crate::log_warn_stderr(
+                use_err,
+                &format!(
+                    "aifo-coder: warning: refusing to mount {}: directory mode must be 0700 or 0750 (got {:o}): {}",
+                    purpose,
+                    mode,
+                    dir.display()
+                ),
+            );
+        }
+        ok
+    }
+
     // Transparent host-side auto-migration of legacy Aider and other agent config files into
     // standardized config dirs under ~/.config/aifo-coder/<agent>-PID so aifo-entrypoint can
     // bridge them inside the container without mounting large state/caches.
@@ -779,19 +863,15 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
     let (cfg_host_dir, cfg_is_override) = {
         if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
-            let p = PathBuf::from(v.trim());
-            if !p.as_os_str().is_empty() && p.is_dir() {
-                (Some(p), true)
-            } else {
-                (None, false)
-            }
+            (
+                validate_mount_source_dir(&v, "AIFO_CONFIG_HOST_DIR"),
+                true,
+            )
         } else if let Ok(v) = env::var("AIFO_CODER_CONFIG_HOST_DIR") {
-            let p = PathBuf::from(v.trim());
-            if !p.as_os_str().is_empty() && p.is_dir() {
-                (Some(p), true)
-            } else {
-                (None, false)
-            }
+            (
+                validate_mount_source_dir(&v, "AIFO_CODER_CONFIG_HOST_DIR"),
+                true,
+            )
         } else {
             let p1 = host_home.join(".config").join("aifo-coder");
             if p1.is_dir() {
@@ -843,17 +923,30 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
 
     // Optional shim dir
     if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
-        if !shim_dir.trim().is_empty() {
+        if let Some(dir) = validate_mount_source_dir(&shim_dir, "AIFO_SHIM_DIR") {
             volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!("{}:/opt/aifo/bin:ro", shim_dir)));
+            volume_flags.push(OsString::from(format!(
+                "{}:/opt/aifo/bin:ro",
+                dir.display()
+            )));
         }
     }
 
     // Optional unix socket dir
     if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
-        if !dir.trim().is_empty() {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!("{}:/run/aifo", dir)));
+        if let Some(p) = validate_mount_source_dir(&dir, "AIFO_TOOLEEXEC_UNIX_DIR") {
+            #[cfg(unix)]
+            {
+                if validate_unix_socket_dir_owner_mode(&p, "AIFO_TOOLEEXEC_UNIX_DIR") {
+                    volume_flags.push(OsString::from("-v"));
+                    volume_flags.push(OsString::from(format!("{}:/run/aifo", p.display())));
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(OsString::from(format!("{}:/run/aifo", p.display())));
+            }
         }
     }
 
