@@ -870,9 +870,9 @@ publish-release:
       ls -lh README.md NOTICE LICENSE
       echo
       echo "NOTE: CI does not sign or notarize macOS artifacts. To publish signed/notarized macOS zips:"
-      echo "  1) On macOS, run: make release-macos-binary-signed"
-      echo "  2) Upload dist/*.zip to the GitLab Package Registry under ${CI_COMMIT_TAG}"
-      echo "  3) Run the manual job: publish-macos-signed-zips"
+      echo "  1) On macOS (on the tag), run: make release-macos-binary-signed"
+      echo "  2) Upload dist/*.zip to the GitLab Package Registry under ${CI_COMMIT_TAG} (or run: make publish-macos-signed-zips-local)"
+      echo "  3) CI will auto-attach signed zip links if they exist in the registry (publish-macos-signed-zips)."
   artifacts:
     expire_in: 1 week
     paths:

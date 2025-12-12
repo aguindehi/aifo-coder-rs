@@ -675,31 +675,21 @@ Tip (tagged releases):
   - `MACOS_ZIP_VERSION=<tag>`
 
 One-command publish (local macOS -> GitLab Release links):
-- Build/sign/notarize, upload to the GitLab Generic Package Registry, and let CI attach links:
+- On a tag checkout, this will:
+  - build/sign/zip/notarize locally,
+  - upload the signed zips to the GitLab Generic Package Registry for that tag,
+  - CI will then auto-attach the signed zip links to the GitLab Release (no manual CI job).
+- Run:
+  - `make release-macos-binary-signed`
   - `make publish-macos-signed-zips-local GITLAB_API_TOKEN=<token>`
+
+Notes:
+- Zip filenames are tag-based automatically when HEAD is exactly at a tag (via `MACOS_ZIP_VERSION`), so renaming is not
+  required.
+- CI never signs/notarizes. It only attaches links if the uploaded zips exist.
 
 Verification (recommended):
 - `make verify-macos-signed`
-
-Publish signed zips to the GitLab Release (tag pipelines):
-- CI does not sign/notarize. Instead, upload the locally produced zips to the GitLab Generic Package
-  Registry for the tag, then run the manual CI job that attaches links to the Release.
-- Expected filenames (must match the tag name, to avoid collisions):
-  - `aifo-coder-<tag>-macos-arm64.zip`
-  - `aifo-coder-<tag>-macos-x86_64.zip`
-- Steps:
-  1) Build/sign/notarize locally on macOS (produces versioned zips in dist/):
-     - `make release-macos-binary-signed`
-  2) Rename zips to use the tag (example for tag v1.2.3):
-     - `mv dist/aifo-coder-<version>-macos-arm64.zip dist/aifo-coder-v1.2.3-macos-arm64.zip`
-     - `mv dist/aifo-coder-<version>-macos-x86_64.zip dist/aifo-coder-v1.2.3-macos-x86_64.zip`
-  3) Upload the renamed zips to the Generic Package Registry for the tag:
-     - `curl --header "PRIVATE-TOKEN: <token>" --upload-file dist/aifo-coder-v1.2.3-macos-arm64.zip \
-         "<CI_API_V4_URL>/projects/<id>/packages/generic/<project>/v1.2.3/aifo-coder-v1.2.3-macos-arm64.zip"`
-     - `curl --header "PRIVATE-TOKEN: <token>" --upload-file dist/aifo-coder-v1.2.3-macos-x86_64.zip \
-         "<CI_API_V4_URL>/projects/<id>/packages/generic/<project>/v1.2.3/aifo-coder-v1.2.3-macos-x86_64.zip"`
-  4) In the tag pipeline, run the manual job:
-     - `publish-macos-signed-zips`
 
 These targets do not invoke Cargo builds directly (except `release-macos-binary-signed`, which calls
 `make build-launcher` first).
