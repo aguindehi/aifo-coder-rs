@@ -407,9 +407,7 @@ pub fn notifications_allow_test_exec_from(dir: &Path) -> EnvGuard {
         dir_canon_str
     };
 
-    EnvGuard {
-        saved: Vec::new(),
-    }
-    .set("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST", "1")
-    .set("AIFO_NOTIFICATIONS_SAFE_DIRS", safe_dirs)
+    EnvGuard { saved: Vec::new() }
+        .set("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST", "1")
+        .set("AIFO_NOTIFICATIONS_SAFE_DIRS", safe_dirs)
 }
