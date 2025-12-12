@@ -920,7 +920,7 @@ pub fn toolchain_run(
     verbose: bool,
     dry_run: bool,
 ) -> io::Result<i32> {
-    let runtime = container_runtime_path()?;
+    let runtime: std::path::PathBuf = container_runtime_path()?;
     let use_err = crate::color_enabled_stderr();
     let pwd = {
         let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -1172,7 +1172,7 @@ pub fn toolchain_start_session(
     no_cache: bool,
     verbose: bool,
 ) -> io::Result<String> {
-    let runtime = container_runtime_path()?;
+    let runtime: std::path::PathBuf = container_runtime_path()?;
     let use_err = crate::color_enabled_stderr();
     let pwd = {
         let p = std_env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

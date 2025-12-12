@@ -11,6 +11,7 @@
 //! - docker/mounts.rs: mount policy / validation helpers
 //! - docker/run.rs: docker run command construction & previews
 
+#[path = "docker/docker.rs"]
 pub(crate) mod docker;
 
 pub use docker::images::image_exists;
