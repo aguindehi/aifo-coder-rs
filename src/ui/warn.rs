@@ -96,7 +96,6 @@ fn warn_input_unix() -> bool {
     }
 }
 
-#[cfg(not(any(unix, windows)))]
 fn warn_input_fallback() -> bool {
     // Fallback: line-based input (non-tty or platforms without single-key support)
     let mut s = String::new();
