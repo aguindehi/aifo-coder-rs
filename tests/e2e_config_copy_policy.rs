@@ -41,9 +41,6 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn unique_name(prefix: &str) -> String {
-    support::unique_name(prefix)
-}
 
 fn run_detached_sleep_container(
     runtime: &Path,
@@ -89,13 +86,6 @@ fn run_detached_sleep_container(
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    support::docker_exec_sh(runtime, name, script)
-}
-
-fn stop_container(runtime: &Path, name: &str) {
-    support::stop_container(runtime, name)
-}
 
 #[test]
 #[ignore]
@@ -144,14 +134,14 @@ fn e2e_config_copy_and_permissions_for_aider() {
     }
 
     // Run container detached with entrypoint copy-on-start
-    let name = unique_name("aifo-e2e-config");
+    let name = support::unique_name("aifo-e2e-config");
     let ok = run_detached_sleep_container(&runtime, &image, &name, root, &[]);
     assert!(ok, "failed to start container {}", name);
 
     // Wait for entrypoint to copy config (stamp or at least dir)
     let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
-        let _ = exec_sh(
+        let _ = support::docker_exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
@@ -182,8 +172,8 @@ perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat 
 [ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing"
 echo "OKS=$ok1$ok2$ok3$ok4$ok5"
 "#;
-    let (_ec, out) = exec_sh(&runtime, &name, script);
-    stop_container(&runtime, &name);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    support::stop_container(&runtime, &name);
 
     assert!(
         out.contains("STAMP=present"),
@@ -243,7 +233,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     #[cfg(unix)]
     std::os::unix::fs::symlink(aider.join("ok.yaml"), aider.join("link.yml")).ok();
 
-    let name = unique_name("aifo-e2e-config");
+    let name = support::unique_name("aifo-e2e-config");
     let ok = run_detached_sleep_container(
         &runtime,
         &image,
@@ -256,7 +246,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     // Wait for entrypoint to copy config (stamp or at least dir)
     let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
-        let _ = exec_sh(
+        let _ = support::docker_exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
@@ -278,8 +268,8 @@ have_ok=0; have_unknown=0; have_huge=0; have_link=0
 [ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1
 echo "RES=$have_ok/$have_unknown/$have_huge/$have_link"
 "#;
-    let (_ec, out) = exec_sh(&runtime, &name, script);
-    stop_container(&runtime, &name);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    support::stop_container(&runtime, &name);
 
     assert!(
         out.contains("RES=1/0/0/0"),

@@ -77,13 +77,6 @@ fn run_detached_sleep_container(
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-fn exec_sh(runtime: &PathBuf, name: &str, script: &str) -> (i32, String) {
-    support::docker_exec_sh(runtime.as_path(), name, script)
-}
-
-fn stop_container(runtime: &PathBuf, name: &str) {
-    support::stop_container(runtime.as_path(), name)
-}
 
 #[test]
 #[ignore]
@@ -154,37 +147,37 @@ fn e2e_config_concurrent_isolation() {
     assert!(ready2, "config not ready in {}", name2);
 
     // Create distinct markers in each container's private copy dir
-    let (_ec1, _out1) = exec_sh(
-        &runtime,
+    let (_ec1, _out1) = support::docker_exec_sh(
+        runtime.as_path(),
         &name1,
         r#"set -e; echo "alpha" > "$HOME/.aifo-config/isolation.txt"; cat "$HOME/.aifo-config/isolation.txt""#,
     );
-    let (_ec2, _out2) = exec_sh(
-        &runtime,
+    let (_ec2, _out2) = support::docker_exec_sh(
+        runtime.as_path(),
         &name2,
         r#"set -e; echo "beta" > "$HOME/.aifo-config/isolation.txt"; cat "$HOME/.aifo-config/isolation.txt""#,
     );
 
     // Verify isolation: name1 sees alpha; name2 sees beta
-    let (_ec1b, out1b) = exec_sh(
-        &runtime,
+    let (_ec1b, out1b) = support::docker_exec_sh(
+        runtime.as_path(),
         &name1,
         r#"set -e; cat "$HOME/.aifo-config/isolation.txt" || echo missing"#,
     );
-    let (_ec2b, out2b) = exec_sh(
-        &runtime,
+    let (_ec2b, out2b) = support::docker_exec_sh(
+        runtime.as_path(),
         &name2,
         r#"set -e; cat "$HOME/.aifo-config/isolation.txt" || echo missing"#,
     );
 
     // Verify Aider bridging exists in each container
-    let (_ecb1, bridge1) = exec_sh(
-        &runtime,
+    let (_ecb1, bridge1) = support::docker_exec_sh(
+        runtime.as_path(),
         &name1,
         r#"set -e; if [ -f "$HOME/.aider.model.settings.yml" ]; then echo "BRIDGE=ok"; else echo "BRIDGE=miss"; fi"#,
     );
-    let (_ecb2, bridge2) = exec_sh(
-        &runtime,
+    let (_ecb2, bridge2) = support::docker_exec_sh(
+        runtime.as_path(),
         &name2,
         r#"set -e; if [ -f "$HOME/.aider.model.settings.yml" ]; then echo "BRIDGE=ok"; else echo "BRIDGE=miss"; fi"#,
     );
@@ -210,6 +203,6 @@ fn e2e_config_concurrent_isolation() {
         bridge2
     );
 
-    stop_container(&runtime, &name1);
-    stop_container(&runtime, &name2);
+    support::stop_container(runtime.as_path(), &name1);
+    support::stop_container(runtime.as_path(), &name2);
 }
