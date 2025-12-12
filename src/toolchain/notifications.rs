@@ -211,7 +211,7 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
     if allow_override {
         if let Some(parent) = exec_abs.parent() {
             let parent_canon = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
-            if dirs.iter().any(|d| *d == parent_canon) {
+            if dirs.contains(&parent_canon) {
                 return true;
             }
         }
