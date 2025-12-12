@@ -361,6 +361,7 @@ pub struct EnvGuard {
 }
 
 impl EnvGuard {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         EnvGuard { saved: Vec::new() }
     }
