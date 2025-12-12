@@ -7,7 +7,19 @@ fn int_test_build_docker_cmd_includes_unix_socket_mount_when_set() {
     }
 
     let tmp = tempfile::tempdir().expect("tmpdir");
-    let dir = tmp.path().to_string_lossy().to_string();
+
+    // Mount validation requires 0700 or 0750 for AIFO_TOOLEEXEC_UNIX_DIR on Unix.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(tmp.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("chmod unix socket dir");
+    }
+
+    let dir = std::fs::canonicalize(tmp.path())
+        .unwrap_or_else(|_| tmp.path().to_path_buf())
+        .to_string_lossy()
+        .to_string();
 
     // Save and set env
     let old = std::env::var("AIFO_TOOLEEXEC_UNIX_DIR").ok();
