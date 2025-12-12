@@ -206,6 +206,55 @@ MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 MACOS_ZIP_ARM64 ?= $(MACOS_DIST_ARM64).zip
 MACOS_ZIP_X86_64 ?= $(MACOS_DIST_X86_64).zip
 
+# -----------------------------------------------------------------------------
+# macOS signing helpers (local-only)
+# -----------------------------------------------------------------------------
+#
+# Certificate strategy and classification:
+# - We distinguish Apple Developer identities vs non-Apple/self-signed.
+# - Detection uses local keychain lookup:
+#     security find-certificate -a -c "$(SIGN_IDENTITY)" -Z -p
+#   and checks for:
+#     "Developer ID Application", "Apple Distribution", "Apple Development"
+# - If SIGN_IDENTITY is empty/unset:
+#     treat as non-Apple (APPLE_DEV=0)
+#
+# Signing flags:
+# - Apple Developer identity:
+#     --force --timestamp --options runtime --verbose=4
+# - Non-Apple/self-signed:
+#     --force --verbose=4
+#
+# NOTE: These helpers are used by macOS signing/notarization targets.
+
+define MACOS_REQUIRE_DARWIN
+OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+if [ "$$OS" != "Darwin" ]; then \
+  echo "This target requires macOS (Darwin); current platform: $$OS" >&2; \
+  exit 1; \
+fi
+endef
+
+define MACOS_DETECT_APPLE_DEV
+APPLE_DEV=0; \
+if [ -n "$${SIGN_IDENTITY:-}" ]; then \
+  if security find-certificate -a -c "$$SIGN_IDENTITY" -Z -p 2>/dev/null \
+    | grep -Eiq "Developer ID Application|Apple Distribution|Apple Development"; then \
+    APPLE_DEV=1; \
+  fi; \
+fi; \
+export APPLE_DEV
+endef
+
+define MACOS_SET_SIGN_FLAGS
+if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+  SIGN_FLAGS="--force --timestamp --options runtime --verbose=4"; \
+else \
+  SIGN_FLAGS="--force --verbose=4"; \
+fi; \
+export SIGN_FLAGS
+endef
+
 banner:
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
