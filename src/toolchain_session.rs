@@ -6,7 +6,6 @@
 //! - Cleans up proxy, sidecars and unix socket dir in Drop unless running inside a fork pane.
 
 use std::io;
-use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
