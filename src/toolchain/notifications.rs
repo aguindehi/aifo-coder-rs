@@ -203,7 +203,20 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
             .collect()
     };
 
-    dirs.iter().any(|d| exec_abs.starts_with(d))
+    if dirs.iter().any(|d| exec_abs.starts_with(d)) {
+        return true;
+    }
+    // Secondary robustness: when override is enabled, accept exact parent directory match
+    // after canonicalization (helps macOS /private/var temp paths and symlink nuances).
+    if allow_override {
+        if let Some(parent) = exec_abs.parent() {
+            let parent_canon = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
+            if dirs.iter().any(|d| *d == parent_canon) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn parse_env_allowlist() -> Vec<String> {
