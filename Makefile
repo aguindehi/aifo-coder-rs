@@ -225,8 +225,8 @@ RELEASE_TAG_EFFECTIVE := $(if \
 )
 
 # Version string embedded into signed macOS zip names.
-# Defaults to RELEASE_TAG_EFFECTIVE so artifacts match GitLab tag names like "release-0.6.6".
-MACOS_ZIP_VERSION ?= $(RELEASE_TAG_EFFECTIVE)
+# Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
+MACOS_ZIP_VERSION ?= $(VERSION)
 
 MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
 MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
