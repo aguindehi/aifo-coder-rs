@@ -149,7 +149,12 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
             let size_hex = ln_trim.split(';').next().unwrap_or(ln_trim);
             let size = match usize::from_str_radix(size_hex, 16) {
                 Ok(v) => v,
-                Err(_) => break,
+                Err(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "invalid chunk size",
+                    ));
+                }
             };
             if size == 0 {
                 // Consume trailers until blank line
@@ -200,7 +205,15 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                 while let Some(s) = read_line_from(reader, &mut rbuf) {
                     let ln2 = s;
                     let size_hex2 = ln2.trim().split(';').next().unwrap_or(ln2.trim());
-                    let sz2 = usize::from_str_radix(size_hex2, 16).unwrap_or(0);
+                    let sz2 = match usize::from_str_radix(size_hex2, 16) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "invalid chunk size",
+                            ));
+                        }
+                    };
                     if sz2 == 0 {
                         break;
                     }
@@ -431,8 +444,8 @@ A;ext=foo=bar\r\n\
     }
 
     #[test]
-    fn test_invalid_hex_chunk_size_is_tolerated_without_panic() {
-        // Invalid chunk size 'G' (not hex) should not panic during decode
+    fn test_invalid_hex_chunk_size_is_rejected() {
+        // Invalid chunk size 'G' (not hex) must be rejected in strict chunked decoding.
         let req_text = "\
 POST /exec HTTP/1.1\r\n\
 Host: localhost\r\n\
@@ -442,7 +455,8 @@ G\r\n\
 payload\r\n\
 0\r\n\r\n";
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
-        let _ = read_http_request(&mut cur).expect("parsed without panic");
+        let err = read_http_request(&mut cur).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[test]

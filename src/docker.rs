@@ -938,15 +938,7 @@ fn parse_registry_host(image: &str) -> Option<String> {
 
 /// Check if an image exists locally via `docker image inspect`.
 fn image_exists_locally(runtime: &Path, image: &str) -> bool {
-    let status = Command::new(runtime)
-        .arg("image")
-        .arg("inspect")
-        .arg(image)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok();
-    status.map(|s| s.success()).unwrap_or(false)
+    crate::util::docker::image_exists(runtime, image)
 }
 
 /// Pull image and on auth failure interactively run `docker login` then retry once.

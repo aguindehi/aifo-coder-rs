@@ -1,6 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 //! Small utilities: shell/json escaping, URL decoding, header parsing, simple tokenization.
 
+pub mod docker;
 pub mod docker_security;
 pub mod fs;
 pub mod id;

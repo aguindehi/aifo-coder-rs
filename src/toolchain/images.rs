@@ -12,18 +12,10 @@ use std::process::{Command, Stdio};
 
 /// Local image existence check via docker inspect.
 fn docker_image_exists_local(image: &str) -> bool {
-    if let Ok(rt) = container_runtime_path() {
-        return Command::new(&rt)
-            .arg("image")
-            .arg("inspect")
-            .arg(image)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    }
-    false
+    container_runtime_path()
+        .ok()
+        .map(|rt| crate::util::docker::image_exists(&rt, image))
+        .unwrap_or(false)
 }
 
 /// Helper: read an env var, trim, and return Some when non-empty.

@@ -8,8 +8,6 @@
 //! These functions do not pull images or perform network I/O; they only compose strings.
 
 use std::env;
-use std::process::{Command, Stdio};
-
 use aifo_coder::container_runtime_path;
 
 /// Trimmed env getter returning Some when non-empty.
@@ -22,18 +20,10 @@ fn env_trim(k: &str) -> Option<String> {
 
 /// Local image existence check via docker inspect.
 fn docker_image_exists_local(image: &str) -> bool {
-    if let Ok(rt) = container_runtime_path() {
-        return Command::new(&rt)
-            .arg("image")
-            .arg("inspect")
-            .arg(image)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    }
-    false
+    container_runtime_path()
+        .ok()
+        .map(|rt| aifo_coder::util::docker::image_exists(&rt, image))
+        .unwrap_or(false)
 }
 
 /// Derive a ":latest" candidate for a given image reference by replacing the tag.
