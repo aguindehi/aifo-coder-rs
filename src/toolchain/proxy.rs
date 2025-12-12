@@ -846,10 +846,7 @@ fn redact_argv_for_logs(argv: &[String]) -> Vec<String> {
         // Redact bearer tokens in-arg, best-effort (case-insensitive).
         let lower_bytes = lower.as_bytes();
         let needle = b"bearer ";
-        if let Some(pos) = lower_bytes
-            .windows(needle.len())
-            .position(|w| w == needle)
-        {
+        if let Some(pos) = lower_bytes.windows(needle.len()).position(|w| w == needle) {
             let mut s = a.clone();
             let after = pos + needle.len();
             if after < s.len() {

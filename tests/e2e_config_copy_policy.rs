@@ -41,7 +41,6 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
         .unwrap_or(false)
 }
 
-
 fn run_detached_sleep_container(
     runtime: &Path,
     image: &str,
@@ -85,7 +84,6 @@ fn run_detached_sleep_container(
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
-
 
 #[test]
 #[ignore]

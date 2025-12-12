@@ -36,7 +36,10 @@ fn e2e_test_proxy_shim_route_rust_and_node() {
     let (_status, headers, _body) = support::http_post_form_tcp(
         port,
         "/exec",
-        &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
         &[("tool", "cargo"), ("cwd", "."), ("arg", "--version")],
     );
     assert_eq!(x_exit_code(&headers), 0, "cargo --version failed via proxy");
@@ -45,7 +48,10 @@ fn e2e_test_proxy_shim_route_rust_and_node() {
     let (_status, headers, _body) = support::http_post_form_tcp(
         port,
         "/exec",
-        &[("Authorization", &format!("Bearer {}", token)), ("X-Aifo-Proto", "1")],
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
         &[("tool", "npx"), ("cwd", "."), ("arg", "--version")],
     );
     assert_eq!(x_exit_code(&headers), 0, "npx --version failed via proxy");

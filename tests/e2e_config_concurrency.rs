@@ -77,7 +77,6 @@ fn run_detached_sleep_container(
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-
 #[test]
 #[ignore]
 fn e2e_config_concurrent_isolation() {

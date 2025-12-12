@@ -174,7 +174,11 @@ pub fn stop_container(runtime: &Path, name: &str) {
 #[allow(dead_code)]
 pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
     let mut cmd = Command::new(runtime);
-    cmd.arg("exec").arg(name).arg("/bin/sh").arg("-c").arg(script);
+    cmd.arg("exec")
+        .arg(name)
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg(script);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     match cmd.output() {
         Ok(o) => {
@@ -188,8 +192,7 @@ pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String)
 
 #[allow(dead_code)]
 pub fn wait_for_config_copied(runtime: &Path, name: &str) -> bool {
-    let script =
-        r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
+    let script = r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
     for _ in 0..50 {
         let (_ec, out) = docker_exec_sh(runtime, name, script);
         if out.contains("READY") {
