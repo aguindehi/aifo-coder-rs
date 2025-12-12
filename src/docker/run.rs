@@ -100,7 +100,11 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 
     // Phase 1: Config clone policy envs (entrypoint will perform the copy)
     // Always set in-container host config mount path explicitly.
-    push_env_kv(&mut env_flags, "AIFO_CONFIG_HOST_DIR", "/home/coder/.aifo-config-host");
+    push_env_kv(
+        &mut env_flags,
+        "AIFO_CONFIG_HOST_DIR",
+        "/home/coder/.aifo-config-host",
+    );
     // Back-compat for images expecting AIFO_CODER_CONFIG_HOST_DIR
     push_env_kv(
         &mut env_flags,
@@ -122,7 +126,11 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 
     // XDG_RUNTIME_DIR (unix only)
     if let Some(uid) = uid_opt {
-        push_env_kv(&mut env_flags, "XDG_RUNTIME_DIR", &format!("/tmp/runtime-{}", uid));
+        push_env_kv(
+            &mut env_flags,
+            "XDG_RUNTIME_DIR",
+            &format!("/tmp/runtime-{}", uid),
+        );
     }
 
     // Pinentry TTY
@@ -157,7 +165,11 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
         }
     }
 
-    for k in ["AIFO_TOOLEEXEC_URL", "AIFO_TOOLEEXEC_TOKEN", "AIFO_TOOLCHAIN_VERBOSE"] {
+    for k in [
+        "AIFO_TOOLEEXEC_URL",
+        "AIFO_TOOLEEXEC_TOKEN",
+        "AIFO_TOOLCHAIN_VERBOSE",
+    ] {
         push_env_kv_if_set(&mut env_flags, k);
     }
 
@@ -227,7 +239,9 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     //
     // For now, keep behavior by delegating to the legacy implementation function inside
     // crate::docker_impl via a private helper.
-    volume_flags.extend(crate::docker_impl_collect_volume_flags(agent, host_home, pwd));
+    volume_flags.extend(crate::docker_impl_collect_volume_flags(
+        agent, host_home, pwd,
+    ));
 
     // Optional shim dir
     if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
