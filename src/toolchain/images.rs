@@ -8,7 +8,6 @@ Toolchain kind normalization and image selection.
 */
 use crate::container_runtime_path;
 use std::env;
-use std::process::{Command, Stdio};
 
 /// Local image existence check via docker inspect.
 fn docker_image_exists_local(image: &str) -> bool {
