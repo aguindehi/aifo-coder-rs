@@ -140,6 +140,12 @@ pub fn docker_runtime() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
 }
 
+/// Return true if a Docker image is present locally (without pulling).
+#[allow(dead_code)]
+pub fn docker_image_present(runtime: &Path, image: &str) -> bool {
+    aifo_coder::image_exists(runtime, image)
+}
+
 #[allow(dead_code)]
 pub fn unique_name(prefix: &str) -> String {
     let pid = std::process::id();

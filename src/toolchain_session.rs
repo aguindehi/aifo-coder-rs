@@ -97,7 +97,7 @@ pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
             return true;
         }
     }
-    false
+
 }
 
 // One-shot npm/yarn → pnpm migration helper integrated into node toolchain startup.
