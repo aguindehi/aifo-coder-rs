@@ -1074,12 +1074,6 @@ fn handle_connection<S: Read + Write>(
 
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
-            if !enforce_notify_caps(&notif_cmd, &argv) {
-                respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
-                let _ = stream.flush();
-                return;
-            }
-
             // Enforce X-Aifo-Proto: "2" even in noauth mode
             if req.headers.get("x-aifo-proto").map(|s| s.trim()) != Some("2") {
                 respond_plain(
@@ -1091,6 +1085,13 @@ fn handle_connection<S: Read + Write>(
                 let _ = stream.flush();
                 return;
             }
+
+            if !enforce_notify_caps(&notif_cmd, &argv) {
+                respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                let _ = stream.flush();
+                return;
+            }
+
             let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
