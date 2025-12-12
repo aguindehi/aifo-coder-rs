@@ -3113,6 +3113,7 @@ release-for-target:
 	    *) OS=unknown ;; \
 	  esac; \
 	  ARCH="$${t%%-*}"; \
+	  if [ "$$OS" = "macos" ] && [ "$$ARCH" = "aarch64" ]; then ARCH="arm64"; fi; \
 	  BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
 	  BINPATH="target/$$t/release/$$BIN"; \
 	  [ -f "$$BINPATH" ] || BINPATH="target/$$t/release/$$BIN_US"; \
@@ -3146,6 +3147,7 @@ release-for-target:
 	      *) OS=unknown ;; \
 	    esac; \
 	    ARCH="$${t%%-*}"; \
+	    if [ "$$OS" = "macos" ] && [ "$$ARCH" = "aarch64" ]; then ARCH="arm64"; fi; \
 	    for f in "$$dir/$$BIN" "$$dir/$$BIN_US"; do \
 	      [ -f "$$f" ] || continue; \
 	      PKG="$$BIN-$$V-$$OS-$$ARCH"; \
@@ -3479,6 +3481,7 @@ release-macos-binaries-zips:
 	    mkdir -p "$$STAGE"; \
 	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch"; \
 	    cp README.md NOTICE LICENSE "$$STAGE/"; \
+	    if [ -d docs ]; then cp -a docs "$$STAGE/"; fi; \
 	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip" .); \
 	    rm -rf "$$STAGE"; \
 	    echo "Wrote $$DIST/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip"; \
