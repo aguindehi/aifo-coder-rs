@@ -63,7 +63,6 @@ pub fn port_from_http_url(url: &str) -> u16 {
         .unwrap_or(0)
 }
 
-
 /// Minimal raw HTTP POST helper over TCP returning (status, headers, body).
 #[allow(dead_code)]
 pub fn http_post_tcp(

@@ -352,7 +352,6 @@ please check the output above.",
     }
 }
 
-
 /// RAII for toolchain sidecars + proxy. On cleanup, stops proxy and optionally sidecars.
 pub struct ToolchainSession {
     sid: String,
