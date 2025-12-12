@@ -3033,7 +3033,6 @@ release-for-target:
 	DIST="$(DIST_DIR)"; \
 	mkdir -p "$$DIST"; \
 	echo "Building release version: $$VERSION"; \
-	rm -f Cargo.lock || true; \
 	PATH="$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
 	CHANNEL="$${AIFO_CODER_RUST_CHANNEL:-stable}"; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -3082,7 +3081,7 @@ release-for-target:
 	    *apple-darwin) \
 	      if [ "$$(uname -s 2>/dev/null)" = "Darwin" ]; then \
 	        echo "Building macOS target $$t with host Rust toolchain ..."; \
-	        if command -v rustup >/dev/null 2>&1; then rustup run "$$CHANNEL" cargo build --release --target "$$t"; else cargo build --release --target "$$t"; fi; \
+	        if command -v rustup >/dev/null 2>&1; then rustup target add "$$t" >/dev/null 2>&1 || true; rustup run "$$CHANNEL" cargo build --release --target "$$t"; else cargo build --release --target "$$t"; fi; \
 	      else \
 	        echo "Skipping macOS target $$t on non-Darwin host"; \
 	      fi ;; \
@@ -3197,7 +3196,7 @@ release-for-target:
 	fi
 
 release-for-mac:
-	@$(MAKE) RELEASE_TARGETS=aarch64-apple-darwin release-for-target
+	@$(MAKE) RELEASE_TARGETS="aarch64-apple-darwin x86_64-apple-darwin" release-for-target
 
 release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
@@ -3570,7 +3569,6 @@ publish-macos-signed-zips-local:
 	if command -v glab >/dev/null 2>&1; then \
 	  $(MAKE) publish-macos-signed-zips-local-glab; \
 	else \
-	  # curl path requires an explicit token; keep the failure localized here. \
 	  if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	    echo "Error: glab not found and RELEASE_ASSETS_API_TOKEN not set; cannot upload." >&2; \
 	    echo "Hint: install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
