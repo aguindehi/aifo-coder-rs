@@ -203,8 +203,9 @@ RELEASE_POSTFIX ?=
 
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
-MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-arm64.zip
-MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-x86_64.zip
+MACOS_ZIP_VERSION ?= $(VERSION)
+MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
+MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
 
 # -----------------------------------------------------------------------------
 # macOS signing helpers (local-only)
@@ -3349,11 +3350,11 @@ release-macos-binaries-zips:
 	    STAGE="$$DIST/.zip-stage-$$arch"; \
 	    rm -rf "$$STAGE"; \
 	    mkdir -p "$$STAGE"; \
-	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(VERSION)-macos-$$arch"; \
+	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch"; \
 	    cp README.md NOTICE LICENSE "$$STAGE/"; \
-	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(VERSION)-macos-$$arch.zip" .); \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip" .); \
 	    rm -rf "$$STAGE"; \
-	    echo "Wrote $$DIST/$(BIN_NAME)-$(VERSION)-macos-$$arch.zip"; \
+	    echo "Wrote $$DIST/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch.zip"; \
 	    ANY=1; \
 	  else \
 	    echo "$$B missing; skipping zip for $${B##*-macos-}."; \

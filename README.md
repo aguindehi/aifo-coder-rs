@@ -669,6 +669,11 @@ Outputs (versioned to avoid collisions):
 - `dist/aifo-coder-<version>-macos-arm64.zip`
 - `dist/aifo-coder-<version>-macos-x86_64.zip` (if produced)
 
+Tip (tagged releases):
+- To produce zip filenames that match a Git tag without renaming, set:
+  - `MACOS_ZIP_VERSION=<tag>`
+  - Example: `make release-macos-binary-signed MACOS_ZIP_VERSION=v1.2.3`
+
 Verification (recommended):
 - `make verify-macos-signed`
 
