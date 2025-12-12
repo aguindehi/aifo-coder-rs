@@ -1072,14 +1072,14 @@ fn handle_connection<S: Read + Write>(
             ));
         }
 
-        if !enforce_notify_caps(&notif_cmd, &argv) {
-            respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
-            let _ = stream.flush();
-            return;
-        }
-
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
+            if !enforce_notify_caps(&notif_cmd, &argv) {
+                respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                let _ = stream.flush();
+                return;
+            }
+
             // Enforce X-Aifo-Proto: "2" even in noauth mode
             if req.headers.get("x-aifo-proto").map(|s| s.trim()) != Some("2") {
                 respond_plain(
@@ -1141,6 +1141,7 @@ fn handle_connection<S: Read + Write>(
             }
         }
 
+        // Auth/proto enforcement applies before caps/required-cmd in authenticated mode.
         match auth_res {
             auth::AuthResult::Authorized { proto } => {
                 if !matches!(proto, auth::Proto::V2) {
@@ -1153,6 +1154,13 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
+
+                if !enforce_notify_caps(&notif_cmd, &argv) {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                    let _ = stream.flush();
+                    return;
+                }
+
                 // After auth+proto checks, require cmd (400 if missing)
                 if notif_cmd.is_empty() {
                     respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
