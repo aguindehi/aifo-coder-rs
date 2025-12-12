@@ -66,7 +66,7 @@ pub fn port_from_http_url(url: &str) -> u16 {
 /// Return true if a Docker image is present locally (without pulling).
 #[allow(dead_code)]
 pub fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
-    aifo_coder::docker::image_exists(runtime, image)
+    aifo_coder::image_exists(runtime, image)
 }
 
 /// Minimal raw HTTP POST helper over TCP returning (status, headers, body).
