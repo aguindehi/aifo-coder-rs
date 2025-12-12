@@ -1,5 +1,5 @@
 #!/bin/sh
-# Optional enforcement (lint) for test naming conventions (Phase 6 of v4 spec)
+# Optional enforcement (lint) for test naming conventions
 # Validates:
 # - File names start with unit_/int_/e2e_ (except tests/support and tests/common)
 # - #[test] function names in lane files start with unit_/int_/e2e_

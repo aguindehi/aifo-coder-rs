@@ -3211,6 +3211,53 @@ lint-tests-naming:
 	@echo "Running test naming lint ..."
 	@sh scripts/lint-test-naming.sh --strict
 
+.PHONY: release-macos-binaries-normalize-local
+release-macos-binaries-normalize-local:
+	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_DARWIN); \
+	DIST="$(DIST_DIR)"; \
+	BIN="$(BIN_NAME)"; \
+	mkdir -p "$$DIST"; \
+	SRC_ARM="target/aarch64-apple-darwin/release/$$BIN"; \
+	SRC_X86="target/x86_64-apple-darwin/release/$$BIN"; \
+	OUT_ARM="$(MACOS_DIST_ARM64)"; \
+	OUT_X86="$(MACOS_DIST_X86_64)"; \
+	HAVE_ANY=0; \
+	if [ -f "$$SRC_ARM" ]; then \
+	  echo "Normalizing macOS arm64 binary: $$SRC_ARM -> $$OUT_ARM"; \
+	  cp "$$SRC_ARM" "$$OUT_ARM"; \
+	  chmod 0755 "$$OUT_ARM" || true; \
+	  HAVE_ANY=1; \
+	  if command -v file >/dev/null 2>&1; then \
+	    file "$$OUT_ARM" | grep -qi "Mach-O 64-bit.*arm64" || { \
+	      echo "Validation failed: $$OUT_ARM is not Mach-O 64-bit arm64." >&2; \
+	      exit 1; \
+	    }; \
+	  fi; \
+	else \
+	  echo "No $$SRC_ARM found; skipping arm64."; \
+	fi; \
+	if [ -f "$$SRC_X86" ]; then \
+	  echo "Normalizing macOS x86_64 binary: $$SRC_X86 -> $$OUT_X86"; \
+	  cp "$$SRC_X86" "$$OUT_X86"; \
+	  chmod 0755 "$$OUT_X86" || true; \
+	  HAVE_ANY=1; \
+	  if command -v file >/dev/null 2>&1; then \
+	    file "$$OUT_X86" | grep -qi "Mach-O 64-bit.*x86_64" || { \
+	      echo "Validation failed: $$OUT_X86 is not Mach-O 64-bit x86_64." >&2; \
+	      exit 1; \
+	    }; \
+	  fi; \
+	else \
+	  echo "No $$SRC_X86 found; skipping x86_64."; \
+	fi; \
+	if [ "$$HAVE_ANY" -eq 0 ]; then \
+	  echo "No macOS binaries found to normalize; run '\''make build-launcher'\'' or '\''make build-launcher-macos-cross'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Normalized macOS binaries into $$DIST."; \
+	'
+
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
