@@ -217,9 +217,9 @@ MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 
 # Effective release tag used for publishing (matches publish-release defaulting behavior).
-# If TAG is explicitly overridden, it wins. Otherwise derive from Cargo.toml version.
+# Prefer TAG only when explicitly provided (command line or environment). Otherwise derive from Cargo.toml version.
 RELEASE_TAG_EFFECTIVE := $(if \
-  $(filter command% environment override,$(origin TAG)), \
+  $(filter command% environment,$(origin TAG)), \
   $(TAG), \
   $(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),) \
 )
@@ -3499,6 +3499,7 @@ publish-macos-signed-zips-local:
 	fi; \
 	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE '\''s#^git@([^:]+):.*#\1#p'\'')"; \
 	PROJ="$$(printf "%s" "$$ORIGIN" | sed -nE '\''s#^git@[^:]+:([^ ]+?)(\.git)?$$#\1#p'\'')"; \
+	PROJ="$${PROJ%.git}"; \
 	if [ -z "$$HOST" ] || [ -z "$$PROJ" ]; then \
 	  echo "Error: unsupported origin remote format: $$ORIGIN" >&2; \
 	  echo "Expected SSH form: git@<host>:<group>/<project>.git" >&2; \
