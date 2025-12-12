@@ -3536,13 +3536,13 @@ publish-macos-signed-zips-local:
 	  name="$$(basename "$$ARM")"; \
 	  url="$$BASE/$$name"; \
 	  echo "Uploading $$ARM -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" -X PUT "$$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" "$$url"; \
 	fi; \
 	if [ -f "$$X86" ]; then \
 	  name="$$(basename "$$X86")"; \
 	  url="$$BASE/$$name"; \
 	  echo "Uploading $$X86 -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$X86" -X PUT "$$url"; \
+	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$X86" "$$url"; \
 	fi; \
 	echo "Upload complete."
 
