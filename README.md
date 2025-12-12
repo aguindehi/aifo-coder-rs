@@ -631,9 +631,28 @@ Existing DMG workflow:
   - `make release-dmg-sign`
 - You can reuse the same `SIGN_IDENTITY` / `NOTARY_PROFILE` settings for both per-arch zips and DMG signing.
 
-#### Per-arch signed binaries (zip release assets)
+#### Release assets (recommended)
 
-You can also sign and package the already-built per-arch macOS launcher binaries into `dist/`:
+After producing artifacts, the recommended release assets are:
+
+- Linux:
+  - `aifo-coder-linux-x86_64.tar.gz` (contains the Linux binary + README.md + NOTICE + LICENSE)
+- macOS (per-arch, preferred for CLI users):
+  - `dist/aifo-coder-macos-arm64.zip`
+  - `dist/aifo-coder-macos-x86_64.zip` (if produced)
+  - Optional raw signed binaries:
+    - `dist/aifo-coder-macos-arm64`
+    - `dist/aifo-coder-macos-x86_64`
+- macOS (GUI users):
+  - Signed DMG via `make release-dmg-sign` (recommended for drag-and-drop install)
+
+Notes:
+- CI macOS artifacts are unsigned; Gatekeeper prompts may appear on end-user machines.
+- Signed/notarized macOS artifacts are produced locally on macOS.
+
+#### Creating per-arch signed macOS zip assets (local, macOS)
+
+These targets package already-built per-arch macOS launcher binaries into `dist/`:
 
 - Normalize existing `target/*-apple-darwin/release/$(BIN_NAME)` into canonical dist names:
   - `make release-macos-binaries-normalize-local`
@@ -645,6 +664,9 @@ You can also sign and package the already-built per-arch macOS launcher binaries
   - `make release-macos-binaries-zips-notarize`
 - One-shot helper (build host arch + normalize + sign + zip + optional notarize):
   - `make release-macos-binary-signed`
+
+Verification (recommended):
+- `make verify-macos-signed`
 
 These targets do not invoke Cargo builds directly (except `release-macos-binary-signed`, which calls
 `make build-launcher` first).

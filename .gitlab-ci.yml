@@ -857,6 +857,9 @@ publish-release:
       ls -lh aifo-coder-linux-x86_64 aifo-coder-macos-arm64 aifo-coder-macos-x86_64
       ls -lh aifo-coder-linux-x86_64.tar.gz aifo-coder-macos.tar.gz
       ls -lh README.md NOTICE LICENSE
+      echo
+      echo "NOTE: CI does not sign or notarize macOS artifacts. For signed/notarized macOS assets,"
+      echo "      run 'make release-macos-binary-signed' locally on macOS and upload dist/*.zip."
   artifacts:
     expire_in: 1 week
     paths:
