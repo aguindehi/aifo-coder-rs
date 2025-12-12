@@ -15,6 +15,55 @@ pub(crate) fn push_mount(args: &mut Vec<String>, spec: &str) {
     args.push(spec.to_string());
 }
 
+fn init_named_volume_with_stamp(
+    runtime: &Path,
+    image: &str,
+    mount_spec: &str,
+    dir_in_container: &str,
+    uid: u32,
+    gid: u32,
+    verbose: bool,
+) {
+    let use_err = crate::color_enabled_stderr();
+
+    // dir_in_container is constant for our use-cases; keep script fixed-shape to avoid injection.
+    let script = format!(
+        "set -e; d={d}; \
+         if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; \
+         mkdir -p \"$d\"; \
+         chown -R {uid}:{gid} \"$d\" || true; \
+         printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
+        d = crate::shell_escape(dir_in_container),
+        uid = uid,
+        gid = gid
+    );
+
+    let args: Vec<String> = vec![
+        "docker".into(),
+        "run".into(),
+        "--rm".into(),
+        "-v".into(),
+        mount_spec.to_string(),
+        image.into(),
+        "sh".into(),
+        "-c".into(),
+        script,
+    ];
+
+    if verbose {
+        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", shell_join(&args)));
+    }
+
+    let mut cmd = Command::new(runtime);
+    for a in &args[1..] {
+        cmd.arg(a);
+    }
+    if !verbose {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let _ = cmd.status();
+}
+
 /// Best-effort ownership initialization for named cargo volumes used by rust sidecar.
 /// Runs a short helper container as root that ensures target dir exists, chowns to uid:gid,
 /// and drops a stamp file to avoid repeated work. Uses the same image as the sidecar to avoid extra pulls.
@@ -26,39 +75,9 @@ fn init_rust_named_volume(
     gid: u32,
     verbose: bool,
 ) {
-    let use_err = crate::color_enabled_stderr();
     let mount = format!("aifo-cargo-{subdir}:/home/coder/.cargo/{subdir}");
-    let script = format!(
-        "set -e; d=\"/home/coder/.cargo/{sd}\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
-        sd = subdir,
-        uid = uid,
-        gid = gid
-    );
-    let args: Vec<String> = vec![
-        "docker".into(),
-        "run".into(),
-        "--rm".into(),
-        "-v".into(),
-        mount,
-        image.into(),
-        "sh".into(),
-        "-c".into(),
-        script,
-    ];
-    if verbose {
-        crate::log_info_stderr(
-            use_err,
-            &format!("aifo-coder: docker: {}", shell_join(&args)),
-        );
-    }
-    let mut cmd = Command::new(runtime);
-    for a in &args[1..] {
-        cmd.arg(a);
-    }
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let _ = cmd.status();
+    let dir = format!("/home/coder/.cargo/{subdir}");
+    init_named_volume_with_stamp(runtime, image, &mount, &dir, uid, gid, verbose);
 }
 
 /// Inspect run-args and initialize named rust cargo volumes when they are selected (registry/git).
@@ -107,38 +126,15 @@ pub(crate) fn init_rust_named_volumes_if_needed(
 ///// Runs a short helper container that ensures /home/coder/.cache exists, chowns to uid:gid,
 ///// and stamps the directory to avoid repeated work.
 fn init_node_cache_volume(runtime: &Path, image: &str, uid: u32, gid: u32, verbose: bool) {
-    let use_err = crate::color_enabled_stderr();
-    let mount = "aifo-node-cache:/home/coder/.cache".to_string();
-    let script = format!(
-        "set -e; d=\"/home/coder/.cache\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
-        uid = uid,
-        gid = gid
+    init_named_volume_with_stamp(
+        runtime,
+        image,
+        "aifo-node-cache:/home/coder/.cache",
+        "/home/coder/.cache",
+        uid,
+        gid,
+        verbose,
     );
-    let args: Vec<String> = vec![
-        "docker".into(),
-        "run".into(),
-        "--rm".into(),
-        "-v".into(),
-        mount,
-        image.into(),
-        "sh".into(),
-        "-c".into(),
-        script,
-    ];
-    if verbose {
-        crate::log_info_stderr(
-            use_err,
-            &format!("aifo-coder: docker: {}", shell_join(&args)),
-        );
-    }
-    let mut cmd = Command::new(runtime);
-    for a in &args[1..] {
-        cmd.arg(a);
-    }
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let _ = cmd.status();
 }
 
 /// Ensure that the host .pnpm-store directory under the given workspace is present
@@ -275,38 +271,15 @@ pub(crate) fn init_node_cache_volume_if_needed(
 /// Ensures /workspace/node_modules exists, is owned by uid:gid, and is stamped
 /// to avoid repeated work.
 fn init_node_modules_volume(runtime: &Path, image: &str, uid: u32, gid: u32, verbose: bool) {
-    let use_err = crate::color_enabled_stderr();
-    let mount = "aifo-node-modules:/workspace/node_modules".to_string();
-    let script = format!(
-        "set -e; d=\"/workspace/node_modules\"; if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; mkdir -p \"$d\"; chown -R {uid}:{gid} \"$d\" || true; printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
-        uid = uid,
-        gid = gid
+    init_named_volume_with_stamp(
+        runtime,
+        image,
+        "aifo-node-modules:/workspace/node_modules",
+        "/workspace/node_modules",
+        uid,
+        gid,
+        verbose,
     );
-    let args: Vec<String> = vec![
-        "docker".into(),
-        "run".into(),
-        "--rm".into(),
-        "-v".into(),
-        mount,
-        image.into(),
-        "sh".into(),
-        "-c".into(),
-        script,
-    ];
-    if verbose {
-        crate::log_info_stderr(
-            use_err,
-            &format!("aifo-coder: docker: {}", shell_join(&args)),
-        );
-    }
-    let mut cmd = Command::new(runtime);
-    for a in &args[1..] {
-        cmd.arg(a);
-    }
-    if !verbose {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let _ = cmd.status();
 }
 
 /// Inspect run-args and initialize the node_modules overlay volume when selected.

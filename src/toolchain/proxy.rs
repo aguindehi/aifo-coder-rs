@@ -442,7 +442,24 @@ fn disconnect_terminate_exec_in_container(
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
+fn exec_wrapper_env_prelude() -> &'static str {
+    "set -e; \
+     export PATH=\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; \
+     export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
+     if [ -f /workspace/corp-ca.crt ]; then \
+       export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; \
+       export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
+     elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then \
+       export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; \
+       export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; \
+     fi;"
+}
+
 /// Build docker exec spawn args with setsid+PGID wrapper (use_tty controls -t).
+///
+/// Security note:
+/// - Do not embed user-controlled argv into a `sh -c` string.
+/// - Instead, pass argv as positional parameters (`-- "$@"`) and `exec "$@"` inside the wrapper.
 fn build_exec_args_with_wrapper(
     container_name: &str,
     exec_preview_args: &[String],
@@ -457,33 +474,44 @@ fn build_exec_args_with_wrapper(
         }
     }
     let idx = idx.unwrap_or(exec_preview_args.len().saturating_sub(1));
+
     // Up to and including container name
     spawn_args.extend(exec_preview_args[1..=idx].iter().cloned());
+
     // Allocate a TTY for streaming to improve interactive flushing when requested.
     if use_tty {
         // Keep STDIN open as well to behave like interactive docker exec (-it)
         spawn_args.insert(1, "-t".to_string());
         spawn_args.insert(1, "-i".to_string());
     }
-    // User command slice after container name
+
+    // User command slice after container name (passed as "$@" to the wrapper)
     let user_slice: Vec<String> = exec_preview_args[idx + 1..].to_vec();
-    let inner = shell_join(&user_slice);
+
+    // Wrapper runs the requested command in a new session (setsid) and records the "child" pid
+    // so we can send signals to the whole process group later.
+    //
+    // IMPORTANT: We intentionally do not interpolate user args into this script.
     let script = format!(
-        "set -e; export PATH=\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
-         if [ -f /workspace/corp-ca.crt ]; then export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
-         elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; fi; \
-         eid=\"${{AIFO_EXEC_ID:-}}\"; if [ -z \"$eid\" ]; then exec {inner} 2>&1; fi; \
-         d=\"${{HOME:-/home/coder}}/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" || true; }}; \
-         ( setsid sh -lc \"export PATH=\\\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:\\$PATH\\\"; export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
-           if [ -f /workspace/corp-ca.crt ]; then export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
-           elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; fi; \
-           exec {inner} 2>&1\" ) & pg=$!; \
-         printf \"%s\\n\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; wait \"$pg\"; rm -rf \"$d\" || true",
-        inner = inner
+        "{prelude} \
+eid=\"${{AIFO_EXEC_ID:-}}\"; \
+if [ -z \"$eid\" ]; then exec \"$@\" 2>&1; fi; \
+d=\"${{HOME:-/home/coder}}/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; \
+mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" || true; }}; \
+( setsid sh -lc \"{prelude} exec \\\"\\$@\\\" 2>&1\" -- \"$@\" ) & pg=$!; \
+printf \"%s\\n\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; \
+wait \"$pg\"; rm -rf \"$d\" || true",
+        prelude = exec_wrapper_env_prelude()
     );
+
     spawn_args.push("sh".to_string());
     spawn_args.push("-c".to_string());
     spawn_args.push(script);
+    // Name for $0 so "$@" begins with the first real user arg.
+    spawn_args.push("aifo-exec".to_string());
+    // Pass through argv as-is (no quoting / no shell parsing).
+    spawn_args.extend(user_slice);
+
     spawn_args
 }
 
@@ -2226,19 +2254,29 @@ mod tests {
             "hello".into(),
         ];
         let out = build_exec_args_with_wrapper(container, &exec_preview_args, false);
+
         // Should not include -t when use_tty=false
         assert!(
             !out.iter().any(|s| s == "-t"),
             "unexpected -t (tty) in non-streaming wrapper args: {:?}",
             out
         );
-        // Should end with "sh -c <script>" and script must contain exec dir + pgid file + setsid
+
+        // Wrapper must invoke sh -c <script>
+        let pos_sh = out.iter().position(|s| s == "sh");
+        let pos_c = out.iter().position(|s| s == "-c");
         assert!(
-            out.iter().any(|s| s == "sh") && out.iter().any(|s| s == "-c"),
+            pos_sh.is_some() && pos_c.is_some(),
             "wrapper should invoke sh -c, got: {:?}",
             out
         );
-        let script = out.last().expect("script arg");
+
+        // Script is the argument immediately following "-c"
+        let script_idx = pos_c.unwrap() + 1;
+        assert!(script_idx < out.len(), "missing script arg: {:?}", out);
+        let script = &out[script_idx];
+
+        // Script must contain exec dir + pgid file + setsid
         assert!(
             script.contains("/.aifo-exec/${AIFO_EXEC_ID:-}") && script.contains("/pgid"),
             "wrapper script should create pgid file under exec dir, got: {}",
@@ -2248,6 +2286,14 @@ mod tests {
             script.contains("setsid"),
             "wrapper script should use setsid to create a new process group, got: {}",
             script
+        );
+
+        // User args must be passed after script (no embedding into script)
+        let tail = &out[script_idx + 1..];
+        assert!(
+            tail.contains(&"echo".to_string()) && tail.contains(&"hello".to_string()),
+            "expected user args to be passed after script, got tail: {:?}",
+            tail
         );
     }
 }
