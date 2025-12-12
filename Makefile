@@ -166,9 +166,9 @@ RELEASE_POSTFIX ?=
 # - Normalized binaries (inputs to signing):
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
-# - Corresponding zip artifacts:
-#   - $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-arm64.zip
-#   - $(DIST_DIR)/$(BIN_NAME)-$(VERSION)-macos-x86_64.zip
+# - Corresponding versioned zip artifacts (avoid collisions):
+#   - $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
+#   - $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
 #
 # Source binaries (produced by existing build targets; signing targets MUST NOT
 # invoke cargo directly):
@@ -178,10 +178,15 @@ RELEASE_POSTFIX ?=
 # Variable expectations:
 # - DIST_DIR ?= dist
 # - BIN_NAME ?= aifo-coder
+# - MACOS_ZIP_VERSION ?= <tag-or-version>
+#   - If HEAD is exactly at a Git tag, we prefer that tag name automatically.
+#   - Otherwise we fall back to $(VERSION).
 # - SIGN_IDENTITY: codesign identity common name (CN). If empty/unset, signing
-#   flows should fall back to ad-hoc signing for local testing.
+#   flows fall back to ad-hoc signing for local testing.
 # - NOTARY_PROFILE: xcrun notarytool keychain profile. If empty/unset, notarize
-#   steps must be a no-op with clear logging and exit 0.
+#   steps are a no-op with clear logging and exit 0.
+# - GITLAB_API_TOKEN: token used by publish-macos-signed-zips-local to upload
+#   signed zips to the GitLab Generic Package Registry.
 #
 # Platform constraints:
 # - codesign/notarytool/stapler operations are macOS-only (Darwin). Any target
@@ -194,12 +199,13 @@ RELEASE_POSTFIX ?=
 # - zip must overwrite .zip artifacts each run.
 # - notarize may re-submit; stapling should be best-effort and idempotent.
 #
-# Naming (expected target names; implemented later):
+# Targets (local-only signing flow; CI does not sign):
 # - release-macos-binaries-normalize-local
 # - release-macos-binaries-sign
 # - release-macos-binaries-zips
 # - release-macos-binaries-zips-notarize
 # - release-macos-binary-signed
+# - publish-macos-signed-zips-local   (uploads signed zips to GitLab registry; CI auto-attaches links)
 
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
