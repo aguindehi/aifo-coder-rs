@@ -32,7 +32,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixListener;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
@@ -754,6 +754,144 @@ pub fn toolexec_start_proxy(
 static RUST_WARMED: Lazy<std::sync::Mutex<HashSet<String>>> =
     Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
 
+const MAX_TOOL_LEN: usize = 64;
+const MAX_CMD_LEN: usize = 128;
+const MAX_CWD_LEN: usize = 4096;
+const MAX_ARGS_COUNT: usize = 128;
+const MAX_ARG_LEN: usize = 4096;
+
+fn normalize_and_validate_cwd(raw: &str) -> Option<String> {
+    let mut s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if s == "." {
+        return Some("/workspace".to_string());
+    }
+
+    // Normalize repeated slashes and trim trailing slash (except for "/").
+    let mut norm = String::with_capacity(s.len());
+    let mut prev_slash = false;
+    for ch in s.chars() {
+        if ch == '/' {
+            if !prev_slash {
+                norm.push('/');
+            }
+            prev_slash = true;
+        } else {
+            prev_slash = false;
+            norm.push(ch);
+        }
+    }
+    if norm.len() > 1 && norm.ends_with('/') {
+        while norm.len() > 1 && norm.ends_with('/') {
+            norm.pop();
+        }
+    }
+    s = norm.as_str();
+
+    if s == "/workspace" {
+        return Some("/workspace".to_string());
+    }
+    if !s.starts_with("/workspace/") {
+        return None;
+    }
+
+    // Reject path traversal and weird segments.
+    let p = Path::new(s);
+    for c in p.components() {
+        match c {
+            Component::RootDir | Component::Normal(_) => {}
+            Component::CurDir | Component::ParentDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(s.to_string())
+}
+
+fn redact_argv_for_logs(argv: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(argv.len());
+    let mut redact_next = false;
+
+    for a in argv {
+        if redact_next {
+            out.push("***".to_string());
+            redact_next = false;
+            continue;
+        }
+
+        // Redact common flag forms:
+        //   --token SECRET
+        //   --token=SECRET
+        // and similarly for password/api-key/key.
+        let lower = a.to_ascii_lowercase();
+        let mut handled = false;
+        for key in ["--token", "--password", "--api-key", "--key"] {
+            if lower == key {
+                out.push(a.clone());
+                redact_next = true;
+                handled = true;
+                break;
+            }
+            let pref = format!("{key}=");
+            if lower.starts_with(&pref) {
+                out.push(format!("{key}=***"));
+                handled = true;
+                break;
+            }
+        }
+        if handled {
+            continue;
+        }
+
+        // Redact bearer tokens in-arg, best-effort (case-insensitive).
+        let lower_bytes = lower.as_bytes();
+        let needle = b"bearer ";
+        if let Some(pos) = lower_bytes.windows(needle.len()).position(|w| w == needle) {
+            let mut s = a.clone();
+            let after = pos + needle.len();
+            if after < s.len() {
+                s.replace_range(after.., "***");
+            } else {
+                s.push_str("***");
+            }
+            out.push(s);
+            continue;
+        }
+
+        out.push(a.clone());
+    }
+    out
+}
+
+fn enforce_common_caps(tool: &str, cwd: &str, argv: &[String]) -> bool {
+    if tool.len() > MAX_TOOL_LEN {
+        return false;
+    }
+    if cwd.len() > MAX_CWD_LEN {
+        return false;
+    }
+    if argv.len() > MAX_ARGS_COUNT {
+        return false;
+    }
+    if argv.iter().any(|a| a.len() > MAX_ARG_LEN) {
+        return false;
+    }
+    true
+}
+
+fn enforce_notify_caps(cmd: &str, argv: &[String]) -> bool {
+    if cmd.is_empty() || cmd.len() > MAX_CMD_LEN {
+        return false;
+    }
+    if argv.len() > MAX_ARGS_COUNT {
+        return false;
+    }
+    if argv.iter().any(|a| a.len() > MAX_ARG_LEN) {
+        return false;
+    }
+    true
+}
+
 fn ensure_rust_toolchain_warm(
     runtime: &PathBuf,
     container: &str,
@@ -884,6 +1022,27 @@ fn handle_connection<S: Read + Write>(
         }
     }
 
+    // Validate/canonicalize cwd early (trust boundary)
+    if let Some(cwd_norm) = normalize_and_validate_cwd(&cwd) {
+        cwd = cwd_norm;
+    } else {
+        respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+        let _ = stream.flush();
+        return;
+    }
+
+    // Enforce caps before spawning anything
+    if !enforce_common_caps(&tool, &cwd, &argv) {
+        respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+        let _ = stream.flush();
+        return;
+    }
+    if !notif_cmd.is_empty() && notif_cmd.len() > MAX_CMD_LEN {
+        respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+        let _ = stream.flush();
+        return;
+    }
+
     // ExecId: accept header or generate, and log parsed request including exec_id
     let exec_id = req
         .headers
@@ -891,7 +1050,8 @@ fn handle_connection<S: Read + Write>(
         .cloned()
         .unwrap_or_else(random_token);
     if matches!(endpoint, Some(http::Endpoint::Exec)) {
-        log_parsed_request(verbose, &tool, &argv, &cwd, &exec_id);
+        let argv_log = redact_argv_for_logs(&argv);
+        log_parsed_request(verbose, &tool, &argv_log, &cwd, &exec_id);
     }
 
     // Notifications
@@ -902,14 +1062,16 @@ fn handle_connection<S: Read + Write>(
                 .as_deref()
                 .map(|c| format!(" client={}", c))
                 .unwrap_or_default();
+            let argv_log = redact_argv_for_logs(&argv);
             log_compact(&format!(
                 "aifo-coder: proxy notify parsed cmd={} argv={} cwd={}{}",
                 notif_cmd,
-                shell_join(&argv),
+                shell_join(&argv_log),
                 cwd,
                 client_sfx
             ));
         }
+
         let noauth = std_env::var("AIFO_NOTIFICATIONS_NOAUTH").ok().as_deref() == Some("1");
         if noauth {
             // Enforce X-Aifo-Proto: "2" even in noauth mode
@@ -923,12 +1085,13 @@ fn handle_connection<S: Read + Write>(
                 let _ = stream.flush();
                 return;
             }
-            // In noauth mode, cmd is required (400 if missing)
-            if notif_cmd.is_empty() {
+
+            if !enforce_notify_caps(&notif_cmd, &argv) {
                 respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
                 let _ = stream.flush();
                 return;
             }
+
             let notif_to = std_env::var("AIFO_NOTIFICATIONS_TIMEOUT_SECS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
@@ -979,6 +1142,7 @@ fn handle_connection<S: Read + Write>(
             }
         }
 
+        // Auth/proto enforcement applies before caps/required-cmd in authenticated mode.
         match auth_res {
             auth::AuthResult::Authorized { proto } => {
                 if !matches!(proto, auth::Proto::V2) {
@@ -991,6 +1155,13 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
+
+                if !enforce_notify_caps(&notif_cmd, &argv) {
+                    respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);
+                    let _ = stream.flush();
+                    return;
+                }
+
                 // After auth+proto checks, require cmd (400 if missing)
                 if notif_cmd.is_empty() {
                     respond_plain(stream, "400 Bad Request", 86, ERR_BAD_REQUEST);

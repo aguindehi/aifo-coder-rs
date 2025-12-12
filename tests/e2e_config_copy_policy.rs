@@ -1,17 +1,14 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
+mod support;
+
 use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::{thread, time::Duration};
 use tempfile::Builder;
-
-fn docker() -> Option<PathBuf> {
-    aifo_coder::container_runtime_path().ok()
-}
 
 fn image_for_aider() -> Option<String> {
     // Prefer explicit env, else default prefix-tag
@@ -41,14 +38,6 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
-}
-
-fn unique_name(prefix: &str) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{}-{}", prefix, now)
 }
 
 fn run_detached_sleep_container(
@@ -95,39 +84,10 @@ fn run_detached_sleep_container(
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("/bin/sh")
-        .arg("-c")
-        .arg(script);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    match cmd.output() {
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).to_string()
-                + &String::from_utf8_lossy(&o.stderr).to_string();
-            (o.status.code().unwrap_or(1), out)
-        }
-        Err(e) => (1, format!("exec failed: {}", e)),
-    }
-}
-
-fn stop_container(runtime: &Path, name: &str) {
-    let _ = Command::new(runtime)
-        .arg("stop")
-        .arg("--time")
-        .arg("1")
-        .arg(name)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-}
-
 #[test]
 #[ignore]
 fn e2e_config_copy_and_permissions_for_aider() {
-    let runtime = match docker() {
+    let runtime = match support::docker_runtime() {
         Some(p) => p,
         None => {
             eprintln!("skipping: docker runtime not available");
@@ -163,44 +123,27 @@ fn e2e_config_copy_and_permissions_for_aider() {
     fs::write(global.join("config.toml"), "k = \"v\"\n").expect("write config.toml");
     fs::write(aider.join(".aider.conf.yml"), "aider: conf\n").expect("write aider conf");
     fs::write(aider.join("creds.token"), "secret-token-123").expect("write token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(aider.join("creds.token"), fs::Permissions::from_mode(0o600))
+            .expect("chmod creds.token");
+    }
 
     // Run container detached with entrypoint copy-on-start
-    let name = unique_name("aifo-e2e-config");
+    let name = support::unique_name("aifo-e2e-config");
     let ok = run_detached_sleep_container(&runtime, &image, &name, root, &[]);
     assert!(ok, "failed to start container {}", name);
 
     // Wait for entrypoint to copy config (stamp or at least dir)
-    let mut ready = false;
-    for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(
-            &runtime,
-            &name,
-            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-        );
-        if out_ready.contains("READY") {
-            ready = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
-        let _ = exec_sh(
+        let _ = support::docker_exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(
-                &runtime,
-                &name,
-                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out_ready.contains("READY") {
-                ready = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready = support::wait_for_config_copied(&runtime, &name);
     }
     assert!(
         ready,
@@ -226,8 +169,8 @@ perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat 
 [ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing"
 echo "OKS=$ok1$ok2$ok3$ok4$ok5"
 "#;
-    let (_ec, out) = exec_sh(&runtime, &name, script);
-    stop_container(&runtime, &name);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    support::stop_container(&runtime, &name);
 
     assert!(
         out.contains("STAMP=present"),
@@ -244,7 +187,7 @@ echo "OKS=$ok1$ok2$ok3$ok4$ok5"
 #[test]
 #[ignore]
 fn e2e_config_skip_symlink_oversized_disallowed() {
-    let runtime = match docker() {
+    let runtime = match support::docker_runtime() {
         Some(p) => p,
         None => {
             eprintln!("skipping: docker runtime not available");
@@ -287,7 +230,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     #[cfg(unix)]
     std::os::unix::fs::symlink(aider.join("ok.yaml"), aider.join("link.yml")).ok();
 
-    let name = unique_name("aifo-e2e-config");
+    let name = support::unique_name("aifo-e2e-config");
     let ok = run_detached_sleep_container(
         &runtime,
         &image,
@@ -298,37 +241,14 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     assert!(ok, "failed to start container {}", name);
 
     // Wait for entrypoint to copy config (stamp or at least dir)
-    let mut ready = false;
-    for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(
-            &runtime,
-            &name,
-            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-        );
-        if out_ready.contains("READY") {
-            ready = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
-        let _ = exec_sh(
+        let _ = support::docker_exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(
-                &runtime,
-                &name,
-                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out_ready.contains("READY") {
-                ready = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready = support::wait_for_config_copied(&runtime, &name);
     }
     assert!(
         ready,
@@ -345,8 +265,8 @@ have_ok=0; have_unknown=0; have_huge=0; have_link=0
 [ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1
 echo "RES=$have_ok/$have_unknown/$have_huge/$have_link"
 "#;
-    let (_ec, out) = exec_sh(&runtime, &name, script);
-    stop_container(&runtime, &name);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    support::stop_container(&runtime, &name);
 
     assert!(
         out.contains("RES=1/0/0/0"),

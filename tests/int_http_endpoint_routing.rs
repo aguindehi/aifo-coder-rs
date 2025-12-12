@@ -12,10 +12,7 @@ fn int_http_endpoint_routing() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // Note: legacy /notifications endpoint is no longer supported and not tested here.
 

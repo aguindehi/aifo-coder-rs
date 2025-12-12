@@ -16,11 +16,7 @@ fn e2e_test_proxy_unauthorized_and_unknown_tool() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
-    // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // No Authorization header -> expect 401
     let (status, _headers, _body) =

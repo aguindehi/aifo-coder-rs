@@ -9,23 +9,22 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
         return;
     }
 
-    // Isolate HOME and PATH; provide a fake 'say'
-    let old_home = std::env::var("HOME").ok();
-    let old_path = std::env::var("PATH").ok();
+    // Isolate HOME and PATH; provide a fake 'say' (EnvGuard restores automatically)
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().join("home");
     let bindir = td.path().join("bin");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&bindir).unwrap();
-    std::env::set_var("HOME", &home);
-    std::env::set_var(
-        "PATH",
-        format!(
-            "{}:{}",
-            bindir.display(),
-            old_path.clone().unwrap_or_default()
-        ),
-    );
+    let _env_guard = support::EnvGuard::new()
+        .set("HOME", home.to_string_lossy().to_string())
+        .set(
+            "PATH",
+            format!(
+                "{}:{}",
+                bindir.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
     let say = bindir.join("say");
     fs::write(&say, "#!/bin/sh\necho say-$*\nexit 0\n").unwrap();
     #[cfg(unix)]
@@ -41,6 +40,8 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
+
     // Prepare log path
     let logf = td.path().join("proxy.log");
     std::env::set_var("AIFO_TEST_LOG_PATH", &logf);
@@ -54,10 +55,7 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
     std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
 
     // Extract port from URL and send a raw notify request with cmd + args
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
     let body = "cmd=say&arg=--title&arg=AIFO";
     let req = format!(
         "POST /notify HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Aifo-Proto: 2\r\nContent-Length: {}\r\n\r\n{}",
@@ -86,11 +84,5 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
     let _ = handle.join();
     aifo_coder::toolchain_cleanup_session(&sid, false);
 
-    // Restore env
-    if let Some(v) = old_home {
-        std::env::set_var("HOME", v);
-    }
-    if let Some(v) = old_path {
-        std::env::set_var("PATH", v);
-    }
+    // Env restored by EnvGuard
 }

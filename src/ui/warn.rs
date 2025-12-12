@@ -40,8 +40,23 @@ fn warn_input_windows() -> bool {
 
 #[cfg(unix)]
 fn warn_input_unix() -> bool {
+    fn stty_path() -> Option<&'static str> {
+        let candidates = ["/bin/stty", "/usr/bin/stty"];
+        candidates
+            .into_iter()
+            .find(|&p| std::path::Path::new(p).is_file())
+    }
+
+    let stty = match stty_path() {
+        Some(p) => p,
+        None => {
+            // No stty available: fall back to line-based input.
+            return warn_input_fallback();
+        }
+    };
+
     // Save current stty state
-    let saved = std::process::Command::new("stty")
+    let saved = std::process::Command::new(stty)
         .arg("-g")
         .output()
         .ok()
@@ -54,7 +69,7 @@ fn warn_input_unix() -> bool {
         });
 
     // Best-effort: set non-canonical mode, no echo, 1-byte min
-    let _ = std::process::Command::new("stty")
+    let _ = std::process::Command::new(stty)
         .args(["-icanon", "min", "1", "-echo"])
         .status();
 
@@ -63,9 +78,9 @@ fn warn_input_unix() -> bool {
 
     // Restore previous stty state (or sane fallback)
     if let Some(state) = saved {
-        let _ = std::process::Command::new("stty").arg(&state).status();
+        let _ = std::process::Command::new(stty).arg(&state).status();
     } else {
-        let _ = std::process::Command::new("stty").arg("sane").status();
+        let _ = std::process::Command::new(stty).arg("sane").status();
     }
 
     let ch = buf[0] as char;
@@ -78,7 +93,6 @@ fn warn_input_unix() -> bool {
     }
 }
 
-#[cfg(not(any(unix, windows)))]
 fn warn_input_fallback() -> bool {
     // Fallback: line-based input (non-tty or platforms without single-key support)
     let mut s = String::new();

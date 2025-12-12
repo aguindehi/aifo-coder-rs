@@ -32,10 +32,7 @@ fn e2e_proxy_streaming_slow_consumer_disconnect() {
         aifo_coder::toolexec_start_proxy(&sid, true).expect("start proxy");
 
     // Extract port
-    fn port_from_url(url: &str) -> u16 {
-        support::port_from_http_url(url)
-    }
-    let port = port_from_url(&url);
+    let port = support::port_from_http_url(&url);
 
     // Issue a v2 streaming request that writes steadily; do not read much, then close.
     use std::io::Write;

@@ -1,3 +1,5 @@
+mod support;
+
 #[cfg(unix)]
 #[test]
 fn int_notifications_handle_request_with_stub_say() {
@@ -28,18 +30,20 @@ fn int_notifications_handle_request_with_stub_say() {
     let mut f = File::create(&cfg).expect("create cfg");
     writeln!(f, "{cfg_line}").expect("write cfg");
 
-    // Save and set environment
-    let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
-    let old_path = std::env::var("PATH").ok();
-    std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg);
-    let mut path_val = bindir.to_string_lossy().to_string();
-    if let Some(p) = &old_path {
-        if !p.is_empty() {
-            path_val.push(':');
-            path_val.push_str(p);
-        }
-    }
-    std::env::set_var("PATH", path_val);
+    // Save and set environment (use EnvGuard to ensure restoration even on panic)
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir)
+        .set(
+            "AIFO_NOTIFICATIONS_CONFIG",
+            cfg.to_string_lossy().to_string(),
+        )
+        .set(
+            "PATH",
+            format!(
+                "{}:{}",
+                bindir.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
 
     // Invoke notifications handler
     let args = vec!["--title".to_string(), "AIFO".to_string()];
@@ -50,15 +54,5 @@ fn int_notifications_handle_request_with_stub_say() {
     let s = String::from_utf8_lossy(&out).trim().to_string();
     assert_eq!(s, "stub-say:--title AIFO");
 
-    // Restore env
-    if let Some(v) = old_cfg {
-        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
-    } else {
-        std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
-    }
-    if let Some(v) = old_path {
-        std::env::set_var("PATH", v);
-    } else {
-        std::env::remove_var("PATH");
-    }
+    // Env restored by EnvGuard
 }

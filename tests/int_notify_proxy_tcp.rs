@@ -1,3 +1,5 @@
+mod support;
+
 #[test]
 fn int_proxy_notify_say_noauth_tcp() {
     // Skip if docker isn't available on this host (proxy requires docker CLI path for runtime)
@@ -41,34 +43,27 @@ fn int_proxy_notify_say_noauth_tcp() {
     );
     std::fs::write(&cfg, cfg_content).expect("write cfg");
 
-    // Save env and set for proxy thread
-    let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
-    let old_path = std::env::var("PATH").ok();
-    let old_noauth = std::env::var("AIFO_NOTIFICATIONS_NOAUTH").ok();
-
-    std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg);
-    let mut path_val = bindir.to_string_lossy().to_string();
-    if let Some(p) = &old_path {
-        if !p.is_empty() {
-            path_val.push(':');
-            path_val.push_str(p);
-        }
-    }
-    std::env::set_var("PATH", path_val);
-    std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", "1");
+    // Save env and set for proxy thread (EnvGuard restores automatically)
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir)
+        .set(
+            "AIFO_NOTIFICATIONS_CONFIG",
+            cfg.to_string_lossy().to_string(),
+        )
+        .set(
+            "PATH",
+            format!(
+                "{}:{}",
+                bindir.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .set("AIFO_NOTIFICATIONS_NOAUTH", "1");
 
     // Start proxy (TCP)
     let (url, _token, running, handle) =
         aifo_coder::toolexec_start_proxy("unit-test-session", false).expect("start proxy");
 
-    // Derive host:port from url like http://127.0.0.1:12345/exec
-    let addr = url
-        .strip_prefix("http://")
-        .unwrap_or(&url)
-        .split('/')
-        .next()
-        .unwrap()
-        .to_string();
+    let addr = format!("127.0.0.1:{}", support::port_from_http_url(&url));
 
     // Build request body and HTTP message
     let body = "cmd=say&arg=--title&arg=AIFO";
@@ -115,20 +110,5 @@ fn int_proxy_notify_say_noauth_tcp() {
     running.store(false, Ordering::SeqCst);
     let _ = handle.join();
 
-    // Restore env
-    if let Some(v) = old_cfg {
-        std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", v);
-    } else {
-        std::env::remove_var("AIFO_NOTIFICATIONS_CONFIG");
-    }
-    if let Some(v) = old_path {
-        std::env::set_var("PATH", v);
-    } else {
-        std::env::remove_var("PATH");
-    }
-    if let Some(v) = old_noauth {
-        std::env::set_var("AIFO_NOTIFICATIONS_NOAUTH", v);
-    } else {
-        std::env::remove_var("AIFO_NOTIFICATIONS_NOAUTH");
-    }
+    // Env restored by EnvGuard
 }

@@ -48,10 +48,7 @@ fn int_proxy_python_venv_precedence() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // POST tool=python
     let (status, _headers, body) = support::http_post_tcp(

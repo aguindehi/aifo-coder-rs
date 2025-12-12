@@ -7,30 +7,6 @@ mod support;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-
-fn find_header_end(buf: &[u8]) -> Option<usize> {
-    if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-        Some(i + 4)
-    } else {
-        buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2)
-    }
-}
-
-fn urlencode_component(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b' ' => out.push('+'),
-            b'-' | b'_' | b'.' | b'~' => out.push(b as char),
-            b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => out.push(b as char),
-            _ => {
-                out.push('%');
-                out.push_str(&format!("{:02X}", b));
-            }
-        }
-    }
-    out
-}
 #[ignore]
 #[test]
 fn e2e_proxy_v2_backpressure_emits_drop_warning_and_counter() {
@@ -84,24 +60,17 @@ fn e2e_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     std::env::set_var("AIFO_PROXY_SIGNAL_GRACE_MS", "0");
 
     // Extract port from http://127.0.0.1:<port>/exec
-    assert!(
-        url.starts_with("http://127.0.0.1:"),
-        "expected tcp proxy url, got: {}",
-        url
-    );
-    let rest = url.trim_start_matches("http://127.0.0.1:");
-    let port_str = rest.split('/').next().unwrap_or(rest);
-    let port = port_str.parse::<u16>().expect("port parse");
+    let port = support::port_from_http_url(&url);
 
     // Build a request body that streams a lot of output quickly
     // Use node to generate an effectively infinite stream using blocking writes (no shell)
     let script = "const fs=require('fs');const b='x\\n'.repeat(65536);for(;;){try{fs.writeSync(1,b);}catch(e){process.exit(0);}}";
     let body = format!(
         "tool={}&cwd={}&arg={}&arg={}",
-        urlencode_component("node"),
-        urlencode_component("/workspace"),
-        urlencode_component("-e"),
-        urlencode_component(script)
+        support::urlencode("node"),
+        support::urlencode("/workspace"),
+        support::urlencode("-e"),
+        support::urlencode(script)
     );
 
     // Compose raw HTTP/1.1 request
@@ -129,7 +98,7 @@ fn e2e_proxy_v2_backpressure_emits_drop_warning_and_counter() {
     let mut buf = Vec::<u8>::new();
     let mut tmp = [0u8; 1024];
     loop {
-        if find_header_end(&buf).is_some() {
+        if aifo_coder::find_header_end(&buf).is_some() {
             break;
         }
         match stream.read(&mut tmp) {

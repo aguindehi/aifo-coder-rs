@@ -31,24 +31,22 @@ fn int_test_proxy_notifications_policy_auth_vs_noauth() {
         return;
     }
 
-    // Isolate HOME and PATH for config and say stub
-    let old_home = std::env::var("HOME").ok();
-    let old_path = std::env::var("PATH").ok();
-
+    // Isolate HOME and PATH for config and say stub (EnvGuard restores automatically)
     let td = tempfile::tempdir().expect("tmpdir");
     let home = td.path().join("home");
     let bindir = td.path().join("bin");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&bindir).unwrap();
-    std::env::set_var("HOME", &home);
-    std::env::set_var(
-        "PATH",
-        format!(
-            "{}:{}",
-            bindir.display(),
-            old_path.clone().unwrap_or_default()
-        ),
-    );
+    let _env_guard = support::EnvGuard::new()
+        .set("HOME", home.to_string_lossy().to_string())
+        .set(
+            "PATH",
+            format!(
+                "{}:{}",
+                bindir.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
 
     // Provide a say stub; may or may not be used depending on policy outcome
     let say = bindir.join("say");
@@ -65,16 +63,14 @@ fn int_test_proxy_notifications_policy_auth_vs_noauth() {
         say.display()
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
 
     // Start proxy
     let sid = format!("notifpol-{}", std::process::id());
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // Default: missing auth -> 401 on /notify
     {
@@ -133,11 +129,5 @@ fn int_test_proxy_notifications_policy_auth_vs_noauth() {
     let _ = handle.join();
     aifo_coder::toolchain_cleanup_session(&sid, false);
 
-    // Restore environment
-    if let Some(v) = old_home {
-        std::env::set_var("HOME", v);
-    }
-    if let Some(v) = old_path {
-        std::env::set_var("PATH", v);
-    }
+    // Env restored by EnvGuard
 }

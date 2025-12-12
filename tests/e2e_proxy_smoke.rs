@@ -1,5 +1,5 @@
 mod support;
-use support::urlencode;
+
 #[ignore]
 #[test]
 fn e2e_test_proxy_shim_route_rust_and_node() {
@@ -21,84 +21,40 @@ fn e2e_test_proxy_shim_route_rust_and_node() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, verbose).expect("failed to start proxy");
 
-    // Helper to extract host:port from url "http://host.docker.internal:PORT/exec"
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
+    let port = support::port_from_http_url(&url);
 
-    fn post_exec(port: u16, token: &str, tool: &str, args: &[&str]) -> (i32, String) {
-        use std::io::{Read, Write};
-        use std::net::TcpStream;
-
-        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-
-        let mut body = format!("tool={}&cwd={}", urlencode(tool), urlencode("."));
-        for a in args {
-            body.push('&');
-            body.push_str(&format!("arg={}", urlencode(a)));
-        }
-
-        let req = format!(
-            "POST /exec HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nX-Aifo-Proto: 1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}",
-            token,
-            body.len(),
-            body
-        );
-        stream.write_all(req.as_bytes()).expect("write failed");
-
-        // Read headers until CRLFCRLF
-        let mut buf = Vec::new();
-        let mut tmp = [0u8; 1024];
-        let header_end_pos = loop {
-            let n = stream.read(&mut tmp).expect("read failed");
-            if n == 0 {
-                break None;
-            }
-            buf.extend_from_slice(&tmp[..n]);
-            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                break Some(pos + 4);
-            }
-            if buf.len() > 128 * 1024 {
-                break None;
-            }
-        };
-        let hend = header_end_pos.expect("no header terminator found");
-        let header = String::from_utf8_lossy(&buf[..hend]).to_string();
-
-        // Parse X-Exit-Code and Content-Length
-        let mut code: i32 = 1;
-        let mut content_len: usize = 0;
-        for line in header.lines() {
+    fn x_exit_code(headers: &str) -> i32 {
+        for line in headers.lines() {
             if let Some(v) = line.strip_prefix("X-Exit-Code: ") {
-                code = v.trim().parse::<i32>().unwrap_or(1);
-            } else if let Some(v) = line.strip_prefix("Content-Length: ") {
-                content_len = v.trim().parse::<usize>().unwrap_or(0);
+                return v.trim().parse::<i32>().unwrap_or(1);
             }
         }
-
-        // Read exactly content_len bytes of body (may already have some in buf)
-        let mut body_bytes = buf[hend..].to_vec();
-        while body_bytes.len() < content_len {
-            let n = stream.read(&mut tmp).expect("read body failed");
-            if n == 0 {
-                break;
-            }
-            body_bytes.extend_from_slice(&tmp[..n]);
-        }
-
-        let text = String::from_utf8_lossy(&body_bytes).to_string();
-        (code, text)
+        1
     }
-
-    let port = extract_port(&url);
 
     // rust: cargo --version
-    let (code_rust, _out_rust) = post_exec(port, &token, "cargo", &["--version"]);
-    assert_eq!(code_rust, 0, "cargo --version failed via proxy");
+    let (_status, headers, _body) = support::http_post_form_tcp(
+        port,
+        "/exec",
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
+        &[("tool", "cargo"), ("cwd", "."), ("arg", "--version")],
+    );
+    assert_eq!(x_exit_code(&headers), 0, "cargo --version failed via proxy");
 
     // node: npx --version
-    let (code_node, _out_node) = post_exec(port, &token, "npx", &["--version"]);
-    assert_eq!(code_node, 0, "npx --version failed via proxy");
+    let (_status, headers, _body) = support::http_post_form_tcp(
+        port,
+        "/exec",
+        &[
+            ("Authorization", &format!("Bearer {}", token)),
+            ("X-Aifo-Proto", "1"),
+        ],
+        &[("tool", "npx"), ("cwd", "."), ("arg", "--version")],
+    );
+    assert_eq!(x_exit_code(&headers), 0, "npx --version failed via proxy");
 
     // Cleanup
     flag.store(false, std::sync::atomic::Ordering::SeqCst);

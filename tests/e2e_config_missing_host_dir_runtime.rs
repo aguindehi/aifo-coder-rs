@@ -1,13 +1,11 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
-use std::path::{Path, PathBuf};
+mod support;
+
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
-
-fn docker() -> Option<PathBuf> {
-    aifo_coder::container_runtime_path().ok()
-}
 
 fn image_for_aider() -> Option<String> {
     if let Ok(img) = std::env::var("AIDER_IMAGE") {
@@ -39,14 +37,6 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn unique_name(prefix: &str) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{}-{}", prefix, now)
-}
-
 fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str) -> bool {
     let args: Vec<String> = vec![
         "docker".into(),
@@ -71,39 +61,10 @@ fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str)
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
-fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("/bin/sh")
-        .arg("-c")
-        .arg(script);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    match cmd.output() {
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).to_string()
-                + &String::from_utf8_lossy(&o.stderr).to_string();
-            (o.status.code().unwrap_or(1), out)
-        }
-        Err(e) => (1, format!("exec failed: {}", e)),
-    }
-}
-
-fn stop_container(runtime: &Path, name: &str) {
-    let _ = Command::new(runtime)
-        .arg("stop")
-        .arg("--time")
-        .arg("1")
-        .arg(name)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-}
-
 #[test]
 #[ignore]
 fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
-    let runtime = match docker() {
+    let runtime = match support::docker_runtime() {
         Some(p) => p,
         None => {
             eprintln!("skipping: docker runtime not available");
@@ -123,7 +84,7 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
     }
 
     // Start aider without mounting a config host directory
-    let name = unique_name("aifo-e2e-missing-host");
+    let name = support::unique_name("aifo-e2e-missing-host");
     assert!(
         run_detached_sleep_container_nomount(&runtime, &image, &name),
         "failed to start container {}",
@@ -133,7 +94,7 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
     // Wait for $HOME/.aifo-config to be created (stamp should remain absent)
     let mut have_dir = false;
     for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(
+        let (_ec, out_ready) = support::docker_exec_sh(
             &runtime,
             &name,
             r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
@@ -145,13 +106,13 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
         thread::sleep(Duration::from_millis(100));
     }
     if !have_dir {
-        let _ = exec_sh(
+        let _ = support::docker_exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
         for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(
+            let (_ec, out_ready) = support::docker_exec_sh(
                 &runtime,
                 &name,
                 r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
@@ -175,8 +136,8 @@ d="$HOME/.aifo-config"
 if [ -d "$d" ]; then echo "DST_DIR=present"; else echo "DST_DIR=missing"; fi
 if [ -f "$d/.copied" ]; then echo "STAMP=present"; else echo "STAMP=absent"; fi
 "#;
-    let (_ec, out) = exec_sh(&runtime, &name, script);
-    stop_container(&runtime, &name);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    support::stop_container(&runtime, &name);
 
     assert!(
         out.contains("DST_DIR=present"),

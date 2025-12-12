@@ -9,25 +9,22 @@ fn int_test_notifications_cmd_e2e_ok_and_mismatch() {
         return;
     }
 
-    // Save current HOME/PATH to restore later
-    let old_home = std::env::var("HOME").ok();
-    let old_path = std::env::var("PATH").ok();
-
-    // Isolate HOME and PATH
+    // Isolate HOME and PATH (EnvGuard restores automatically)
     let tmpd = tempfile::tempdir().expect("tmpdir");
     let home = tmpd.path().join("home");
     let bindir = tmpd.path().join("bin");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&bindir).unwrap();
-    std::env::set_var("HOME", &home);
-    std::env::set_var(
-        "PATH",
-        format!(
-            "{}:{}",
-            bindir.display(),
-            old_path.clone().unwrap_or_default()
-        ),
-    );
+    let _env_guard = support::EnvGuard::new()
+        .set("HOME", home.to_string_lossy().to_string())
+        .set(
+            "PATH",
+            format!(
+                "{}:{}",
+                bindir.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
 
     // Synthetic 'say' printing args and exiting 0
     let say = bindir.join("say");
@@ -45,15 +42,14 @@ fn int_test_notifications_cmd_e2e_ok_and_mismatch() {
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
+    let _notif_guard = support::notifications_allow_test_exec_from(&bindir);
+
     // Start proxy without launching sidecars (notifications-cmd does not require sidecars)
     let sid = format!("notif-{}", std::process::id());
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // OK case: args match config
     {
@@ -97,11 +93,5 @@ fn int_test_notifications_cmd_e2e_ok_and_mismatch() {
     let _ = handle.join();
     aifo_coder::toolchain_cleanup_session(&sid, false);
 
-    // Restore environment
-    if let Some(v) = old_home {
-        std::env::set_var("HOME", v);
-    }
-    if let Some(v) = old_path {
-        std::env::set_var("PATH", v);
-    }
+    // Env restored by EnvGuard(s)
 }

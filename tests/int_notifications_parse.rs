@@ -1,3 +1,5 @@
+mod support;
+
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
@@ -234,6 +236,8 @@ fn int_notifications_args_mismatch_error() {
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
+
     let res =
         aifo_coder::notifications_handle_request(&["--title".into(), "Other".into()], false, 1);
     assert!(res.is_err(), "expected mismatch error, got: {:?}", res);
@@ -282,6 +286,9 @@ fn int_notifications_config_rejects_non_say() {
     let cfg_path = write_cfg(&home, &cfg);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
+
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
+
     let res =
         aifo_coder::notifications_handle_request(&["--title".into(), "AIFO".into()], false, 1);
     assert!(res.is_err(), "expected error when executable is not 'say'");

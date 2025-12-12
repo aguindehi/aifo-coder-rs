@@ -1,6 +1,21 @@
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn sanitize_env_value(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
+        return None;
+    }
+    Some(s.to_string())
+}
+
+fn first_line(s: &str) -> &str {
+    s.lines().next().unwrap_or("")
+}
+
 fn main() {
     // Re-run build script when this file changes
     println!("cargo:rerun-if-changed=build.rs");
@@ -12,10 +27,10 @@ fn main() {
     if let Ok(path) = std::env::var("AIFO_OTEL_ENDPOINT_FILE") {
         if let Ok(contents) = std::fs::read_to_string(&path) {
             let mut lines = contents.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
-            if let Some(ep) = lines.next() {
+            if let Some(ep) = lines.next().and_then(sanitize_env_value) {
                 println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_ENDPOINT={ep}");
             }
-            if let Some(transport) = lines.next() {
+            if let Some(transport) = lines.next().and_then(sanitize_env_value) {
                 let t = transport.trim().to_ascii_lowercase();
                 if t == "grpc" || t == "http" {
                     println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_TRANSPORT={t}");
@@ -23,14 +38,15 @@ fn main() {
             }
         }
     } else if let Ok(val) = std::env::var("AIFO_OTEL_ENDPOINT") {
-        let trimmed = val.trim();
-        if !trimmed.is_empty() {
+        if let Some(trimmed) = sanitize_env_value(&val) {
             println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_ENDPOINT={trimmed}");
         }
         if let Ok(t) = std::env::var("AIFO_OTEL_TRANSPORT") {
-            let tl = t.trim().to_ascii_lowercase();
-            if tl == "grpc" || tl == "http" {
-                println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_TRANSPORT={tl}");
+            if let Some(tl0) = sanitize_env_value(&t) {
+                let tl = tl0.trim().to_ascii_lowercase();
+                if tl == "grpc" || tl == "http" {
+                    println!("cargo:rustc-env=AIFO_OTEL_DEFAULT_TRANSPORT={tl}");
+                }
             }
         }
     }
@@ -42,7 +58,7 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                sanitize_env_value(first_line(&String::from_utf8_lossy(&o.stdout)))
             } else {
                 None
             }
@@ -54,14 +70,20 @@ fn main() {
                 .as_secs();
             format!("unix:{secs}")
         });
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_DATE={build_date}");
+    if let Some(v) = sanitize_env_value(&build_date) {
+        println!("cargo:rustc-env=AIFO_SHIM_BUILD_DATE={v}");
+    }
 
     // Target triple and profile
     let target = std::env::var("TARGET").unwrap_or_else(|_| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_TARGET={target}");
+    if let Some(v) = sanitize_env_value(&target) {
+        println!("cargo:rustc-env=AIFO_SHIM_BUILD_TARGET={v}");
+    }
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_PROFILE={profile}");
+    if let Some(v) = sanitize_env_value(&profile) {
+        println!("cargo:rustc-env=AIFO_SHIM_BUILD_PROFILE={v}");
+    }
 
     // rustc version (best-effort)
     let rustc_ver = Command::new("rustc")
@@ -70,11 +92,13 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                sanitize_env_value(first_line(&String::from_utf8_lossy(&o.stdout)))
             } else {
                 None
             }
         })
         .unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=AIFO_SHIM_BUILD_RUSTC={rustc_ver}");
+    if let Some(v) = sanitize_env_value(&rustc_ver) {
+        println!("cargo:rustc-env=AIFO_SHIM_BUILD_RUSTC={v}");
+    }
 }

@@ -7,7 +7,7 @@
 # - AIFO_CODER_PROJECT_ROOT: override project root detection
 # - AIFO_CODER_BIN: direct path to a compiled aifo-coder binary
 # - RUST_BUILDER_IMAGE: Docker image tag used for container builds (fallback)
-# 
+#
 # Behavior overview:
 # - Prefers an installed and runnable aifo-coder on PATH (not this script)
 # - Rebuilds with cargo when sources are newer than the current binary

@@ -78,10 +78,7 @@ fn e2e_streaming_spawn_fail_plain_500() {
         std::env::set_var("PATH", v);
     }
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // Issue a streaming exec request; if spawn fails properly, we should get plain 500 with X-Exit-Code: 86
     use std::net::TcpStream;
