@@ -29,6 +29,7 @@ Style guidance
 mod apparmor;
 #[allow(clippy::doc_overindented_list_items)]
 mod color;
+mod docker;
 mod docker_mod;
 mod errors;
 mod fork;
@@ -48,7 +49,7 @@ mod ui;
 mod util;
 pub use apparmor::*;
 pub use color::*;
-pub use docker_mod::*;
+pub use docker::*;
 pub use errors::exit_code_for_io_error;
 pub use errors::{display_for_fork_error, display_for_toolchain_error};
 pub use errors::{exit_code_for_fork_error, exit_code_for_toolchain_error};
