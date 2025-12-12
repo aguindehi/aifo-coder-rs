@@ -3507,12 +3507,18 @@ publish-macos-signed-zips-local:
 	fi; \
 	API_V4="https://$$HOST/api/v4"; \
 	PROJ_ENC="$$(printf "%s" "$$PROJ" | sed '\''s#/#%2F#g'\'')"; \
-	PID="$$(curl -sS -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$API_V4/projects/$$PROJ_ENC" \
-	  | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' | head -n1)"; \
+	RES="$$(mktemp)"; \
+	STATUS="$$(curl -sS -w '%{http_code}' -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
+	PID="$$(sed -nE 's/.*\"id\":[[:space:]]*([0-9]+).*/\1/p' "$$RES" | head -n1)"; \
 	if [ -z "$$PID" ]; then \
 	  echo "Error: failed to resolve project id via GitLab API for $$PROJ (host $$HOST)." >&2; \
+	  echo "HTTP status: $$STATUS" >&2; \
+	  echo "Response body (first 80 lines):" >&2; \
+	  sed -n '1,80p' "$$RES" >&2; \
+	  rm -f "$$RES"; \
 	  exit 1; \
 	fi; \
+	rm -f "$$RES"; \
 	UPLOAD_TAG="$(RELEASE_TAG_EFFECTIVE)"; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
 	X86="$(MACOS_ZIP_X86_64)"; \
