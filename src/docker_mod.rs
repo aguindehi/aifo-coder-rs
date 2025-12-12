@@ -863,10 +863,7 @@ fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsStri
     //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
     let (cfg_host_dir, cfg_is_override) = {
         if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
-            (
-                validate_mount_source_dir(&v, "AIFO_CONFIG_HOST_DIR"),
-                true,
-            )
+            (validate_mount_source_dir(&v, "AIFO_CONFIG_HOST_DIR"), true)
         } else if let Ok(v) = env::var("AIFO_CODER_CONFIG_HOST_DIR") {
             (
                 validate_mount_source_dir(&v, "AIFO_CODER_CONFIG_HOST_DIR"),
