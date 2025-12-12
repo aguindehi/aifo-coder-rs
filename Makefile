@@ -238,9 +238,15 @@ endef
 define MACOS_DETECT_APPLE_DEV
 APPLE_DEV=0; \
 if [ -n "$${SIGN_IDENTITY:-}" ]; then \
-  if security find-certificate -a -c "$$SIGN_IDENTITY" -Z -p 2>/dev/null \
+  if security find-certificate -a -c "$$SIGN_IDENTITY" -Z -p --keychain "$$KEYCHAIN" 2>/dev/null \
     | grep -Eiq "Developer ID Application|Apple Distribution|Apple Development"; then \
     APPLE_DEV=1; \
+  elif command -v openssl >/dev/null 2>&1; then \
+    SUBJ="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -p --keychain "$$KEYCHAIN" 2>/dev/null \
+      | openssl x509 -noout -subject 2>/dev/null | head -n1)"; \
+    case "$$SUBJ" in \
+      *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; \
+    esac; \
   fi; \
 fi; \
 export APPLE_DEV
@@ -271,7 +277,7 @@ else \
   if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_IDENTITY" "$$B"; then \
     :; \
   else \
-    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z 2>/dev/null \
+    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z --keychain "$$KEYCHAIN" 2>/dev/null \
       | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
     if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$B"; then \
       :; \
