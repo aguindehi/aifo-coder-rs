@@ -170,13 +170,10 @@ RELEASE_POSTFIX ?=
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64.zip
 #   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64.zip
 #
-# Source binaries (produced by existing targets, not by signing targets):
+# Source binaries (produced by existing build targets; signing targets MUST NOT
+# invoke cargo directly):
 # - target/aarch64-apple-darwin/release/$(BIN_NAME)
 # - target/x86_64-apple-darwin/release/$(BIN_NAME)
-#
-# Invariants:
-# - macOS signing/notarization targets MUST NOT invoke cargo build directly.
-# - dist/ artifacts are replaceable; targets are free to overwrite them.
 #
 # Variable expectations:
 # - DIST_DIR ?= dist
@@ -187,9 +184,22 @@ RELEASE_POSTFIX ?=
 #   steps must be a no-op with clear logging and exit 0.
 #
 # Platform constraints:
-# - codesign/notarytool/stapler operations are macOS-only (Darwin).
-# - On non-Darwin platforms, those targets must fail with a clear message and
-#   exit status 1.
+# - codesign/notarytool/stapler operations are macOS-only (Darwin). Any target
+#   requiring these tools must exit 1 on non-Darwin with a clear message that
+#   includes the detected uname.
+#
+# Idempotency:
+# - normalize may overwrite dist/ binaries each run.
+# - sign must be safe when binaries are already signed (codesign --force).
+# - zip must overwrite .zip artifacts each run.
+# - notarize may re-submit; stapling should be best-effort and idempotent.
+#
+# Naming (expected target names; implemented later):
+# - release-macos-binaries-normalize-local
+# - release-macos-binaries-sign
+# - release-macos-binaries-zips
+# - release-macos-binaries-zips-notarize
+# - release-macos-binary-signed
 
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
