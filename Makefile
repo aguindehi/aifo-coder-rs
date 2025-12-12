@@ -216,14 +216,6 @@ RELEASE_POSTFIX ?=
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 
-# Effective release tag used for publishing (matches publish-release defaulting behavior).
-# Prefer TAG only when explicitly provided (command line or environment). Otherwise derive from Cargo.toml version.
-RELEASE_TAG_EFFECTIVE := $(if \
-  $(filter command% environment,$(origin TAG)), \
-  $(TAG), \
-  $(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),) \
-)
-
 # Version string embedded into signed macOS zip names.
 # Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
 MACOS_ZIP_VERSION ?= $(VERSION)
@@ -1691,10 +1683,15 @@ publish-release-macos-signed:
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
-	echo "Publishing signed macOS zips for $(RELEASE_TAG_EFFECTIVE) ..."; \
-	$(MAKE) release-macos-binary-signed; \
-	$(MAKE) publish-macos-signed-zips-local; \
-	echo "Done. Ensure the git tag '\''$(RELEASE_TAG_EFFECTIVE)'\'' exists in GitLab so the Release reflects these assets."; \
+	TAG_EFF="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG_EFF" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-signed-zips-local; \
+	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
 	'
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
@@ -2924,6 +2921,18 @@ ifeq ($(strip $(VERSION)),)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
+# Effective release tag used for publishing (matches publish-release defaulting behavior).
+# Prefer TAG only when explicitly provided (command line or environment). Otherwise derive from Cargo.toml version.
+#
+# NOTE: This must be a recursively-expanded variable (=) and must be defined after
+# VERSION/RELEASE_PREFIX/RELEASE_POSTFIX so older GNU Make versions (e.g. 3.81) don't
+# freeze it to empty via := immediate expansion.
+RELEASE_TAG_EFFECTIVE = $(if \
+  $(filter command% environment,$(origin TAG)), \
+  $(TAG), \
+  $(RELEASE_PREFIX)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),) \
+)
+
 
 # macOS app packaging variables
 APP_NAME ?= $(BIN_NAME)
@@ -3531,8 +3540,8 @@ publish-macos-signed-zips-local:
 	fi; \
 	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
 	if [ -z "$$TAG" ]; then \
-	  echo "Error: RELEASE_TAG_EFFECTIVE is empty; cannot determine release tag for link attachment." >&2; \
-	  echo "Hint: ensure TAG/RELEASE_PREFIX/VERSION are set as for publish-release." >&2; \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
 	  exit 1; \
 	fi; \
 	UPLOAD_AND_GET_URL() { \
