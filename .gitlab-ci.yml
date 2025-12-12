@@ -859,14 +859,37 @@ publish-release:
       cp dist/aifo-coder-macos-x86_64 .
       # Rename Linux binary for clarity
       mv aifo-coder aifo-coder-linux-x86_64
-      # Create per-OS archives including docs
-      tar -czf aifo-coder-linux-x86_64.tar.gz \
-        aifo-coder-linux-x86_64 README.md NOTICE LICENSE docs
-      tar -czf aifo-coder-macos.tar.gz \
-        aifo-coder-macos-arm64 aifo-coder-macos-x86_64 README.md NOTICE LICENSE docs
+      # Create per-arch archives (zip) including docs.
+      # Keep a stable 'aifo-coder' binary name inside the archive; version is in the filename.
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-linux-x86_64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip" .); \
+        rm -rf "${stage}"; \
+      )
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-macos-arm64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip" .); \
+        rm -rf "${stage}"; \
+      )
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-macos-x86_64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip" .); \
+        rm -rf "${stage}"; \
+      )
       echo "Artifacts ready:"
       ls -lh aifo-coder-linux-x86_64 aifo-coder-macos-arm64 aifo-coder-macos-x86_64
-      ls -lh aifo-coder-linux-x86_64.tar.gz aifo-coder-macos.tar.gz
+      ls -lh aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip \
+        aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip \
+        aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
       ls -lh README.md NOTICE LICENSE
       echo
       echo "NOTE: CI does not sign or notarize macOS artifacts. To publish signed/notarized macOS zips:"
@@ -879,8 +902,9 @@ publish-release:
         --name "Release ${CI_COMMIT_TAG}" \
         --tag-name "${CI_COMMIT_TAG}" \
         --description "${CI_COMMIT_MESSAGE}" \
-        --assets-link "{\"name\":\"aifo-coder-linux-x86_64.tar.gz\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-linux-x86_64.tar.gz\"}" \
-        --assets-link "{\"name\":\"aifo-coder-macos.tar.gz\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos.tar.gz\"}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip\"}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip\"}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip\"}" \
         --assets-link "{\"name\":\"aifo-coder-linux-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-linux-x86_64\"}" \
         --assets-link "{\"name\":\"aifo-coder-macos-arm64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-arm64\"}" \
         --assets-link "{\"name\":\"aifo-coder-macos-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-x86_64\"}" \
@@ -891,8 +915,9 @@ publish-release:
       - aifo-coder-linux-x86_64
       - aifo-coder-macos-arm64
       - aifo-coder-macos-x86_64
-      - aifo-coder-linux-x86_64.tar.gz
-      - aifo-coder-macos.tar.gz
+      - aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip
+      - aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip
+      - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
       - README.md
       - NOTICE
       - LICENSE

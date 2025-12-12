@@ -278,6 +278,10 @@ command -v zip >/dev/null 2>&1 || { \
 }
 endef
 
+define ZIP_CMD
+zip -9qr
+endef
+
 define MACOS_DETECT_APPLE_DEV
 APPLE_DEV=0; \
 if [ -n "$${SIGN_IDENTITY:-}" ]; then \
@@ -3129,9 +3133,10 @@ release-for-target:
 	  [ -d docs ] && cp -a docs "$$STAGE/"; \
 	  [ -d examples ] && cp -a examples "$$STAGE/"; \
 	  chmod -R u=rwX,go=rX "$$STAGE" || true; \
-	  tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
-	  chmod 0644 "$$D/$$PKG.tar.gz" || true; \
-	  echo "Wrote $$D/$$PKG.tar.gz"; \
+	  $(MACOS_REQUIRE_ZIP); \
+	  (cd "$$D" && $(ZIP_CMD) "$$PKG.zip" "$$PKG"); \
+	  chmod 0644 "$$D/$$PKG.zip" || true; \
+	  echo "Wrote $$D/$$PKG.zip"; \
 	  rm -rf "$$STAGE"; \
 	  PACKED=1; \
 	done; \
@@ -3158,9 +3163,10 @@ release-for-target:
 	      [ -d docs ] && cp -a docs "$$STAGE/"; \
 	      [ -d examples ] && cp -a examples "$$STAGE/"; \
 	      chmod -R u=rwX,go=rX "$$STAGE" || true; \
-	      tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
-	      chmod 0644 "$$D/$$PKG.tar.gz" || true; \
-	      echo "Wrote $$D/$$PKG.tar.gz"; \
+	      $(MACOS_REQUIRE_ZIP); \
+	      (cd "$$D" && $(ZIP_CMD) "$$PKG.zip" "$$PKG"); \
+	      chmod 0644 "$$D/$$PKG.zip" || true; \
+	      echo "Wrote $$D/$$PKG.zip"; \
 	      rm -rf "$$STAGE"; \
 	      PACKED=1; \
 	    done; \
@@ -3169,10 +3175,10 @@ release-for-target:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi; \
-	echo "Generate checksums for archives (tar.gz, dmg)" > /dev/null; \
-	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
+	echo "Generate checksums for archives (zip, dmg)" > /dev/null; \
+	if ls "$$D"/*.zip >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
 	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
-	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
+	  for f in "$$D"/*.zip "$$D"/*.dmg; do \
 	    [ -f "$$f" ] || continue; \
 	    if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$$f" >> "$$OUT"; \
 	    elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f" >> "$$OUT"; \
