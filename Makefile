@@ -158,10 +158,10 @@ export DOCKER_BUILDKIT ?= 1
 RELEASE_PREFIX ?= release
 RELEASE_POSTFIX ?=
 
-# Optional local developer overrides (not committed): load .env if present.
-# Typical use: RELEASE_ASSETS_API_TOKEN, SIGN_IDENTITY, NOTARY_PROFILE.
--include .env
-export RELEASE_ASSETS_API_TOKEN
+# Optional local developer overrides (not committed).
+# NOTE: We intentionally do NOT `include .env` here because `.env` is typically
+# shell syntax (often quoted) and Make would include quotes in variable values.
+# Targets that need values from .env should source it in their shell recipe.
 
 # -----------------------------------------------------------------------------
 # macOS binary signing / notarization (local-only) – prerequisites & invariants
@@ -1684,6 +1684,7 @@ publish-release-macos-signed:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
+	if [ -f ./.env ]; then . ./.env; fi; \
 	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
 	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required to upload signed macOS zips." >&2; \
@@ -3487,6 +3488,7 @@ publish-macos-signed-zips-local:
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
+	if [ -f ./.env ]; then . ./.env; fi; \
 	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload to GitLab Package Registry." >&2; \
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
