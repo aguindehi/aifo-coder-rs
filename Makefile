@@ -3634,16 +3634,17 @@ publish-macos-signed-zips-local-glab:
 	  fi; \
 	}; \
 	echo "Resolving project id via glab (current repo context) ..."; \
-	PID="$$(glab api --hostname "$$HOST" projects/:id --jq .id)"; \
+	PID="$$(glab api --hostname "$$HOST" projects/:id | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' | head -n1)"; \
 	if [ -z "$$PID" ]; then \
-	  echo "Error: could not resolve project id via glab." >&2; \
+	  echo "Error: could not resolve project id via glab (missing id in API response)." >&2; \
 	  exit 1; \
 	fi; \
 	UPLOAD_AND_GET_URL() { \
 	  file="$$1"; \
 	  [ -f "$$file" ] || { echo ""; return 0; }; \
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
-	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" --jq .url; \
+	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" \
+	    | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' | head -n1; \
 	}; \
 	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
 	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
@@ -3651,13 +3652,14 @@ publish-macos-signed-zips-local-glab:
 	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
 	  exit 1; \
 	fi; \
-	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID --jq .web_url)"; \
+	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID | sed -nE '\''s/.*"web_url":[[:space:]]*"([^"]+)".*/\1/p'\'' | head -n1)"; \
 	if [ -z "$$BASE_WEB" ]; then \
 	  echo "Error: could not resolve project web_url via glab." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
-	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" --jq '.assets.links[].url' 2>/dev/null | tr "\n" " " || true)"; \
+	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" 2>/dev/null \
+	  | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' | tr "\n" " " || true)"; \
 	ADD_LINK() { \
 	  name="$$1"; rel_path="$$2"; \
 	  [ -n "$$rel_path" ] || return 0; \
@@ -3672,7 +3674,8 @@ publish-macos-signed-zips-local-glab:
 	      return 0 ;; \
 	  esac; \
 	  echo "Adding release link: $$name -> $$full_url"; \
-	  glab api --hostname "$$HOST" -X POST "projects/$$PID/releases/$$TAG/assets/links" --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
+	  glab api --hostname "$$HOST" -X POST "projects/$$PID/releases/$$TAG/assets/links" \
+	    --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
 	}; \
 	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
 	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
