@@ -14,7 +14,7 @@ use serde_yaml::Value as YamlValue;
 use std::fs;
 #[allow(unused_imports)]
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -143,7 +143,7 @@ fn compute_allowlist_basenames() -> Vec<String> {
     out
 }
 
-fn notifications_exec_in_safe_dir(exec_abs: &PathBuf) -> bool {
+fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
     let defaults = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
     let allow_override = std::env::var("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST")
         .ok()
@@ -166,13 +166,13 @@ fn notifications_exec_in_safe_dir(exec_abs: &PathBuf) -> bool {
             if !out.is_empty() {
                 out
             } else {
-                defaults.iter().map(|d| PathBuf::from(d)).collect()
+                defaults.iter().map(PathBuf::from).collect()
             }
         } else {
-            defaults.iter().map(|d| PathBuf::from(d)).collect()
+            defaults.iter().map(PathBuf::from).collect()
         }
     } else {
-        defaults.iter().map(|d| PathBuf::from(d)).collect()
+        defaults.iter().map(PathBuf::from).collect()
     };
 
     dirs.iter().any(|d| exec_abs.starts_with(d))

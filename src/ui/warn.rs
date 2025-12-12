@@ -42,12 +42,9 @@ fn warn_input_windows() -> bool {
 fn warn_input_unix() -> bool {
     fn stty_path() -> Option<&'static str> {
         let candidates = ["/bin/stty", "/usr/bin/stty"];
-        for p in candidates {
-            if std::path::Path::new(p).is_file() {
-                return Some(p);
-            }
-        }
-        None
+        candidates
+            .into_iter()
+            .find(|&p| std::path::Path::new(p).is_file())
     }
 
     let stty = match stty_path() {
