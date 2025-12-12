@@ -446,6 +446,9 @@ pub(crate) fn notifications_handle_request(
     }
 
     // Require request cmd to equal basename(exec_abs)
+    if cmd.len() > 128 {
+        return Err(NotifyError::Policy("cmd too long".to_string()));
+    }
     if cmd != basename {
         return Err(NotifyError::Policy(format!(
             "only executable basename '{}' is accepted (got '{}')",
@@ -454,6 +457,10 @@ pub(crate) fn notifications_handle_request(
     }
 
     // Argument policy
+    if argv.len() > 128 || argv.iter().any(|a| a.len() > 4096) {
+        return Err(NotifyError::Policy("too many or too long args".to_string()));
+    }
+
     let final_args: Vec<String> = if cfg.has_trailing_args_placeholder {
         let cap = clamp_max_args();
         let mut args = cfg.fixed_args.clone();
