@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
 
 fn docker() -> Option<PathBuf> {
-    aifo_coder::container_runtime_path().ok()
+    support::docker_runtime()
 }
 
 fn image_for_aider() -> Option<String> {
@@ -40,11 +40,7 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
 }
 
 fn unique_name(prefix: &str) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{}-{}", prefix, now)
+    support::unique_name(prefix)
 }
 
 fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str) -> bool {
@@ -72,32 +68,11 @@ fn run_detached_sleep_container_nomount(runtime: &Path, image: &str, name: &str)
 }
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("/bin/sh")
-        .arg("-c")
-        .arg(script);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    match cmd.output() {
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).to_string()
-                + &String::from_utf8_lossy(&o.stderr).to_string();
-            (o.status.code().unwrap_or(1), out)
-        }
-        Err(e) => (1, format!("exec failed: {}", e)),
-    }
+    support::docker_exec_sh(runtime, name, script)
 }
 
 fn stop_container(runtime: &Path, name: &str) {
-    let _ = Command::new(runtime)
-        .arg("stop")
-        .arg("--time")
-        .arg("1")
-        .arg(name)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    support::stop_container(runtime, name)
 }
 
 #[test]

@@ -244,32 +244,26 @@ pub fn http_post_form_tcp(
         }
     }
 
-    // Split headers/body
+    // Split headers/body using the library helper (CRLFCRLF or LFLF)
     let mut status: u16 = 0;
-    let headers_s;
-    let mut body_out: Vec<u8> = Vec::new();
+    let headers_s: String;
+    let body_out: Vec<u8>;
 
-    if let Some(pos) = aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
-    {
-        let h = &buf[..pos];
+    if let Some(hend) = aifo_coder::find_header_end(&buf) {
+        let h = &buf[..hend];
         headers_s = String::from_utf8_lossy(h).to_string();
-        // Parse status code from status line
         if let Some(line) = headers_s.lines().next() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 status = parts[1].parse::<u16>().unwrap_or(0);
             }
         }
-        // Body (best-effort)
-        let mut body_bytes = buf[pos..].to_vec();
-        // Drop leading CRLFCRLF or LF+LF
-        while body_bytes.first() == Some(&b'\r') || body_bytes.first() == Some(&b'\n') {
-            body_bytes.remove(0);
-        }
-        body_out = body_bytes;
+        body_out = buf[hend..].to_vec();
     } else {
         headers_s = String::from_utf8_lossy(&buf).to_string();
+        body_out = Vec::new();
     }
+
     (status, headers_s, body_out)
 }
 

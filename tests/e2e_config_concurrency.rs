@@ -1,15 +1,13 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
+mod support;
+
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
 use tempfile::Builder;
-
-fn docker() -> Option<PathBuf> {
-    aifo_coder::container_runtime_path().ok()
-}
 
 fn image_for_aider() -> Option<String> {
     if let Ok(img) = std::env::var("AIDER_IMAGE") {
@@ -80,32 +78,11 @@ fn run_detached_sleep_container(
 }
 
 fn exec_sh(runtime: &PathBuf, name: &str, script: &str) -> (i32, String) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("/bin/sh")
-        .arg("-c")
-        .arg(script);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    match cmd.output() {
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).to_string()
-                + &String::from_utf8_lossy(&o.stderr).to_string();
-            (o.status.code().unwrap_or(1), out)
-        }
-        Err(e) => (1, format!("exec failed: {}", e)),
-    }
+    support::docker_exec_sh(runtime.as_path(), name, script)
 }
 
 fn stop_container(runtime: &PathBuf, name: &str) {
-    let _ = Command::new(runtime)
-        .arg("stop")
-        .arg("--time")
-        .arg("1")
-        .arg(name)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    support::stop_container(runtime.as_path(), name)
 }
 
 #[test]
@@ -146,92 +123,33 @@ fn e2e_config_concurrent_isolation() {
     )
     .expect("write model settings");
 
-    let name1 = format!(
-        "aifo-e2e-cfg-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_micros()
-    );
-    let name2 = format!(
-        "aifo-e2e-cfg-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_micros()
-            + 1
-    );
+    let name1 = support::unique_name("aifo-e2e-cfg");
+    let name2 = support::unique_name("aifo-e2e-cfg");
 
     assert!(run_detached_sleep_container(&runtime, &image, &name1, root));
     assert!(run_detached_sleep_container(&runtime, &image, &name2, root));
 
     // Wait for config readiness in container 1
-    let mut ready1 = false;
-    for _ in 0..50 {
-        let (_ec, out) = exec_sh(
-            &runtime,
-            &name1,
-            r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
-        );
-        if out.contains("READY") {
-            ready1 = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready1 = support::wait_for_config_copied(runtime.as_path(), &name1);
     if !ready1 {
         let _ = exec_sh(
             &runtime,
             &name1,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out) = exec_sh(
-                &runtime,
-                &name1,
-                r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out.contains("READY") {
-                ready1 = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready1 = support::wait_for_config_copied(runtime.as_path(), &name1);
     }
     assert!(ready1, "config not ready in {}", name1);
 
     // Wait for config readiness in container 2
-    let mut ready2 = false;
-    for _ in 0..50 {
-        let (_ec, out) = exec_sh(
-            &runtime,
-            &name2,
-            r#"if [ -d "$HOME/.aifo-config" ] && { [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; }; then echo READY; fi"#,
-        );
-        if out.contains("READY") {
-            ready2 = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready2 = support::wait_for_config_copied(runtime.as_path(), &name2);
     if !ready2 {
         let _ = exec_sh(
             &runtime,
             &name2,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out) = exec_sh(
-                &runtime,
-                &name2,
-                r#"if [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out.contains("READY") {
-                ready2 = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready2 = support::wait_for_config_copied(runtime.as_path(), &name2);
     }
     assert!(ready2, "config not ready in {}", name2);
 

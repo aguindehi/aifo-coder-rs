@@ -136,6 +136,12 @@ fn e2e_config_copy_and_permissions_for_aider() {
     fs::write(global.join("config.toml"), "k = \"v\"\n").expect("write config.toml");
     fs::write(aider.join(".aider.conf.yml"), "aider: conf\n").expect("write aider conf");
     fs::write(aider.join("creds.token"), "secret-token-123").expect("write token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(aider.join("creds.token"), fs::Permissions::from_mode(0o600))
+            .expect("chmod creds.token");
+    }
 
     // Run container detached with entrypoint copy-on-start
     let name = unique_name("aifo-e2e-config");
