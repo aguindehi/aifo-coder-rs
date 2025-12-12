@@ -768,7 +768,10 @@ fn try_run_native(
             }
             let size = match usize::from_str_radix(size_hex, 16) {
                 Ok(v) => v,
-                Err(_) => break,
+                Err(_) => {
+                    // Strict: malformed chunk size => treat response as invalid.
+                    return None;
+                }
             };
             if size == 0 {
                 // Read and parse trailers until blank line
