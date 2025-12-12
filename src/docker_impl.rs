@@ -1,85 +1,31 @@
 #![allow(clippy::module_name_repetitions)]
-//! Docker command construction and runtime detection.
+//! Legacy docker implementation kept temporarily as a compatibility shim.
 //!
-//! This file contains the full docker implementation, split out of `docker_mod.rs`
-//! so `docker_mod.rs` can become a small module boundary and later be further
-//! decomposed into submodules.
+//! The crate now uses `docker_mod::docker::*` submodules. This file remains only
+//! to avoid a large one-shot diff while we migrate helpers in smaller steps.
 //!
-//! NOTE: This is an intermediate step to “close the gap” on the docker.rs refactor.
-//! A follow-up can split this file into `docker/runtime.rs`, `docker/env.rs`,
-//! `docker/mounts.rs`, `docker/images.rs`, and `docker/run.rs` if desired.
+//! IMPORTANT: New code must not be added here.
 
-use crate::ensure_file_exists;
-use crate::path_pair;
-#[cfg(unix)]
-use nix::unistd::{getgid, getuid};
-use once_cell::sync::Lazy;
-use std::env;
-use std::ffi::OsString;
-use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use which::which;
+use std::path::Path;
 
-#[cfg(feature = "otel")]
-use tracing::instrument;
-
-// Pass-through environment variables to the containerized agent
-static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        // AIFO master env (single source of truth)
-        "AIFO_API_KEY",
-        "AIFO_API_BASE",
-        "AIFO_API_VERSION",
-        // Git author/committer overrides
-        "GIT_AUTHOR_NAME",
-        "GIT_AUTHOR_EMAIL",
-        "GIT_COMMITTER_NAME",
-        "GIT_COMMITTER_EMAIL",
-        // GPG signing controls
-        "AIFO_CODER_GIT_SIGN",
-        "GIT_SIGNING_KEY",
-        // Timezone
-        "TZ",
-        // Editor preferences
-        "EDITOR",
-        "VISUAL",
-        "TERM",
-    ]
-});
-
-pub fn container_runtime_path() -> io::Result<PathBuf> {
-    // Allow tests or callers to explicitly disable Docker detection to avoid hard failures
-    if env::var("AIFO_CODER_TEST_DISABLE_DOCKER").ok().as_deref() == Some("1")
-        || env::var("AIFO_CODER_SKIP_DOCKER").ok().as_deref() == Some("1")
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Docker disabled by environment override.",
-        ));
-    }
-
-    if let Ok(p) = which("docker") {
-        return Ok(p);
-    }
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        "Docker is required but was not found in PATH.",
-    ))
+pub(crate) fn docker_impl_pull_image_with_autologin(
+    _runtime: &Path,
+    _image: &str,
+    _verbose: bool,
+    _agent_label: Option<&str>,
+) -> io::Result<()> {
+    // The real implementation lives in the legacy file below in this module.
+    // It is still referenced by docker/run.rs for behavior parity.
+    super::docker_impl_legacy::pull_image_with_autologin(_runtime, _image, _verbose, _agent_label)
 }
 
-/// Return true if a docker image exists locally (without pulling).
-pub fn image_exists(runtime: &Path, image: &str) -> bool {
-    Command::new(runtime)
-        .arg("image")
-        .arg("inspect")
-        .arg(image)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+pub(crate) fn docker_impl_collect_volume_flags(
+    agent: &str,
+    host_home: &Path,
+    pwd: &Path,
+) -> Vec<std::ffi::OsString> {
+    super::docker_impl_legacy::collect_volume_flags(agent, host_home, pwd)
 }
 
 fn agent_bin_and_path(agent: &str) -> (String, String) {
