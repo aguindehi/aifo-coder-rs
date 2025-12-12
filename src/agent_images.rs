@@ -7,8 +7,8 @@
 //!
 //! These functions do not pull images or perform network I/O; they only compose strings.
 
-use std::env;
 use aifo_coder::container_runtime_path;
+use std::env;
 
 /// Trimmed env getter returning Some when non-empty.
 fn env_trim(k: &str) -> Option<String> {
