@@ -3585,13 +3585,13 @@ publish-macos-signed-zips-local:
 	  $(MAKE) publish-macos-signed-zips-local-curl; \
 	fi
 
+# glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
 .PHONY: publish-macos-signed-zips-local-glab
 publish-macos-signed-zips-local-glab:
 	@set -eu; \
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-glab; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
-	# glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
 	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
