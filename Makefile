@@ -3641,7 +3641,7 @@ publish-macos-signed-zips-local-glab:
 	echo "Resolving project id via glab (current repo context) ..."; \
 	PID="$$(glab api --hostname "$$HOST" projects/:id \
 	  | tr -d "\n" \
-	  | sed -nE '\''s/.*"id":[[:space:]]*([0-9]+).*/\1/p'\'' \
+	  | sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" \
 	  | head -n1)"; \
 	if [ -z "$$PID" ]; then \
 	  echo "Error: could not resolve project id via glab (missing id in API response)." >&2; \
@@ -3653,7 +3653,7 @@ publish-macos-signed-zips-local-glab:
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
 	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" \
 	    | tr -d "\n" \
-	    | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	    | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
 	    | head -n1; \
 	}; \
 	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
@@ -3664,7 +3664,7 @@ publish-macos-signed-zips-local-glab:
 	fi; \
 	BASE_WEB="$$(glab api --hostname "$$HOST" projects/$$PID \
 	  | tr -d "\n" \
-	  | sed -nE '\''s/.*"web_url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	  | sed -nE "s/.*\"web_url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
 	  | head -n1)"; \
 	if [ -z "$$BASE_WEB" ]; then \
 	  echo "Error: could not resolve project web_url via glab." >&2; \
