@@ -1687,14 +1687,14 @@ publish-release-macos-signed:
 	if [ -f ./.env ]; then . ./.env; fi; \
 	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
 	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
-	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required to upload signed macOS zips." >&2; \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required to upload signed macOS zips and update the GitLab Release." >&2; \
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Publishing signed macOS zips for $(RELEASE_TAG_EFFECTIVE) ..."; \
 	$(MAKE) release-macos-binary-signed; \
 	$(MAKE) publish-macos-signed-zips-local; \
-	echo "Done. Create/push the git tag '\''$(RELEASE_TAG_EFFECTIVE)'\'' to trigger CI release + link attachment."; \
+	echo "Done. Ensure the git tag '\''$(RELEASE_TAG_EFFECTIVE)'\'' exists in GitLab so the Release reflects these assets."; \
 	'
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
@@ -3490,7 +3490,7 @@ publish-macos-signed-zips-local:
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
-	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload to GitLab Package Registry." >&2; \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload macOS zips and update the GitLab Release." >&2; \
 	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
 	  exit 1; \
 	fi; \
@@ -3500,21 +3500,21 @@ publish-macos-signed-zips-local:
 	  exit 1; \
 	fi; \
 	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@([^:]+):.*#\1#p")"; \
-	PROJ="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@[^:]+:([^ ]+?)(\.git)?\$$#\1#p")"; \
-	PROJ="$${PROJ%.git}"; \
-	if [ -z "$$HOST" ] || [ -z "$$PROJ" ]; then \
+	PROJ_PATH="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@[^:]+:([^ ]+?)(\.git)?\$$#\1#p")"; \
+	PROJ_PATH="$${PROJ_PATH%.git}"; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
 	  echo "Error: unsupported origin remote format: $$ORIGIN" >&2; \
 	  echo "Expected SSH form: git@<host>:<group>/<project>.git" >&2; \
 	  exit 1; \
 	fi; \
 	API_V4="https://$$HOST/api/v4"; \
-	PROJ_ENC="$$(printf "%s" "$$PROJ" | sed "s#/#%2F#g")"; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
 	RES="$$(mktemp)"; \
 	STATUS="$$(curl -sS -w "%{http_code}" -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
 	  "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
 	PID="$$(sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" "$$RES" | head -n1)"; \
 	if [ -z "$$PID" ]; then \
-	  echo "Error: failed to resolve project id via GitLab API for $$PROJ (host $$HOST)." >&2; \
+	  echo "Error: failed to resolve project id via GitLab API for $$PROJ_PATH (host $$HOST)." >&2; \
 	  echo "HTTP status: $$STATUS" >&2; \
 	  echo "Response body (first 80 lines):" >&2; \
 	  sed -n "1,80p" "$$RES" >&2; \
@@ -3522,7 +3522,6 @@ publish-macos-signed-zips-local:
 	  exit 1; \
 	fi; \
 	rm -f "$$RES"; \
-	UPLOAD_TAG="$(VERSION)"; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
 	X86="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
@@ -3530,25 +3529,68 @@ publish-macos-signed-zips-local:
 	  echo "Hint: run 'make release-macos-binary-signed' first." >&2; \
 	  exit 1; \
 	fi; \
-	BASE="$$API_V4/projects/$$PID/packages/generic/$(BIN_NAME)/$$UPLOAD_TAG"; \
-	echo "Uploading to: $$BASE"; \
-	if [ -f "$$ARM" ]; then \
-	  name="$$(basename "$$ARM")"; \
-	  url="$$BASE/$$name"; \
-	  echo "Uploading $$ARM -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$ARM" "$$url" || { \
-	    echo "Upload failed. Note: this GitLab may not expose project package listing (projects/:id/packages returns 404)." >&2; \
-	    echo "If uploads continue to 404, switch to GitLab uploads API as fallback." >&2; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: RELEASE_TAG_EFFECTIVE is empty; cannot determine release tag for link attachment." >&2; \
+	  echo "Hint: ensure TAG/RELEASE_PREFIX/VERSION are set as for publish-release." >&2; \
+	  exit 1; \
+	fi; \
+	UPLOAD_AND_GET_URL() { \
+	  file="$$1"; \
+	  [ -f "$$file" ] || { echo ""; return 0; }; \
+	  echo "Uploading $$file via project uploads API ..."; \
+	  out="$$(mktemp)"; \
+	  if ! curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    -F "file=@$$file" \
+	    "$$API_V4/projects/$$PID/uploads" >"$$out"; then \
+	    echo "Error: upload failed for $$file" >&2; \
+	    cat "$$out" >&2 || true; \
+	    rm -f "$$out"; \
 	    exit 1; \
-	  }; \
+	  fi; \
+	  url="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$out" | head -n1)"; \
+	  rm -f "$$out"; \
+	  if [ -z "$$url" ]; then \
+	    echo "Error: could not parse upload URL for $$file" >&2; \
+	    exit 1; \
+	  fi; \
+	  printf "%s" "$$url"; \
+	}; \
+	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
+	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
+	if [ -z "$$ARM_URL" ] && [ -z "$$X86_URL" ]; then \
+	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
+	  exit 1; \
 	fi; \
-	if [ -f "$$X86" ]; then \
-	  name="$$(basename "$$X86")"; \
-	  url="$$BASE/$$name"; \
-	  echo "Uploading $$X86 -> $$url"; \
-	  curl -fsS --retry 3 -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" --upload-file "$$X86" "$$url"; \
+	BASE_WEB="https://$$HOST/$$PROJ_PATH"; \
+	RELEASE_API="$$API_V4/projects/$$PID/releases/$$TAG"; \
+	echo "Fetching existing release assets for tag $$TAG ..."; \
+	REL_RES="$$(mktemp)"; \
+	REL_STATUS="$$(curl -sS -w "%{http_code}" -o "$$REL_RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$RELEASE_API" || echo 000)"; \
+	if [ "$$REL_STATUS" != "200" ]; then \
+	  echo "Warning: release for tag $$TAG not found (HTTP $$REL_STATUS). Links will be attached only if release exists." >&2; \
+	  cat "$$REL_RES" >&2 || true; \
 	fi; \
-	echo "Upload complete."
+	EXISTING_URLS="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$REL_RES" | tr "\n" " ")" ; \
+	rm -f "$$REL_RES"; \
+	ADD_LINK() { \
+	  name="$$1"; rel_path="$$2"; \
+	  [ -n "$$rel_path" ] || return 0; \
+	  full_url="$$BASE_WEB$$rel_path"; \
+	  case " $$EXISTING_URLS " in \
+	    *" $$full_url "*) \
+	      echo "Release link already present: $$name -> $$full_url"; \
+	      return 0 ;; \
+	  esac; \
+	  echo "Adding release link: $$name -> $$full_url"; \
+	  curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    --data-urlencode "name=$$name" \
+	    --data-urlencode "url=$$full_url" \
+	    "$$RELEASE_API/assets/links" >/dev/null || true; \
+	}; \
+	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
+	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
+	echo "Upload and release link attachment complete."
 
 .PHONY: verify-macos-signed
 verify-macos-signed:
