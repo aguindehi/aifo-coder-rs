@@ -7,7 +7,6 @@
 //!
 //! These functions do not pull images or perform network I/O; they only compose strings.
 
-use aifo_coder::container_runtime_path;
 use std::env;
 
 /// Trimmed env getter returning Some when non-empty.
@@ -16,14 +15,6 @@ fn env_trim(k: &str) -> Option<String> {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|s| !s.is_empty())
-}
-
-/// Local image existence check via docker inspect.
-fn image_exists_local_best_effort(image: &str) -> bool {
-    container_runtime_path()
-        .ok()
-        .map(|rt| aifo_coder::image_exists(&rt, image))
-        .unwrap_or(false)
 }
 
 /// Derive a ":latest" candidate for a given image reference by replacing the tag.
@@ -67,12 +58,21 @@ pub(crate) fn default_image_for(agent: &str) -> String {
     // Prefer a local image if present and no explicit internal registry env is set.
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
     if !explicit_ir {
-        if image_exists_local_best_effort(&image) {
+        let runtime = aifo_coder::container_runtime_path().ok();
+        if runtime
+            .as_ref()
+            .map(|rt| aifo_coder::image_exists(rt.as_path(), &image))
+            .unwrap_or(false)
+        {
             return image;
         }
         // Fallback: try a local ":latest" tag for the same repository name.
         let latest = local_latest_candidate(&image);
-        if image_exists_local_best_effort(&latest) {
+        if runtime
+            .as_ref()
+            .map(|rt| aifo_coder::image_exists(rt.as_path(), &latest))
+            .unwrap_or(false)
+        {
             return latest;
         }
     }
@@ -110,12 +110,22 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
     // Same local-first and qualification policy as default_image_for()
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
     if !explicit_ir {
-        if image_exists_local_best_effort(&image) {
+        let runtime = aifo_coder::container_runtime_path().ok();
+        if runtime
+            .as_ref()
+            .map(|rt| aifo_coder::image_exists(rt.as_path(), &image))
+            .unwrap_or(false)
+        {
             return image;
         }
         // Fallback: try a local ":latest" tag for the same repository name.
         let latest = local_latest_candidate(&image);
-        if image_exists_local_best_effort(&latest) {
+        if runtime
+            .as_ref()
+            .map(|rt| aifo_coder::image_exists(rt.as_path(), &latest))
+            .unwrap_or(false)
+        .unwrap_or(false)
+        {
             return latest;
         }
     }

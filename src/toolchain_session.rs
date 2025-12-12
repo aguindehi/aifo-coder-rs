@@ -355,18 +355,10 @@ please check the output above.",
 
 // Best-effort: check if a toolchain image exists locally (by ref).
 fn toolchain_image_exists_local(image: &str) -> bool {
-    if let Ok(runtime) = aifo_coder::container_runtime_path() {
-        return Command::new(&runtime)
-            .arg("image")
-            .arg("inspect")
-            .arg(image)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    }
-    false
+    aifo_coder::container_runtime_path()
+        .ok()
+        .map(|rt| aifo_coder::image_exists(rt.as_path(), image))
+        .unwrap_or(false)
 }
 
 /// RAII for toolchain sidecars + proxy. On cleanup, stops proxy and optionally sidecars.

@@ -12,6 +12,9 @@ use std::time::Duration;
 use super::sidecar::sidecar_container_name;
 use crate::container_runtime_path;
 
+#[cfg(unix)]
+use wait_timeout::ChildExt as _;
+
 /// Common DEV tools shared across allowlists and shims (used to widen routing preferences).
 const DEV_TOOLS: &[&str] = &[
     "make",
@@ -161,28 +164,49 @@ pub fn container_exists(name: &str) -> bool {
 
 // Best-effort: check if tool is available inside the given container (cached by caller)
 fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
-    if let Ok(runtime) = container_runtime_path() {
-        let mut cmd = Command::new(&runtime);
-        cmd.arg("exec")
-            .arg(name)
-            .arg("/bin/sh")
-            .arg("-c")
-            .arg(format!("command -v {} >/dev/null 2>&1", tool))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        // Run with a simple timeout by spawning and joining
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let st = cmd.status();
-            let _ = tx.send(st.ok().map(|s| s.success()).unwrap_or(false));
-        });
-        // Use a small default when no global timeout is configured, so we can cache availability.
-        let probe_secs = if timeout_secs == 0 { 2 } else { timeout_secs };
-        if let Ok(ok) = rx.recv_timeout(Duration::from_secs(probe_secs)) {
-            return ok;
+    let runtime = match container_runtime_path() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Keep a small default when no global timeout is configured, so we can cache availability.
+    let probe_secs = if timeout_secs == 0 { 2 } else { timeout_secs };
+
+    let mut child = match Command::new(&runtime)
+        .arg("exec")
+        .arg(name)
+        .arg("/bin/sh")
+        .arg("-c")
+        .arg(format!("command -v {} >/dev/null 2>&1", tool))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    #[cfg(unix)]
+    {
+        match child
+            .wait_timeout(Duration::from_secs(probe_secs))
+            .ok()
+            .flatten()
+        {
+            Some(st) => st.success(),
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                false
+            }
         }
     }
-    false
+
+    #[cfg(not(unix))]
+    {
+        let _ = probe_secs;
+        child.wait().map(|st| st.success()).unwrap_or(false)
+    }
 }
 
 // Preferred sidecars for a given tool (in order)

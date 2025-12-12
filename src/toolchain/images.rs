@@ -6,16 +6,7 @@ Toolchain kind normalization and image selection.
 - default_toolchain_image_for_version: versioned image selectors
 - is_official_rust_image / official_rust_image_for_version: helpers for rust
 */
-use crate::container_runtime_path;
 use std::env;
-
-/// Local image existence check via docker inspect.
-fn image_exists_local_best_effort(image: &str) -> bool {
-    container_runtime_path()
-        .ok()
-        .map(|rt| crate::image_exists(&rt, image))
-        .unwrap_or(false)
-}
 
 /// Helper: read an env var, trim, and return Some when non-empty.
 fn env_trim(k: &str) -> Option<String> {
@@ -202,8 +193,13 @@ pub fn default_toolchain_image(kind: &str) -> String {
             format!("{internal}{repo}:{rel_tag}")
         },
     ];
+    let runtime = crate::container_runtime_path().ok();
     for c in candidates_local.iter().filter(|s| !s.is_empty()) {
-        if image_exists_local_best_effort(c) {
+        if runtime
+            .as_ref()
+            .map(|rt| crate::image_exists(rt.as_path(), c))
+            .unwrap_or(false)
+        {
             return c.to_string();
         }
     }
