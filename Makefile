@@ -255,6 +255,39 @@ fi; \
 export SIGN_FLAGS
 endef
 
+define MACOS_DEFAULT_KEYCHAIN
+KEYCHAIN="$$(security default-keychain -d user | tr -d " \"")"; \
+export KEYCHAIN
+endef
+
+define MACOS_SIGN_ONE_BINARY
+B="$$1"; \
+[ -n "$$B" ] || { echo "Error: missing binary path to sign" >&2; exit 2; }; \
+if [ ! -e "$$B" ]; then echo "Error: file not found: $$B" >&2; exit 2; fi; \
+if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+  echo "SIGN_IDENTITY not set; ad-hoc signing $$B for local use."; \
+  codesign $$SIGN_FLAGS -s - "$$B"; \
+else \
+  if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_IDENTITY" "$$B"; then \
+    :; \
+  else \
+    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z 2>/dev/null \
+      | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
+    if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$B"; then \
+      :; \
+    else \
+      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+        echo "Error: codesign failed for Apple Developer identity '$$SIGN_IDENTITY'." >&2; \
+        echo "Hint: inspect identities with: security find-identity -p codesigning -v" >&2; \
+        exit 1; \
+      fi; \
+      echo "Warning: could not use SIGN_IDENTITY '$$SIGN_IDENTITY'; falling back to ad-hoc signing (-s -)." >&2; \
+      codesign $$SIGN_FLAGS -s - "$$B"; \
+    fi; \
+  fi; \
+fi
+endef
+
 banner:
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
