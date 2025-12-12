@@ -3588,6 +3588,7 @@ publish-macos-signed-zips-local-glab:
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-glab; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
+	# glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
 	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
@@ -3639,28 +3640,31 @@ publish-macos-signed-zips-local-glab:
 	    exit 2; \
 	  fi; \
 	}; \
-	echo "Resolving project id via glab (from origin remote path) ..."; \
+	echo "Resolving project via glab (from origin remote path) ..."; \
 	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
-	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>/dev/null || true)"; \
+	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>&1)"; \
 	PID="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" | head -n1)"; \
-	if [ -z "$$PID" ]; then \
-	  echo "Error: could not resolve project id via glab for $$PROJ_PATH on $$HOST." >&2; \
-	  echo "Hint: ensure your origin remote matches the authenticated GitLab host and project." >&2; \
-	  exit 1; \
-	fi; \
 	BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | tr -d "\n" | sed -nE "s/.*\"web_url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
-	if [ -z "$$BASE_WEB" ]; then \
-	  echo "Error: could not resolve project web_url via glab." >&2; \
+	if [ -z "$$PID" ] || [ -z "$$BASE_WEB" ]; then \
+	  echo "Error: could not resolve project via glab for $$PROJ_PATH on $$HOST." >&2; \
+	  echo "glab response (first 60 lines):" >&2; \
+	  printf "%s\n" "$$PROJ_JSON" | sed -n "1,60p" >&2; \
 	  exit 1; \
 	fi; \
+	echo "Resolved project: $$BASE_WEB (id=$$PID)"; \
 	UPLOAD_AND_GET_URL() { \
 	  file="$$1"; \
 	  [ -f "$$file" ] || { echo ""; return 0; }; \
 	  echo "Uploading $$file via glab api (project uploads) ..."; \
-	  glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" \
-	    | tr -d "\n" \
-	    | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
-	    | head -n1; \
+	  out="$$(glab api --hostname "$$HOST" -X POST "projects/$$PID/uploads" -F "file=@$$file" 2>&1)"; \
+	  url="$$(printf "%s" "$$out" | tr -d "\n" | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | head -n1)"; \
+	  if [ -z "$$url" ]; then \
+	    echo "Error: upload failed or could not parse upload URL for $$file" >&2; \
+	    echo "glab response (first 60 lines):" >&2; \
+	    printf "%s\n" "$$out" | sed -n "1,60p" >&2; \
+	    exit 1; \
+	  fi; \
+	  printf "%s" "$$url"; \
 	}; \
 	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
 	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
@@ -3668,19 +3672,19 @@ publish-macos-signed-zips-local-glab:
 	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
 	  exit 1; \
 	fi; \
-	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
-	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" 2>/dev/null \
-	  | tr -d "\n" \
-	  | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
-	  | tr "\n" " " || true)"; \
+	echo "Checking for existing release tag $$TAG (links will be attached only if it exists) ..."; \
+	REL_JSON="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" 2>/dev/null || true)"; \
+	HAVE_REL="$$(printf "%s" "$$REL_JSON" | tr -d "\n" | grep -c "\"tag_name\"")"; \
+	if [ "$$HAVE_REL" -gt 0 ]; then \
+	  EXISTING_URLS="$$(printf "%s" "$$REL_JSON" | tr -d "\n" | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" | tr "\n" " " || true)"; \
+	else \
+	  EXISTING_URLS=""; \
+	  echo "Release $$TAG not found; uploads completed but links will not be attached." >&2; \
+	fi; \
 	ADD_LINK() { \
 	  name="$$1"; rel_path="$$2"; \
 	  [ -n "$$rel_path" ] || return 0; \
-	  case "$$rel_path" in \
-	    http://*|https://*) full_url="$$rel_path" ;; \
-	    /*) full_url="$$BASE_WEB$$rel_path" ;; \
-	    *) full_url="$$BASE_WEB/$$rel_path" ;; \
-	  esac; \
+	  full_url="$$BASE_WEB$$rel_path"; \
 	  case " $$EXISTING_URLS " in \
 	    *" $$full_url "*) \
 	      echo "Release link already present: $$name -> $$full_url"; \
@@ -3690,9 +3694,11 @@ publish-macos-signed-zips-local-glab:
 	  glab api --hostname "$$HOST" -X POST "projects/$$PID/releases/$$TAG/assets/links" \
 	    --field "name=$$name" --field "url=$$full_url" >/dev/null || true; \
 	}; \
-	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
-	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
-	echo "Upload and release link attachment complete (glab)."
+	if [ "$$HAVE_REL" -gt 0 ]; then \
+	  [ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
+	  [ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
+	fi; \
+	echo "Upload complete (glab)."
 
 .PHONY: publish-macos-signed-zips-local-curl
 publish-macos-signed-zips-local-curl:
