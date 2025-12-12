@@ -3091,7 +3091,7 @@ release-for-target:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi; \
-	echo Generate checksums for archives (tar.gz, dmg) > /dev/null; \
+	echo "Generate checksums for archives (tar.gz, dmg)" > /dev/null; \
 	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
 	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
 	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
@@ -3103,7 +3103,7 @@ release-for-target:
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
 	fi; \
-	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null; \
+	echo "Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root)" >/dev/null; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
 	  PKG="$$BIN"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
