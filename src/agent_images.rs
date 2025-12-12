@@ -124,7 +124,7 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
             .as_ref()
             .map(|rt| aifo_coder::image_exists(rt.as_path(), &latest))
             .unwrap_or(false)
-        .unwrap_or(false)
+            .unwrap_or(false)
         {
             return latest;
         }
