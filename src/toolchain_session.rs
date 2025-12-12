@@ -97,7 +97,6 @@ pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
             return true;
         }
     }
-
     false
 }
 
