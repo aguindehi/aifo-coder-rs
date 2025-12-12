@@ -3665,8 +3665,24 @@ publish-macos-signed-zips-local-glab:
 	echo "glab version: $$(glab --version | head -n1)"; \
 	echo "Ensuring GitLab Release exists for tag $$TAG ..."; \
 	if ! glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
-	  echo "Release $$TAG not found; creating it (notes will use tag message if available) ..."; \
-	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "" >/dev/null 2>&1 || true; \
+	  echo "Release $$TAG not found; creating it."; \
+	  NOTES="$${RELEASE_NOTES:-}"; \
+	  if [ -z "$$NOTES" ]; then \
+	    if [ -t 0 ]; then \
+	      echo "Enter release notes (finish with a line containing only EOF):"; \
+	      NOTES="$$(cat <<'__AIFO_EOF__'\n$$(cat)\n__AIFO_EOF__)" ; \
+	    fi; \
+	  fi; \
+	  if [ -z "$$NOTES" ]; then \
+	    echo "Error: release notes are required (set RELEASE_NOTES or provide input interactively)." >&2; \
+	    exit 2; \
+	  fi; \
+	  if [ -t 0 ]; then \
+	    echo "Creating Release $$TAG with provided notes..."; \
+	  fi; \
+	  printf "%s" "$$NOTES" >"$(DIST_DIR)/.release-notes.tmp"; \
+	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "@$(DIST_DIR)/.release-notes.tmp"; \
+	  rm -f "$(DIST_DIR)/.release-notes.tmp"; \
 	fi; \
 	echo "Uploading signed macOS zip assets to Release $$TAG ..."; \
 	FILES=""; \
