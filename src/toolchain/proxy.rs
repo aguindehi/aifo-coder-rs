@@ -1529,18 +1529,16 @@ fn handle_connection<S: Read + Write>(
                 .cloned()
                 .or_else(|| headers.get("Traceparent").cloned())
             {
-                // Ensure we pass it through as environment to the shim.
-                // The wrapper always uses "docker exec ... sh -c <script>", so we can prefix
-                // an export of TRACEPARENT before the main script.
-                if let Some(last) = spawn_args.last_mut() {
-                    let original_script = last.clone();
-                    let injected = format!(
-                        "export TRACEPARENT={q}{v}{q}; {orig}",
-                        q = "'",
-                        v = traceparent_val,
-                        orig = original_script,
-                    );
-                    *last = injected;
+                // SECURITY: don't inject untrusted values into a shell script. Instead, pass TRACEPARENT
+                // as a docker exec environment variable (-e TRACEPARENT=...).
+                //
+                // build_exec_args_with_wrapper() returns the docker exec arguments starting after "docker",
+                // so the first arg should be "exec".
+                if !traceparent_val.is_empty()
+                    && spawn_args.first().map(|s| s.as_str()) == Some("exec")
+                {
+                    spawn_args.insert(1, "-e".to_string());
+                    spawn_args.insert(2, format!("TRACEPARENT={}", traceparent_val));
                 }
             }
         }
