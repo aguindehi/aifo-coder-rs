@@ -10,7 +10,7 @@ use crate::container_runtime_path;
 use std::env;
 
 /// Local image existence check via docker inspect.
-fn docker_image_exists_local(image: &str) -> bool {
+fn image_exists_local_best_effort(image: &str) -> bool {
     container_runtime_path()
         .ok()
         .map(|rt| crate::image_exists(&rt, image))
@@ -203,7 +203,7 @@ pub fn default_toolchain_image(kind: &str) -> String {
         },
     ];
     for c in candidates_local.iter().filter(|s| !s.is_empty()) {
-        if docker_image_exists_local(c) {
+        if image_exists_local_best_effort(c) {
             return c.to_string();
         }
     }

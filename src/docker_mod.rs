@@ -1039,10 +1039,6 @@ fn parse_registry_host(image: &str) -> Option<String> {
     None
 }
 
-/// Check if an image exists locally via `docker image inspect`.
-fn image_exists_locally(runtime: &Path, image: &str) -> bool {
-    crate::image_exists(runtime, image)
-}
 
 /// Pull image and on auth failure interactively run `docker login` then retry once.
 /// Verbose runs stream docker pull output; non-verbose prints a short notice before quiet pull.
@@ -1355,7 +1351,7 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
             },
         ];
         for c in candidates.iter().filter(|s| !s.is_empty()) {
-            if image_exists_locally(rt.as_path(), c) {
+            if crate::image_exists(rt.as_path(), c) {
                 return Ok(c.to_string());
             }
         }
@@ -1710,7 +1706,7 @@ echo \"verbose\" >> \"$GNUPGHOME/gpg-agent.conf\"; \
     // Defaults and local :latest preferences are handled upstream in main.rs when --image is not provided.
     let effective_image = image.to_string();
     // Pre-pull image and auto-login on permission denied (interactive)
-    if !image_exists_locally(runtime.as_path(), &effective_image) {
+    if !crate::image_exists(runtime.as_path(), &effective_image) {
         let _ = pull_image_with_autologin(runtime.as_path(), &effective_image, false, Some(agent));
     }
 

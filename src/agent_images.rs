@@ -19,7 +19,7 @@ fn env_trim(k: &str) -> Option<String> {
 }
 
 /// Local image existence check via docker inspect.
-fn docker_image_exists_local(image: &str) -> bool {
+fn image_exists_local_best_effort(image: &str) -> bool {
     container_runtime_path()
         .ok()
         .map(|rt| aifo_coder::image_exists(&rt, image))
@@ -67,12 +67,12 @@ pub(crate) fn default_image_for(agent: &str) -> String {
     // Prefer a local image if present and no explicit internal registry env is set.
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
     if !explicit_ir {
-        if docker_image_exists_local(&image) {
+        if image_exists_local_best_effort(&image) {
             return image;
         }
         // Fallback: try a local ":latest" tag for the same repository name.
         let latest = local_latest_candidate(&image);
-        if docker_image_exists_local(&latest) {
+        if image_exists_local_best_effort(&latest) {
             return latest;
         }
     }
@@ -110,12 +110,12 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
     // Same local-first and qualification policy as default_image_for()
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
     if !explicit_ir {
-        if docker_image_exists_local(&image) {
+        if image_exists_local_best_effort(&image) {
             return image;
         }
         // Fallback: try a local ":latest" tag for the same repository name.
         let latest = local_latest_candidate(&image);
-        if docker_image_exists_local(&latest) {
+        if image_exists_local_best_effort(&latest) {
             return latest;
         }
     }
