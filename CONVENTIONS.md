@@ -102,3 +102,8 @@ really need to do that, get user consent for it.
 
 As a general rule use 'make check' instead of 'cargo test'. Make
 check uses 'cargo nextest' which is a lot faster then 'cargo test'.
+
+# Comments
+
+As a general rule, do not use specification / plan phase informations in comments as
+these are transient and specification / plan dependant.
