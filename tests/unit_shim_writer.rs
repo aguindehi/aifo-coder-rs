@@ -32,3 +32,10 @@ fn unit_test_aifo_shim_uses_data_urlencode_and_bearer_only() {
         content
     );
 }
+
+#[test]
+fn unit_shim_tool_names_include_uv_and_uvx() {
+    let tools = aifo_coder::shim_tool_names();
+    assert!(tools.contains(&"uv"), "shim_tool_names must include 'uv'");
+    assert!(tools.contains(&"uvx"), "shim_tool_names must include 'uvx'");
+}

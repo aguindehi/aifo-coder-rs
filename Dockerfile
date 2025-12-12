@@ -162,18 +162,24 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
   install -d -m 0755 /usr/local/bin && \
   cat >/usr/local/bin/aifo-entrypoint <<'SH'
 #!/bin/sh
 set -e
-if [ -z "$HOME" ]; then export HOME="/home/coder"; fi
+if [ -z "$HOME" ] || [ "$HOME" = "/" ] || [ ! -w "$HOME" ]; then export HOME="/home/coder"; fi
 if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi
 if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi
 mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true
 # Ensure a private runtime dir for gpg-agent sockets if system one is unavailable
 if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi
 mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true
+# Ensure writable HOME subtrees for arbitrary uid (uv/uvx, pnpm, etc.)
+for d in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
+         "$HOME/.local/share/uv" "$HOME/.local/share/pnpm"; do
+  install -d -m 0777 "$d" >/dev/null 2>&1 || true
+  chmod 0777 "$d" >/dev/null 2>&1 || true
+done
 # Copy keyrings from mounted host dir if present and not already in place
 if [ -d "$HOME/.gnupg-host" ]; then
   for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do
@@ -333,6 +339,8 @@ RUN chmod +x /usr/local/bin/aifo-entrypoint
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN install -d -m 0777 /home/coder/.local /home/coder/.local/share /home/coder/.local/state /home/coder/.local/share/uv /home/coder/.local/share/pnpm /home/coder/.cache
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -394,6 +402,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
+    if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
     mkdir -p /opt/venv/.build-info; \
@@ -538,6 +547,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
         fi; \
         sh /tmp/uv.sh; \
         mv /root/.local/bin/uv /usr/local/bin/uv; \
+        if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
         npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
         npm cache clean --force >/dev/null 2>&1 || true; \
         rm -rf /root/.npm /root/.cache; \
@@ -597,6 +607,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
+  if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
   install -d -m 0755 /opt/uv-home; \
   # Ensure a stable Python toolchain (3.12) to avoid building packages from source under 3.14 \
   HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
@@ -740,6 +751,8 @@ RUN sh -lc 'set -e; \
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN install -d -m 0777 /home/coder/.local /home/coder/.local/share /home/coder/.local/state /home/coder/.local/share/uv /home/coder/.local/share/pnpm /home/coder/.cache
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -780,6 +793,7 @@ ARG AIDER_SOURCE=release
 ARG AIDER_GIT_REF=main
 ARG AIDER_GIT_COMMIT=""
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
     CAF=/run/secrets/migros_root_ca; \
     if [ -f "$CAF" ]; then \
         install -m 0644 "$CAF" /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
@@ -796,6 +810,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     sh /tmp/uv.sh; \
     mv /root/.local/bin/uv /usr/local/bin/uv; \
+    if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
     uv venv /opt/venv; \
     uv pip install --native-tls --python /opt/venv/bin/python --upgrade pip; \
     mkdir -p /opt/venv/.build-info; \
@@ -941,6 +956,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
             fi; \
             sh /tmp/uv.sh; \
             mv /root/.local/bin/uv /usr/local/bin/uv; \
+            if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
             npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional @poai/mcpm-aider; \
             npm cache clean --force >/dev/null 2>&1 || true; \
             rm -rf /root/.npm /root/.cache; \
@@ -1000,6 +1016,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
   curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv.sh; \
   sh /tmp/uv.sh; \
   mv /root/.local/bin/uv /usr/local/bin/uv; \
+  if [ -f /root/.local/bin/uvx ]; then mv /root/.local/bin/uvx /usr/local/bin/uvx; else ln -sf /usr/local/bin/uv /usr/local/bin/uvx; fi; \
   install -d -m 0755 /opt/uv-home; \
   HOME=/opt/uv-home uv python install 3.12.12 || HOME=/opt/uv-home uv python install 3.12 || true; \
   VER_PIN="$(printf "%s" "${OPENHANDS_VERSION}" | sed -n -E "s/^([0-9][0-9.]*)[[:alnum:]-]*/\1/p")"; \

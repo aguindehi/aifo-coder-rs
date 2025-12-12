@@ -14,6 +14,8 @@ pub(crate) const PROXY_ENV_NAMES: &[&str] = &[
     "AIFO_CONFIG_ALLOW_EXT",
     "AIFO_CONFIG_COPY_ALWAYS",
     "AIFO_CONFIG_MAX_SIZE",
+    // pnpm/node: allow host to override store path inside sidecars if desired
+    "PNPM_STORE_PATH",
 ];
 
 /// Env vars that must not be forwarded from host into sidecars to avoid

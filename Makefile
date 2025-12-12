@@ -408,6 +408,10 @@ help: banner
 	@echo "  scrub-coauthors ............. Rewrite history to remove the aider co-author line from all commit messages"
 	@echo "                                WARNING: This rewrites history. Ensure you have backups and will force-push."
 	@echo ""
+	@echo "  node-install ................ Host-side pnpm preflight + pnpm install --frozen-lockfile"
+	@echo "  node-guard .................. Check for npm/yarn installs touching node_modules (pnpm-only guardrail)"
+	@echo "  node-migrate-to-pnpm ........ One-shot migration: npm/yarn → pnpm (removes node_modules + old locks)"
+	@echo ""
 	@echo "  gpg-show-config ............. Show current git GPG signing-related configuration"
 	@echo "  gpg-enable-signing .......... Re-enable GPG signing for commits and tags in this repo"
 	@echo "  gpg-disable-signing ......... Disable GPG signing for commits and tags in this repo (use if commits fail to sign)"
@@ -2218,6 +2222,106 @@ toolchain-cache-clear:
 	@echo "Purging toolchain cache volumes (cargo registry/git, node/npm, pip, ccache, go) ..."
 	- docker volume rm -f aifo-cargo-registry aifo-cargo-git aifo-node-cache aifo-npm-cache aifo-pip-cache aifo-ccache aifo-go >/dev/null 2>&1 || true
 	@echo "Done."
+
+# Host-side Node preflight and install using pnpm and shared .pnpm-store.
+# - Creates .pnpm-store with safe permissions when missing
+# - Warns if npm/yarn installs are detected
+# - Runs pnpm install with frozen lockfile
+.PHONY: node-install
+node-install:
+	@set -e; \
+	if ! command -v pnpm >/dev/null 2>&1; then \
+	  echo "error: pnpm is required but was not found on PATH."; \
+	  echo "       Install with: npm install -g pnpm@9"; \
+	  exit 1; \
+	fi; \
+	if [ -f package-lock.json ]; then \
+	  echo "warning: package-lock.json detected; this repository uses pnpm and pnpm-lock.yaml as the"; \
+	  echo "         source of truth. Please avoid 'npm install' and use 'pnpm install' instead."; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "warning: yarn.lock detected; this repository uses pnpm and pnpm-lock.yaml as the"; \
+	  echo "         source of truth. Please avoid 'yarn install' and use 'pnpm install' instead."; \
+	fi; \
+	if [ ! -d ".pnpm-store" ]; then \
+	  echo "Creating .pnpm-store with group-writable permissions ..."; \
+	  mkdir -p .pnpm-store; \
+	  chmod 775 .pnpm-store || true; \
+	fi; \
+	if [ -n "$$CI" ]; then \
+	  echo "Running pnpm install --frozen-lockfile (CI mode) ..."; \
+	else \
+	  echo "Running pnpm install --frozen-lockfile ..."; \
+	fi; \
+	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile
+
+# Simple guardrail to detect npm/yarn installs touching node_modules.
+# Intended for local checks and CI preflight (Phase 1 lockfile enforcement).
+.PHONY: node-guard
+node-guard:
+	@set -e; \
+	if [ -f package-lock.json ]; then \
+	  echo "warning: package-lock.json present; this repository is pnpm-only (pnpm-lock.yaml is canonical)."; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "warning: yarn.lock present; this repository is pnpm-only (pnpm-lock.yaml is canonical)."; \
+	fi; \
+	if [ -d node_modules ] && [ ! -f node_modules/.aifo-node-overlay ]; then \
+	  echo "note: node_modules/ exists without overlay sentinel; ensure it was created via pnpm on this host."; \
+	fi
+
+# One-shot npm/yarn → pnpm migration helper.
+# - Removes node_modules, package-lock.json, yarn.lock (if present)
+# - Ensures .pnpm-store exists with safe permissions
+# - Runs pnpm install --frozen-lockfile using the shared store
+.PHONY: node-migrate-to-pnpm
+node-migrate-to-pnpm:
+	@set -e; \
+	if ! command -v pnpm >/dev/null 2>&1; then \
+	  echo "error: pnpm is required but was not found on PATH."; \
+	  echo "       Install with: npm install -g pnpm@9"; \
+	  exit 1; \
+	fi; \
+	found_any=0; \
+	if [ -f package-lock.json ]; then echo "found: package-lock.json"; found_any=1; fi; \
+	if [ -f yarn.lock ]; then echo "found: yarn.lock"; found_any=1; fi; \
+	if [ -d node_modules ]; then echo "found: node_modules/"; found_any=1; fi; \
+	if [ "$$found_any" -eq 0 ]; then \
+	  echo "No npm/yarn artifacts detected (node_modules, package-lock.json, yarn.lock)."; \
+	  echo "Nothing to migrate."; \
+	  exit 0; \
+	fi; \
+	if [ -z "$$CI" ]; then \
+	  printf "This will REMOVE node_modules/, package-lock.json and yarn.lock (if present), then run pnpm install.\n"; \
+	  printf "Continue? [y/N] "; \
+	  read ans || ans=""; \
+	  case "$$ans" in \
+	    y|Y) ;; \
+	    *) echo "Aborted."; exit 1;; \
+	  esac; \
+	else \
+	  echo "CI mode: migrating to pnpm without interactive prompt."; \
+	fi; \
+	if [ -d node_modules ]; then \
+	  echo "Removing node_modules/ ..."; \
+	  rm -rf node_modules; \
+	fi; \
+	if [ -f package-lock.json ]; then \
+	  echo "Removing package-lock.json ..."; \
+	  rm -f package-lock.json; \
+	fi; \
+	if [ -f yarn.lock ]; then \
+	  echo "Removing yarn.lock ..."; \
+	  rm -f yarn.lock; \
+	fi; \
+	if [ ! -d ".pnpm-store" ]; then \
+	  echo "Creating .pnpm-store with group-writable permissions ..."; \
+	  mkdir -p .pnpm-store; \
+	  chmod 775 .pnpm-store || true; \
+	fi; \
+	echo "Running pnpm install --frozen-lockfile ..."; \
+	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile; \
+	echo "pnpm migration completed. Commit pnpm-lock.yaml and keep .pnpm-store/ ignored in git."
 
 .PHONY: rebuild rebuild-coder rebuild-fat rebuild-codex rebuild-crush rebuild-aider rebuild-openhands rebuild-opencode rebuild-plandex rebuild-rust-builder
 rebuild: rebuild-slim rebuild-fat rebuild-rust-builder rebuild-toolchain

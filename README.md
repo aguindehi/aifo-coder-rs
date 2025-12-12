@@ -114,6 +114,11 @@ Global flags:
 - --no-toolchain-cache            Disable named cache volumes for toolchain sidecars
 - --toolchain-unix-socket         Linux: use unix:/// socket transport for the proxy
 - --toolchain-bootstrap <opt>     Bootstrap actions (repeatable), e.g. typescript=global
+- --non-interactive               Disable interactive LLM prompt (same as AIFO_CODER_SUPPRESS_LLM_WARNING=1)
+
+> **Node: pnpm-only guard.** Repository tooling is designed for pnpm. Avoid `npm install`/`yarn install`
+> directly in this repo; use `make node-install` or run `pnpm install --frozen-lockfile` in the repo
+> root. For CI or local preflight, you can run `make node-guard` to check for accidental npm/yarn use.
 
 Subcommands:
 - codex [args...]                Run OpenAI Codex CLI inside container
@@ -440,37 +445,6 @@ Orchestrators:
 Tip: Maintenance commands help manage sessions:
 - aifo-coder fork list [--json] [--all-repos]
 - aifo-coder fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]
-
-### Toolchain sidecars (Phase 1)
-
-Use a dedicated sidecar container that mounts your current workspace and persistent caches for the selected language. Example kinds: rust, node, typescript (alias of node), python, c-cpp, go.
-
-Examples:
-```bash
-./aifo-coder toolchain rust -- cargo --version
-./aifo-coder toolchain node -- npx --version
-./aifo-coder toolchain python -- python -m pip --version
-# override the image for a run:
-./aifo-coder toolchain rust --toolchain-image rust:1.80-slim -- cargo --help
-# disable named cache volumes (e.g., to avoid creating volumes on CI):
-./aifo-coder toolchain node --no-toolchain-cache -- npm ci
-```
-
-Running tests for toolchain sidecars (Phase 1)
-- Run the full test suite:
-```bash
-cargo test
-```
-- Run only the toolchain Phase 1 integration tests (note: use --test target name, not a file path filter):
-```bash
-cargo test --test toolchain_phase1
-```
-- Optional live tests (pull and execute real sidecars; ignored by default):
-```bash
-cargo test --test toolchain_live -- --ignored
-```
-
----
 
 ## Makefile targets
 

@@ -408,6 +408,9 @@ fn main() -> ExitCode {
     if cli.non_interactive {
         std::env::set_var("AIFO_CODER_SUPPRESS_LLM_WARNING", "1");
     }
+    if cli.non_interactive {
+        std::env::set_var("AIFO_CODER_NON_INTERACTIVE", "1");
+    }
     apply_cli_globals(&cli);
     let use_err = aifo_coder::color_enabled_stderr();
 
