@@ -3519,7 +3519,7 @@ publish-macos-signed-zips-local:
 	  exit 1; \
 	fi; \
 	rm -f "$$RES"; \
-	UPLOAD_TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	UPLOAD_TAG="$(VERSION)"; \
 	ARM="$(MACOS_ZIP_ARM64)"; \
 	X86="$(MACOS_ZIP_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
