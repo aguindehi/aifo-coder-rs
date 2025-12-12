@@ -1736,6 +1736,8 @@ publish-release:
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
+# For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
+# For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
 .PHONY: publish-release-macos-signed
 publish-release-macos-signed:
 	@/bin/sh -ec '\
@@ -1743,8 +1745,6 @@ publish-release-macos-signed:
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
 	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
-	# For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed). \
-	# For curl fallback, we require RELEASE_ASSETS_API_TOKEN. \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
