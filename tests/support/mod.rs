@@ -353,3 +353,51 @@ pub fn should_run_macos_cross() -> bool {
     }
     false
 }
+
+/// RAII guard for temporarily setting/unsetting environment variables.
+#[derive(Debug)]
+pub struct EnvGuard {
+    saved: Vec<(String, Option<String>)>,
+}
+
+impl EnvGuard {
+    pub fn set<K: Into<String>, V: Into<String>>(mut self, key: K, val: V) -> Self {
+        let k = key.into();
+        if !self.saved.iter().any(|(kk, _)| kk == &k) {
+            self.saved.push((k.clone(), std::env::var(&k).ok()));
+        }
+        std::env::set_var(&k, val.into());
+        self
+    }
+
+    pub fn remove<K: Into<String>>(mut self, key: K) -> Self {
+        let k = key.into();
+        if !self.saved.iter().any(|(kk, _)| kk == &k) {
+            self.saved.push((k.clone(), std::env::var(&k).ok()));
+        }
+        std::env::remove_var(&k);
+        self
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        for (k, v) in self.saved.drain(..).rev() {
+            if let Some(val) = v {
+                std::env::set_var(k, val);
+            } else {
+                std::env::remove_var(k);
+            }
+        }
+    }
+}
+
+/// Opt into notifications safe-dir overrides for tests that execute stub binaries from temp dirs.
+#[allow(dead_code)]
+pub fn notifications_allow_test_exec_from(dir: &Path) -> EnvGuard {
+    EnvGuard {
+        saved: Vec::new(),
+    }
+    .set("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST", "1")
+    .set("AIFO_NOTIFICATIONS_SAFE_DIRS", dir.to_string_lossy().to_string())
+}

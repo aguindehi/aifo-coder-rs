@@ -65,6 +65,7 @@ fn int_test_proxy_notifications_policy_auth_vs_noauth() {
         say.display()
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
 
     // Start proxy
     let sid = format!("notifpol-{}", std::process::id());

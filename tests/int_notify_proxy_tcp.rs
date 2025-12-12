@@ -42,6 +42,7 @@ fn int_proxy_notify_say_noauth_tcp() {
     std::fs::write(&cfg, cfg_content).expect("write cfg");
 
     // Save env and set for proxy thread
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     let old_path = std::env::var("PATH").ok();
     let old_noauth = std::env::var("AIFO_NOTIFICATIONS_NOAUTH").ok();

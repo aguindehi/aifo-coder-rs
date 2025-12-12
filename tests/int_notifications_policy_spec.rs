@@ -1,3 +1,4 @@
+mod support;
 use std::fs;
 
 #[test]
@@ -109,6 +110,7 @@ fn int_allowlist_env_extension_notify_send() {
     let cfg_path = dir.join("aider.yml");
     fs::write(&cfg_path, cfg).expect("write cfg");
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     let old_allow = std::env::var("AIFO_NOTIFICATIONS_ALLOWLIST").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
@@ -157,6 +159,7 @@ fn int_max_args_truncation_with_placeholder() {
     let cfg_path = dir.join("aider.yml");
     fs::write(&cfg_path, cfg).expect("write cfg");
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     let old_max = std::env::var("AIFO_NOTIFICATIONS_MAX_ARGS").ok();
     let old_allow = std::env::var("AIFO_NOTIFICATIONS_ALLOWLIST").ok();

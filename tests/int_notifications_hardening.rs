@@ -37,6 +37,7 @@ mod notifications_hardening_tests {
         fs::write(&cfg_path, yaml).expect("write yaml");
 
         // Point notifications config to our temp file
+        let _env_guard = crate::support::notifications_allow_test_exec_from(dir);
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
         // Ensure default (no trimming) to avoid env noise
         std::env::remove_var("AIFO_NOTIFICATIONS_TRIM_ENV");
@@ -82,6 +83,7 @@ exit 0
             script.display()
         );
         fs::write(&cfg_path, yaml).expect("write yaml");
+        let _env_guard = crate::support::notifications_allow_test_exec_from(dir);
         std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg_path);
 
         // Set a secret env var in parent

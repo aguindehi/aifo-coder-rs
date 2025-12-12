@@ -45,6 +45,8 @@ fn int_test_notifications_cmd_e2e_ok_and_mismatch() {
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
+
     // Start proxy without launching sidecars (notifications-cmd does not require sidecars)
     let sid = format!("notif-{}", std::process::id());
     let (url, token, flag, handle) =

@@ -41,6 +41,8 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
     );
     fs::write(home.join(".aider.conf.yml"), cfg_content).unwrap();
 
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
+
     // Prepare log path
     let logf = td.path().join("proxy.log");
     std::env::set_var("AIFO_TEST_LOG_PATH", &logf);

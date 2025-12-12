@@ -29,6 +29,7 @@ fn int_notifications_handle_request_with_stub_say() {
     writeln!(f, "{cfg_line}").expect("write cfg");
 
     // Save and set environment
+    let _env_guard = support::notifications_allow_test_exec_from(&bindir);
     let old_cfg = std::env::var("AIFO_NOTIFICATIONS_CONFIG").ok();
     let old_path = std::env::var("PATH").ok();
     std::env::set_var("AIFO_NOTIFICATIONS_CONFIG", &cfg);
