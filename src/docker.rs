@@ -1,27 +1,5 @@
 pub use crate::docker_mod::*;
 
-fn agent_bin_and_path(agent: &str) -> (String, String) {
-    let abs = match agent {
-        "aider" => "/opt/venv/bin/aider",
-        "codex" => "/usr/local/bin/codex",
-        "crush" => "/usr/local/bin/crush",
-        "openhands" => "/opt/venv-openhands/bin/openhands",
-        "opencode" => "/usr/local/bin/opencode",
-        "plandex" => "/usr/local/bin/plandex",
-        _ => agent,
-    }
-    .to_string();
-
-    let path = match agent {
-        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-    }
-    .to_string();
-
-    (abs, path)
-}
-
 fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     let mut env_flags: Vec<OsString> = Vec::new();
 
