@@ -3436,6 +3436,41 @@ release-macos-binary-signed:
 	$(MAKE) release-macos-binaries-zips-notarize; \
 	'
 
+.PHONY: verify-macos-signed
+verify-macos-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=verify-macos-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(MACOS_REQUIRE_TOOLS) codesign; \
+	B1="$(MACOS_DIST_ARM64)"; \
+	B2="$(MACOS_DIST_X86_64)"; \
+	Z1="$(MACOS_ZIP_ARM64)"; \
+	Z2="$(MACOS_ZIP_X86_64)"; \
+	ANY=0; \
+	for B in "$$B1" "$$B2"; do \
+	  if [ -f "$$B" ]; then \
+	    echo "Verifying codesign: $$B"; \
+	    codesign --verify --deep --strict --verbose=4 "$$B"; \
+	    if command -v spctl >/dev/null 2>&1; then spctl --assess --type exec --verbose=4 "$$B" || true; fi; \
+	    ANY=1; \
+	  fi; \
+	done; \
+	if command -v xcrun >/dev/null 2>&1 && command -v stapler >/dev/null 2>&1; then \
+	  for Z in "$$Z1" "$$Z2"; do \
+	    if [ -f "$$Z" ]; then \
+	      echo "Validating staple ticket (best-effort): $$Z"; \
+	      xcrun stapler validate "$$Z" || true; \
+	      ANY=1; \
+	    fi; \
+	  done; \
+	fi; \
+	if [ "$$ANY" -eq 0 ]; then \
+	  echo "No macOS binaries/zips found to verify under $(DIST_DIR). Run signing/zipping first." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Verification complete."; \
+	'
+
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
@@ -3664,7 +3699,14 @@ release-dmg-sign: release-app
 	  exit 0; \
 	fi; \
 	echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
-	xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait; \
+	OUT="$$(mktemp)"; \
+	if ! xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait >"$$OUT" 2>&1; then \
+	  cat "$$OUT" >&2; \
+	  rm -f "$$OUT"; \
+	  echo "Error: notarization failed for $$DMG_PATH" >&2; \
+	  exit 1; \
+	fi; \
+	rm -f "$$OUT"; \
 	echo "Stapling notarization ticket to DMG and app ..."; \
 	xcrun stapler staple "$$DMG_PATH" || true; \
 	xcrun stapler staple "$$APPROOT" || true; \
