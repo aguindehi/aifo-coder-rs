@@ -1,6 +1,8 @@
 #![allow(clippy::manual_assert)]
 // ignore-tidy-linelength
 
+mod support;
+
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -8,10 +10,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{thread, time::Duration};
 use tempfile::Builder;
-
-fn docker() -> Option<PathBuf> {
-    aifo_coder::container_runtime_path().ok()
-}
 
 fn image_for_aider() -> Option<String> {
     // Prefer explicit env, else default prefix-tag
@@ -44,11 +42,7 @@ fn image_exists(runtime: &Path, image: &str) -> bool {
 }
 
 fn unique_name(prefix: &str) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{}-{}", prefix, now)
+    support::unique_name(prefix)
 }
 
 fn run_detached_sleep_container(
@@ -96,38 +90,17 @@ fn run_detached_sleep_container(
 }
 
 fn exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    let mut cmd = Command::new(runtime);
-    cmd.arg("exec")
-        .arg(name)
-        .arg("/bin/sh")
-        .arg("-c")
-        .arg(script);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    match cmd.output() {
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).to_string()
-                + &String::from_utf8_lossy(&o.stderr).to_string();
-            (o.status.code().unwrap_or(1), out)
-        }
-        Err(e) => (1, format!("exec failed: {}", e)),
-    }
+    support::docker_exec_sh(runtime, name, script)
 }
 
 fn stop_container(runtime: &Path, name: &str) {
-    let _ = Command::new(runtime)
-        .arg("stop")
-        .arg("--time")
-        .arg("1")
-        .arg(name)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    support::stop_container(runtime, name)
 }
 
 #[test]
 #[ignore]
 fn e2e_config_copy_and_permissions_for_aider() {
-    let runtime = match docker() {
+    let runtime = match support::docker_runtime() {
         Some(p) => p,
         None => {
             eprintln!("skipping: docker runtime not available");
@@ -170,37 +143,14 @@ fn e2e_config_copy_and_permissions_for_aider() {
     assert!(ok, "failed to start container {}", name);
 
     // Wait for entrypoint to copy config (stamp or at least dir)
-    let mut ready = false;
-    for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(
-            &runtime,
-            &name,
-            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-        );
-        if out_ready.contains("READY") {
-            ready = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
         let _ = exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(
-                &runtime,
-                &name,
-                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out_ready.contains("READY") {
-                ready = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready = support::wait_for_config_copied(&runtime, &name);
     }
     assert!(
         ready,
@@ -244,7 +194,7 @@ echo "OKS=$ok1$ok2$ok3$ok4$ok5"
 #[test]
 #[ignore]
 fn e2e_config_skip_symlink_oversized_disallowed() {
-    let runtime = match docker() {
+    let runtime = match support::docker_runtime() {
         Some(p) => p,
         None => {
             eprintln!("skipping: docker runtime not available");
@@ -298,37 +248,14 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
     assert!(ok, "failed to start container {}", name);
 
     // Wait for entrypoint to copy config (stamp or at least dir)
-    let mut ready = false;
-    for _ in 0..50 {
-        let (_ec, out_ready) = exec_sh(
-            &runtime,
-            &name,
-            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-        );
-        if out_ready.contains("READY") {
-            ready = true;
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let mut ready = support::wait_for_config_copied(&runtime, &name);
     if !ready {
         let _ = exec_sh(
             &runtime,
             &name,
             r#"/usr/local/bin/aifo-entrypoint /bin/true || true"#,
         );
-        for _ in 0..50 {
-            let (_ec, out_ready) = exec_sh(
-                &runtime,
-                &name,
-                r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#,
-            );
-            if out_ready.contains("READY") {
-                ready = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        ready = support::wait_for_config_copied(&runtime, &name);
     }
     assert!(
         ready,

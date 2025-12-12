@@ -1,17 +1,14 @@
 /*!
 Test support helpers shared across integration tests.
 
-- have_git(): check git availability on PATH
-- which(bin): cross-platform which/where lookup
-- init_repo_with_default_user(dir): initialize a git repo with default user.name/email
-
 These helpers do not print skip messages themselves so tests can preserve their
 existing "skipping: ..." outputs verbatim.
 */
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 /// Return true if `git` is available on PATH.
 #[allow(dead_code)]
@@ -85,71 +82,7 @@ pub fn http_post_tcp(
     headers: &[(&str, &str)],
     body_kv: &[(&str, &str)],
 ) -> (u16, String, Vec<u8>) {
-    use std::io::{Read, Write};
-    use std::net::TcpStream;
-
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
-
-    // Build urlencoded body
-    let mut body = String::new();
-    for (i, (k, v)) in body_kv.iter().enumerate() {
-        if i > 0 {
-            body.push('&');
-        }
-        body.push_str(&format!("{}={}", urlencode(k), urlencode(v)));
-    }
-
-    // Build request
-    let mut req = format!(
-        "POST /exec HTTP/1.1\r\nHost: host.docker.internal\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n",
-        body.len()
-    );
-    for (k, v) in headers {
-        req.push_str(&format!("{k}: {v}\r\n"));
-    }
-    req.push_str("\r\n");
-    req.push_str(&body);
-
-    stream.write_all(req.as_bytes()).expect("write failed");
-
-    let mut buf = Vec::new();
-    let mut tmp = [0u8; 1024];
-    loop {
-        match stream.read(&mut tmp) {
-            Ok(0) => break,
-            Ok(n) => buf.extend_from_slice(&tmp[..n]),
-            Err(_) => break,
-        }
-    }
-
-    // Split headers/body
-    let mut status: u16 = 0;
-    let headers_s;
-    let mut body_out: Vec<u8> = Vec::new();
-
-    if let Some(pos) =
-        aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
-    {
-        let h = &buf[..pos];
-        headers_s = String::from_utf8_lossy(h).to_string();
-        // Parse status code from status line
-        if let Some(line) = headers_s.lines().next() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                status = parts[1].parse::<u16>().unwrap_or(0);
-            }
-        }
-        // Body (best-effort)
-        let mut body_bytes = buf[pos..].to_vec();
-        // Drop leading CRLFCRLF or LF+LF
-        while body_bytes.first() == Some(&b'\r') || body_bytes.first() == Some(&b'\n') {
-            body_bytes.remove(0);
-        }
-        body_out = body_bytes;
-    } else {
-        headers_s = String::from_utf8_lossy(&buf).to_string();
-    }
-    (status, headers_s, body_out)
+    http_post_form_tcp(port, "/exec", headers, body_kv)
 }
 
 /// Minimal raw HTTP sender over TCP returning the full response as a String.
@@ -212,6 +145,132 @@ pub fn init_repo_with_default_user(dir: &Path) -> io::Result<()> {
 #[allow(dead_code)]
 pub fn urlencode(s: &str) -> String {
     urlencoding::encode(s).into_owned()
+}
+
+#[allow(dead_code)]
+pub fn docker_runtime() -> Option<PathBuf> {
+    aifo_coder::container_runtime_path().ok()
+}
+
+#[allow(dead_code)]
+pub fn unique_name(prefix: &str) -> String {
+    let pid = std::process::id();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("{prefix}-{pid}-{nanos}")
+}
+
+#[allow(dead_code)]
+pub fn stop_container(runtime: &Path, name: &str) {
+    let _ = Command::new(runtime)
+        .args(["stop", "--time", "1", name])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[allow(dead_code)]
+pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
+    let mut cmd = Command::new(runtime);
+    cmd.arg("exec").arg(name).arg("/bin/sh").arg("-c").arg(script);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    match cmd.output() {
+        Ok(o) => {
+            let out = String::from_utf8_lossy(&o.stdout).to_string()
+                + &String::from_utf8_lossy(&o.stderr).to_string();
+            (o.status.code().unwrap_or(1), out)
+        }
+        Err(e) => (1, format!("exec failed: {e}")),
+    }
+}
+
+#[allow(dead_code)]
+pub fn wait_for_config_copied(runtime: &Path, name: &str) -> bool {
+    let script =
+        r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
+    for _ in 0..50 {
+        let (_ec, out) = docker_exec_sh(runtime, name, script);
+        if out.contains("READY") {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    false
+}
+
+#[allow(dead_code)]
+pub fn http_post_form_tcp(
+    port: u16,
+    path: &str,
+    headers: &[(&str, &str)],
+    body_kv: &[(&str, &str)],
+) -> (u16, String, Vec<u8>) {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect failed");
+
+    // Build urlencoded body
+    let mut body = String::new();
+    for (i, (k, v)) in body_kv.iter().enumerate() {
+        if i > 0 {
+            body.push('&');
+        }
+        body.push_str(&format!("{}={}", urlencode(k), urlencode(v)));
+    }
+
+    // Build request
+    let mut req = format!(
+        "POST {path} HTTP/1.1\r\nHost: host.docker.internal\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n",
+        body.len()
+    );
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    req.push_str("\r\n");
+    req.push_str(&body);
+
+    stream.write_all(req.as_bytes()).expect("write failed");
+
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 1024];
+    loop {
+        match stream.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => buf.extend_from_slice(&tmp[..n]),
+            Err(_) => break,
+        }
+    }
+
+    // Split headers/body
+    let mut status: u16 = 0;
+    let headers_s;
+    let mut body_out: Vec<u8> = Vec::new();
+
+    if let Some(pos) = aifo_coder::find_crlfcrlf(&buf).or_else(|| buf.windows(2).position(|w| w == b"\n\n"))
+    {
+        let h = &buf[..pos];
+        headers_s = String::from_utf8_lossy(h).to_string();
+        // Parse status code from status line
+        if let Some(line) = headers_s.lines().next() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                status = parts[1].parse::<u16>().unwrap_or(0);
+            }
+        }
+        // Body (best-effort)
+        let mut body_bytes = buf[pos..].to_vec();
+        // Drop leading CRLFCRLF or LF+LF
+        while body_bytes.first() == Some(&b'\r') || body_bytes.first() == Some(&b'\n') {
+            body_bytes.remove(0);
+        }
+        body_out = body_bytes;
+    } else {
+        headers_s = String::from_utf8_lossy(&buf).to_string();
+    }
+    (status, headers_s, body_out)
 }
 
 #[cfg(unix)]
