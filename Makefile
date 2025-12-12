@@ -294,7 +294,7 @@ endef
 
 define MACOS_REQUIRE_TOOLS
 missing=""; \
-for t in $$@; do \
+for t in $(1); do \
   command -v "$$t" >/dev/null 2>&1 || missing="$$missing $$t"; \
 done; \
 if [ -n "$$missing" ]; then \
@@ -3315,7 +3315,7 @@ release-macos-binaries-sign:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-sign; \
 	$(MACOS_REQUIRE_DARWIN); \
-	$(MACOS_REQUIRE_TOOLS) security codesign; \
+	$(call MACOS_REQUIRE_TOOLS,security codesign); \
 	B1="$(MACOS_DIST_ARM64)"; \
 	B2="$(MACOS_DIST_X86_64)"; \
 	if [ ! -f "$$B1" ] && [ ! -f "$$B2" ]; then \
@@ -3408,7 +3408,7 @@ release-macos-binaries-zips-notarize:
 	  echo "NOTARY_PROFILE unset; skipping macOS notarization and stapling."; \
 	  exit 0; \
 	fi; \
-	$(MACOS_REQUIRE_TOOLS) security xcrun; \
+	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
 	if ! xcrun notarytool --help >/dev/null 2>&1; then \
 	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
 	  exit 0; \
@@ -3475,7 +3475,7 @@ publish-macos-signed-zips-local:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
 	$(MACOS_REQUIRE_DARWIN); \
-	$(MACOS_REQUIRE_TOOLS) git curl; \
+	$(call MACOS_REQUIRE_TOOLS,git curl); \
 	if [ -z "$${GITLAB_API_TOKEN:-}" ]; then \
 	  echo "Error: GITLAB_API_TOKEN is required to upload to GitLab Package Registry." >&2; \
 	  exit 1; \
