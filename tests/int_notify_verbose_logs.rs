@@ -15,7 +15,7 @@ fn int_test_notify_verbose_logs_include_parsed_and_result() {
     let bindir = td.path().join("bin");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&bindir).unwrap();
-    let _env_guard = support::EnvGuard { saved: Vec::new() }
+    let _env_guard = support::EnvGuard::new()
         .set("HOME", home.to_string_lossy().to_string())
         .set(
             "PATH",

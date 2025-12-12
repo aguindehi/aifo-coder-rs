@@ -361,6 +361,10 @@ pub struct EnvGuard {
 }
 
 impl EnvGuard {
+    pub fn new() -> Self {
+        EnvGuard { saved: Vec::new() }
+    }
+
     pub fn set<K: Into<String>, V: Into<String>>(mut self, key: K, val: V) -> Self {
         let k = key.into();
         if !self.saved.iter().any(|(kk, _)| kk == &k) {

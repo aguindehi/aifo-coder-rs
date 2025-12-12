@@ -37,7 +37,7 @@ fn int_test_proxy_notifications_policy_auth_vs_noauth() {
     let bindir = td.path().join("bin");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&bindir).unwrap();
-    let _env_guard = support::EnvGuard { saved: Vec::new() }
+    let _env_guard = support::EnvGuard::new()
         .set("HOME", home.to_string_lossy().to_string())
         .set(
             "PATH",
