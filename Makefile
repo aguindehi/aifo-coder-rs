@@ -3673,7 +3673,7 @@ publish-macos-signed-zips-local-glab:
 	echo "Fetching existing release assets for tag $$TAG via glab ..."; \
 	EXISTING_URLS="$$(glab api --hostname "$$HOST" "projects/$$PID/releases/$$TAG" 2>/dev/null \
 	  | tr -d "\n" \
-	  | sed -nE '\''s/.*"url":[[:space:]]*"([^"]+)".*/\1/p'\'' \
+	  | sed -nE "s/.*\"url\":[[:space:]]*\"([^\"]+)\".*/\1/p" \
 	  | tr "\n" " " || true)"; \
 	ADD_LINK() { \
 	  name="$$1"; rel_path="$$2"; \
