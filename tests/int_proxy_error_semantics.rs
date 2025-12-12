@@ -13,8 +13,6 @@ fn int_error_semantics_tcp_v1_and_v2() {
         support::port_from_http_url(url)
     }
 
-    // Helper moved to tests/support::http_post_tcp
-
     // 1) 401 Unauthorized (no Authorization header)
     {
         std::env::remove_var("AIFO_TOOLEEXEC_USE_UNIX");

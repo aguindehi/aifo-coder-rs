@@ -11,17 +11,7 @@ fn int_test_proxy_allowlist_rejects_disallowed_tool() {
     let (url, _token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // Try to execute disallowed tool 'bash' via query → expect 403 (allowlist fast-path, auth-independent)
     use std::io::{Read, Write};

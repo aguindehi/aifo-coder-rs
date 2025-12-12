@@ -35,10 +35,7 @@ fn int_proxy_timeout_python_sleep() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, true).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // Request that exceeds timeout: python -c "import time; time.sleep(2)"
     use std::io::{Read, Write};

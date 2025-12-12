@@ -12,10 +12,7 @@ fn int_proxy_unauthorized_without_sidecars_and_missing_tool_body() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        support::port_from_http_url(u)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // 401 Unauthorized (no Authorization header)
     {

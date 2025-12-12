@@ -1,3 +1,4 @@
+mod support;
 use std::io::{Read, Write};
 
 #[test]
@@ -13,17 +14,7 @@ fn int_proxy_missing_or_wrong_proto_header() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("failed to start proxy");
 
-    fn extract_port(u: &str) -> u16 {
-        let after_scheme = u.split("://").nth(1).unwrap_or(u);
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        host_port
-            .rsplit(':')
-            .next()
-            .unwrap_or("0")
-            .parse::<u16>()
-            .unwrap_or(0)
-    }
-    let port = extract_port(&url);
+    let port = support::port_from_http_url(&url);
 
     // 1) Missing X-Aifo-Proto header -> expect 426
     {
