@@ -3282,9 +3282,10 @@ release-macos-binaries-sign:
 	fi; \
 	$(MACOS_DEFAULT_KEYCHAIN); \
 	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
-	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	if [ -z "$${SIGN_IDENTITY:-}" ] || [ "$$SIGN_IDENTITY" = "Migros AI Foundation Code Signer" ]; then \
+	  SIGN_IDENTITY=""; export SIGN_IDENTITY; \
 	  APPLE_DEV=0; export APPLE_DEV; \
-	  echo "SIGN_IDENTITY not set; attempting ad-hoc signing for local use."; \
+	  echo "SIGN_IDENTITY unset/empty (or default placeholder); using ad-hoc signing for local use."; \
 	else \
 	  $(MACOS_DETECT_APPLE_DEV); \
 	  if [ "$${APPLE_DEV:-0}" = "1" ]; then \
@@ -3303,9 +3304,10 @@ release-macos-binaries-sign:
 	    echo "Verifying $$B ..."; \
 	    if ! codesign --verify --strict --verbose=4 "$$B"; then \
 	      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	        echo "Error: codesign verification failed for $$B (Apple Developer identity)." >&2; \
 	        exit 1; \
 	      fi; \
-	      echo "Warning: codesign verification failed for $$B." >&2; \
+	      echo "Warning: codesign verification failed for $$B (non-Apple/local identity)." >&2; \
 	      exit 1; \
 	    fi; \
 	    codesign -dv --verbose=4 "$$B" >/dev/null 2>&1 || true; \
@@ -3328,9 +3330,9 @@ release-macos-binaries-zips:
 	  exit 1; \
 	fi; \
 	ANY=0; \
-	for arch in arm64 x86_64; do \
-	  B="$$DIST/$(BIN_NAME)-macos-$$arch"; \
+	for B in "$(MACOS_DIST_ARM64)" "$(MACOS_DIST_X86_64)"; do \
 	  if [ -f "$$B" ]; then \
+	    arch="$${B##*-macos-}"; \
 	    STAGE="$$DIST/.zip-stage-$$arch"; \
 	    rm -rf "$$STAGE"; \
 	    mkdir -p "$$STAGE"; \
@@ -3341,7 +3343,7 @@ release-macos-binaries-zips:
 	    echo "Wrote $$DIST/$(BIN_NAME)-macos-$$arch.zip"; \
 	    ANY=1; \
 	  else \
-	    echo "$$B missing; skipping zip for $$arch."; \
+	    echo "$$B missing; skipping zip for $${B##*-macos-}."; \
 	  fi; \
 	done; \
 	if [ "$$ANY" -eq 0 ]; then \
