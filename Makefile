@@ -230,14 +230,14 @@ MACOS_ZIP_X86_64 ?= $(MACOS_DIST_X86_64).zip
 define MACOS_REQUIRE_DARWIN
 OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 if [ "$$OS" != "Darwin" ]; then \
-  echo "This target requires macOS (Darwin); current platform: $$OS" >&2; \
+  echo "$${AIFO_DARWIN_TARGET_NAME:-This target} requires macOS (Darwin), found $$OS" >&2; \
   exit 1; \
 fi
 endef
 
 define MACOS_REQUIRE_ZIP
 command -v zip >/dev/null 2>&1 || { \
-  echo "Error: zip tool not found; install zip (e.g., 'brew install zip' on macOS)." >&2; \
+  echo "Error: zip tool not found; please install 'zip' and retry." >&2; \
   exit 1; \
 }
 endef
@@ -3221,6 +3221,7 @@ lint-tests-naming:
 .PHONY: release-macos-binaries-normalize-local
 release-macos-binaries-normalize-local:
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-normalize-local; \
 	$(MACOS_REQUIRE_DARWIN); \
 	DIST="$(DIST_DIR)"; \
 	BIN="$(BIN_NAME)"; \
@@ -3268,6 +3269,7 @@ release-macos-binaries-normalize-local:
 .PHONY: release-macos-binaries-sign
 release-macos-binaries-sign:
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-sign; \
 	$(MACOS_REQUIRE_DARWIN); \
 	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)" >&2; exit 1; }; \
 	command -v codesign >/dev/null 2>&1 || { echo "Error: codesign tool not found (Xcode Command Line Tools)" >&2; exit 1; }; \
@@ -3351,6 +3353,7 @@ release-macos-binaries-zips:
 .PHONY: release-macos-binaries-zips-notarize
 release-macos-binaries-zips-notarize:
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-zips-notarize; \
 	$(MACOS_REQUIRE_DARWIN); \
 	NOTARY="$(NOTARY_PROFILE)"; \
 	if [ -z "$$NOTARY" ]; then \
@@ -3379,10 +3382,14 @@ release-macos-binaries-zips-notarize:
 	for Z in "$$Z1" "$$Z2"; do \
 	  if [ -f "$$Z" ]; then \
 	    echo "Submitting $$Z for notarization with profile $$NOTARY ..."; \
-	    if ! xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait; then \
+	    OUT="$$(mktemp)"; \
+	    if ! xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait >"$$OUT" 2>&1; then \
+	      cat "$$OUT" >&2; \
+	      rm -f "$$OUT"; \
 	      echo "Error: notarization failed for $$Z" >&2; \
 	      exit 1; \
 	    fi; \
+	    rm -f "$$OUT"; \
 	  fi; \
 	done; \
 	for Z in "$$Z1" "$$Z2"; do \
@@ -3402,6 +3409,7 @@ release-macos-binaries-zips-notarize:
 .PHONY: release-macos-binary-signed
 release-macos-binary-signed:
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binary-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(MAKE) build-launcher; \
 	$(MAKE) release-macos-binaries-normalize-local; \
