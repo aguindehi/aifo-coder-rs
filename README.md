@@ -588,6 +588,49 @@ Summary:
 
 There are two common paths to sign macOS artifacts:
 
+#### CI behavior (unchanged)
+
+CI builds and publishes macOS artifacts, but it does not perform signing or notarization:
+- CI MUST NOT run `codesign`, `notarytool`, or `stapler`.
+- CI MUST NOT depend on `SIGN_IDENTITY` or `NOTARY_PROFILE`.
+- CI MAY still produce and publish unsigned macOS binaries (e.g. from osxcross) and/or copy them into `dist/` as:
+  - `dist/aifo-coder-macos-arm64`
+  - `dist/aifo-coder-macos-x86_64`
+
+Unsigned artifacts may trigger Gatekeeper warnings on end-user machines. Signed/notarized assets are produced locally on
+macOS (see below).
+
+#### Local developer workflows (macOS)
+
+Two supported local workflows:
+
+1) Self-signed / non-Apple identity (internal use)
+- Configure a local signing identity (login keychain), e.g.:
+  - `export SIGN_IDENTITY="Migros AI Foundation Code Signer"`
+  - `unset NOTARY_PROFILE`
+- Run:
+  - `make release-macos-binary-signed`
+- Result:
+  - `dist/aifo-coder-macos-*.zip` containing signed (but not notarized) per-arch binaries.
+- Note:
+  - Notarization is skipped automatically for non-Apple identities.
+
+2) Apple Developer ID (public distribution)
+- Configure:
+  - `export SIGN_IDENTITY="Developer ID Application: <Org Name> (<TEAMID>)"`
+  - `export NOTARY_PROFILE="<notarytool-profile>"`
+- Run:
+  - `make release-macos-binary-signed`
+- Result:
+  - Per-arch `.zip` assets are signed and submitted for notarization; stapling is attempted best-effort.
+
+Existing DMG workflow:
+- The DMG pipeline remains independent and continues to use:
+  - `make release-app`
+  - `make release-dmg`
+  - `make release-dmg-sign`
+- You can reuse the same `SIGN_IDENTITY` / `NOTARY_PROFILE` settings for both per-arch zips and DMG signing.
+
 #### Per-arch signed binaries (zip release assets)
 
 You can also sign and package the already-built per-arch macOS launcher binaries into `dist/`:
