@@ -158,6 +158,44 @@ export DOCKER_BUILDKIT ?= 1
 RELEASE_PREFIX ?= release
 RELEASE_POSTFIX ?=
 
+# -----------------------------------------------------------------------------
+# macOS binary signing / notarization (local-only) – prerequisites & invariants
+# -----------------------------------------------------------------------------
+#
+# Canonical artifacts and paths:
+# - Normalized binaries (inputs to signing):
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
+# - Corresponding zip artifacts:
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64.zip
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64.zip
+#
+# Source binaries (produced by existing targets, not by signing targets):
+# - target/aarch64-apple-darwin/release/$(BIN_NAME)
+# - target/x86_64-apple-darwin/release/$(BIN_NAME)
+#
+# Invariants:
+# - macOS signing/notarization targets MUST NOT invoke cargo build directly.
+# - dist/ artifacts are replaceable; targets are free to overwrite them.
+#
+# Variable expectations:
+# - DIST_DIR ?= dist
+# - BIN_NAME ?= aifo-coder
+# - SIGN_IDENTITY: codesign identity common name (CN). If empty/unset, signing
+#   flows should fall back to ad-hoc signing for local testing.
+# - NOTARY_PROFILE: xcrun notarytool keychain profile. If empty/unset, notarize
+#   steps must be a no-op with clear logging and exit 0.
+#
+# Platform constraints:
+# - codesign/notarytool/stapler operations are macOS-only (Darwin).
+# - On non-Darwin platforms, those targets must fail with a clear message and
+#   exit status 1.
+
+MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
+MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
+MACOS_ZIP_ARM64 ?= $(MACOS_DIST_ARM64).zip
+MACOS_ZIP_X86_64 ?= $(MACOS_DIST_X86_64).zip
+
 banner:
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
