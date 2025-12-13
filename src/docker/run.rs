@@ -941,16 +941,8 @@ pub fn build_docker_preview_only(
     preview_args.push("/bin/sh".to_string());
     preview_args.push("-c".to_string());
 
-    let sh_cmd = format!(
-        "set -e; umask 077; \
-         if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
-         export PATH=\"{path_value}\"; sed_port(){{ if [ \"${{AIFO_SED_PORTABLE:-1}}\" = \"1\" ]; then sed -i'' \"$@\"; else sed -i \"$@\"; fi; }}; \
-         uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
-         mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
-         unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
-         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
-         exec {agent_joined}"
-    );
+    let sh_cmd = build_container_sh_cmd(&path_value, &agent_joined)
+        .unwrap_or_else(|_| format!("exec {agent_joined}"));
     preview_args.push(sh_cmd);
 
     preview_args
