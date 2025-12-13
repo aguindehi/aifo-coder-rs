@@ -26,7 +26,7 @@ use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
 
 use crate::banner::print_startup_banner;
-use crate::util::{shell_escape, ShellScript};
+use aifo_coder::{shell_escape, ShellScript};
 
 struct CursorGuard {
     hide: bool,
