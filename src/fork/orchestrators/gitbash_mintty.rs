@@ -2,6 +2,14 @@
 
 use std::process::Command;
 
+fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
+    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
+        Err(format!("refusing to execute {what}: contains newline"))
+    } else {
+        Ok(())
+    }
+}
+
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 
@@ -34,6 +42,7 @@ impl Orchestrator for GitBashMintty {
                     let cut = inner.len() - "; exec bash".len();
                     inner.truncate(cut);
                 }
+                reject_newlines(&inner, "Git Bash inner command")?;
                 let st = Command::new(&gb).arg("-c").arg(&inner).status();
                 match st {
                     Ok(s) if s.success() => {}
@@ -60,6 +69,7 @@ impl Orchestrator for GitBashMintty {
                 let cut = inner.len() - "; exec bash".len();
                 inner.truncate(cut);
             }
+            reject_newlines(&inner, "mintty inner command")?;
             let st = Command::new(&mt)
                 .arg("-e")
                 .arg("bash")

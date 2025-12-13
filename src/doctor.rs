@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::agent_images::default_image_for_quiet;
+use aifo_coder::ShellScript;
 
 pub fn run_doctor(verbose: bool) {
     let verbose_env = std::env::var("AIFO_CODER_DOCTOR_VERBOSE")
@@ -153,7 +154,11 @@ pub fn run_doctor(verbose: bool) {
         args.push(image);
         args.push("-lc".to_string());
         args.push(
-            "cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined".to_string(),
+            ShellScript::new()
+                .push("cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined"
+                    .to_string())
+                .build()
+                .unwrap_or_else(|_| "echo unconfined".to_string()),
         );
         let mut cmd = Command::new(&rt);
         for a in &args {
@@ -332,7 +337,13 @@ pub fn run_doctor(verbose: bool) {
             ("full", format!("{}-crush:{}", prefix, tag)),
             ("slim", format!("{}-crush-slim:{}", prefix, tag)),
         ];
-        let check = "for e in emacs-nox vim nano mg nvi; do command -v \"$e\" >/dev/null 2>&1 && printf \"%s \" \"$e\"; done";
+        let check = ShellScript::new()
+            .push(
+                r#"for e in emacs-nox vim nano mg nvi; do command -v "$e" >/dev/null 2>&1 && printf "%s " "$e"; done"#
+                    .to_string(),
+            )
+            .build()
+            .unwrap_or_else(|_| "true".to_string());
         let use_color = atty::is(atty::Stream::Stderr);
         let mut printed_any = false;
 
@@ -350,7 +361,7 @@ pub fn run_doctor(verbose: bool) {
             }
 
             if let Ok(out) = Command::new(&rt)
-                .args(["run", "--rm", "--entrypoint", "sh", &img, "-lc", check])
+                .args(["run", "--rm", "--entrypoint", "sh", &img, "-lc", &check])
                 .output()
             {
                 let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -373,7 +384,7 @@ pub fn run_doctor(verbose: bool) {
         if !printed_any {
             let image = default_image_for_quiet("crush");
             if let Ok(out) = Command::new(&rt)
-                .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", check])
+                .args(["run", "--rm", "--entrypoint", "sh", &image, "-lc", &check])
                 .output()
             {
                 let list = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -911,10 +922,15 @@ pub fn run_doctor(verbose: bool) {
             .arg(&image)
             .arg("sh")
             .arg("-lc")
-            .arg(format!(
-                "echo ok > /workspace/{tmp} && id -u > /workspace/{tmp}.uid",
-                tmp = tmpname
-            ));
+            .arg(
+                ShellScript::new()
+                    .extend([
+                        format!(r#"echo ok > "/workspace/{tmp}""#, tmp = tmpname),
+                        format!(r#"id -u > "/workspace/{tmp}.uid""#, tmp = tmpname),
+                    ])
+                    .build()
+                    .unwrap_or_else(|_| "false".to_string()),
+            );
         let _ = cmd.stdout(Stdio::null()).stderr(Stdio::null()).status();
 
         let host_file = pwd.join(&tmpname);
