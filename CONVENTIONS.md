@@ -107,3 +107,42 @@ check uses 'cargo nextest' which is a lot faster then 'cargo test'.
 
 As a general rule, do not use specification / plan phase informations in comments as
 these are transient and specification / plan dependant.
+
+# Recommended project-wide standard
+
+1) Never build executable shell scripts from multi-line string literals
+
+Rule: any string that will be executed by /bin/sh -c, bash -c, cmd /c, PowerShell, etc. must be assembled from atomic fragments
+and joined.
+
+This prevents Rust source formatting from changing runtime behavior.
+
+2) Use the small utility: “ShellScript builder”
+
+Use the reusable helper "ShellScript" (from src/util/mod.rs) like:
+
+ • ShellScript::new()
+ • push(cmd: impl Into<String>)
+ • extend([...])
+ • build() → returns a single-line string joined with ;
+ • validates: rejects \n, \r, and optionally \0
+
+Then standardize on:
+
+ • Each push() is one logical command (no embedded newlines).
+ • Use ; joining by default (portable, safe).
+ • For rare cases where newlines are intended, make that explicit (e.g. build_multiline()), but default should be single-line.
+
+3) Make “no embedded newlines” a checked invariant
+
+We enforce it in the builder:
+
+ • In debug: debug_assert!(!contains_newline)
+ • In release: return an error (io::Error or a project error) when a newline is present
+
+This turns silent regressions into immediate failures with a clear message.
+
+4) Centralize quoting rules
+
+We have shell_escape and shell_join. The builder should be used only for the control script; user args should still go
+through shell_join/shell_escape. Keeping those responsibilities separate avoids injection bugs.
