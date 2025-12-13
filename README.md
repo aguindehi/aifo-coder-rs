@@ -588,6 +588,112 @@ Summary:
 
 There are two common paths to sign macOS artifacts:
 
+#### CI behavior (unchanged)
+
+CI builds and publishes macOS artifacts, but it does not perform signing or notarization:
+- CI MUST NOT run `codesign`, `notarytool`, or `stapler`.
+- CI MUST NOT depend on `SIGN_IDENTITY` or `NOTARY_PROFILE`.
+- CI MAY still produce and publish unsigned macOS binaries (e.g. from osxcross) and/or copy them into `dist/` as:
+  - `dist/aifo-coder-macos-arm64`
+  - `dist/aifo-coder-macos-x86_64`
+
+Unsigned artifacts may trigger Gatekeeper warnings on end-user machines. Signed/notarized assets are produced locally on
+macOS (see below).
+
+#### Local developer workflows (macOS)
+
+Two supported local workflows:
+
+1) Self-signed / non-Apple identity (internal use)
+- Configure a local signing identity (login keychain), e.g.:
+  - `export SIGN_IDENTITY="Migros AI Foundation Code Signer"`
+  - `unset NOTARY_PROFILE`
+- Run:
+  - `make release-macos-binary-signed`
+- Result:
+  - `dist/aifo-coder-<version>-macos-*.zip` containing signed (but not notarized) per-arch binaries.
+- Note:
+  - Notarization is skipped automatically for non-Apple identities.
+
+2) Apple Developer ID (public distribution)
+- Configure:
+  - `export SIGN_IDENTITY="Developer ID Application: <Org Name> (<TEAMID>)"`
+  - `export NOTARY_PROFILE="<notarytool-profile>"`
+- Run:
+  - `make release-macos-binary-signed`
+- Result:
+  - Per-arch `.zip` assets are signed and submitted for notarization; stapling is attempted best-effort.
+
+Existing DMG workflow:
+- The DMG pipeline remains independent and continues to use:
+  - `make release-app`
+  - `make release-dmg`
+  - `make release-dmg-sign`
+- You can reuse the same `SIGN_IDENTITY` / `NOTARY_PROFILE` settings for both per-arch zips and DMG signing.
+
+#### Release assets (recommended)
+
+After producing artifacts, the recommended release assets are:
+
+- Linux:
+  - `aifo-coder-linux-x86_64.tar.gz` (contains the Linux binary + README.md + NOTICE + LICENSE)
+- macOS (per-arch, preferred for CLI users):
+  - `dist/aifo-coder-<version>-macos-arm64.zip`
+  - `dist/aifo-coder-<version>-macos-x86_64.zip` (if produced)
+  - Optional raw signed binaries:
+    - `dist/aifo-coder-macos-arm64`
+    - `dist/aifo-coder-macos-x86_64`
+- macOS (GUI users):
+  - Signed DMG via `make release-dmg-sign` (recommended for drag-and-drop install)
+
+Notes:
+- CI macOS artifacts are unsigned; Gatekeeper prompts may appear on end-user machines.
+- Signed/notarized macOS artifacts are produced locally on macOS.
+
+#### Creating per-arch signed macOS zip assets (local, macOS)
+
+These targets package already-built per-arch macOS launcher binaries into `dist/`:
+
+- Normalize existing `target/*-apple-darwin/release/$(BIN_NAME)` into canonical dist names:
+  - `make release-macos-binaries-normalize-local`
+- Sign those dist binaries in place:
+  - `make release-macos-binaries-sign`
+- Create per-arch zip files including required docs:
+  - `make release-macos-binaries-zips`
+- Optional notarization (Developer ID + NOTARY_PROFILE required):
+  - `make release-macos-binaries-zips-notarize`
+- One-shot helper (build host arch + normalize + sign + zip + optional notarize):
+  - `make release-macos-binary-signed`
+
+Outputs (versioned to avoid collisions):
+- `dist/aifo-coder-<version>-macos-arm64.zip`
+- `dist/aifo-coder-<version>-macos-x86_64.zip` (if produced)
+
+Tip (tagged releases):
+- If HEAD is exactly at a Git tag, zip filenames automatically use that tag.
+- You can still override explicitly with:
+  - `MACOS_ZIP_VERSION=<tag>`
+
+One-command publish (local macOS -> GitLab Release links):
+- On a tag checkout, this will:
+  - build/sign/zip/notarize locally,
+  - upload the signed zips to the GitLab Generic Package Registry for that tag,
+  - CI will then auto-attach the signed zip links to the GitLab Release (no manual CI job).
+- Run:
+  - `make release-macos-binary-signed`
+  - `make publish-macos-signed-zips-local GITLAB_API_TOKEN=<token>`
+
+Notes:
+- Zip filenames are tag-based automatically when HEAD is exactly at a tag (via `MACOS_ZIP_VERSION`), so renaming is not
+  required.
+- CI never signs/notarizes. It only attaches links if the uploaded zips exist.
+
+Verification (recommended):
+- `make verify-macos-signed`
+
+These targets do not invoke Cargo builds directly (except `release-macos-binary-signed`, which calls
+`make build-launcher` first).
+
 1) Apple Developer identity (Apple Distribution / Developer ID Application):
 - Produces artifacts eligible for notarization.
 - The Makefile target release-dmg-sign will detect an Apple identity and use hardened runtime flags and timestamps automatically.

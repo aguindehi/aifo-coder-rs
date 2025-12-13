@@ -173,6 +173,7 @@ if command -v docker >/dev/null 2>&1; then
   else
     echo "Error: built binary at $BIN is not executable on this host (architecture mismatch?)." >&2
     echo "Try: rm -rf ./target && re-run this script, or install Rust (https://rustup.rs) to build natively." >&2
+    exit 1
   fi
 fi
 

@@ -11,6 +11,17 @@ include:
 
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
+  # Local-only macOS signing: optional upload location for signed/notarized per-arch zips.
+  # These are produced on macOS with:
+  #   make release-macos-binary-signed
+  # and then uploaded to the GitLab Generic Package Registry under:
+  #   ${CI_PROJECT_NAME}/${CI_COMMIT_TAG}/
+  #
+  # Expected filenames are versioned to avoid collisions:
+  # - aifo-coder-${CI_COMMIT_TAG}-macos-arm64-signed.zip
+  # - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64-signed.zip
+  SIGNED_MACOS_ARM64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-arm64-signed.zip
+  SIGNED_MACOS_X86_64_ZIP: aifo-coder-${CI_COMMIT_TAG}-macos-x86_64-signed.zip
   KEEP_APT: "0"
   DOCKER_BUILDKIT: "0"
 
@@ -848,42 +859,150 @@ publish-release:
       cp dist/aifo-coder-macos-x86_64 .
       # Rename Linux binary for clarity
       mv aifo-coder aifo-coder-linux-x86_64
-      # Create per-OS archives including docs
-      tar -czf aifo-coder-linux-x86_64.tar.gz \
-        aifo-coder-linux-x86_64 README.md NOTICE LICENSE
-      tar -czf aifo-coder-macos.tar.gz \
-        aifo-coder-macos-arm64 aifo-coder-macos-x86_64 README.md NOTICE LICENSE
+      # Create per-arch archives (zip) including docs.
+      # Keep a stable 'aifo-coder' binary name inside the archive; version is in the filename.
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-linux-x86_64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip" .); \
+        rm -rf "${stage}"; \
+      )
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-macos-arm64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip" .); \
+        rm -rf "${stage}"; \
+      )
+      ( \
+        stage="$(mktemp -d)"; \
+        install -m 0755 aifo-coder-macos-x86_64 "${stage}/aifo-coder"; \
+        install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
+        cp -a docs "${stage}/"; \
+        (cd "${stage}" && zip -9qr "../aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip" .); \
+        rm -rf "${stage}"; \
+      )
       echo "Artifacts ready:"
       ls -lh aifo-coder-linux-x86_64 aifo-coder-macos-arm64 aifo-coder-macos-x86_64
-      ls -lh aifo-coder-linux-x86_64.tar.gz aifo-coder-macos.tar.gz
+      ls -lh aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip \
+        aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip \
+        aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
       ls -lh README.md NOTICE LICENSE
+      echo
+      echo "NOTE: CI does not sign or notarize macOS artifacts. To publish signed/notarized macOS zips:"
+      echo "  1) On macOS (on the tag), run: make release-macos-binary-signed"
+      echo "  2) Upload dist/*.zip to the GitLab Package Registry under ${CI_COMMIT_TAG} (or run: make publish-macos-signed-zips-local)"
+      echo "  3) CI will auto-attach signed zip links if they exist in the registry (publish-macos-signed-zips)."
+      echo
+      echo "Creating or updating GitLab Release via release-cli..."
+      release-cli create \
+        --name "Release ${CI_COMMIT_TAG}" \
+        --tag-name "${CI_COMMIT_TAG}" \
+        --description "${CI_COMMIT_MESSAGE}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip\"}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip\"}" \
+        --assets-link "{\"name\":\"aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip\"}" \
+        --assets-link "{\"name\":\"aifo-coder-linux-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-linux-x86_64\"}" \
+        --assets-link "{\"name\":\"aifo-coder-macos-arm64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-arm64\"}" \
+        --assets-link "{\"name\":\"aifo-coder-macos-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-x86_64\"}" \
+        --update
   artifacts:
     expire_in: 1 week
     paths:
       - aifo-coder-linux-x86_64
       - aifo-coder-macos-arm64
       - aifo-coder-macos-x86_64
-      - aifo-coder-linux-x86_64.tar.gz
-      - aifo-coder-macos.tar.gz
+      - aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip
+      - aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip
+      - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
       - README.md
       - NOTICE
       - LICENSE
       - docs/
-  release:
-    tag_name: $CI_COMMIT_TAG
-    name: "Release $CI_COMMIT_TAG"
-    description: "$CI_COMMIT_MESSAGE"
-    assets:
-      links:
-        - name: aifo-coder-linux-x86_64.tar.gz
-          url: $CI_JOB_URL/artifacts/file/aifo-coder-linux-x86_64.tar.gz
-        - name: aifo-coder-macos.tar.gz
-          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos.tar.gz
-        - name: aifo-coder-linux-x86_64
-          url: $CI_JOB_URL/artifacts/file/aifo-coder-linux-x86_64
-        - name: aifo-coder-macos-arm64
-          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos-arm64
-        - name: aifo-coder-macos-x86_64
-          url: $CI_JOB_URL/artifacts/file/aifo-coder-macos-x86_64
   rules:
     - if: $CI_COMMIT_TAG
+
+publish-macos-signed-zips:
+  stage: release
+  image: alpine:3.20
+  interruptible: true
+  timeout: 15m
+  tags:
+    - qual-mcap-gcp
+  needs:
+    - publish-release
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: on_success
+  variables:
+    # Requires a project/group token with api scope and permission to edit releases.
+    # Use a protected/masked CI variable.
+    GITLAB_API_TOKEN: "${GITLAB_API_TOKEN}"
+  script:
+    - |
+      set -euo pipefail
+      apk add --no-cache curl jq >/dev/null
+      if [ -z "${GITLAB_API_TOKEN:-}" ]; then
+        echo "GITLAB_API_TOKEN not set; skipping signed macOS zip link attachment."
+        exit 0
+      fi
+
+      ARM_ZIP="${SIGNED_MACOS_ARM64_ZIP}"
+      X86_ZIP="${SIGNED_MACOS_X86_64_ZIP}"
+
+      echo "Expecting signed zip filenames:"
+      echo "  ${ARM_ZIP}"
+      echo "  ${X86_ZIP}"
+      echo "Package registry base:"
+      echo "  ${PACKAGE_REGISTRY_URL}"
+
+      # Validate that the signed zips exist in the Generic Package Registry (HEAD).
+      auth_hdr="PRIVATE-TOKEN: ${GITLAB_API_TOKEN}"
+      arm_url="${PACKAGE_REGISTRY_URL}/${ARM_ZIP}"
+      x86_url="${PACKAGE_REGISTRY_URL}/${X86_ZIP}"
+
+      echo "Checking package registry objects..."
+      arm_status="$(curl -sS -o /dev/null -w '%{http_code}' -I -H "${auth_hdr}" "${arm_url}" || echo 000)"
+      x86_status="$(curl -sS -o /dev/null -w '%{http_code}' -I -H "${auth_hdr}" "${x86_url}" || echo 000)"
+
+      if [ "${arm_status}" != "200" ] && [ "${x86_status}" != "200" ]; then
+        echo "No signed macOS zip artifacts found in package registry for tag ${CI_COMMIT_TAG}; skipping."
+        exit 0
+      fi
+
+      # Create (or update) release asset links pointing at the package registry URLs.
+      release_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
+      echo "Fetching existing release assets..."
+      curl -sS -H "${auth_hdr}" "${release_url}" > release.json
+      existing="$(jq -r '.assets.links[].url // empty' release.json | tr '\n' ' ')"
+
+      add_link() {
+        name="$1"
+        url="$2"
+        if echo "${existing}" | grep -Fq -- "${url}"; then
+          echo "Release link already present: ${name} -> ${url}"
+          return 0
+        fi
+        echo "Adding release link: ${name} -> ${url}"
+        curl -sS -X POST -H "${auth_hdr}" \
+          --data-urlencode "name=${name}" \
+          --data-urlencode "url=${url}" \
+          "${release_url}/assets/links" >/dev/null
+      }
+
+      if [ "${arm_status}" = "200" ]; then
+        add_link "${ARM_ZIP}" "${arm_url}"
+      else
+        echo "arm64 signed zip not found (HTTP ${arm_status}); skipping link."
+      fi
+
+      if [ "${x86_status}" = "200" ]; then
+        add_link "${X86_ZIP}" "${x86_url}"
+      else
+        echo "x86_64 signed zip not found (HTTP ${x86_status}); skipping link."
+      fi
+
+      echo "Done."

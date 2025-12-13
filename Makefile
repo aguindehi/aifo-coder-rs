@@ -27,6 +27,15 @@ IMAGE_PREFIX ?= aifo-coder
 TAG ?= latest
 RUST_TOOLCHAIN_TAG ?= latest
 
+# Release tags use a prefix like "release" by default.
+# If RELEASE_PREFIX is set in the environment (even to empty), GNU Make will treat it as defined.
+# That can accidentally produce tags like "-0.6.6". Normalize empty/whitespace-only to default.
+#
+# IMPORTANT: Keep this consistent with the later `RELEASE_PREFIX ?= release` block.
+ifeq ($(strip $(RELEASE_PREFIX)),)
+  RELEASE_PREFIX := release
+endif
+
 # Set to 0 to drop apt/procps in final images (local default keeps them; CI overrides to 0)
 KEEP_APT ?= 1
 
@@ -103,6 +112,11 @@ NICENESS_CARGO_NEXTEST =? 0
 # Agent build source: [git | release]
 AIDER_SOURCE ?= release
 
+# glab authentication behavior:
+# - When uploading signed macOS zips via glab, we can optionally prompt for interactive login.
+# - Default: enabled (TTY-only). Disable with AIFO_GLAB_AUTOLOGIN=0.
+AIFO_GLAB_AUTOLOGIN ?= 1
+
 # Agent version pins (default: latest). Pin for reproducible releases.
 CODEX_VERSION ?= latest
 CRUSH_VERSION ?= latest
@@ -156,7 +170,188 @@ export DOCKER_BUILDKIT ?= 1
 
 # Publish release prefix/postfix
 RELEASE_PREFIX ?= release
+# If environment defines RELEASE_PREFIX but it is empty/whitespace, default back to "release".
+# (This handles cases where a caller exports RELEASE_PREFIX="" which would otherwise override ?=.)
+ifeq ($(strip $(RELEASE_PREFIX)),)
+  RELEASE_PREFIX := release
+endif
 RELEASE_POSTFIX ?=
+
+# Optional local developer overrides (not committed).
+# NOTE: We intentionally do NOT `include .env` here because `.env` is typically
+# shell syntax (often quoted) and Make would include quotes in variable values.
+# Targets that need values from .env should source it in their shell recipe.
+
+# -----------------------------------------------------------------------------
+# macOS binary signing / notarization (local-only) – prerequisites & invariants
+# -----------------------------------------------------------------------------
+#
+# Canonical artifacts and paths:
+# - Normalized binaries (inputs to signing):
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-arm64
+#   - $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
+# - Corresponding versioned zip artifacts (avoid collisions):
+#   - $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64.zip
+#   - $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64.zip
+#
+# Source binaries (produced by existing build targets; signing targets MUST NOT
+# invoke cargo directly):
+# - target/aarch64-apple-darwin/release/$(BIN_NAME)
+# - target/x86_64-apple-darwin/release/$(BIN_NAME)
+#
+# Variable expectations:
+# - DIST_DIR ?= dist
+# - BIN_NAME ?= aifo-coder
+# - MACOS_ZIP_VERSION ?= <tag-or-version>
+#   - If HEAD is exactly at a Git tag, we prefer that tag name automatically.
+#   - Otherwise we fall back to $(VERSION).
+# - SIGN_IDENTITY: codesign identity common name (CN). If empty/unset, signing
+#   flows fall back to ad-hoc signing for local testing.
+# - NOTARY_PROFILE: xcrun notarytool keychain profile. If empty/unset, notarize
+#   steps are a no-op with clear logging and exit 0.
+# - RELEASE_ASSETS_API_TOKEN: local token (typically provided via .env) used by
+#   publish-macos-signed-zips-local to upload signed zips to the GitLab Generic
+#   Package Registry.
+#
+# Platform constraints:
+# - codesign/notarytool/stapler operations are macOS-only (Darwin). Any target
+#   requiring these tools must exit 1 on non-Darwin with a clear message that
+#   includes the detected uname.
+#
+# Idempotency:
+# - normalize may overwrite dist/ binaries each run.
+# - sign must be safe when binaries are already signed (codesign --force).
+# - zip must overwrite .zip artifacts each run.
+# - notarize may re-submit; stapling should be best-effort and idempotent.
+#
+# Targets (local-only signing flow; CI does not sign):
+# - release-macos-binaries-normalize-local
+# - release-macos-binaries-sign
+# - release-macos-binaries-zips
+# - release-macos-binaries-zips-notarize
+# - release-macos-binary-signed
+# - publish-macos-signed-zips-local   (uploads signed zips to GitLab registry; CI auto-attaches links)
+
+MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
+MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
+
+# Version string embedded into signed macOS zip names.
+# Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
+MACOS_ZIP_VERSION ?= $(VERSION)
+
+MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64-signed.zip
+MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64-signed.zip
+
+# -----------------------------------------------------------------------------
+# macOS signing helpers (local-only)
+# -----------------------------------------------------------------------------
+#
+# Certificate strategy and classification:
+# - We distinguish Apple Developer identities vs non-Apple/self-signed.
+# - Detection uses local keychain lookup:
+#     security find-certificate -a -c "$(SIGN_IDENTITY)" -Z -p
+#   and checks for:
+#     "Developer ID Application", "Apple Distribution", "Apple Development"
+# - If SIGN_IDENTITY is empty/unset:
+#     treat as non-Apple (APPLE_DEV=0)
+#
+# Signing flags:
+# - Apple Developer identity:
+#     --force --timestamp --options runtime --verbose=4
+# - Non-Apple/self-signed:
+#     --force --verbose=4
+#
+# NOTE: These helpers are used by macOS signing/notarization targets.
+
+define MACOS_REQUIRE_DARWIN
+OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+if [ "$$OS" != "Darwin" ]; then \
+  echo "$${AIFO_DARWIN_TARGET_NAME:-This target} requires macOS (Darwin), found $$OS" >&2; \
+  exit 1; \
+fi
+endef
+
+define MACOS_REQUIRE_ZIP
+command -v zip >/dev/null 2>&1 || { \
+  echo "Error: zip tool not found; please install 'zip' and retry." >&2; \
+  exit 1; \
+}
+endef
+
+define ZIP_CMD
+zip -9qr
+endef
+
+define MACOS_DETECT_APPLE_DEV
+APPLE_DEV=0; \
+if [ -n "$${SIGN_IDENTITY:-}" ]; then \
+  if security find-certificate -a -c "$$SIGN_IDENTITY" -Z -p --keychain "$$KEYCHAIN" 2>/dev/null \
+    | grep -Eiq "Developer ID Application|Apple Distribution|Apple Development"; then \
+    APPLE_DEV=1; \
+  elif command -v openssl >/dev/null 2>&1; then \
+    SUBJ="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -p --keychain "$$KEYCHAIN" 2>/dev/null \
+      | openssl x509 -noout -subject 2>/dev/null | head -n1)"; \
+    case "$$SUBJ" in \
+      *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; \
+    esac; \
+  fi; \
+fi; \
+export APPLE_DEV
+endef
+
+define MACOS_SET_SIGN_FLAGS
+if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+  SIGN_FLAGS="--force --timestamp --options runtime --verbose=4"; \
+else \
+  SIGN_FLAGS="--force --verbose=4"; \
+fi; \
+export SIGN_FLAGS
+endef
+
+define MACOS_DEFAULT_KEYCHAIN
+KEYCHAIN="$$(security default-keychain -d user | tr -d " \"")"; \
+export KEYCHAIN
+endef
+
+define MACOS_REQUIRE_TOOLS
+missing=""; \
+for t in $(1); do \
+  command -v "$$t" >/dev/null 2>&1 || missing="$$missing $$t"; \
+done; \
+if [ -n "$$missing" ]; then \
+  echo "Error: missing required tools:$$missing" >&2; \
+  exit 1; \
+fi
+endef
+
+define MACOS_SIGN_ONE_BINARY
+B="$$1"; \
+if [ -z "$$B" ] && [ -n "$${SIGN_BIN:-}" ]; then B="$$SIGN_BIN"; fi; \
+[ -n "$$B" ] || { echo "Error: missing binary path to sign" >&2; exit 2; }; \
+if [ ! -e "$$B" ]; then echo "Error: file not found: $$B" >&2; exit 2; fi; \
+if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+  echo "SIGN_IDENTITY not set; ad-hoc signing $$B for local use."; \
+  codesign $$SIGN_FLAGS -s - "$$B"; \
+else \
+  if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_IDENTITY" "$$B"; then \
+    :; \
+  else \
+    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z --keychain "$$KEYCHAIN" 2>/dev/null \
+      | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
+    if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$B"; then \
+      :; \
+    else \
+      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+        echo "Error: codesign failed for Apple Developer identity '$$SIGN_IDENTITY'." >&2; \
+        echo "Hint: inspect identities with: security find-identity -p codesigning -v" >&2; \
+        exit 1; \
+      fi; \
+      echo "Warning: could not use SIGN_IDENTITY '$$SIGN_IDENTITY'; falling back to ad-hoc signing (-s -)." >&2; \
+      codesign $$SIGN_FLAGS -s - "$$B"; \
+    fi; \
+  fi; \
+fi
+endef
 
 banner:
 	@echo ""
@@ -361,7 +556,10 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-release ............. Release wrapper: use defaults (multi-arch, push, tags, cargo version) then run publish"
+	@echo "  publish-release ............. Orchestrator: publish multi-arch images, then signed macOS zips for the same release tag"
+	@echo "  publish-release-images ...... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
+	@echo "  publish-release-macos-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish signed macOS zips"
+	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
 	@echo ""
 	@echo "                                Single-arch CI pushes are tagged with -linux-<arch> suffix to avoid colliding with multi-arch release tags."
 	@echo "                                Multi-arch releases keep clean tags. Override behavior with ADD_ARCH_IN_TAG=0 or 1"
@@ -1196,6 +1394,52 @@ publish-toolchain-node:
 # Publish agent images (full and slim). Tags both local and registry-prefixed refs when REGISTRY is set.
 .PHONY: publish-codex publish-codex-slim publish-crush publish-crush-slim publish-aider publish-aider-slim publish-openhands publish-openhands-slim publish-opencode publish-opencode-slim publish-plandex publish-plandex-slim
 
+.PHONY: glab-smoke
+glab-smoke:
+	@/bin/sh -ec '\
+	set -e; \
+	if ! command -v glab >/dev/null 2>&1; then \
+	  echo "glab not found on PATH."; \
+	  echo "Install (macOS): brew install glab"; \
+	  exit 1; \
+	fi; \
+	echo "glab version:"; \
+	glab --version; \
+	echo; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -n "$$ORIGIN" ]; then \
+	  case "$$ORIGIN" in \
+	    git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}" ;; \
+	    ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}" ;; \
+	    https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}" ;; \
+	    http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}" ;; \
+	    * ) HOST="" ;; \
+	  esac; \
+	else \
+	  HOST=""; \
+	fi; \
+	if [ -n "$$HOST" ]; then \
+	  echo "glab auth status (host: $$HOST):"; \
+	  STATUS_OUT="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	  printf "%s\n" "$$STATUS_OUT"; \
+	  echo; \
+	  printf "%s\n" "$$STATUS_OUT" | grep -q "Logged in to $$HOST" || { \
+	    echo "Not authenticated for $$HOST."; \
+	    echo "Run: glab auth login --hostname $$HOST"; \
+	    exit 2; \
+	  }; \
+	else \
+	  echo "glab auth status (all hosts):"; \
+	  glab auth status || true; \
+	  echo; \
+	  echo "Could not derive host from origin remote; authenticate with:"; \
+	  echo "  glab auth login --hostname git.intern.migros.net"; \
+	  exit 2; \
+	fi; \
+	echo "OK: glab is authenticated for $$HOST"; \
+	echo "Done."; \
+	'
+
 publish-codex:
 	@set -e; \
 	echo "Publishing $(CODEX_IMAGE) (set PLATFORMS and PUSH=1 for multi-arch) ..."; \
@@ -1482,8 +1726,8 @@ publish:
 	@$(MAKE) publish-toolchain-node
 	@$(MAKE) publish-toolchain-cpp
 
-.PHONY: publish-release
-publish-release:
+.PHONY: publish-release-images
+publish-release-images:
 	@$(MAKE) \
 	  PLATFORMS=$(if $(filter command% environment override,$(origin PLATFORMS)),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
 	  PUSH=$(if $(filter command% environment override,$(origin PUSH)),$(PUSH),1) \
@@ -1496,6 +1740,47 @@ publish-release:
 	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
+
+.PHONY: publish-release
+publish-release:
+	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
+	@$(MAKE) publish-release-images
+	@echo
+	@echo "==> Running publish-release-macos-signed (build, sign and upload macOS launchers) ..."
+	@$(MAKE) publish-release-macos-signed
+	@echo
+	@echo "Tag and GitLab Release have been created/updated locally."
+	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
+
+# For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
+# For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
+.PHONY: publish-release-macos-signed
+publish-release-macos-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
+	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
+	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
+	  exit 1; \
+	fi; \
+	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
+	    exit 1 ;; \
+	  -* ) \
+	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_TAG_EFFECTIVE|^TAG[[:space:]]*\\?=\" " >&2; \
+	    exit 2 ;; \
+	esac; \
+	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-signed-zips-local; \
+	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
+	'
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
@@ -2724,6 +3009,17 @@ ifeq ($(strip $(VERSION)),)
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo 0.0.0)
 endif
 
+# Effective release tag used for publishing (matches publish-release defaulting behavior).
+# Prefer TAG only when explicitly provided (command line or environment). Otherwise derive from Cargo.toml version.
+#
+# NOTE: This must be a recursively-expanded variable (=) and must be defined after
+# VERSION/RELEASE_PREFIX/RELEASE_POSTFIX so older GNU Make versions (e.g. 3.81) don't
+# freeze it to empty via := immediate expansion.
+#
+# IMPORTANT: Keep this as a *single line* to avoid embedding whitespace/newlines into the tag value,
+# which would corrupt downstream shell commands and Docker image refs.
+RELEASE_TAG_EFFECTIVE = $(if $(filter command% environment,$(origin TAG)),$(TAG),$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),))
+
 
 # macOS app packaging variables
 APP_NAME ?= $(BIN_NAME)
@@ -2753,7 +3049,6 @@ release-for-target:
 	DIST="$(DIST_DIR)"; \
 	mkdir -p "$$DIST"; \
 	echo "Building release version: $$VERSION"; \
-	rm -f Cargo.lock || true; \
 	PATH="$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
 	CHANNEL="$${AIFO_CODER_RUST_CHANNEL:-stable}"; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -2802,7 +3097,12 @@ release-for-target:
 	    *apple-darwin) \
 	      if [ "$$(uname -s 2>/dev/null)" = "Darwin" ]; then \
 	        echo "Building macOS target $$t with host Rust toolchain ..."; \
-	        if command -v rustup >/dev/null 2>&1; then rustup run "$$CHANNEL" cargo build --release --target "$$t"; else cargo build --release --target "$$t"; fi; \
+	        if command -v rustup >/dev/null 2>&1; then \
+	          rustup target add "$$t"; \
+	          rustup run "$$CHANNEL" cargo build --release --target "$$t"; \
+	        else \
+	          cargo build --release --target "$$t"; \
+	        fi; \
 	      else \
 	        echo "Skipping macOS target $$t on non-Darwin host"; \
 	      fi ;; \
@@ -2817,7 +3117,6 @@ release-for-target:
 	      || echo "Warning: build failed for $$t";; \
 	  esac; \
 	done; \
-	[ -n "$$BIN" ] || BIN="$$( $(CARGO_NAME_CMD) )"; \
 	D="$${DIST:-$(DIST_DIR)}"; \
 	V="$${VERSION:-$(VERSION)}"; \
 	mkdir -p "$$D"; \
@@ -2830,6 +3129,7 @@ release-for-target:
 	    *) OS=unknown ;; \
 	  esac; \
 	  ARCH="$${t%%-*}"; \
+	  if [ "$$OS" = "macos" ] && [ "$$ARCH" = "aarch64" ]; then ARCH="arm64"; fi; \
 	  BIN_US="$$(printf '%s' "$$BIN" | tr '-' '_')"; \
 	  BINPATH="target/$$t/release/$$BIN"; \
 	  [ -f "$$BINPATH" ] || BINPATH="target/$$t/release/$$BIN_US"; \
@@ -2845,9 +3145,10 @@ release-for-target:
 	  [ -d docs ] && cp -a docs "$$STAGE/"; \
 	  [ -d examples ] && cp -a examples "$$STAGE/"; \
 	  chmod -R u=rwX,go=rX "$$STAGE" || true; \
-	  tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
-	  chmod 0644 "$$D/$$PKG.tar.gz" || true; \
-	  echo "Wrote $$D/$$PKG.tar.gz"; \
+	  $(MACOS_REQUIRE_ZIP); \
+	  (cd "$$D" && $(ZIP_CMD) "$$PKG.zip" "$$PKG"); \
+	  chmod 0644 "$$D/$$PKG.zip" || true; \
+	  echo "Wrote $$D/$$PKG.zip"; \
 	  rm -rf "$$STAGE"; \
 	  PACKED=1; \
 	done; \
@@ -2863,6 +3164,7 @@ release-for-target:
 	      *) OS=unknown ;; \
 	    esac; \
 	    ARCH="$${t%%-*}"; \
+	    if [ "$$OS" = "macos" ] && [ "$$ARCH" = "aarch64" ]; then ARCH="arm64"; fi; \
 	    for f in "$$dir/$$BIN" "$$dir/$$BIN_US"; do \
 	      [ -f "$$f" ] || continue; \
 	      PKG="$$BIN-$$V-$$OS-$$ARCH"; \
@@ -2873,9 +3175,10 @@ release-for-target:
 	      [ -d docs ] && cp -a docs "$$STAGE/"; \
 	      [ -d examples ] && cp -a examples "$$STAGE/"; \
 	      chmod -R u=rwX,go=rX "$$STAGE" || true; \
-	      tar -C "$$D" -czf "$$D/$$PKG.tar.gz" "$$PKG"; \
-	      chmod 0644 "$$D/$$PKG.tar.gz" || true; \
-	      echo "Wrote $$D/$$PKG.tar.gz"; \
+	      $(MACOS_REQUIRE_ZIP); \
+	      (cd "$$D" && $(ZIP_CMD) "$$PKG.zip" "$$PKG"); \
+	      chmod 0644 "$$D/$$PKG.zip" || true; \
+	      echo "Wrote $$D/$$PKG.zip"; \
 	      rm -rf "$$STAGE"; \
 	      PACKED=1; \
 	    done; \
@@ -2884,10 +3187,10 @@ release-for-target:
 	if [ "$$PACKED" -eq 0 ]; then \
 	  echo "No built binaries found to package. Searched TARGETS and target/*/release."; \
 	fi; \
-	echo Generate checksums for archives (tar.gz, dmg) > /dev/null; \
-	if ls "$$D"/*.tar.gz >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
+	echo "Generate checksums for archives (zip, dmg)" > /dev/null; \
+	if ls "$$D"/*.zip >/dev/null 2>&1 || ls "$$D"/*.dmg >/dev/null 2>&1; then \
 	  OUT="$$D/SHA256SUMS.txt"; : > "$$OUT"; \
-	  for f in "$$D"/*.tar.gz "$$D"/*.dmg; do \
+	  for f in "$$D"/*.zip "$$D"/*.dmg; do \
 	    [ -f "$$f" ] || continue; \
 	    if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$$f" >> "$$OUT"; \
 	    elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f" >> "$$OUT"; \
@@ -2896,9 +3199,9 @@ release-for-target:
 	  chmod 0644 "$$OUT" || true; \
 	  echo "Wrote $$OUT"; \
 	fi; \
-	echo Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root) >/dev/null; \
+	echo "Generate SBOM via cargo-cyclonedx (this tool writes <package>.cdx.{json,xml} into the project root)" >/dev/null; \
 	if command -v cargo >/dev/null 2>&1 && cargo cyclonedx -h >/dev/null 2>&1; then \
-	  PKG="$$( $(CARGO_NAME_CMD) )"; \
+	  PKG="$$BIN"; \
 	  OUT_JSON="$$D/SBOM.cdx.json"; OUT_XML="$$D/SBOM.cdx.xml"; \
 	  rm -f "$$OUT_JSON" "$$OUT_XML"; \
 	  if cargo cyclonedx --help 2>&1 | grep -q -- '--format'; then \
@@ -2918,7 +3221,7 @@ release-for-target:
 	fi
 
 release-for-mac:
-	@$(MAKE) RELEASE_TARGETS=aarch64-apple-darwin release-for-target
+	@$(MAKE) RELEASE_TARGETS="aarch64-apple-darwin x86_64-apple-darwin" release-for-target
 
 release-for-linux:
 	@$(MAKE) RELEASE_TARGETS=x86_64-unknown-linux-gnu release-for-target
@@ -3074,6 +3377,487 @@ lint-tests-naming:
 	@echo "Running test naming lint ..."
 	@sh scripts/lint-test-naming.sh --strict
 
+.PHONY: release-macos-binaries-normalize-local
+release-macos-binaries-normalize-local:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-normalize-local; \
+	$(MACOS_REQUIRE_DARWIN); \
+	DIST="$(DIST_DIR)"; \
+	BIN="$(BIN_NAME)"; \
+	mkdir -p "$$DIST"; \
+	SRC_ARM="target/aarch64-apple-darwin/release/$$BIN"; \
+	SRC_X86="target/x86_64-apple-darwin/release/$$BIN"; \
+	OUT_ARM="$(MACOS_DIST_ARM64)"; \
+	OUT_X86="$(MACOS_DIST_X86_64)"; \
+	HAVE_ANY=0; \
+	if [ -f "$$SRC_ARM" ]; then \
+	  echo "Normalizing macOS arm64 binary: $$SRC_ARM -> $$OUT_ARM"; \
+	  cp "$$SRC_ARM" "$$OUT_ARM"; \
+	  chmod 0755 "$$OUT_ARM" || true; \
+	  HAVE_ANY=1; \
+	  if command -v file >/dev/null 2>&1; then \
+	    file "$$OUT_ARM" | grep -qi "Mach-O 64-bit.*arm64" || { \
+	      echo "Validation failed: $$OUT_ARM is not Mach-O 64-bit arm64." >&2; \
+	      exit 1; \
+	    }; \
+	  fi; \
+	else \
+	  echo "No $$SRC_ARM found; skipping arm64."; \
+	fi; \
+	if [ -f "$$SRC_X86" ]; then \
+	  echo "Normalizing macOS x86_64 binary: $$SRC_X86 -> $$OUT_X86"; \
+	  cp "$$SRC_X86" "$$OUT_X86"; \
+	  chmod 0755 "$$OUT_X86" || true; \
+	  HAVE_ANY=1; \
+	  if command -v file >/dev/null 2>&1; then \
+	    file "$$OUT_X86" | grep -qi "Mach-O 64-bit.*x86_64" || { \
+	      echo "Validation failed: $$OUT_X86 is not Mach-O 64-bit x86_64." >&2; \
+	      exit 1; \
+	    }; \
+	  fi; \
+	else \
+	  echo "No $$SRC_X86 found; skipping x86_64."; \
+	fi; \
+	if [ "$$HAVE_ANY" -eq 0 ]; then \
+	  echo "No macOS binaries found to normalize; run '\''make build-launcher'\'' or '\''make build-launcher-macos-cross'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Normalized macOS binaries into $$DIST."; \
+	'
+
+.PHONY: release-macos-binaries-sign
+release-macos-binaries-sign:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-sign; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,security codesign); \
+	B1="$(MACOS_DIST_ARM64)"; \
+	B2="$(MACOS_DIST_X86_64)"; \
+	if [ ! -f "$$B1" ] && [ ! -f "$$B2" ]; then \
+	  echo "No $(DIST_DIR)/$(BIN_NAME)-macos-* binaries to sign." >&2; \
+	  echo "Hint: run '\''make build-launcher'\'' and '\''make release-macos-binaries-normalize-local'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	  APPLE_DEV=0; export APPLE_DEV; \
+	  echo "SIGN_IDENTITY not set; using ad-hoc signing for local use."; \
+	else \
+	  $(MACOS_DETECT_APPLE_DEV); \
+	  if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	    echo "Detected Apple Developer identity."; \
+	  else \
+	    echo "Using non-Apple/local identity."; \
+	  fi; \
+	fi; \
+	$(MACOS_SET_SIGN_FLAGS); \
+	for B in "$$B1" "$$B2"; do \
+	  if [ -f "$$B" ]; then \
+	    if command -v xattr >/dev/null 2>&1; then xattr -cr "$$B" 2>/dev/null || true; fi; \
+	    echo "Signing $$B ..."; \
+	    SIGN_BIN="$$B"; \
+	    $(MACOS_SIGN_ONE_BINARY); \
+	    echo "Verifying $$B ..."; \
+	    if ! codesign --verify --strict --verbose=4 "$$B"; then \
+	      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	        echo "Error: codesign verification failed for $$B (Apple Developer identity)." >&2; \
+	        exit 1; \
+	      fi; \
+	      echo "Warning: codesign verification failed for $$B (non-Apple/local identity)." >&2; \
+	      exit 1; \
+	    fi; \
+	    codesign -dv --verbose=4 "$$B" >/dev/null 2>&1 || true; \
+	    if command -v spctl >/dev/null 2>&1; then spctl --assess --type exec --verbose=4 "$$B" >/dev/null 2>&1 || true; fi; \
+	  fi; \
+	done; \
+	'
+
+.PHONY: release-macos-binaries-zips
+release-macos-binaries-zips:
+	@/bin/sh -ec '\
+	$(MACOS_REQUIRE_ZIP); \
+	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
+	if [ ! -f "README.md" ] || [ ! -f "NOTICE" ] || [ ! -f "LICENSE" ]; then \
+	  echo "Error: missing required docs for zip packaging. Require README.md, NOTICE, LICENSE." >&2; \
+	  [ -f "README.md" ] || echo "Missing: README.md" >&2; \
+	  [ -f "NOTICE" ] || echo "Missing: NOTICE" >&2; \
+	  [ -f "LICENSE" ] || echo "Missing: LICENSE" >&2; \
+	  exit 1; \
+	fi; \
+	ANY=0; \
+	for B in "$(MACOS_DIST_ARM64)" "$(MACOS_DIST_X86_64)"; do \
+	  if [ -f "$$B" ]; then \
+	    arch="$${B##*-macos-}"; \
+	    STAGE="$$DIST/.zip-stage-$$arch"; \
+	    rm -rf "$$STAGE"; \
+	    mkdir -p "$$STAGE"; \
+	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch"; \
+	    cp README.md NOTICE LICENSE "$$STAGE/"; \
+	    if [ -d docs ]; then cp -a docs "$$STAGE/"; fi; \
+	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch-signed.zip" .); \
+	    rm -rf "$$STAGE"; \
+	    echo "Wrote $$DIST/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch-signed.zip"; \
+	    ANY=1; \
+	  else \
+	    echo "$$B missing; skipping zip for $${B##*-macos-}."; \
+	  fi; \
+	done; \
+	if [ "$$ANY" -eq 0 ]; then \
+	  echo "No macOS binaries in dist/ to zip; run normalization and signing first." >&2; \
+	  exit 1; \
+	fi; \
+	'
+
+.PHONY: release-macos-binaries-zips-notarize
+release-macos-binaries-zips-notarize:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-zips-notarize; \
+	$(MACOS_REQUIRE_DARWIN); \
+	NOTARY="$(NOTARY_PROFILE)"; \
+	if [ -z "$$NOTARY" ]; then \
+	  echo "NOTARY_PROFILE unset; skipping macOS notarization and stapling."; \
+	  exit 0; \
+	fi; \
+	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
+	if ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
+	  exit 0; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID. Skipping."; \
+	  exit 0; \
+	fi; \
+	Z1="$(MACOS_ZIP_ARM64)"; \
+	Z2="$(MACOS_ZIP_X86_64)"; \
+	if [ ! -f "$$Z1" ] && [ ! -f "$$Z2" ]; then \
+	  echo "No macOS binary zips found in dist/ to notarize." >&2; \
+	  echo "Hint: run '\''make release-macos-binaries-zips'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    echo "Submitting $$Z for notarization with profile $$NOTARY ..."; \
+	    OUT="$$(mktemp)"; \
+	    if ! xcrun notarytool submit "$$Z" --keychain-profile "$$NOTARY" --wait >"$$OUT" 2>&1; then \
+	      cat "$$OUT" >&2; \
+	      rm -f "$$OUT"; \
+	      echo "Error: notarization failed for $$Z" >&2; \
+	      exit 1; \
+	    fi; \
+	    rm -f "$$OUT"; \
+	  fi; \
+	done; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    xcrun stapler staple "$$Z" || true; \
+	  fi; \
+	done; \
+	if [ -f "$(MACOS_DIST_ARM64)" ]; then xcrun stapler staple "$(MACOS_DIST_ARM64)" || true; fi; \
+	if [ -f "$(MACOS_DIST_X86_64)" ]; then xcrun stapler staple "$(MACOS_DIST_X86_64)" || true; fi; \
+	for Z in "$$Z1" "$$Z2"; do \
+	  if [ -f "$$Z" ]; then \
+	    xcrun stapler validate "$$Z" || true; \
+	  fi; \
+	done; \
+	'
+
+.PHONY: release-macos-binary-signed
+release-macos-binary-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-binary-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(MAKE) release-for-mac; \
+	$(MAKE) build-launcher; \
+	$(MAKE) release-macos-binaries-normalize-local; \
+	$(MAKE) release-macos-binaries-sign; \
+	$(MAKE) release-macos-binaries-zips; \
+	$(MAKE) release-macos-binaries-zips-notarize; \
+	'
+
+.PHONY: publish-macos-signed-zips-local
+publish-macos-signed-zips-local:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if command -v glab >/dev/null 2>&1; then \
+	  $(MAKE) publish-macos-signed-zips-local-glab; \
+	else \
+	  if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	    echo "Error: glab not found and RELEASE_ASSETS_API_TOKEN not set; cannot upload." >&2; \
+	    echo "Hint: install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
+	    exit 1; \
+	  fi; \
+	  $(MAKE) publish-macos-signed-zips-local-curl; \
+	fi
+
+# glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
+.PHONY: publish-macos-signed-zips-local-glab
+publish-macos-signed-zips-local-glab:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-glab; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git glab); \
+	export GLAB_CHECK_FOR_UPDATES=false; \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	ARM="$(MACOS_ZIP_ARM64)"; \
+	X86="$(MACOS_ZIP_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS zip artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-binary-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ORIGIN" in \
+	  git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}"; PROJ_PATH="$${ORIGIN#*:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#ssh://git@$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#https://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#http://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  * ) HOST=""; PROJ_PATH="" ;; \
+	esac; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: could not derive GitLab host/project path from origin remote: $$ORIGIN" >&2; \
+	  exit 1; \
+	fi; \
+	echo "Checking glab auth for host $$HOST ..."; \
+	STATUS_OUT="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	printf "%s\n" "$$STATUS_OUT"; \
+	printf "%s\n" "$$STATUS_OUT" | grep -q "Logged in to $$HOST" || { \
+	  if [ "$${AIFO_GLAB_AUTOLOGIN:-0}" = "1" ] && [ -t 0 ]; then \
+	    echo "Not authenticated; attempting interactive glab auth login for $$HOST ..."; \
+	    glab auth login --hostname "$$HOST"; \
+	    STATUS_OUT2="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	    printf "%s\n" "$$STATUS_OUT2"; \
+	    printf "%s\n" "$$STATUS_OUT2" | grep -q "Logged in to $$HOST" || { \
+	      echo "Error: glab authentication still not configured for $$HOST." >&2; \
+	      exit 2; \
+	    }; \
+	  else \
+	    echo "Error: glab is not authenticated for $$HOST." >&2; \
+	    echo "Run: glab auth login --hostname $$HOST" >&2; \
+	    echo "Or set AIFO_GLAB_AUTOLOGIN=1 to prompt automatically (TTY only)." >&2; \
+	    exit 2; \
+	  fi; \
+	}; \
+	echo "Resolving project via glab (from origin remote path) ..."; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
+	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>/dev/null || true)"; \
+	if command -v python3 >/dev/null 2>&1; then \
+	  PID="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || true)"; \
+	  BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('web_url',''))" 2>/dev/null || true)"; \
+	else \
+	  PID=""; BASE_WEB=""; \
+	fi; \
+	if [ -z "$$PID" ] || [ -z "$$BASE_WEB" ]; then \
+	  echo "Error: could not resolve project via glab for $$PROJ_PATH on $$HOST." >&2; \
+	  echo "Hint: install python3 or ensure glab outputs pure JSON (update notices break parsing on glab 1.48.0)." >&2; \
+	  echo "glab stdout (first 60 lines):" >&2; \
+	  printf "%s\n" "$$PROJ_JSON" | sed -n "1,60p" >&2; \
+	  echo "glab stderr (first 60 lines):" >&2; \
+	  glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>&1 >/dev/null | sed -n "1,60p" >&2 || true; \
+	  exit 1; \
+	fi; \
+	echo "Resolved project: $$BASE_WEB (id=$$PID)"; \
+	echo "glab version: $$(glab --version | head -n1)"; \
+	echo "Ensuring GitLab Release exists for tag $$TAG ..."; \
+	if ! glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "Release $$TAG not found; creating it."; \
+	  NOTES="$${RELEASE_NOTES:-}"; \
+	  if [ -z "$$NOTES" ]; then \
+	    if [ -t 0 ]; then \
+	      echo "Enter release notes (finish with a line containing only EOF):"; \
+	      NOTES="$$(cat <<'__AIFO_EOF__'\n$$(cat)\n__AIFO_EOF__)" ; \
+	    fi; \
+	  fi; \
+	  if [ -z "$$NOTES" ]; then \
+	    echo "Error: release notes are required (set RELEASE_NOTES or provide input interactively)." >&2; \
+	    exit 2; \
+	  fi; \
+	  if [ -t 0 ]; then \
+	    echo "Creating Release $$TAG with provided notes..."; \
+	  fi; \
+	  printf "%s" "$$NOTES" >"$(DIST_DIR)/.release-notes.tmp"; \
+	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "@$(DIST_DIR)/.release-notes.tmp"; \
+	  rm -f "$(DIST_DIR)/.release-notes.tmp"; \
+	fi; \
+	echo "Uploading signed macOS zip assets to Release $$TAG ..."; \
+	FILES=""; \
+	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
+	if [ -f "$$X86" ]; then FILES="$$FILES $$X86"; fi; \
+	if [ -z "$$FILES" ]; then \
+	  echo "Error: no macOS zip artifacts found to upload (expected $$ARM and/or $$X86)." >&2; \
+	  exit 1; \
+	fi; \
+	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
+	echo "Upload complete (glab)."
+
+.PHONY: publish-macos-signed-zips-local-curl
+publish-macos-signed-zips-local-curl:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-signed-zips-local-curl; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git curl); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload macOS zips and update the GitLab Release." >&2; \
+	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
+	  exit 1; \
+	fi; \
+	ORIGIN="$$(git remote -v | grep -E '^origin[[:space:]]' | head -n1 | awk '{print $$2}')"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote from 'git remote -v'." >&2; \
+	  exit 1; \
+	fi; \
+	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@([^:]+):.*#\1#p")"; \
+	PROJ_PATH="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@[^:]+:([^ ]+?)(\.git)?\$$#\1#p")"; \
+	PROJ_PATH="$${PROJ_PATH%.git}"; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: unsupported origin remote format: $$ORIGIN" >&2; \
+	  echo "Expected SSH form: git@<host>:<group>/<project>.git" >&2; \
+	  exit 1; \
+	fi; \
+	API_V4="https://$$HOST/api/v4"; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
+	RES="$$(mktemp)"; \
+	STATUS="$$(curl -sS -w "%{http_code}" -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	  "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
+	PID="$$(sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" "$$RES" | head -n1)"; \
+	if [ -z "$$PID" ]; then \
+	  echo "Error: failed to resolve project id via GitLab API for $$PROJ_PATH (host $$HOST)." >&2; \
+	  echo "HTTP status: $$STATUS" >&2; \
+	  echo "Response body (first 80 lines):" >&2; \
+	  sed -n "1,80p" "$$RES" >&2; \
+	  rm -f "$$RES"; \
+	  exit 1; \
+	fi; \
+	rm -f "$$RES"; \
+	ARM="$(MACOS_ZIP_ARM64)"; \
+	X86="$(MACOS_ZIP_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS zip artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-binary-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	UPLOAD_AND_GET_URL() { \
+	  file="$$1"; \
+	  [ -f "$$file" ] || { echo ""; return 0; }; \
+	  echo "Uploading $$file via project uploads API ..."; \
+	  out="$$(mktemp)"; \
+	  if ! curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    -F "file=@$$file" \
+	    "$$API_V4/projects/$$PID/uploads" >"$$out"; then \
+	    echo "Error: upload failed for $$file" >&2; \
+	    cat "$$out" >&2 || true; \
+	    rm -f "$$out"; \
+	    exit 1; \
+	  fi; \
+	  url="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$out" | head -n1)"; \
+	  rm -f "$$out"; \
+	  if [ -z "$$url" ]; then \
+	    echo "Error: could not parse upload URL for $$file" >&2; \
+	    exit 1; \
+	  fi; \
+	  printf "%s" "$$url"; \
+	}; \
+	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
+	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
+	if [ -z "$$ARM_URL" ] && [ -z "$$X86_URL" ]; then \
+	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
+	  exit 1; \
+	fi; \
+	BASE_WEB="https://$$HOST/$$PROJ_PATH"; \
+	RELEASE_API="$$API_V4/projects/$$PID/releases/$$TAG"; \
+	echo "Fetching existing release assets for tag $$TAG ..."; \
+	REL_RES="$$(mktemp)"; \
+	REL_STATUS="$$(curl -sS -w "%{http_code}" -o "$$REL_RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$RELEASE_API" || echo 000)"; \
+	if [ "$$REL_STATUS" != "200" ]; then \
+	  echo "Warning: release for tag $$TAG not found (HTTP $$REL_STATUS). Links will be attached only if release exists." >&2; \
+	  cat "$$REL_RES" >&2 || true; \
+	fi; \
+	EXISTING_URLS="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$REL_RES" | tr "\n" " ")" ; \
+	rm -f "$$REL_RES"; \
+	ADD_LINK() { \
+	  name="$$1"; rel_path="$$2"; \
+	  [ -n "$$rel_path" ] || return 0; \
+	  full_url="$$BASE_WEB$$rel_path"; \
+	  case " $$EXISTING_URLS " in \
+	    *" $$full_url "*) \
+	      echo "Release link already present: $$name -> $$full_url"; \
+	      return 0 ;; \
+	  esac; \
+	  echo "Adding release link: $$name -> $$full_url"; \
+	  curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    --data-urlencode "name=$$name" \
+	    --data-urlencode "url=$$full_url" \
+	    "$$RELEASE_API/assets/links" >/dev/null || true; \
+	}; \
+	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
+	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
+	echo "Upload and release link attachment complete (curl)."
+
+.PHONY: verify-macos-signed
+verify-macos-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=verify-macos-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(MACOS_REQUIRE_TOOLS) codesign; \
+	B1="$(MACOS_DIST_ARM64)"; \
+	B2="$(MACOS_DIST_X86_64)"; \
+	Z1="$(MACOS_ZIP_ARM64)"; \
+	Z2="$(MACOS_ZIP_X86_64)"; \
+	ANY=0; \
+	for B in "$$B1" "$$B2"; do \
+	  if [ -f "$$B" ]; then \
+	    echo "Verifying codesign: $$B"; \
+	    codesign --verify --deep --strict --verbose=4 "$$B"; \
+	    if command -v spctl >/dev/null 2>&1; then spctl --assess --type exec --verbose=4 "$$B" || true; fi; \
+	    ANY=1; \
+	  fi; \
+	done; \
+	if command -v xcrun >/dev/null 2>&1 && xcrun stapler -h >/dev/null 2>&1; then \
+	  for Z in "$$Z1" "$$Z2"; do \
+	    if [ -f "$$Z" ]; then \
+	      echo "Validating staple ticket (best-effort): $$Z"; \
+	      xcrun stapler validate "$$Z" || true; \
+	      ANY=1; \
+	    fi; \
+	  done; \
+	fi; \
+	if [ "$$ANY" -eq 0 ]; then \
+	  echo "No macOS binaries/zips found to verify under $(DIST_DIR). Run signing/zipping first." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Verification complete."; \
+	'
+
 .PHONY: release-app release-dmg release-dmg-sign
 ifeq ($(shell uname -s),Darwin)
 
@@ -3222,6 +4006,8 @@ EOF \
 # then rebuilds the DMG so it contains the signed app, then signs the DMG.
 release-dmg-sign: release-app
 	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-dmg-sign; \
+	$(MACOS_REQUIRE_DARWIN); \
 	APP="$(APP_NAME)"; \
 	BIN="$(BIN_NAME)"; \
 	DIST="$(DIST_DIR)"; \
@@ -3233,120 +4019,84 @@ release-dmg-sign: release-app
 	if [ ! -d "$$APPROOT" ]; then echo "Error: app bundle not found at $$APPROOT. Run '"'"'make release-app'"'"' first." >&2; exit 1; fi; \
 	command -v security >/dev/null 2>&1 || { echo "Error: security tool not found (macOS required)"; exit 1; }; \
 	command -v codesign >/dev/null 2>&1 || { echo "Error: codesign tool not found (Xcode Command Line Tools)"; exit 1; }; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	SIGN_IDENTITY="$$SIGN_ID_NAME"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	$(MACOS_SET_SIGN_FLAGS); \
 	echo "Using signing identity name: $$SIGN_ID_NAME"; \
-	echo "Keychains (user):"; security list-keychains -d user || true; \
 	echo "Default keychain (user):"; security default-keychain -d user || true; \
-	echo "Available code signing identities (may be empty for self-signed certs):"; \
-	security find-identity -p codesigning -v || true; \
-	echo "Available identities (basic listing, may include self-signed):"; \
-	security find-identity -p basic -v || true; \
-	echo "Searching for certificate by common name (including self-signed/untrusted):"; \
-	security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | sed -n "1,12p" || true; \
-	CERT_MATCH_COUNT="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | grep -c "^SHA-1 hash:" || true)"; \
-	if [ "$$CERT_MATCH_COUNT" -eq 0 ]; then \
-	  echo "Error: No certificate with common name $$SIGN_ID_NAME found in your keychains." >&2; \
-	  echo "Hint: Ensure the certificate AND its private key are in the login keychain and unlocked, or override SIGN_IDENTITY." >&2; \
-	  exit 1; \
-	fi; \
-	KEYCHAIN="$$(security default-keychain -d user | sed -e "s/[ \"]//g")"; \
-	echo "Default keychain (path): $${KEYCHAIN:-unknown}"; \
-	SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z 2>/dev/null | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
-	if [ -n "$$SIG_SHA1" ]; then \
-	  echo "Found certificate SHA-1: $$SIG_SHA1"; \
+	echo "Available code signing identities (codesigning):"; security find-identity -p codesigning -v || true; \
+	echo "Certificate lookup (first match):"; security find-certificate -a -c "$$SIGN_ID_NAME" -Z --keychain "$$KEYCHAIN" 2>/dev/null | sed -n "1,12p" || true; \
+	if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	  echo "Detected Apple Developer identity; ad-hoc fallback is disabled."; \
 	else \
-	  echo "Warning: Could not extract SHA-1 hash from certificate lookup."; \
-	fi; \
-	APPLE_DEV=0; \
-	if command -v openssl >/dev/null 2>&1; then \
-	  SUBJ="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -p 2>/dev/null | openssl x509 -noout -subject 2>/dev/null | head -n1)"; \
-	  echo "Certificate subject: $${SUBJ:-unknown}"; \
-	  case "$$SUBJ" in *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; esac; \
-	fi; \
-	if [ "$$APPLE_DEV" -eq 1 ]; then \
-	  SIGN_FLAGS="--force --verbose=4 --options runtime --timestamp"; \
-	  echo "Using hardened runtime signing flags (Apple Developer identity detected)."; \
-	else \
-	  SIGN_FLAGS="--force --verbose=4"; \
-	  echo "Using basic signing flags (self-signed or non-Apple certificate)."; \
+	  echo "Using non-Apple/local identity; ad-hoc fallback may be used if codesign fails."; \
 	fi; \
 	BIN_EXEC="$$APPROOT/Contents/MacOS/$$BIN"; \
 	if [ ! -x "$$BIN_EXEC" ]; then echo "Error: app executable not found at $$BIN_EXEC" >&2; exit 1; fi; \
 	echo "Clearing extended attributes on app bundle (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$APPROOT" || true; fi; \
 	echo "Signing inner executable: $$BIN_EXEC"; \
-	if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS -s "$$SIGN_ID_NAME" "$$BIN_EXEC" >/dev/null 2>&1; then \
-	  echo "Signed inner executable with identity name (no explicit keychain)."; \
-	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for inner executable; falling back to ad-hoc." >&2; \
-	  if codesign $$SIGN_FLAGS -s - "$$BIN_EXEC"; then \
-	    echo "Ad-hoc signed inner executable (no identity)."; \
-	  else \
-	    echo "codesign inner executable failed" >&2; exit 1; \
-	  fi; \
-	fi; \
+	SIGN_BIN="$$BIN_EXEC"; \
+	$(MACOS_SIGN_ONE_BINARY); \
 	echo "Signing app bundle: $$APPROOT"; \
-	echo "Use --deep to ensure nested components are signed if present" >/dev/null; \
-	if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with certificate SHA-1 via default keychain."; \
-	elif codesign $$SIGN_FLAGS --deep -s "$$SIGN_ID_NAME" "$$APPROOT" >/dev/null 2>&1; then \
-	  echo "Signed app bundle with identity name (no explicit keychain)."; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	  echo "SIGN_IDENTITY not set; ad-hoc signing app bundle for local use."; \
+	  codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; \
 	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for app bundle; falling back to ad-hoc." >&2; \
-	  if codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; then \
-	    echo "Ad-hoc signed app bundle (no identity)."; \
+	  if codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$APPROOT"; then \
+	    :; \
 	  else \
-	    echo "codesign app bundle failed" >&2; exit 1; \
+	    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_ID_NAME" -Z --keychain "$$KEYCHAIN" 2>/dev/null \
+	      | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
+	    if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --deep --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$APPROOT"; then \
+	      :; \
+	    else \
+	      if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	        echo "Error: codesign failed for Apple Developer identity '$$SIGN_ID_NAME'." >&2; \
+	        echo "Hint: inspect identities with: security find-identity -p codesigning -v" >&2; \
+	        exit 1; \
+	      fi; \
+	      echo "Warning: could not use SIGN_IDENTITY '$$SIGN_ID_NAME' for app bundle; falling back to ad-hoc (-s -)." >&2; \
+	      codesign $$SIGN_FLAGS --deep -s - "$$APPROOT"; \
+	    fi; \
 	  fi; \
 	fi; \
 	echo "Verifying app signature (deep/strict) ..."; \
-	if ! codesign --verify --deep --strict --verbose=4 "$$APPROOT"; then \
-	  echo "codesign verification failed for app" >&2; exit 1; \
-	fi; \
+	codesign --verify --deep --strict --verbose=4 "$$APPROOT"; \
 	echo "Building DMG from signed app ..."; \
 	$(MAKE) release-dmg; \
 	if [ ! -f "$$DMG_PATH" ]; then echo "Error: DMG not found at $$DMG_PATH" >&2; exit 1; fi; \
 	echo "Clearing extended attributes on DMG (xattr -cr) ..."; \
 	if command -v xattr >/dev/null 2>&1; then xattr -cr "$$DMG_PATH" || true; fi; \
 	echo "Signing DMG at $$DMG_PATH ..."; \
-	if codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with identity name via default keychain."; \
-	elif [ -n "$$SIG_SHA1" ] && codesign --force --verbose=4 --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with certificate SHA-1 via default keychain."; \
-	elif codesign --force --verbose=4 -s "$$SIGN_ID_NAME" "$$DMG_PATH" >/dev/null 2>&1; then \
-	  echo "Signed DMG with identity name (no explicit keychain)."; \
-	else \
-	  echo "Warning: could not use signing identity '$$SIGN_ID_NAME' (or SHA-1) for DMG; falling back to ad-hoc." >&2; \
-	  if codesign --force --verbose=4 -s - "$$DMG_PATH"; then \
-	    echo "Ad-hoc signed DMG (no identity)."; \
-	  else \
-	    echo "codesign DMG failed" >&2; exit 1; \
-	  fi; \
-	fi; \
+	SIGN_BIN="$$DMG_PATH"; \
+	$(MACOS_SIGN_ONE_BINARY); \
 	NOTARY="$(NOTARY_PROFILE)"; \
-	DMG_ADHOC=0; APP_ADHOC=0; \
-	DSIG="$$(codesign -dv --verbose=4 "$$DMG_PATH" 2>&1 || true)"; \
-	ASIG="$$(codesign -dv --verbose=4 "$$APPROOT" 2>&1 || true)"; \
-	echo "$$DSIG" | grep -q "^Authority=" || DMG_ADHOC=1; \
-	echo "$$ASIG" | grep -q "^Authority=" || APP_ADHOC=1; \
-	if [ "$$DMG_ADHOC" -eq 1 ] || [ "$$APP_ADHOC" -eq 1 ]; then \
-	  echo "Skipping notarization: app or DMG were ad-hoc signed (no Apple identity)."; \
-	elif [ "$$APPLE_DEV" -eq 1 ] && [ -n "$$NOTARY" ] && command -v xcrun >/dev/null 2>&1 && xcrun notarytool --help >/dev/null 2>&1; then \
-	  echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
-	  if ! xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait; then \
-	    echo "Notarization failed" >&2; exit 1; \
-	  fi; \
-	  echo "Stapling notarization ticket to DMG and app ..."; \
-	  xcrun stapler staple "$$DMG_PATH" || true; \
-	  xcrun stapler staple "$$APPROOT" || true; \
-	else \
-	  echo "Skipping notarization (NOTARY_PROFILE unset, notarytool unavailable, or non-Apple identity)."; \
+	if [ -z "$$NOTARY" ]; then \
+	  echo "NOTARY_PROFILE unset; skipping notarization and stapling."; \
+	  exit 0; \
 	fi; \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID. Skipping."; \
+	  exit 0; \
+	fi; \
+	if ! command -v xcrun >/dev/null 2>&1 || ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "xcrun notarytool not found; skipping notarization/stapling."; \
+	  exit 0; \
+	fi; \
+	echo "Submitting $$DMG_PATH for notarization with profile $$NOTARY ..."; \
+	OUT="$$(mktemp)"; \
+	if ! xcrun notarytool submit "$$DMG_PATH" --keychain-profile "$$NOTARY" --wait >"$$OUT" 2>&1; then \
+	  cat "$$OUT" >&2; \
+	  rm -f "$$OUT"; \
+	  echo "Error: notarization failed for $$DMG_PATH" >&2; \
+	  exit 1; \
+	fi; \
+	rm -f "$$OUT"; \
+	echo "Stapling notarization ticket to DMG and app ..."; \
+	xcrun stapler staple "$$DMG_PATH" || true; \
+	xcrun stapler staple "$$APPROOT" || true; \
 	echo "Signing steps completed: $$APPROOT and $$DMG_PATH"; \
 	'
 
