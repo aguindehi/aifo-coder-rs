@@ -266,7 +266,7 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         r#"chmod -R go-rwx "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
         r#"unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true"#.to_string(),
         r#"gpgconf --launch gpg-agent >/dev/null 2>&1 || true"#.to_string(),
-        r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup sh -c "tail -n0 -F /var/log/host/apparmor.log >> \"$HOME/.aifo-logs/apparmor.log\" 2>&1" >/dev/null 2>&1 &); fi"#.to_string(),
+        r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup tail -n0 -F /var/log/host/apparmor.log >> "$HOME/.aifo-logs/apparmor.log" 2>&1 </dev/null >/dev/null 2>&1 &); fi"#.to_string(),
         r#"/usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true"#.to_string(),
         format!("exec {agent_joined}"),
     ]);

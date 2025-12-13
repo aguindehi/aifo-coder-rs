@@ -89,9 +89,14 @@ fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
         "go" => "command -v go",
         _ => return None,
     };
-    Some(format!(
-        "export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"
-    ))
+
+    ShellScript::new()
+        .extend([
+            format!(r#"export PATH="{pathv}""#),
+            format!("{tool_cmd} >/dev/null 2>&1"),
+        ])
+        .build()
+        .ok()
 }
 impl CursorGuard {
     fn new(hide: bool) -> Self {

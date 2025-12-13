@@ -49,6 +49,7 @@ use nix::unistd::{getgid, getuid};
 use crate::container_runtime_path;
 use crate::shell_join;
 use crate::ShellScript;
+use aifo_coder::ShellScript as AifoShellScript;
 
 use super::sidecar;
 use super::{auth, http, notifications};
@@ -155,8 +156,16 @@ fn workspace_access_hint(
     args.push(container.into());
     args.push("sh".into());
     args.push("-c".into());
-    let script = "set -e; ls -ld /workspace 2>&1; if [ -x /workspace ] && [ -r /workspace ]; then echo OK; else echo DENIED; fi";
-    args.push(script.into());
+    let script = AifoShellScript::new()
+        .extend([
+            "set -e".to_string(),
+            "ls -ld /workspace 2>&1".to_string(),
+            r#"if [ -x /workspace ] && [ -r /workspace ]; then echo OK; else echo DENIED; fi"#
+                .to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| "echo DENIED".to_string());
+    args.push(script);
     if verbose {
         log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));
     }
