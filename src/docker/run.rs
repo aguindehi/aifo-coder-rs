@@ -22,6 +22,7 @@ use crate::docker_mod::docker::mounts::{
     validate_mount_source_dir, validate_unix_socket_dir_owner_mode,
 };
 use crate::docker_mod::docker::runtime::container_runtime_path;
+use crate::ShellScript;
 
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
@@ -230,6 +231,46 @@ pub(crate) fn host_claude_config_path(host_home: &Path) -> Option<PathBuf> {
                 .join("claude_desktop_config.json"),
         )
     }
+}
+
+fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<String> {
+    let mut sh = ShellScript::new();
+    sh.extend([
+        "set -e".to_string(),
+        "umask 077".to_string(),
+        r#"if [ "${AIFO_AGENT_IGNORE_SIGINT:-0}" = "1" ]; then trap '' INT; fi"#.to_string(),
+        format!(r#"export PATH="{path_value}""#),
+        r#"sed_port(){ if [ "${AIFO_SED_PORTABLE:-1}" = "1" ]; then sed -i'' "$@"; else sed -i "$@"; fi; }"#.to_string(),
+        r#"uid="$(id -u)"; gid="$(id -g)""#.to_string(),
+        r#"mkdir -p "$HOME" "$GNUPGHOME""#.to_string(),
+        r#"chmod 700 "$HOME" "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
+        r#"chown "$uid:$gid" "$HOME" 2>/dev/null || true"#.to_string(),
+        r#"if (command -v getent >/dev/null 2>&1 && ! getent passwd "$uid" >/dev/null 2>&1) || (! command -v getent >/dev/null 2>&1 && ! grep -q "^[^:]*:[^:]*:$uid:" /etc/passwd); then mkdir -p "$HOME/.nss_wrapper"; PASSWD_FILE="$HOME/.nss_wrapper/passwd"; GROUP_FILE="$HOME/.nss_wrapper/group"; echo "coder:x:${uid}:${gid}:,,,:$HOME:/bin/sh" > "$PASSWD_FILE"; echo "coder:x:${gid}:" > "$GROUP_FILE"; for so in /usr/lib/*/libnss_wrapper.so /usr/lib/*/libnss_wrapper.so.* /usr/lib/libnss_wrapper.so /lib/*/libnss_wrapper.so /lib/*/libnss_wrapper.so.*; do if [ -f "$so" ]; then export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$so"; break; fi; done; export NSS_WRAPPER_PASSWD="$PASSWD_FILE" NSS_WRAPPER_GROUP="$GROUP_FILE" USER="coder" LOGNAME="coder"; fi"#.to_string(),
+        r#"if [ -n "${XDG_RUNTIME_DIR:-}" ]; then mkdir -p "$XDG_RUNTIME_DIR/gnupg" || true; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true; fi"#.to_string(),
+        r#"mkdir -p "$HOME/.aifo-logs" || true"#.to_string(),
+        r#"if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="$(tty 2>/dev/null || echo /dev/tty)"; fi"#.to_string(),
+        r#"touch "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"sed_port -e "/^pinentry-program /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
+        r#"echo "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"sed_port -e "/^log-file /d" -e "/^debug-level /d" -e "/^verbose$/d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
+        r#"echo "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"echo "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"echo "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "default-cache-ttl 7200" >> "$GNUPGHGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"for item in private-keys-v1.d openpgp-revocs.d pubring.kbx trustdb.gpg gpg.conf; do if [ ! -e "$GNUPGHOME/$item" ] && [ -e "/home/coder/.gnupg-host/$item" ]; then cp -a "/home/coder/.gnupg-host/$item" "$GNUPGHOME/" 2>/dev/null || true; fi; done"#.to_string(),
+        r#"touch "$GNUPGHOME/gpg.conf""#.to_string(),
+        r#"sed_port -e "/^pinentry-mode /d" "$GNUPGHOME/gpg.conf" 2>/dev/null || true"#.to_string(),
+        r#"echo "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
+        r#"chmod -R go-rwx "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
+        r#"unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true"#.to_string(),
+        r#"gpgconf --launch gpg-agent >/dev/null 2>&1 || true"#.to_string(),
+        r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup sh -c "tail -n0 -F /var/log/host/apparmor.log >> \"$HOME/.aifo-logs/apparmor.log\" 2>&1" >/dev/null 2>&1 &); fi"#.to_string(),
+        r#"/usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true"#.to_string(),
+        format!("exec {agent_joined}"),
+    ]);
+    sh.build()
 }
 
 pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {

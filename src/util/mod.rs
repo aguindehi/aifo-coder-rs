@@ -4,6 +4,9 @@
 pub mod docker_security;
 pub mod fs;
 pub mod id;
+pub mod shell_script;
+
+pub use shell_script::ShellScript;
 
 pub fn shell_join(args: &[String]) -> String {
     args.iter()
