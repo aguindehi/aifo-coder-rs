@@ -7,9 +7,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::docker_mod::docker::images::image_exists;
-use crate::docker_mod::docker::mounts::{
-    validate_mount_source_dir, validate_unix_socket_dir_owner_mode,
-};
 use crate::docker_mod::docker::runtime::container_runtime_path;
 
 /// Derive registry host from an image reference (first component if qualified).
@@ -373,12 +370,6 @@ fn split_paths_env(v: &str) -> Vec<PathBuf> {
         }
     }
     out
-}
-
-/// Remove per-run staged config directories recorded in AIFO_CONFIG_STAGING_DIRS and
-/// the legacy AIFO_AIDER_STAGING_DIR (best-effort).
-pub fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<std::ffi::OsString> {
-    crate::docker_mod::docker::run::collect_volume_flags(agent, host_home, pwd)
 }
 
 pub fn cleanup_aider_staging_from_env() {
