@@ -556,9 +556,10 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-release ............. Release wrapper: derive TAG from Cargo.toml (release-<version>), then run publish"
+	@echo "  publish-release-images ...... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
 	@echo "  publish-release-macos-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish signed macOS zips"
-	@echo "                                Requires RELEASE_ASSETS_API_TOKEN (typically from .env); uses SIGN_IDENTITY and optional NOTARY_PROFILE."
+	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
+	@echo "  publish-release ............. Orchestrator: publish multi-arch images, then signed macOS zips for the same release tag"
 	@echo ""
 	@echo "                                Single-arch CI pushes are tagged with -linux-<arch> suffix to avoid colliding with multi-arch release tags."
 	@echo "                                Multi-arch releases keep clean tags. Override behavior with ADD_ARCH_IN_TAG=0 or 1"
