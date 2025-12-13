@@ -10,6 +10,248 @@ use crate::docker_mod::docker::images::image_exists;
 use crate::docker_mod::docker::mounts::{validate_mount_source_dir, validate_unix_socket_dir_owner_mode};
 use crate::docker_mod::docker::runtime::container_runtime_path;
 
+/// Derive registry host from an image reference (first component if qualified).
+fn parse_registry_host(image: &str) -> Option<String> {
+    if let Some((first, _rest)) = image.split_once('/') {
+        if first.contains('.') || first.contains(':') || first == "localhost" {
+            return Some(first.to_string());
+        }
+    }
+    None
+}
+
+/// Pull image and on auth failure interactively run `docker login` then retry once.
+/// Verbose runs stream docker pull output; non-verbose prints a short notice before quiet pull.
+pub fn pull_image_with_autologin(
+    runtime: &Path,
+    image: &str,
+    verbose: bool,
+    agent_label: Option<&str>,
+) -> io::Result<()> {
+    use std::process::Stdio;
+
+    // Effective verbosity: honor explicit flag or env set by CLI --verbose.
+    let eff_verbose = verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
+    let use_err = crate::color_enabled_stderr();
+
+    // Helper to do a pull with inherited stdio so progress is visible.
+    let pull_inherit = |rt: &Path, img: &str| -> io::Result<bool> {
+        let st = std::process::Command::new(rt).arg("pull").arg(img).status()?;
+        Ok(st.success())
+    };
+
+    // Helper to do a pull with captured output so we can parse error text.
+    let pull_captured = |rt: &Path, img: &str| -> io::Result<(bool, String)> {
+        let out = std::process::Command::new(rt)
+            .arg("pull")
+            .arg(img)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        let ok = out.status.success();
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+        .to_ascii_lowercase();
+        Ok((ok, combined))
+    };
+
+    let auth_patterns = [
+        "pull access denied",
+        "permission denied",
+        "authentication required",
+        "unauthorized",
+        "requested access to the resource is denied",
+        "may require 'docker login'",
+        "requires 'docker login'",
+    ];
+
+    if eff_verbose {
+        crate::log_info_stderr(
+            use_err,
+            &format!("aifo-coder: docker: docker pull {}", image),
+        );
+        if pull_inherit(runtime, image)? {
+            return Ok(());
+        }
+        let (_ok2, combined) = pull_captured(runtime, image)?;
+        let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+        let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+        let interactive = atty::is(atty::Stream::Stdin);
+
+        if auto_enabled && interactive && looks_auth_error {
+            let host = parse_registry_host(image);
+            let mut login_cmd = std::process::Command::new(runtime);
+            login_cmd.arg("login");
+            if let Some(h) = host.as_deref() {
+                crate::log_info_stderr(
+                    use_err,
+                    &format!("aifo-coder: docker: docker login {}", h),
+                );
+                login_cmd.arg(h);
+            } else {
+                crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
+            }
+            let st = login_cmd.status().map_err(|e| {
+                io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+            })?;
+            if !st.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "docker login failed",
+                ));
+            }
+            if pull_inherit(runtime, image)? {
+                return Ok(());
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "docker pull failed after login",
+            ));
+        }
+
+        // Fallback: try pulling unqualified tail repo:tag from Docker Hub when image is qualified
+        if parse_registry_host(image).is_some() {
+            let tag = image
+                .split_once('@')
+                .map(|(n, _)| n)
+                .unwrap_or(image)
+                .rsplit_once(':')
+                .map(|(_, t)| t.to_string())
+                .unwrap_or_else(|| "latest".to_string());
+            let tail = image.rsplit('/').next().unwrap_or(image);
+            let unqual = format!(
+                "{}:{}",
+                tail.split_once(':').map(|(n, _)| n).unwrap_or(tail),
+                tag
+            );
+            crate::log_info_stderr(
+                use_err,
+                &format!("aifo-coder: docker: docker pull {}", unqual),
+            );
+            if pull_inherit(runtime, &unqual)? {
+                return Ok(());
+            }
+            return Err(io::Error::other(format!(
+                "docker pull failed; tried: {}, {}",
+                image, unqual
+            )));
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "docker pull failed",
+        ))
+    } else {
+        // Non-verbose: print a short notice before quiet pull so users get feedback.
+        let msg = if let Some(name) = agent_label {
+            format!("aifo-coder: pulling agent image [{}]: {}", name, image)
+        } else {
+            format!("aifo-coder: pulling agent image: {}", image)
+        };
+        crate::log_info_stderr(use_err, &msg);
+
+        let out = std::process::Command::new(runtime)
+            .arg("pull")
+            .arg(image)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+        if out.status.success() {
+            return Ok(());
+        }
+
+        let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
+        let interactive = atty::is(atty::Stream::Stdin);
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+        .to_ascii_lowercase();
+        let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
+
+        if auto_enabled && interactive && looks_auth_error {
+            let host = parse_registry_host(image);
+            if let Some(h) = host.as_deref() {
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker login {}", h));
+            } else {
+                crate::log_info_stderr(use_err, "aifo-coder: docker login");
+            }
+            let mut login = std::process::Command::new(runtime);
+            login.arg("login");
+            if let Some(h) = host.as_deref() {
+                login.arg(h);
+            }
+            let st = login.status().map_err(|e| {
+                io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
+            })?;
+            if !st.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "docker login failed",
+                ));
+            }
+
+            crate::log_info_stderr(use_err, "aifo-coder: retrying pull after login");
+            let out2 = std::process::Command::new(runtime)
+                .arg("pull")
+                .arg(image)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()?;
+            if out2.status.success() {
+                return Ok(());
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "docker pull failed after login",
+            ));
+        }
+
+        // Fallback: try pulling unqualified tail repo:tag from Docker Hub when image is qualified
+        if parse_registry_host(image).is_some() {
+            let tag = image
+                .split_once('@')
+                .map(|(n, _)| n)
+                .unwrap_or(image)
+                .rsplit_once(':')
+                .map(|(_, t)| t.to_string())
+                .unwrap_or_else(|| "latest".to_string());
+            let tail = image.rsplit('/').next().unwrap_or(image);
+            let unqual = format!(
+                "{}:{}",
+                tail.split_once(':').map(|(n, _)| n).unwrap_or(tail),
+                tag
+            );
+            let out_hub = std::process::Command::new(runtime)
+                .arg("pull")
+                .arg(&unqual)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()?;
+            if out_hub.status.success() {
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!("docker pull failed; tried: {}, {}", image, unqual),
+                ))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!(
+                    "docker pull failed (status {:?})",
+                    out.status.code().unwrap_or(-1)
+                ),
+            ))
+        }
+    }
+}
+
 /// Helper: set/replace tag on an image reference (strip any digest, replace last tag after '/').
 fn set_image_tag(image: &str, new_tag: &str) -> String {
     let base = image.split_once('@').map(|(n, _)| n).unwrap_or(image);
