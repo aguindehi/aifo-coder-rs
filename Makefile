@@ -1725,8 +1725,8 @@ publish:
 	@$(MAKE) publish-toolchain-node
 	@$(MAKE) publish-toolchain-cpp
 
-.PHONY: publish-release
-publish-release:
+.PHONY: publish-release-images
+publish-release-images:
 	@$(MAKE) \
 	  PLATFORMS=$(if $(filter command% environment override,$(origin PLATFORMS)),$(PLATFORMS),linux/amd64$(COMMA)linux/arm64) \
 	  PUSH=$(if $(filter command% environment override,$(origin PUSH)),$(PUSH),1) \
@@ -1739,6 +1739,17 @@ publish-release:
 	  NODE_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin NODE_TOOLCHAIN_TAG)),$(NODE_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
+
+.PHONY: publish-release
+publish-release:
+	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
+	@$(MAKE) publish-release-images
+	@echo
+	@echo "==> Running publish-release-macos-signed (build, sign and upload macOS launchers) ..."
+	@$(MAKE) publish-release-macos-signed
+	@echo
+	@echo "Tag and GitLab Release have been created/updated locally."
+	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
