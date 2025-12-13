@@ -409,7 +409,11 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                     staged_any = true;
                 }
             }
-            if staged_any { Some(staging) } else { None }
+            if staged_any {
+                Some(staging)
+            } else {
+                None
+            }
         }
 
         let mut staged_dirs: Vec<PathBuf> = Vec::new();
