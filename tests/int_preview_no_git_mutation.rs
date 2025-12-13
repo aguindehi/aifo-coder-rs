@@ -6,8 +6,7 @@ fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_wor
     let agents = ["aider", "codex", "crush"];
     for agent in agents {
         let args = vec!["--help".to_string()];
-        let preview =
-            aifo_coder::build_docker_preview_only(agent, &args, "alpine:3.20", None);
+        let preview = aifo_coder::build_docker_preview_only(agent, &args, "alpine:3.20", None);
 
         // No in-container git mutations
         assert!(
@@ -35,8 +34,7 @@ fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_wor
     // Aider-specific: disabling signing via env should still inject transient GIT_CONFIG_* env
     std::env::set_var("AIFO_CODER_GIT_SIGN", "0");
     let args = vec!["--help".to_string()];
-    let preview =
-        aifo_coder::build_docker_preview_only("aider", &args, "alpine:3.20", None);
+    let preview = aifo_coder::build_docker_preview_only("aider", &args, "alpine:3.20", None);
     assert!(
         preview.contains("GIT_CONFIG_KEY_0=commit.gpgsign"),
         "aider preview must include transient GIT_CONFIG_* for disabling signing; preview:\n{}",
