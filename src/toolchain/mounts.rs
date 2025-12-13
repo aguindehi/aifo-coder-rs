@@ -36,7 +36,21 @@ fn init_named_volume_with_stamp(
     sh.push(format!(
         r#"printf '%s\n' '{uid}:{gid}' > "$d/.aifo-init-done" || true"#
     ));
-    let script = sh.build().unwrap_or_else(|_| "set -e".to_string());
+    let script = match sh.build() {
+        Ok(s) => s,
+        Err(e) => {
+            if verbose {
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: warning: refusing to run invalid shell init script: {}",
+                        e
+                    ),
+                );
+            }
+            return;
+        }
+    };
 
     let args: Vec<String> = vec![
         "docker".into(),

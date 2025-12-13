@@ -257,7 +257,7 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         r#"echo "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
         r#"echo "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
         r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "default-cache-ttl 7200" >> "$GNUPGHGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
         r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
         r#"for item in private-keys-v1.d openpgp-revocs.d pubring.kbx trustdb.gpg gpg.conf; do if [ ! -e "$GNUPGHOME/$item" ] && [ -e "/home/coder/.gnupg-host/$item" ]; then cp -a "/home/coder/.gnupg-host/$item" "$GNUPGHOME/" 2>/dev/null || true; fi; done"#.to_string(),
         r#"touch "$GNUPGHOME/gpg.conf""#.to_string(),
