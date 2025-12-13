@@ -3043,7 +3043,8 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
-SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+#SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+SIGN_IDENTITY ?= Migros AI Foundation Code Signing
 NOTARY_PROFILE ?=
 DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
 
