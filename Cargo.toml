@@ -36,6 +36,7 @@ humantime = { version = "2.1", optional = true }
 urlencoding = "2"
 tempfile = "3"
 walkdir = "2"
+wait-timeout = "0.2"
 
 [features]
 otel = [

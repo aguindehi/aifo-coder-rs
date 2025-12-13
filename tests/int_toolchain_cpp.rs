@@ -1,11 +1,5 @@
 fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
-    std::process::Command::new(runtime)
-        .args(["image", "inspect", image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    aifo_coder::image_exists(runtime, image)
 }
 
 #[test]

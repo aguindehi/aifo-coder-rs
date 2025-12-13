@@ -6,7 +6,6 @@
 //! - Cleans up proxy, sidecars and unix socket dir in Drop unless running inside a fork pane.
 
 use std::io;
-use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -353,22 +352,6 @@ please check the output above.",
     }
 }
 
-// Best-effort: check if a toolchain image exists locally (by ref).
-fn toolchain_image_exists_local(image: &str) -> bool {
-    if let Ok(runtime) = aifo_coder::container_runtime_path() {
-        return Command::new(&runtime)
-            .arg("image")
-            .arg("inspect")
-            .arg(image)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    }
-    false
-}
-
 /// RAII for toolchain sidecars + proxy. On cleanup, stops proxy and optionally sidecars.
 pub struct ToolchainSession {
     sid: String,
@@ -443,7 +426,11 @@ impl ToolchainSession {
                     .find(|(kk, _)| kk == k)
                     .map(|(_, v)| v.clone())
                     .unwrap_or_else(|| aifo_coder::default_toolchain_image(k));
-                if !toolchain_image_exists_local(&img) {
+                let present = aifo_coder::container_runtime_path()
+                    .ok()
+                    .map(|rt| aifo_coder::image_exists(rt.as_path(), &img))
+                    .unwrap_or(false);
+                if !present {
                     aifo_coder::log_info_stderr(
                         use_err,
                         &format!("aifo-coder: pulling toolchain image [{}]: {}", k, img),

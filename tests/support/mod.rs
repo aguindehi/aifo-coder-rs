@@ -63,18 +63,6 @@ pub fn port_from_http_url(url: &str) -> u16 {
         .unwrap_or(0)
 }
 
-/// Return true if a Docker image is present locally (without pulling).
-#[allow(dead_code)]
-pub fn docker_image_present(runtime: &std::path::Path, image: &str) -> bool {
-    std::process::Command::new(runtime)
-        .args(["image", "inspect", image])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
 /// Minimal raw HTTP POST helper over TCP returning (status, headers, body).
 #[allow(dead_code)]
 pub fn http_post_tcp(
@@ -150,6 +138,12 @@ pub fn urlencode(s: &str) -> String {
 #[allow(dead_code)]
 pub fn docker_runtime() -> Option<PathBuf> {
     aifo_coder::container_runtime_path().ok()
+}
+
+/// Return true if a Docker image is present locally (without pulling).
+#[allow(dead_code)]
+pub fn docker_image_present(runtime: &Path, image: &str) -> bool {
+    aifo_coder::image_exists(runtime, image)
 }
 
 #[allow(dead_code)]

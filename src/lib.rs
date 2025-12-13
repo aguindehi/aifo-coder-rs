@@ -30,6 +30,7 @@ mod apparmor;
 #[allow(clippy::doc_overindented_list_items)]
 mod color;
 mod docker;
+mod docker_mod;
 mod errors;
 mod fork;
 #[path = "fork/meta.rs"]
