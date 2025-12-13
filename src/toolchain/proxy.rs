@@ -48,6 +48,7 @@ use nix::unistd::{getgid, getuid};
 
 use crate::container_runtime_path;
 use crate::shell_join;
+use crate::ShellScript;
 
 use super::sidecar;
 use super::{auth, http, notifications};
@@ -307,11 +308,16 @@ fn kill_in_container(
     verbose: bool,
 ) {
     let sig = signal.to_ascii_uppercase();
-    let script = format!(
-        "pg=\"/home/coder/.aifo-exec/{id}/pgid\"; if [ -f \"$pg\" ]; then n=$(cat \"$pg\" 2>/dev/null); if [ -n \"$n\" ]; then kill -s {sig} -\"$n\" || true; fi; fi",
-        id = exec_id,
-        sig = sig
-    );
+    let script = ShellScript::new()
+        .extend([
+            format!(r#"pg="/home/coder/.aifo-exec/{exec_id}/pgid""#),
+            r#"if [ -f "$pg" ]; then"#.to_string(),
+            r#"  n=$(cat "$pg" 2>/dev/null)"#.to_string(),
+            format!(r#"  if [ -n "$n" ]; then kill -s {sig} -"$n" || true; fi"#),
+            r#"fi"#.to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| "true".to_string());
 
     let args: Vec<String> = vec![
         "docker".into(),
@@ -442,17 +448,29 @@ fn disconnect_terminate_exec_in_container(
     kill_in_container(runtime, container, exec_id, "KILL", verbose);
 }
 
-fn exec_wrapper_env_prelude() -> &'static str {
-    "set -e; \
-     export PATH=\"/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH\"; \
-     export RUSTUP_NO_UPDATE_CHECK=1; export RUSTUP_SELF_UPDATE=0; export RUSTUP_USE_CURL=1; \
-     if [ -f /workspace/corp-ca.crt ]; then \
-       export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; \
-       export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; \
-     elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then \
-       export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; \
-       export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; \
-     fi;"
+fn exec_wrapper_env_prelude() -> String {
+    ShellScript::new()
+        .extend([
+            "set -e".to_string(),
+            r#"export PATH="/usr/local/go/bin:/home/coder/.cargo/bin:/usr/local/cargo/bin:$PATH""#
+                .to_string(),
+            "export RUSTUP_NO_UPDATE_CHECK=1".to_string(),
+            "export RUSTUP_SELF_UPDATE=0".to_string(),
+            "export RUSTUP_USE_CURL=1".to_string(),
+            r#"if [ -f /workspace/corp-ca.crt ]; then"#.to_string(),
+            "  export SSL_CERT_FILE=/workspace/corp-ca.crt".to_string(),
+            "  export CURL_CA_BUNDLE=/workspace/corp-ca.crt".to_string(),
+            "  export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt".to_string(),
+            "  export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt".to_string(),
+            r#"elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then"#.to_string(),
+            "  export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
+            "  export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
+            "  export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
+            "  export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
+            "fi".to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| "set -e".to_string())
 }
 
 /// Build docker exec spawn args with setsid+PGID wrapper (use_tty controls -t).
@@ -492,17 +510,25 @@ fn build_exec_args_with_wrapper(
     // so we can send signals to the whole process group later.
     //
     // IMPORTANT: We intentionally do not interpolate user args into this script.
-    let script = format!(
-        "{prelude} \
-eid=\"${{AIFO_EXEC_ID:-}}\"; \
-if [ -z \"$eid\" ]; then exec \"$@\" 2>&1; fi; \
-d=\"${{HOME:-/home/coder}}/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; \
-mkdir -p \"$d\" 2>/dev/null || {{ d=\"/tmp/.aifo-exec/${{AIFO_EXEC_ID:-}}\"; mkdir -p \"$d\" || true; }}; \
-( setsid sh -lc \"{prelude} exec \\\"\\$@\\\" 2>&1\" -- \"$@\" ) & pg=$!; \
-printf \"%s\\n\" \"$pg\" > \"$d/pgid\" 2>/dev/null || true; \
-wait \"$pg\"; rm -rf \"$d\" || true",
-        prelude = exec_wrapper_env_prelude()
-    );
+    let prelude = exec_wrapper_env_prelude();
+
+    let script = ShellScript::new()
+        .extend([
+            prelude.clone(),
+            r#"eid="${AIFO_EXEC_ID:-}""#.to_string(),
+            r#"if [ -z "$eid" ]; then exec "$@" 2>&1; fi"#.to_string(),
+            r#"d="${HOME:-/home/coder}/.aifo-exec/${AIFO_EXEC_ID:-}""#.to_string(),
+            r#"mkdir -p "$d" 2>/dev/null || { d="/tmp/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" || true; }"#.to_string(),
+            // NOTE: Keep the inner "sh -lc" but assemble the prelude as a validated single-line.
+            format!(
+                r#"( setsid sh -lc "{} exec \"\$@\" 2>&1" -- "$@" ) & pg=$!"#,
+                prelude
+            ),
+            r#"printf "%s\n" "$pg" > "$d/pgid" 2>/dev/null || true"#.to_string(),
+            r#"wait "$pg"; rm -rf "$d" || true"#.to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| r#"exec "$@""#.to_string());
 
     spawn_args.push("sh".to_string());
     spawn_args.push("-c".to_string());
