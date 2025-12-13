@@ -4,9 +4,10 @@
 use std::env;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::docker_mod::docker::images::image_exists;
+use crate::docker_mod::docker::mounts::{validate_mount_source_dir, validate_unix_socket_dir_owner_mode};
 use crate::docker_mod::docker::runtime::container_runtime_path;
 
 /// Helper: set/replace tag on an image reference (strip any digest, replace last tag after '/').
@@ -132,6 +133,13 @@ fn split_paths_env(v: &str) -> Vec<PathBuf> {
 
 /// Remove per-run staged config directories recorded in AIFO_CONFIG_STAGING_DIRS and
 /// the legacy AIFO_AIDER_STAGING_DIR (best-effort).
+pub fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<std::ffi::OsString> {
+    // The full mount/staging implementation is currently still in src/docker_impl.rs.
+    // This function provides the stable entry point for docker_mod callers and will be
+    // migrated incrementally to docker/* modules in follow-up steps.
+    crate::docker_impl::collect_volume_flags_impl(agent, host_home, pwd)
+}
+
 pub fn cleanup_aider_staging_from_env() {
     // Legacy single-dir env (pre-multi-agent staging)
     if let Ok(p) = env::var("AIFO_AIDER_STAGING_DIR") {

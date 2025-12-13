@@ -9,23 +9,12 @@
 use std::io;
 use std::path::Path;
 
-pub(crate) fn docker_impl_pull_image_with_autologin(
-    _runtime: &Path,
-    _image: &str,
-    _verbose: bool,
-    _agent_label: Option<&str>,
-) -> io::Result<()> {
-    // The real implementation lives in the legacy file below in this module.
-    // It is still referenced by docker/run.rs for behavior parity.
-    super::docker_impl_legacy::pull_image_with_autologin(_runtime, _image, _verbose, _agent_label)
-}
-
-pub(crate) fn docker_impl_collect_volume_flags(
+pub(crate) fn collect_volume_flags_impl(
     agent: &str,
     host_home: &Path,
     pwd: &Path,
 ) -> Vec<std::ffi::OsString> {
-    super::docker_impl_legacy::collect_volume_flags(agent, host_home, pwd)
+    collect_volume_flags(agent, host_home, pwd)
 }
 
 fn agent_bin_and_path(agent: &str) -> (String, String) {

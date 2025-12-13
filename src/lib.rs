@@ -51,7 +51,6 @@ mod util;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;
-pub use docker_impl::{docker_impl_collect_volume_flags, docker_impl_pull_image_with_autologin};
 pub use errors::exit_code_for_io_error;
 pub use errors::{display_for_fork_error, display_for_toolchain_error};
 pub use errors::{exit_code_for_fork_error, exit_code_for_toolchain_error};

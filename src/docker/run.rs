@@ -235,13 +235,9 @@ fn host_claude_config_path(host_home: &Path) -> Option<PathBuf> {
 fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
 
-    // Aider special-case staging block and per-agent staging are still implemented in docker_impl.rs
-    // today. This refactor step focuses on code structure; follow-up can move staging into its own
-    // unit-tested module without behavior changes.
-    //
-    // For now, keep behavior by delegating to the legacy implementation function inside
-    // crate::docker_impl via a private helper.
-    volume_flags.extend(crate::docker_impl_collect_volume_flags(
+    // Base mounts (home/config/staging/gitconfig/gnupg/logs/etc) are now implemented in docker_impl.rs
+    // and exposed via this stable helper in the docker_mod module tree.
+    volume_flags.extend(crate::docker_mod::docker::staging::collect_volume_flags(
         agent, host_home, pwd,
     ));
 
@@ -614,7 +610,7 @@ echo \"verbose\" >> \"$GNUPGHOME/gpg-agent.conf\"; \
     let effective_image = image.to_string();
     // Pre-pull image and auto-login on permission denied (interactive)
     if !image_exists(runtime.as_path(), &effective_image) {
-        let _ = crate::docker_impl_pull_image_with_autologin(
+        let _ = crate::docker_mod::docker::staging::pull_image_with_autologin(
             runtime.as_path(),
             &effective_image,
             false,
