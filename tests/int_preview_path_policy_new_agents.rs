@@ -4,11 +4,10 @@ ignore-tidy-linelength
 
 #[test]
 fn int_test_path_policy_and_naming_openhands_opencode_plandex() {
-    // Skip if docker isn't available on this host
-    if aifo_coder::container_runtime_path().is_err() {
-        eprintln!("skipping: docker not found in PATH");
-        return;
-    }
+    // Isolate HOME so preview mount discovery stays fast and deterministic
+    let td = tempfile::tempdir().expect("tmpdir");
+    let old_home = std::env::var("HOME").ok();
+    std::env::set_var("HOME", td.path());
 
     // Use a tiny image for preview (no pulls; deterministic)
     let img = "alpine:3.20";
@@ -67,4 +66,11 @@ fn int_test_path_policy_and_naming_openhands_opencode_plandex() {
         "hostname should include agent string; preview:\n{}",
         preview_pl
     );
+
+    // Restore HOME
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    } else {
+        std::env::remove_var("HOME");
+    }
 }

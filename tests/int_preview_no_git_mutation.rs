@@ -1,5 +1,10 @@
 #[test]
 fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_works() {
+    // Isolate HOME so preview mount discovery stays fast and deterministic
+    let td = tempfile::tempdir().expect("tmpdir");
+    let old_home = std::env::var("HOME").ok();
+    std::env::set_var("HOME", td.path());
+
     // Ensure a stable container name for reproducibility
     std::env::set_var("AIFO_CODER_CONTAINER_NAME", "aifo-coder-unit-test");
 
@@ -40,4 +45,11 @@ fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_wor
         "aider preview must include transient GIT_CONFIG_* for disabling signing; preview:\n{}",
         preview
     );
+
+    // Restore HOME
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    } else {
+        std::env::remove_var("HOME");
+    }
 }
