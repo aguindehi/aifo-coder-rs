@@ -49,7 +49,6 @@ use nix::unistd::{getgid, getuid};
 use crate::container_runtime_path;
 use crate::shell_join;
 use crate::ShellScript;
-use aifo_coder::ShellScript as AifoShellScript;
 
 use super::sidecar;
 use super::{auth, http, notifications};
@@ -156,7 +155,7 @@ fn workspace_access_hint(
     args.push(container.into());
     args.push("sh".into());
     args.push("-c".into());
-    let script = AifoShellScript::new()
+    let script = ShellScript::new()
         .extend([
             "set -e".to_string(),
             "ls -ld /workspace 2>&1".to_string(),
