@@ -26,7 +26,7 @@ use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
 
 use crate::banner::print_startup_banner;
-use crate::{shell_escape, ShellScript};
+use crate::util::{shell_escape, ShellScript};
 
 struct CursorGuard {
     hide: bool,
@@ -526,7 +526,7 @@ fn run_version_check(
     let script = ShellScript::new()
         .push(cmd.to_string())
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e: std::io::Error| e.to_string())?;
 
     let mut child = Command::new(rt)
         .arg("run")
