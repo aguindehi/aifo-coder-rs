@@ -9,14 +9,6 @@
 use std::io;
 use std::path::Path;
 
-pub(crate) fn collect_volume_flags_impl(
-    agent: &str,
-    host_home: &Path,
-    pwd: &Path,
-) -> Vec<std::ffi::OsString> {
-    collect_volume_flags(agent, host_home, pwd)
-}
-
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",

@@ -378,10 +378,7 @@ fn split_paths_env(v: &str) -> Vec<PathBuf> {
 /// Remove per-run staged config directories recorded in AIFO_CONFIG_STAGING_DIRS and
 /// the legacy AIFO_AIDER_STAGING_DIR (best-effort).
 pub fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<std::ffi::OsString> {
-    // The full mount/staging implementation is currently still in src/docker_impl.rs.
-    // This function provides the stable entry point for docker_mod callers and will be
-    // migrated incrementally to docker/* modules in follow-up steps.
-    crate::docker_impl::collect_volume_flags_impl(agent, host_home, pwd)
+    crate::docker_mod::docker::run::collect_volume_flags(agent, host_home, pwd)
 }
 
 pub fn cleanup_aider_staging_from_env() {
