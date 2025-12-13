@@ -18,5 +18,6 @@ pub use docker::images::image_exists;
 pub use docker::run::{build_docker_cmd, build_docker_preview_only};
 pub use docker::runtime::container_runtime_path;
 pub use docker::staging::{
-    cleanup_aider_staging_from_env, compute_effective_agent_image_for_run, pull_image_with_autologin,
+    cleanup_aider_staging_from_env, compute_effective_agent_image_for_run,
+    pull_image_with_autologin,
 };
