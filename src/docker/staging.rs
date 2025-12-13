@@ -7,7 +7,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::docker_mod::docker::images::image_exists;
-use crate::docker_mod::docker::mounts::{validate_mount_source_dir, validate_unix_socket_dir_owner_mode};
+use crate::docker_mod::docker::mounts::{
+    validate_mount_source_dir, validate_unix_socket_dir_owner_mode,
+};
 use crate::docker_mod::docker::runtime::container_runtime_path;
 
 /// Derive registry host from an image reference (first component if qualified).
@@ -36,7 +38,10 @@ pub fn pull_image_with_autologin(
 
     // Helper to do a pull with inherited stdio so progress is visible.
     let pull_inherit = |rt: &Path, img: &str| -> io::Result<bool> {
-        let st = std::process::Command::new(rt).arg("pull").arg(img).status()?;
+        let st = std::process::Command::new(rt)
+            .arg("pull")
+            .arg(img)
+            .status()?;
         Ok(st.success())
     };
 
@@ -86,10 +91,7 @@ pub fn pull_image_with_autologin(
             let mut login_cmd = std::process::Command::new(runtime);
             login_cmd.arg("login");
             if let Some(h) = host.as_deref() {
-                crate::log_info_stderr(
-                    use_err,
-                    &format!("aifo-coder: docker: docker login {}", h),
-                );
+                crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
                 login_cmd.arg(h);
             } else {
                 crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
