@@ -63,7 +63,10 @@ fn pm_deep_cmd_for(kind: &str) -> Option<String> {
         "go" => {
             let src = "package main\nfunc main() {}\n";
             let script = ShellScript::new()
-                .push(format!("printf %s {} > /tmp/aifo-support-go.go", shell_escape(src)))
+                .push(format!(
+                    "printf %s {} > /tmp/aifo-support-go.go",
+                    shell_escape(src)
+                ))
                 .push("go run /tmp/aifo-support-go.go".to_string())
                 .build()
                 .ok()?;
