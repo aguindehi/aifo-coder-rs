@@ -55,6 +55,11 @@ ARGS_NEXTEST ?= --profile ci --no-fail-fast --status-level=fail --hide-progress-
 NEXTEST_VERSION ?= 0.9.114
 CARGO_FLAGS ?= --features otel-otlp
 
+# Cargo UI flags:
+# - Keep warnings/errors, but suppress per-crate "Compiling/Checking ..." noise.
+# - Override with CARGO_UI_FLAGS= for debugging.
+CARGO_UI_FLAGS ?= -q
+
 # Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 
@@ -1959,7 +1964,7 @@ lint:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (sidecar) ..."; \
-	  cargo -q clippy --workspace --all-features -- -D warnings; \
+	  cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
@@ -1975,10 +1980,10 @@ lint:
 	  HAVE_CLIPPY=$$(rustup component list --toolchain stable 2>/dev/null | awk '/^clippy .* (installed)/{print 1; exit}'); \
 	  if [ "$$HAVE_CLIPPY" = "1" ]; then \
 	    echo "Using rustup stable clippy (-D warnings)"; \
-	    rustup run stable cargo -q clippy --workspace --all-features -- -D warnings; \
+	    rustup run stable cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings; \
 	  else \
 	    echo "Using local cargo clippy (-D warnings)"; \
-	    cargo -q clippy --workspace --all-features -- -D warnings; \
+	    cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings; \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
@@ -1988,7 +1993,7 @@ lint:
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
 	  echo "Running cargo clippy (local cargo) ..."; \
-	  cargo -q clippy --workspace --all-features -- -D warnings; \
+	  cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -1998,7 +2003,7 @@ lint:
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
-	      cargo -q clippy --workspace --all-features -- -D warnings'; \
+	      cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
 	  exit 1; \
@@ -2030,7 +2035,7 @@ lint-ultra:
 	  fi; \
 	  echo "Running cargo clippy (sidecar, curated strict + warnings) ..."; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
-	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
+	  cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if [ -n "$$CI" ] || [ "$$AIFO_AUTOINSTALL_COMPONENTS" = "1" ]; then rustup component add --toolchain stable rustfmt clippy >/dev/null 2>&1 || true; fi; \
@@ -2039,9 +2044,9 @@ lint-ultra:
 	  if rustup run stable cargo -V >/dev/null 2>&1; then USE_RUSTUP=1; else USE_RUSTUP=0; fi; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
 	  if [ "$$USE_RUSTUP" -eq 1 ]; then \
-	    rustup run stable cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
+	    rustup run stable cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	  else \
-	    cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
+	    cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
@@ -2052,7 +2057,7 @@ lint-ultra:
 	  fi; \
 	  echo "Running cargo clippy (local cargo, curated strict + warnings) ..."; \
 	  if [ "$${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
-	  cargo -q clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
+	  cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features $$TARGETS -- $$LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "Running lint inside $(RUST_BUILDER_IMAGE) ..."; \
 	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
@@ -2064,7 +2069,7 @@ lint-ultra:
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
 	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
 	      if [ "${AIFO_ULTRA_INCLUDE_TESTS:-1}" = "1" ]; then TARGETS="--all-targets"; else TARGETS="--lib --bins"; fi; \
-	      cargo -q clippy --workspace --all-features $TARGETS -- $LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock'; \
+	      cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features $TARGETS -- $LINT_FLAGS -D unsafe_code -D clippy::dbg_macro -D clippy::await_holding_lock'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
 	  exit 1; \
