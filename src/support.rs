@@ -26,6 +26,7 @@ use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
 
 use crate::banner::print_startup_banner;
+use crate::{shell_escape, ShellScript};
 
 struct CursorGuard {
     hide: bool,
@@ -35,23 +36,39 @@ struct CursorGuard {
 /// These are small "hello world" style checks that compile or execute minimal code.
 fn pm_deep_cmd_for(kind: &str) -> Option<String> {
     match kind {
-        "rust" => Some(
-            "printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin && /tmp/aifo-support-rust-bin"
-                .to_string(),
-        ),
+        "rust" => {
+            let script = ShellScript::new()
+                .push("printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin".to_string())
+                .push("/tmp/aifo-support-rust-bin".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
         "node" => Some("node -e 'process.exit(0)'".to_string()),
         "typescript" => Some(
-            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#.to_string(),
-        ),
-        "python" => Some("python3 - <<'EOF'\nimport sys\nsys.exit(0)\nEOF".to_string()),
-        "c-cpp" => Some(
-            "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c && /tmp/aifo-support-c"
+            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#
                 .to_string(),
         ),
-        "go" => Some(
-            "cat <<'EOF' >/tmp/aifo-support-go.go\npackage main\nfunc main() {}\nEOF\ngo run /tmp/aifo-support-go.go"
-                .to_string(),
-        ),
+        "python" => Some("python3 -c 'import sys; sys.exit(0)'".to_string()),
+        "c-cpp" => {
+            let script = ShellScript::new()
+                .push(
+                    "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c".to_string(),
+                )
+                .push("/tmp/aifo-support-c".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
+        "go" => {
+            let src = "package main\nfunc main() {}\n";
+            let script = ShellScript::new()
+                .push(format!("printf %s {} > /tmp/aifo-support-go.go", shell_escape(src)))
+                .push("go run /tmp/aifo-support-go.go".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
         _ => None,
     }
 }
@@ -503,6 +520,11 @@ fn run_version_check(
         }
     }
 
+    let script = ShellScript::new()
+        .push(cmd.to_string())
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let mut child = Command::new(rt)
         .arg("run")
         .arg("--rm")
@@ -510,7 +532,7 @@ fn run_version_check(
         .arg("/bin/sh")
         .arg(image)
         .arg("-c")
-        .arg(cmd)
+        .arg(script)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
