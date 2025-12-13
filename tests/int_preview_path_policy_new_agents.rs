@@ -15,8 +15,8 @@ fn int_test_path_policy_and_naming_openhands_opencode_plandex() {
     let args = vec!["--help".to_string()];
 
     // openhands: shims-first PATH and container naming includes agent
-    let (_cmd_oh, preview_oh) =
-        aifo_coder::build_docker_cmd("openhands", &args, img, None).expect("build_docker_cmd");
+    let preview_oh =
+        aifo_coder::build_docker_preview_only("openhands", &args, img, None);
     assert!(
         preview_oh.contains("export PATH=\"/opt/aifo/bin:"),
         "openhands PATH should be shims-first; preview:\n{}",
@@ -34,8 +34,8 @@ fn int_test_path_policy_and_naming_openhands_opencode_plandex() {
     );
 
     // opencode: shims-first PATH and container naming includes agent
-    let (_cmd_oc, preview_oc) =
-        aifo_coder::build_docker_cmd("opencode", &args, img, None).expect("build_docker_cmd");
+    let preview_oc =
+        aifo_coder::build_docker_preview_only("opencode", &args, img, None);
     assert!(
         preview_oc.contains("export PATH=\"/opt/aifo/bin:"),
         "opencode PATH should be shims-first; preview:\n{}",
@@ -53,8 +53,8 @@ fn int_test_path_policy_and_naming_openhands_opencode_plandex() {
     );
 
     // plandex: shims-first PATH and container naming includes agent
-    let (_cmd_pl, preview_pl) =
-        aifo_coder::build_docker_cmd("plandex", &args, img, None).expect("build_docker_cmd");
+    let preview_pl =
+        aifo_coder::build_docker_preview_only("plandex", &args, img, None);
     assert!(
         preview_pl.contains("export PATH=\"/opt/aifo/bin:"),
         "plandex PATH should be shims-first; preview:\n{}",
