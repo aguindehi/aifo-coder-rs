@@ -1133,7 +1133,6 @@ pub fn build_docker_cmd(
     // Defaults and local :latest preferences are handled upstream in main.rs when --image is not provided.
     let effective_image = image.to_string();
     // Pre-pull image and auto-login on permission denied (interactive).
-    // Honor CLI verbosity via env AIFO_CODER_VERBOSE=1 so users see progress when requested.
     let pull_verbose = env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
     if !image_exists(runtime.as_path(), &effective_image) {
         let _ = crate::docker_mod::docker::staging::pull_image_with_autologin(
