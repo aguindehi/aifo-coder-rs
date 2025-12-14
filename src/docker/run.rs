@@ -262,22 +262,24 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         // gpg-agent.conf edits: keep sequential edits split into atomic pushes for maintainability
         r#"touch "$GNUPGHOME/gpg-agent.conf""#.to_string(),
         r#"sed_port -e "/^pinentry-program /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"printf '%s\n' "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#
+            .to_string(),
         r#"sed_port -e "/^log-file /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
         r#"sed_port -e "/^debug-level /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
         r#"sed_port -e "/^verbose$/d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"echo "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"echo "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"printf '%s\n' "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#
+            .to_string(),
+        r#"printf '%s\n' "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"printf '%s\n' "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
         // Host keyring copy loop: keep as one fragment (compound for/do/done).
         r#"for item in private-keys-v1.d openpgp-revocs.d pubring.kbx trustdb.gpg gpg.conf; do if [ ! -e "$GNUPGHOME/$item" ] && [ -e "/home/coder/.gnupg-host/$item" ]; then cp -a "/home/coder/.gnupg-host/$item" "$GNUPGHOME/" 2>/dev/null || true; fi; done"#.to_string(),
         // gpg.conf edits (sequential, safe to split)
         r#"touch "$GNUPGHOME/gpg.conf""#.to_string(),
         r#"sed_port -e "/^pinentry-mode /d" "$GNUPGHOME/gpg.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
+        r#"printf '%s\n' "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
         r#"chmod -R go-rwx "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
         r#"unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true"#.to_string(),
         r#"gpgconf --launch gpg-agent >/dev/null 2>&1 || true"#.to_string(),

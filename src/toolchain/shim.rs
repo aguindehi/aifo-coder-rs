@@ -53,6 +53,7 @@ pub fn shim_tool_names() -> &'static [&'static str] {
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;
     let shim_path = dir.join("aifo-shim");
+    // ignore-tidy-linelength
     let shim = r#"#!/bin/sh
 set -e
 
@@ -327,6 +328,7 @@ exit "$ec"
     // Provide a 'sh' wrapper that ensures transient shells exit after running a command.
     // This prevents dropping into an interactive shell after '/run ...' completes or is interrupted.
     // Opt-out by setting AIFO_SH_WRAP_DISABLE=1 inside the agent container.
+    // ignore-tidy-linelength
     let sh_wrap = r#"#!/bin/sh
 # aifo-coder sh wrapper: auto-exit after -c/-lc commands and avoid lingering shells on Ctrl-C.
 # Opt-out: AIFO_SH_WRAP_DISABLE=1
