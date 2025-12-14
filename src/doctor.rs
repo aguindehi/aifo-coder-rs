@@ -155,8 +155,10 @@ pub fn run_doctor(verbose: bool) {
         args.push("-lc".to_string());
         args.push(
             ShellScript::new()
-                .push("cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined"
-                    .to_string())
+                .push(
+                    "cat /proc/self/attr/apparmor/current 2>/dev/null || echo unconfined"
+                        .to_string(),
+                )
                 .build()
                 .unwrap_or_else(|_| "echo unconfined".to_string()),
         );
