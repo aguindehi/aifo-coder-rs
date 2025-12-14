@@ -7,7 +7,7 @@ use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 use crate::fork::env;
 use crate::fork::inner;
-use crate::util::reject_newlines;
+use aifo_coder::reject_newlines;
 
 /// tmux orchestrator (Unix): creates a session, splits panes, sets layout, and launches per-pane scripts.
 /// Waits for attach/switch to complete before returning (i.e., after user detaches).
