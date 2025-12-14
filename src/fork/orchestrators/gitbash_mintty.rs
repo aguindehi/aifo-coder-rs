@@ -2,16 +2,9 @@
 
 use std::process::Command;
 
-fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
-    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
-        Err(format!("refusing to execute {what}: contains newline"))
-    } else {
-        Ok(())
-    }
-}
-
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
+use crate::reject_newlines;
 
 /// Git Bash / mintty orchestrator.
 /// When exec_shell_tail is false, trims the trailing "; exec bash" from inner.

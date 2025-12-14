@@ -7,14 +7,7 @@ use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 use crate::fork::env;
 use crate::fork::inner;
-
-fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
-    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
-        Err(format!("refusing to execute {what}: contains newline"))
-    } else {
-        Ok(())
-    }
-}
+use crate::reject_newlines;
 
 /// tmux orchestrator (Unix): creates a session, splits panes, sets layout, and launches per-pane scripts.
 /// Waits for attach/switch to complete before returning (i.e., after user detaches).

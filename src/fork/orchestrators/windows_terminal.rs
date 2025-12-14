@@ -4,14 +4,7 @@ use std::process::Command;
 
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
-
-fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
-    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
-        Err(format!("refusing to execute {what}: contains newline"))
-    } else {
-        Ok(())
-    }
-}
+use crate::reject_newlines;
 
 /// Windows Terminal orchestrator (non-waitable).
 pub struct WindowsTerminal;
