@@ -503,19 +503,22 @@ fn build_exec_args_with_wrapper(
         .unwrap_or_else(|_| r#"exec "$@""#.to_string());
 
     // Embed the inner command in a single-quoted sh literal so we don't have to escape `"`, `$`,
-    // or `\` sequences. This is safe because ShellScript fragments reject newlines and NUL, and
-    // `inner_cmd` is constructed only from fixed strings in this module.
+    // or `\` sequences.
     let inner_cmd_sq = inner_cmd.replace('\'', r#"'\''"#);
 
+    // IMPORTANT: ShellScript joins fragments with `; `. Do not split compound constructs like
+    // `if/then/fi` across fragments or you'll get invalid `then;` syntax on dash.
     let script = ShellScript::new()
         .extend([
+            // Prelude is itself a single-line script; safe to embed as one fragment.
             prelude.clone(),
+            // Keep compound constructs as single fragments (single-line `if ...; then ...; fi`).
             r#"eid="${AIFO_EXEC_ID:-}""#.to_string(),
             r#"if [ -z "$eid" ]; then exec "$@" 2>&1; fi"#.to_string(),
-            r#"d="${HOME:-/home/coder}/.aifo-exec/${AIFO_EXEC_ID:-}""#.to_string(),
-            r#"mkdir -p "$d" 2>/dev/null || { d="/tmp/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" || true; }"#.to_string(),
-            // NOTE: Keep the nested `sh -lc` for login-shell semantics.
-            // Use single quotes around the command so we avoid escaping double quotes inside `inner_cmd`.
+            // Create exec dir (fallback to /tmp) as a single fragment; brace-group must not be split.
+            r#"d="${HOME:-/home/coder}/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" 2>/dev/null || { d="/tmp/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" || true; }"#.to_string(),
+            // Run command under setsid in the background and capture the PID (compound group in one fragment).
+            // Keep the nested `sh -lc` for login-shell semantics.
             format!(r#"( setsid sh -lc '{inner_cmd_sq}' -- "$@" ) & pg=$!"#),
             r#"printf "%s\n" "$pg" > "$d/pgid" 2>/dev/null || true"#.to_string(),
             r#"wait "$pg"; rm -rf "$d" || true"#.to_string(),
