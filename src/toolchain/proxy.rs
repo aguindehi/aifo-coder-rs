@@ -494,6 +494,10 @@ fn build_exec_args_with_wrapper(
     //
     // IMPORTANT: We intentionally do not interpolate user args into this script.
     let prelude = exec_wrapper_env_prelude();
+    let inner_cmd = ShellScript::new()
+        .extend([prelude.clone(), r#"exec "$@" 2>&1"#.to_string()])
+        .build()
+        .unwrap_or_else(|_| r#"exec "$@""#.to_string());
 
     let script = ShellScript::new()
         .extend([
@@ -502,11 +506,9 @@ fn build_exec_args_with_wrapper(
             r#"if [ -z "$eid" ]; then exec "$@" 2>&1; fi"#.to_string(),
             r#"d="${HOME:-/home/coder}/.aifo-exec/${AIFO_EXEC_ID:-}""#.to_string(),
             r#"mkdir -p "$d" 2>/dev/null || { d="/tmp/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" || true; }"#.to_string(),
-            // NOTE: Keep the inner "sh -lc" but assemble the prelude as a validated single-line.
-            format!(
-                r#"( setsid sh -lc "{} exec \"\$@\" 2>&1" -- "$@" ) & pg=$!"#,
-                prelude
-            ),
+            // NOTE: Keep the nested `sh -lc` for login-shell semantics, but validate the embedded
+            // inner command with ShellScript to enforce the no-newlines invariant.
+            format!(r#"( setsid sh -lc "{}" -- "$@" ) & pg=$!"#, inner_cmd),
             r#"printf "%s\n" "$pg" > "$d/pgid" 2>/dev/null || true"#.to_string(),
             r#"wait "$pg"; rm -rf "$d" || true"#.to_string(),
         ])
