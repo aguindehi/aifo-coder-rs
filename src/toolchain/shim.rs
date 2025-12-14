@@ -111,7 +111,7 @@ fn build_posix_shim_script() -> io::Result<String> {
             "    fi".to_string(),
             r#"    CURL_ARGS="$CURL_ARGS --data-urlencode \"cmd=$tool\"""#.to_string(),
             r#"    for a in "$@"; do CURL_ARGS="$CURL_ARGS --data-urlencode \"arg=$a\""; done"#.to_string(),
-            r#"    if ! sh -c "exec curl $CURL_ARGS \"$URL\"" sh; then"#.to_string(),
+            r#"    if ! sh -c "exec curl $CURL_ARGS \"${URL}\"" sh; then"#.to_string(),
             r#"      : # body printed by curl on error as well"#.to_string(),
             "    fi".to_string(),
             r#"    ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)""#.to_string(),
