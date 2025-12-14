@@ -37,6 +37,14 @@ pub(crate) enum NotifyError {
 fn parse_notif_cfg() -> Result<NotifCfg, NotifyError> {
     // Reuse legacy tokenizer to obtain tokens; enforce new invariants on top.
     let tokens = parse_notifications_command_config().map_err(NotifyError::Policy)?;
+
+    for t in &tokens {
+        if t.contains('\n') || t.contains('\r') || t.contains('\0') {
+            return Err(NotifyError::Policy(
+                "invalid notifications-command: contains newline".to_string(),
+            ));
+        }
+    }
     if tokens.is_empty() {
         return Err(NotifyError::Policy(
             "notifications-command is empty".to_string(),

@@ -4,6 +4,7 @@ use std::process::Command;
 
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
+use crate::reject_newlines;
 
 /// Git Bash / mintty orchestrator.
 /// When exec_shell_tail is false, trims the trailing "; exec bash" from inner.
@@ -34,6 +35,7 @@ impl Orchestrator for GitBashMintty {
                     let cut = inner.len() - "; exec bash".len();
                     inner.truncate(cut);
                 }
+                reject_newlines(&inner, "Git Bash inner command")?;
                 let st = Command::new(&gb).arg("-c").arg(&inner).status();
                 match st {
                     Ok(s) if s.success() => {}
@@ -60,6 +62,7 @@ impl Orchestrator for GitBashMintty {
                 let cut = inner.len() - "; exec bash".len();
                 inner.truncate(cut);
             }
+            reject_newlines(&inner, "mintty inner command")?;
             let st = Command::new(&mt)
                 .arg("-e")
                 .arg("bash")

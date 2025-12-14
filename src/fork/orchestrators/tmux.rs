@@ -7,6 +7,7 @@ use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 use crate::fork::env;
 use crate::fork::inner;
+use aifo_coder::reject_newlines;
 
 /// tmux orchestrator (Unix): creates a session, splits panes, sets layout, and launches per-pane scripts.
 /// Waits for attach/switch to complete before returning (i.e., after user detaches).
@@ -109,10 +110,9 @@ impl Orchestrator for Tmux {
                 let _ = fs::set_permissions(&script_path, fs::Permissions::from_mode(0o700));
             }
             let target = format!("{}:0.{}", &session.session_name, idx);
-            let shwrap = format!(
-                "sh -lc {}",
-                aifo_coder::shell_escape(&script_path.display().to_string())
-            );
+            let script_arg = aifo_coder::shell_escape(&script_path.display().to_string());
+            let shwrap = format!("sh -lc {}", script_arg);
+            reject_newlines(&shwrap, "tmux sh -lc command")?;
             let _ = Command::new(&tmux)
                 .arg("send-keys")
                 .arg("-t")

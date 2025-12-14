@@ -4,9 +4,22 @@
 pub mod docker_security;
 pub mod fs;
 pub mod id;
+pub mod shell_file;
 pub mod shell_script;
 
+pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
+
+/// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
+///
+/// Keep error text stable (tests/UX depend on it).
+pub fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
+    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
+        Err(format!("refusing to execute {what}: contains newline"))
+    } else {
+        Ok(())
+    }
+}
 
 pub fn shell_join(args: &[String]) -> String {
     args.iter()

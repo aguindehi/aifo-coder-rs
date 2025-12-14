@@ -26,6 +26,14 @@ use std::process::ExitCode;
 use std::time::{Duration, SystemTime};
 
 use crate::banner::print_startup_banner;
+use aifo_coder::{shell_escape, ShellScript};
+
+fn build_sh(cmds: &[String]) -> String {
+    ShellScript::new()
+        .extend(cmds.iter().cloned())
+        .build()
+        .unwrap_or_else(|_| "false".to_string())
+}
 
 struct CursorGuard {
     hide: bool,
@@ -35,23 +43,42 @@ struct CursorGuard {
 /// These are small "hello world" style checks that compile or execute minimal code.
 fn pm_deep_cmd_for(kind: &str) -> Option<String> {
     match kind {
-        "rust" => Some(
-            "printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin && /tmp/aifo-support-rust-bin"
-                .to_string(),
-        ),
+        "rust" => {
+            let script = ShellScript::new()
+                .push("printf 'fn main() {}' | rustc - -o /tmp/aifo-support-rust-bin".to_string())
+                .push("/tmp/aifo-support-rust-bin".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
         "node" => Some("node -e 'process.exit(0)'".to_string()),
         "typescript" => Some(
-            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#.to_string(),
-        ),
-        "python" => Some("python3 - <<'EOF'\nimport sys\nsys.exit(0)\nEOF".to_string()),
-        "c-cpp" => Some(
-            "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c && /tmp/aifo-support-c"
+            r#"node -e "require('typescript'); process.exit(0)" 2>/dev/null || tsc --version"#
                 .to_string(),
         ),
-        "go" => Some(
-            "cat <<'EOF' >/tmp/aifo-support-go.go\npackage main\nfunc main() {}\nEOF\ngo run /tmp/aifo-support-go.go"
-                .to_string(),
-        ),
+        "python" => Some("python3 -c 'import sys; sys.exit(0)'".to_string()),
+        "c-cpp" => {
+            let script = ShellScript::new()
+                .push(
+                    "printf 'int main(){return 0;}' | cc -x c - -o /tmp/aifo-support-c".to_string(),
+                )
+                .push("/tmp/aifo-support-c".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
+        "go" => {
+            let src = "package main\nfunc main() {}\n";
+            let script = ShellScript::new()
+                .push(format!(
+                    "printf %s {} > /tmp/aifo-support-go.go",
+                    shell_escape(src)
+                ))
+                .push("go run /tmp/aifo-support-go.go".to_string())
+                .build()
+                .ok()?;
+            Some(script)
+        }
         _ => None,
     }
 }
@@ -69,9 +96,14 @@ fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
         "go" => "command -v go",
         _ => return None,
     };
-    Some(format!(
-        "export PATH=\"{pathv}\"; {tool_cmd} >/dev/null 2>&1"
-    ))
+
+    ShellScript::new()
+        .extend([
+            format!(r#"export PATH="{pathv}""#),
+            format!("{tool_cmd} >/dev/null 2>&1"),
+        ])
+        .build()
+        .ok()
 }
 impl CursorGuard {
     fn new(hide: bool) -> Self {
@@ -282,19 +314,27 @@ fn agent_path_for(agent: &str) -> &'static str {
 /// OpenHands may be installed in different venv prefixes across images; try both.
 fn agent_check_cmd(agent: &str) -> String {
     let pathv = agent_path_for(agent);
+
     match agent {
         "openhands" => {
             let a = "/opt/venv-openhands/bin/openhands";
             let b = "/opt/venv/bin/openhands";
-            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH; 3) Python package presence as offline fallback.
-            format!(
-                "export PATH=\"{pathv}\"; \
-                 if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v python3 >/dev/null 2>&1 && python3 -c \"import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('openhands') else 1)\" >/dev/null 2>&1; then exit 0; \
-                 else exit 1; fi"
-            )
+            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH;
+            // 3) Python package presence as offline fallback.
+            build_sh(&[
+                format!(r#"export PATH="{pathv}""#),
+                format!(
+                    r#"if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                format!(
+                    r#"if [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                r#"if command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; fi"#
+                    .to_string(),
+                r#"if command -v python3 >/dev/null 2>&1 && python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('openhands') else 1)" >/dev/null 2>&1; then exit 0; fi"#
+                    .to_string(),
+                "exit 1".to_string(),
+            ])
         }
         _ => {
             let abs = agent_cli_for(agent);
@@ -302,12 +342,16 @@ fn agent_check_cmd(agent: &str) -> String {
                 "aider" | "codex" | "crush" | "opencode" | "plandex" => agent,
                 _ => abs.rsplit('/').next().unwrap_or(agent),
             };
-            format!(
-                "export PATH=\"{pathv}\"; \
-                 if [ -x {abs} ]; then {abs} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v {base} >/dev/null 2>&1; then {base} --version >/dev/null 2>&1 || true; exit 0; \
-                 else exit 1; fi"
-            )
+            build_sh(&[
+                format!(r#"export PATH="{pathv}""#),
+                format!(
+                    r#"if [ -x {abs} ]; then {abs} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                format!(
+                    r#"if command -v {base} >/dev/null 2>&1; then {base} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                "exit 1".to_string(),
+            ])
         }
     }
 }
@@ -503,6 +547,11 @@ fn run_version_check(
         }
     }
 
+    let script = ShellScript::new()
+        .push(cmd.to_string())
+        .build()
+        .map_err(|e: std::io::Error| e.to_string())?;
+
     let mut child = Command::new(rt)
         .arg("run")
         .arg("--rm")
@@ -510,7 +559,7 @@ fn run_version_check(
         .arg("/bin/sh")
         .arg(image)
         .arg("-c")
-        .arg(cmd)
+        .arg(script)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

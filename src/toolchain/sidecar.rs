@@ -20,7 +20,7 @@ use nix::unistd::{getgid, getuid};
 
 use crate::apparmor::{desired_apparmor_profile, docker_supports_apparmor};
 use crate::ToolchainError;
-use crate::{container_runtime_path, shell_join};
+use crate::{container_runtime_path, shell_join, ShellScript};
 
 use super::env::{
     apply_passthrough_envs, apply_rust_common_env, apply_rust_linker_flags_if_set, push_env,
@@ -358,24 +358,20 @@ pub fn build_sidecar_run_preview_with_overrides(
             // run pnpm install using the shared /workspace/.pnpm-store. This keeps native
             // artifacts per-OS while reusing the content-addressable store.
             let sentinel = "/workspace/node_modules/.aifo-node-overlay";
-            let mut bootstrap = String::from(
-                "set -e; d=\"/workspace/node_modules\"; s=\"/workspace/pnpm-lock.yaml\"; \
-if [ ! -d \"$d\" ] || [ -z \"$(ls -A \"$d\" 2>/dev/null || true)\" ]; then \
-  mkdir -p \"$d\"; \
-  if [ -f \"$s\" ]; then \
-    if command -v pnpm >/dev/null 2>&1; then \
-      echo \"aifo-coder: node sidecar: bootstrapping node_modules via pnpm install --frozen-lockfile\" >&2; \
-      PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
-    else \
-      echo \"aifo-coder: warning: pnpm not found in node toolchain image; skipping automatic install\" >&2; \
-    fi; \
-  fi; \
-fi; \
-if [ ! -f \"");
-            bootstrap.push_str(sentinel);
-            bootstrap.push_str("\" ]; then printf '%s\\n' 'overlay' > \"");
-            bootstrap.push_str(sentinel);
-            bootstrap.push_str("\" || true; fi; exec \"$@\"");
+            let bootstrap = ShellScript::new()
+                .extend([
+                    "set -e".to_string(),
+                    r#"d="/workspace/node_modules""#.to_string(),
+                    r#"s="/workspace/pnpm-lock.yaml""#.to_string(),
+                    r#"if [ ! -d "$d" ] || [ -z "$(ls -A "$d" 2>/dev/null || true)" ]; then mkdir -p "$d"; if [ -f "$s" ]; then if command -v pnpm >/dev/null 2>&1; then echo "aifo-coder: node sidecar: bootstrapping node_modules via pnpm install --frozen-lockfile" >&2; PNPM_STORE_PATH="${PNPM_STORE_PATH:-/workspace/.pnpm-store}" pnpm install --frozen-lockfile || true; else echo "aifo-coder: warning: pnpm not found in node toolchain image; skipping automatic install" >&2; fi; fi; fi"#.to_string(),
+                    format!(
+                        r#"if [ ! -f "{s}" ]; then printf '%s\n' 'overlay' > "{s}" || true; fi"#,
+                        s = sentinel
+                    ),
+                    r#"exec "$@""#.to_string(),
+                ])
+                .build()
+                .unwrap_or_else(|_| r#"exec "$@""#.to_string());
             push_env(&mut args, "AIFO_NODE_OVERLAY_BOOTSTRAP", &bootstrap);
         }
         "python" => {
@@ -486,32 +482,24 @@ fn node_overlay_state_and_guard(
 ) -> io::Result<bool> {
     let use_err = crate::color_enabled_stderr();
     let mut cmd = Command::new(runtime);
+    let script = ShellScript::new()
+        .extend([
+            "set -e".to_string(),
+            r#"wd="/workspace""#.to_string(),
+            r#"nd="/workspace/node_modules""#.to_string(),
+            r#"s="/workspace/node_modules/.aifo-node-overlay""#.to_string(),
+            r#"if [ ! -d "$nd" ]; then echo "error:overlay-missing"; exit 0; fi"#.to_string(),
+            r#"if [ -f "$s" ]; then if [ "$(stat -c '%d:%i' "$wd" 2>/dev/null || echo '?')" = "$(stat -c '%d:%i' "$nd" 2>/dev/null || echo '!')" ]; then echo "error:overlay-device-mismatch"; exit 0; fi; fi"#.to_string(),
+            r#"if find "$nd" -mindepth 1 -maxdepth 1 ! -name '.*' | head -n 1 | grep -q .; then echo "nonempty"; else echo "empty"; fi"#.to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| "echo error:overlay-missing".to_string());
+
     cmd.arg("exec")
         .arg(container_name)
         .arg("sh")
         .arg("-lc")
-        .arg(
-            "set -e; \
-             wd=\"/workspace\"; \
-             nd=\"/workspace/node_modules\"; \
-             s=\"/workspace/node_modules/.aifo-node-overlay\"; \
-             if [ ! -d \"$nd\" ]; then \
-               echo \"error:overlay-missing\"; \
-               exit 0; \
-             fi; \
-             if [ -f \"$s\" ]; then \
-               if [ \"$(stat -c '%d:%i' \"$wd\" 2>/dev/null || echo '?')\" \
-                    = \"$(stat -c '%d:%i' \"$nd\" 2>/dev/null || echo '!')\" ]; then \
-                 echo \"error:overlay-device-mismatch\"; \
-                 exit 0; \
-               fi; \
-             fi; \
-             if find \"$nd\" -mindepth 1 -maxdepth 1 ! -name '.*' | head -n 1 | grep -q .; then \
-               echo \"nonempty\"; \
-             else \
-               echo \"empty\"; \
-             fi",
-        )
+        .arg(script)
         .stdout(Stdio::piped())
         .stderr(if verbose {
             Stdio::inherit()
@@ -553,34 +541,25 @@ fn ensure_node_overlay_and_install(
 ) -> io::Result<()> {
     let use_err = crate::color_enabled_stderr();
     let mut cmd = Command::new(runtime);
+    let script = ShellScript::new()
+        .extend([
+            "set -e".to_string(),
+            r#"d="/workspace/node_modules""#.to_string(),
+            r#"s="/workspace/node_modules/.aifo-node-overlay""#.to_string(),
+            r#"lock="/workspace/pnpm-lock.yaml""#.to_string(),
+            r#"hash_file="/workspace/node_modules/.aifo-pnpm-lock.hash""#.to_string(),
+            r#"mkdir -p "$d""#.to_string(),
+            r#"if [ -f "$lock" ] && command -v sha256sum >/dev/null 2>&1; then new_hash="$(sha256sum "$lock" 2>/dev/null | awk '{print $1}')"; old_hash=""; if [ -f "$hash_file" ]; then old_hash="$(cat "$hash_file" 2>/dev/null || echo '')"; fi; if [ "$new_hash" != "$old_hash" ] && command -v pnpm >/dev/null 2>&1; then echo "aifo-coder: node sidecar: pnpm-lock.yaml changed; running pnpm install --frozen-lockfile" >&2; PNPM_STORE_PATH="${PNPM_STORE_PATH:-/workspace/.pnpm-store}" pnpm install --frozen-lockfile || true; printf '%s\n' "$new_hash" >"$hash_file" 2>/dev/null || true; fi; elif [ -f "$lock" ] && command -v pnpm >/dev/null 2>&1; then echo "aifo-coder: node sidecar: ensuring node_modules via pnpm install --frozen-lockfile" >&2; PNPM_STORE_PATH="${PNPM_STORE_PATH:-/workspace/.pnpm-store}" pnpm install --frozen-lockfile || true; fi"#.to_string(),
+            r#"if [ ! -f "$s" ]; then printf '%s\n' 'overlay' > "$s" || true; fi"#.to_string(),
+        ])
+        .build()
+        .unwrap_or_else(|_| "true".to_string());
+
     cmd.arg("exec")
         .arg(container_name)
         .arg("sh")
         .arg("-lc")
-        .arg(
-            "set -e; \
-             d=\"/workspace/node_modules\"; \
-             s=\"/workspace/node_modules/.aifo-node-overlay\"; \
-             lock=\"/workspace/pnpm-lock.yaml\"; \
-             hash_file=\"/workspace/node_modules/.aifo-pnpm-lock.hash\"; \
-             mkdir -p \"$d\"; \
-             if [ -f \"$lock\" ] && command -v sha256sum >/dev/null 2>&1; then \
-               new_hash=\"$(sha256sum \"$lock\" 2>/dev/null | awk '{print $1}')\"; \
-               old_hash=\"\"; \
-               if [ -f \"$hash_file\" ]; then \
-                 old_hash=\"$(cat \"$hash_file\" 2>/dev/null || echo '')\"; \
-               fi; \
-               if [ \"$new_hash\" != \"$old_hash\" ] && command -v pnpm >/dev/null 2>&1; then \
-                 echo \"aifo-coder: node sidecar: pnpm-lock.yaml changed; running pnpm install --frozen-lockfile\" >&2; \
-                 PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
-                 printf '%s\\n' \"$new_hash\" >\"$hash_file\" 2>/dev/null || true; \
-               fi; \
-             elif [ -f \"$lock\" ] && command -v pnpm >/dev/null 2>&1; then \
-               echo \"aifo-coder: node sidecar: ensuring node_modules via pnpm install --frozen-lockfile\" >&2; \
-               PNPM_STORE_PATH=\"${PNPM_STORE_PATH:-/workspace/.pnpm-store}\" pnpm install --frozen-lockfile || true; \
-             fi; \
-             if [ ! -f \"$s\" ]; then printf '%s\\n' 'overlay' > \"$s\" || true; fi",
-        )
+        .arg(script)
         .stdout(if verbose {
             Stdio::inherit()
         } else {
@@ -779,23 +758,26 @@ pub(crate) fn build_sidecar_exec_preview_with_exec_id(
             .as_deref()
             == Some("1");
     if use_bootstrap {
-        let bootstrap = "set -e; if [ \"${AIFO_TOOLCHAIN_VERBOSE:-}\" = \"1\" ]; then set -x; fi; \
-mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true; \
-T=\"${AIFO_RUST_BOOTSTRAP_TIMEOUT:-180}\"; \
-NEEDS_NEXTEST=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && [ \"$2\" = \"nextest\" ]; then NEEDS_NEXTEST=1; fi; \
-if [ \"$NEEDS_NEXTEST\" = \"1\" ]; then \
-  cargo nextest -V >/dev/null 2>&1 \
-  || env CARGO_HOME=/home/coder/.cargo timeout \"$T\" cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
-  cargo nextest -V >/dev/null 2>&1 \
-  || timeout \"$T\" cargo install --root /usr/local/cargo cargo-nextest --locked >/dev/null 2>&1 || true; \
-fi; \
-NEEDS_CLIPPY=0; if [ \"$#\" -ge 2 ] && [ \"$1\" = \"cargo\" ] && { [ \"$2\" = \"clippy\" ] || [ \"$2\" = \"fmt\" ] || [ \"$2\" = \"fix\" ]; }; then NEEDS_CLIPPY=1; fi; \
-if [ \"$NEEDS_CLIPPY\" = \"1\" ]; then timeout \"$T\" rustup component add clippy rustfmt >/dev/null 2>&1 || true; fi; \
-if [ \"${AIFO_RUST_SCCACHE:-}\" = \"1\" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi; \
-exec \"$@\"";
+        let bootstrap = ShellScript::new()
+            .extend([
+                r#"set -e"#.to_string(),
+                r#"if [ "${AIFO_TOOLCHAIN_VERBOSE:-}" = "1" ]; then set -x; fi"#.to_string(),
+                r#"mkdir -p /home/coder/.cargo/bin >/dev/null 2>&1 || true"#.to_string(),
+                r#"T="${AIFO_RUST_BOOTSTRAP_TIMEOUT:-180}""#.to_string(),
+                r#"NEEDS_NEXTEST=0"#.to_string(),
+                r#"if [ "$#" -ge 2 ] && [ "$1" = "cargo" ] && [ "$2" = "nextest" ]; then NEEDS_NEXTEST=1; fi"#.to_string(),
+                r#"if [ "$NEEDS_NEXTEST" = "1" ]; then cargo nextest -V >/dev/null 2>&1 || env CARGO_HOME=/home/coder/.cargo timeout "$T" cargo install cargo-nextest --locked >/dev/null 2>&1 || true; cargo nextest -V >/dev/null 2>&1 || timeout "$T" cargo install --root /usr/local/cargo cargo-nextest --locked >/dev/null 2>&1 || true; fi"#.to_string(),
+                r#"NEEDS_CLIPPY=0"#.to_string(),
+                r#"if [ "$#" -ge 2 ] && [ "$1" = "cargo" ] && { [ "$2" = "clippy" ] || [ "$2" = "fmt" ] || [ "$2" = "fix" ]; }; then NEEDS_CLIPPY=1; fi"#.to_string(),
+                r#"if [ "$NEEDS_CLIPPY" = "1" ]; then timeout "$T" rustup component add clippy rustfmt >/dev/null 2>&1 || true; fi"#.to_string(),
+                r#"if [ "${AIFO_RUST_SCCACHE:-}" = "1" ] && ! command -v sccache >/dev/null 2>&1; then echo 'warning: sccache requested but not installed; install it inside the container or use aifo-coder-toolchain-rust image with sccache' >&2; fi"#.to_string(),
+                r#"exec "$@""#.to_string(),
+            ])
+            .build()
+            .unwrap_or_else(|_| r#"exec "$@""#.to_string());
         args.push("sh".to_string());
         args.push("-c".to_string());
-        args.push(bootstrap.to_string());
+        args.push(bootstrap);
         // Name for $0, subsequent args become "$@"
         args.push("aifo-exec".to_string());
         for a in user_args {

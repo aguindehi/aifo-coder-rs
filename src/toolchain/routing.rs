@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use super::sidecar::sidecar_container_name;
-use crate::container_runtime_path;
+use crate::{container_runtime_path, shell_escape, ShellScript};
 
 #[cfg(unix)]
 use wait_timeout::ChildExt as _;
@@ -172,12 +172,18 @@ fn tool_available_in(name: &str, tool: &str, timeout_secs: u64) -> bool {
     // Keep a small default when no global timeout is configured, so we can cache availability.
     let probe_secs = if timeout_secs == 0 { 2 } else { timeout_secs };
 
+    let tool_q = shell_escape(tool);
+    let script = ShellScript::new()
+        .push(format!("command -v -- {tool_q} >/dev/null 2>&1"))
+        .build()
+        .unwrap_or_else(|_| "false".to_string());
+
     let mut child = match Command::new(&runtime)
         .arg("exec")
         .arg(name)
         .arg("/bin/sh")
         .arg("-c")
-        .arg(format!("command -v {} >/dev/null 2>&1", tool))
+        .arg(script)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

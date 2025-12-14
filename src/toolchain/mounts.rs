@@ -7,7 +7,7 @@ Mounts and ownership initialization for sidecars.
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use crate::shell_join;
+use crate::{shell_escape, shell_join, ShellScript};
 
 /// Push a volume mount (-v host:container) into docker args.
 pub(crate) fn push_mount(args: &mut Vec<String>, spec: &str) {
@@ -27,16 +27,30 @@ fn init_named_volume_with_stamp(
     let use_err = crate::color_enabled_stderr();
 
     // dir_in_container is constant for our use-cases; keep script fixed-shape to avoid injection.
-    let script = format!(
-        "set -e; d={d}; \
-         if [ -f \"$d/.aifo-init-done\" ]; then exit 0; fi; \
-         mkdir -p \"$d\"; \
-         chown -R {uid}:{gid} \"$d\" || true; \
-         printf '%s\\n' '{uid}:{gid}' > \"$d/.aifo-init-done\" || true",
-        d = crate::shell_escape(dir_in_container),
-        uid = uid,
-        gid = gid
-    );
+    let mut sh = ShellScript::new();
+    sh.push("set -e".to_string());
+    sh.push(format!("d={}", shell_escape(dir_in_container)));
+    sh.push(r#"if [ -f "$d/.aifo-init-done" ]; then exit 0; fi"#.to_string());
+    sh.push(r#"mkdir -p "$d""#.to_string());
+    sh.push(format!(r#"chown -R {uid}:{gid} "$d" || true"#));
+    sh.push(format!(
+        r#"printf '%s\n' '{uid}:{gid}' > "$d/.aifo-init-done" || true"#
+    ));
+    let script = match sh.build() {
+        Ok(s) => s,
+        Err(e) => {
+            if verbose {
+                crate::log_warn_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: warning: refusing to run invalid shell init script: {}",
+                        e
+                    ),
+                );
+            }
+            return;
+        }
+    };
 
     let args: Vec<String> = vec![
         "docker".into(),

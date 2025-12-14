@@ -245,28 +245,45 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         r#"mkdir -p "$HOME" "$GNUPGHOME""#.to_string(),
         r#"chmod 700 "$HOME" "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
         r#"chown "$uid:$gid" "$HOME" 2>/dev/null || true"#.to_string(),
-        r#"if (command -v getent >/dev/null 2>&1 && ! getent passwd "$uid" >/dev/null 2>&1) || (! command -v getent >/dev/null 2>&1 && ! grep -q "^[^:]*:[^:]*:$uid:" /etc/passwd); then mkdir -p "$HOME/.nss_wrapper"; PASSWD_FILE="$HOME/.nss_wrapper/passwd"; GROUP_FILE="$HOME/.nss_wrapper/group"; echo "coder:x:${uid}:${gid}:,,,:$HOME:/bin/sh" > "$PASSWD_FILE"; echo "coder:x:${gid}:" > "$GROUP_FILE"; for so in /usr/lib/*/libnss_wrapper.so /usr/lib/*/libnss_wrapper.so.* /usr/lib/libnss_wrapper.so /lib/*/libnss_wrapper.so /lib/*/libnss_wrapper.so.*; do if [ -f "$so" ]; then export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$so"; break; fi; done; export NSS_WRAPPER_PASSWD="$PASSWD_FILE" NSS_WRAPPER_GROUP="$GROUP_FILE" USER="coder" LOGNAME="coder"; fi"#.to_string(),
+        // nss_wrapper: create a passwd/group entry for arbitrary uid to avoid surprises in tools.
+        //
+        // NOTE: ShellScript joins fragments with `; `. Avoid splitting compound shell constructs
+        // (if/then/fi, for/do/done, etc.) across fragments, or the inserted separators can
+        // produce invalid shell syntax (e.g. `then; ...`).
+        r#"have_getent=0; command -v getent >/dev/null 2>&1 && have_getent=1"#.to_string(),
+        r#"need_user=0"#.to_string(),
+        r#"if [ "$have_getent" = "1" ]; then getent passwd "$uid" >/dev/null 2>&1 || need_user=1; else grep -q "^[^:]*:[^:]*:$uid:" /etc/passwd || need_user=1; fi"#.to_string(),
+        // Keep this nss_wrapper block as a single fragment (compound if/then/fi).
+        r#"if [ "$need_user" = "1" ]; then mkdir -p "$HOME/.nss_wrapper"; PASSWD_FILE="$HOME/.nss_wrapper/passwd"; GROUP_FILE="$HOME/.nss_wrapper/group"; echo "coder:x:${uid}:${gid}:,,,:$HOME:/bin/sh" > "$PASSWD_FILE"; echo "coder:x:${gid}:" > "$GROUP_FILE"; for so in /usr/lib/*/libnss_wrapper.so /usr/lib/*/libnss_wrapper.so.* /usr/lib/libnss_wrapper.so /lib/*/libnss_wrapper.so /lib/*/libnss_wrapper.so.*; do if [ -f "$so" ]; then export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$so"; break; fi; done; export NSS_WRAPPER_PASSWD="$PASSWD_FILE" NSS_WRAPPER_GROUP="$GROUP_FILE" USER="coder" LOGNAME="coder"; fi"#.to_string(),
+        // XDG_RUNTIME_DIR init: keep as a single fragment (compound if/then/fi).
         r#"if [ -n "${XDG_RUNTIME_DIR:-}" ]; then mkdir -p "$XDG_RUNTIME_DIR/gnupg" || true; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true; fi"#.to_string(),
         r#"mkdir -p "$HOME/.aifo-logs" || true"#.to_string(),
         r#"if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="$(tty 2>/dev/null || echo /dev/tty)"; fi"#.to_string(),
+        // gpg-agent.conf edits: keep sequential edits split into atomic pushes for maintainability
         r#"touch "$GNUPGHOME/gpg-agent.conf""#.to_string(),
         r#"sed_port -e "/^pinentry-program /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"sed_port -e "/^log-file /d" -e "/^debug-level /d" -e "/^verbose$/d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"echo "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"echo "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "default-cache-ttl 7200" >> "$GNUPGHGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"printf '%s\n' "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#
+            .to_string(),
+        r#"sed_port -e "/^log-file /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
+        r#"sed_port -e "/^debug-level /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
+        r#"sed_port -e "/^verbose$/d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
+        r#"printf '%s\n' "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#
+            .to_string(),
+        r#"printf '%s\n' "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"printf '%s\n' "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
+        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
+        // Host keyring copy loop: keep as one fragment (compound for/do/done).
         r#"for item in private-keys-v1.d openpgp-revocs.d pubring.kbx trustdb.gpg gpg.conf; do if [ ! -e "$GNUPGHOME/$item" ] && [ -e "/home/coder/.gnupg-host/$item" ]; then cp -a "/home/coder/.gnupg-host/$item" "$GNUPGHOME/" 2>/dev/null || true; fi; done"#.to_string(),
+        // gpg.conf edits (sequential, safe to split)
         r#"touch "$GNUPGHOME/gpg.conf""#.to_string(),
         r#"sed_port -e "/^pinentry-mode /d" "$GNUPGHOME/gpg.conf" 2>/dev/null || true"#.to_string(),
-        r#"echo "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
+        r#"printf '%s\n' "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
         r#"chmod -R go-rwx "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
         r#"unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true"#.to_string(),
         r#"gpgconf --launch gpg-agent >/dev/null 2>&1 || true"#.to_string(),
-        r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup sh -c "tail -n0 -F /var/log/host/apparmor.log >> \"$HOME/.aifo-logs/apparmor.log\" 2>&1" >/dev/null 2>&1 &); fi"#.to_string(),
+        r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup tail -n0 -F /var/log/host/apparmor.log >> "$HOME/.aifo-logs/apparmor.log" 2>&1 </dev/null >/dev/null 2>&1 &); fi"#.to_string(),
         r#"/usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true"#.to_string(),
         format!("exec {agent_joined}"),
     ]);
@@ -941,16 +958,8 @@ pub fn build_docker_preview_only(
     preview_args.push("/bin/sh".to_string());
     preview_args.push("-c".to_string());
 
-    let sh_cmd = format!(
-        "set -e; umask 077; \
-         if [ \"${{AIFO_AGENT_IGNORE_SIGINT:-0}}\" = \"1\" ]; then trap '' INT; fi; \
-         export PATH=\"{path_value}\"; sed_port(){{ if [ \"${{AIFO_SED_PORTABLE:-1}}\" = \"1\" ]; then sed -i'' \"$@\"; else sed -i \"$@\"; fi; }}; \
-         uid=\"$(id -u)\"; gid=\"$(id -g)\"; \
-         mkdir -p \"$HOME\" \"$GNUPGHOME\"; chmod 700 \"$HOME\" \"$GNUPGHOME\" 2>/dev/null || true; chown \"$uid:$gid\" \"$HOME\" 2>/dev/null || true; \
-         unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; \
-         /usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true; \
-         exec {agent_joined}"
-    );
+    let sh_cmd = build_container_sh_cmd(&path_value, &agent_joined)
+        .unwrap_or_else(|_| format!("exec {agent_joined}"));
     preview_args.push(sh_cmd);
 
     preview_args
@@ -1123,12 +1132,13 @@ pub fn build_docker_cmd(
     // Use the image passed in exactly; do not rewrite an explicit CLI override here.
     // Defaults and local :latest preferences are handled upstream in main.rs when --image is not provided.
     let effective_image = image.to_string();
-    // Pre-pull image and auto-login on permission denied (interactive)
+    // Pre-pull image and auto-login on permission denied (interactive).
+    let pull_verbose = env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
     if !image_exists(runtime.as_path(), &effective_image) {
         let _ = crate::docker_mod::docker::staging::pull_image_with_autologin(
             runtime.as_path(),
             &effective_image,
-            false,
+            pull_verbose,
             Some(agent),
         );
     }

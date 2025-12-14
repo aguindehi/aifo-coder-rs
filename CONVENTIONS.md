@@ -110,39 +110,92 @@ these are transient and specification / plan dependant.
 
 # Recommended project-wide standard
 
+This section is written for both humans and LLM/Coding Agents. Follow these
+rules to keep shell behavior correct, portable and safe.
+
 1) Never build executable shell scripts from multi-line string literals
 
-Rule: any string that will be executed by /bin/sh -c, bash -c, cmd /c, PowerShell, etc. must be assembled from atomic fragments
-and joined.
+Rule: any string that will be executed by /bin/sh -c, bash -c, cmd /c, PowerShell,
+etc. must be assembled from atomic fragments and joined.
 
 This prevents Rust source formatting from changing runtime behavior.
 
-2) Use the small utility: “ShellScript builder”
+2) When to use which builder
 
-Use the reusable helper "ShellScript" (from src/util/mod.rs) like:
+- Use ShellScript (src/util/shell_script.rs) when the string will be executed via
+  sh -c (e.g., docker exec … sh -c, sh -lc).
+- Use ShellFile (src/util/shell_file.rs) when writing a script file that will be
+  executed later (e.g., launch.sh, wrappers, entrypoints).
+
+3) ShellScript builder (single-line control scripts)
+
+Use the reusable helper “ShellScript” like:
 
  • ShellScript::new()
  • push(cmd: impl Into<String>)
  • extend([...])
- • build() → returns a single-line string joined with ;
- • validates: rejects \n, \r, and optionally \0
+ • build() → returns a single-line string joined with “; ”
+ • validates: rejects \n, \r and \0 in every fragment
 
-Then standardize on:
+LLM/Coding-Agent rules:
 
- • Each push() is one logical command (no embedded newlines).
- • Use ; joining by default (portable, safe).
- • For rare cases where newlines are intended, make that explicit (e.g. build_multiline()), but default should be single-line.
+- Each push()/fragment is one logical command with no embedded newlines.
+- The builder joins fragments with “; ”, so never split compound constructs across
+  fragments. Keep each of these in a SINGLE fragment:
+  • if/then/elif/fi
+  • for/do/done
+  • case/esac
+  • { … } or ( … )
+- Prefer single-line constructs for compounds, for example:
+  if cond; then do_x; elif other; then do_y; else do_z; fi
+- Do not interpolate user-provided argv into the ShellScript text. Instead pass
+  argv as positional parameters and use: exec "$@" inside the script.
 
-3) Make “no embedded newlines” a checked invariant
+4) ShellFile builder (multi-line scripts written to disk)
 
-We enforce it in the builder:
+Use “ShellFile” when you intend to write a script file:
 
- • In debug: debug_assert!(!contains_newline)
- • In release: return an error (io::Error or a project error) when a newline is present
+ • ShellFile::new()
+ • push(line: impl Into<String>) → one logical line (no embedded \n/\r/\0)
+ • extend([...])
+ • build() → joins with “\n” and ensures a trailing newline
+
+Guidance:
+
+- It is OK (and preferred) to keep compound constructs readable over multiple
+  lines with ShellFile.
+- Preserve the same safety rules for user input: do not inline untrusted argv
+  into control structures; pass via "$@" or validated/env values.
+
+5) Make “no embedded newlines” a checked invariant
+
+We enforce it in the builders:
+
+ • In debug: debug_assert! that fragments/lines have no newlines.
+ • In release: return an io::Error when a newline or NUL is present.
 
 This turns silent regressions into immediate failures with a clear message.
 
-4) Centralize quoting rules
+6) Centralize quoting rules
 
-We have shell_escape and shell_join. The builder should be used only for the control script; user args should still go
-through shell_join/shell_escape. Keeping those responsibilities separate avoids injection bugs.
+We have shell_escape and shell_join. The builder should be used only for the
+control script; user args should still go through shell_join/shell_escape when
+needed for logging or previews. Keeping those responsibilities separate avoids
+injection bugs.
+
+7) Common failure mode to avoid (dash syntax errors)
+
+Bad (split across fragments, becomes “then; …” due to “; ” joiner):
+- push("if cond"); push("then"); push("do_x"); push("fi")
+
+Good (single fragment):
+- push("if cond; then do_x; fi")
+
+8) Quick decision checklist (LLM-friendly)
+
+- Will this run via sh -c? → Use ShellScript.
+- Will this be written to disk and executed later? → Use ShellFile.
+- Does a fragment end with control keywords (then, do, {, case)? → Do NOT split
+  the construct; keep it in a single ShellScript fragment.
+- Any user input involved? → Do NOT embed in control script text; pass via "$@"
+  and/or validated env, and use shell_escape/shell_join only for logs or previews.

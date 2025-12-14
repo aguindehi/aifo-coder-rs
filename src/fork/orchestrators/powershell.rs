@@ -5,6 +5,7 @@ use std::process::Command;
 
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
+use crate::reject_newlines;
 
 /// PowerShell orchestrator: opens one window per pane using Start-Process.
 /// When `wait` is true, waits for all spawned PIDs to exit before returning.
@@ -35,6 +36,7 @@ impl Orchestrator for PowerShell {
                 &p.state_dir,
                 child_args,
             );
+            reject_newlines(&inner, "PowerShell inner command")?;
             let wd = quote_ps(&p.dir);
             let child = quote_ps(&ps_path);
             let inner_q = quote_literal(&inner);
@@ -51,6 +53,7 @@ impl Orchestrator for PowerShell {
                 arglist = arglist,
                 inner = inner_q
             );
+            reject_newlines(&script, "PowerShell Start-Process script")?;
             let out = Command::new(&ps_path)
                 .arg("-NoProfile")
                 .arg("-Command")
