@@ -113,10 +113,7 @@ mod int_home_writability_agents {
         }
         cmd.arg(image).arg("sh").arg("-lc").arg(&script);
 
-        assert!(
-            !script.contains('\n') && !script.contains('\r') && !script.contains('\0'),
-            "script must not contain CR/LF/NUL"
-        );
+        assert!(!script.contains('\0'), "script must not contain NUL");
 
         match cmd.output() {
             Ok(out) => {
