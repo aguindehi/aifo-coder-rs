@@ -432,6 +432,8 @@ fn disconnect_terminate_exec_in_container(
 }
 
 fn exec_wrapper_env_prelude() -> String {
+    // IMPORTANT: ShellScript joins fragments with `; `. Keep compound constructs in a single fragment
+    // (if/then/elif/fi), otherwise dash can error with `then;` / `elif;`.
     ShellScript::new()
         .extend([
             "set -e".to_string(),
@@ -440,17 +442,7 @@ fn exec_wrapper_env_prelude() -> String {
             "export RUSTUP_NO_UPDATE_CHECK=1".to_string(),
             "export RUSTUP_SELF_UPDATE=0".to_string(),
             "export RUSTUP_USE_CURL=1".to_string(),
-            r#"if [ -f /workspace/corp-ca.crt ]; then"#.to_string(),
-            "  export SSL_CERT_FILE=/workspace/corp-ca.crt".to_string(),
-            "  export CURL_CA_BUNDLE=/workspace/corp-ca.crt".to_string(),
-            "  export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt".to_string(),
-            "  export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt".to_string(),
-            r#"elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then"#.to_string(),
-            "  export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
-            "  export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
-            "  export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
-            "  export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt".to_string(),
-            "fi".to_string(),
+            r#"if [ -f /workspace/corp-ca.crt ]; then export SSL_CERT_FILE=/workspace/corp-ca.crt; export CURL_CA_BUNDLE=/workspace/corp-ca.crt; export CARGO_HTTP_CAINFO=/workspace/corp-ca.crt; export REQUESTS_CA_BUNDLE=/workspace/corp-ca.crt; elif [ -f /etc/ssl/certs/aifo-corp-ca.crt ]; then export SSL_CERT_FILE=/etc/ssl/certs/aifo-corp-ca.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/aifo-corp-ca.crt; export REQUESTS_CA_BUNDLE=/etc/ssl/certs/aifo-corp-ca.crt; fi"#.to_string(),
         ])
         .build()
         .unwrap_or_else(|_| "set -e".to_string())
