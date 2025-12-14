@@ -5,6 +5,14 @@ use std::process::Command;
 use super::super::types::{ForkSession, Pane};
 use super::Orchestrator;
 
+fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
+    if s.contains('\n') || s.contains('\r') || s.contains('\0') {
+        Err(format!("refusing to execute {what}: contains newline"))
+    } else {
+        Ok(())
+    }
+}
+
 /// Windows Terminal orchestrator (non-waitable).
 pub struct WindowsTerminal;
 
@@ -35,6 +43,7 @@ impl Orchestrator for WindowsTerminal {
                 &first.state_dir,
                 child_args,
             );
+            reject_newlines(&inner, "Windows Terminal inner command (new-tab)")?;
             let args = aifo_coder::wt_build_new_tab_args(&psbin, &first.dir, &inner);
             let mut cmd = Command::new(&wt_path);
             for a in args.iter().skip(1) {
@@ -58,6 +67,7 @@ impl Orchestrator for WindowsTerminal {
                 &p.state_dir,
                 child_args,
             );
+            reject_newlines(&inner, "Windows Terminal inner command (split-pane)")?;
             let orient = aifo_coder::wt_orient_for_layout(&session.layout, p.index);
             let args = aifo_coder::wt_build_split_args(orient, &psbin, &p.dir, &inner);
             let mut cmd = Command::new(&wt_path);

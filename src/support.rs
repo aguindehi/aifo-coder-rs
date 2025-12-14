@@ -28,6 +28,13 @@ use std::time::{Duration, SystemTime};
 use crate::banner::print_startup_banner;
 use aifo_coder::{shell_escape, ShellScript};
 
+fn build_sh(cmds: &[String]) -> String {
+    ShellScript::new()
+        .extend(cmds.iter().cloned())
+        .build()
+        .unwrap_or_else(|_| "false".to_string())
+}
+
 struct CursorGuard {
     hide: bool,
 }
@@ -307,19 +314,27 @@ fn agent_path_for(agent: &str) -> &'static str {
 /// OpenHands may be installed in different venv prefixes across images; try both.
 fn agent_check_cmd(agent: &str) -> String {
     let pathv = agent_path_for(agent);
+
     match agent {
         "openhands" => {
             let a = "/opt/venv-openhands/bin/openhands";
             let b = "/opt/venv/bin/openhands";
-            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH; 3) Python package presence as offline fallback.
-            format!(
-                "export PATH=\"{pathv}\"; \
-                 if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v python3 >/dev/null 2>&1 && python3 -c \"import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('openhands') else 1)\" >/dev/null 2>&1; then exit 0; \
-                 else exit 1; fi"
-            )
+            // 1) Prefer absolute a, then b; 2) fallback to basename on PATH;
+            // 3) Python package presence as offline fallback.
+            build_sh(&[
+                format!(r#"export PATH="{pathv}""#),
+                format!(
+                    r#"if [ -x {a} ]; then {a} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                format!(
+                    r#"if [ -x {b} ]; then {b} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                r#"if command -v openhands >/dev/null 2>&1; then openhands --version >/dev/null 2>&1 || true; exit 0; fi"#
+                    .to_string(),
+                r#"if command -v python3 >/dev/null 2>&1 && python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('openhands') else 1)" >/dev/null 2>&1; then exit 0; fi"#
+                    .to_string(),
+                "exit 1".to_string(),
+            ])
         }
         _ => {
             let abs = agent_cli_for(agent);
@@ -327,12 +342,16 @@ fn agent_check_cmd(agent: &str) -> String {
                 "aider" | "codex" | "crush" | "opencode" | "plandex" => agent,
                 _ => abs.rsplit('/').next().unwrap_or(agent),
             };
-            format!(
-                "export PATH=\"{pathv}\"; \
-                 if [ -x {abs} ]; then {abs} --version >/dev/null 2>&1 || true; exit 0; \
-                 elif command -v {base} >/dev/null 2>&1; then {base} --version >/dev/null 2>&1 || true; exit 0; \
-                 else exit 1; fi"
-            )
+            build_sh(&[
+                format!(r#"export PATH="{pathv}""#),
+                format!(
+                    r#"if [ -x {abs} ]; then {abs} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                format!(
+                    r#"if command -v {base} >/dev/null 2>&1; then {base} --version >/dev/null 2>&1 || true; exit 0; fi"#
+                ),
+                "exit 1".to_string(),
+            ])
         }
     }
 }
