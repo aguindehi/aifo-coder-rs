@@ -132,7 +132,7 @@ pub fn build_tmux_launch_script(
     pane_state_dir: &Path,
     child_args_joined: &str,
     _launcher_path: &str,
-) -> String {
+) -> std::io::Result<String> {
     let mut exports: Vec<String> = Vec::new();
     for (k, v) in super::env::fork_env_for_pane(sid, pane_index, container_name, pane_state_dir) {
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
@@ -170,7 +170,6 @@ pub fn build_tmux_launch_script(
         .push(r#"  exit "$st""#.to_string())
         .push("fi".to_string())
         .build()
-        .unwrap_or_else(|_| String::new())
 }
 
 #[cfg(test)]
@@ -237,7 +236,8 @@ mod tests {
             &state_dir,
             "echo hi",
             "/launcher",
-        );
+        )
+        .expect("build tmux launch script");
         // Must contain env exports
         assert!(
             script.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1"),

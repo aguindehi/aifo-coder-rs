@@ -1,25 +1,23 @@
-#![doc = r#"
-Support matrix command: randomized, fast, non-blocking exploration with TTY-only animation.
-
-Usage
-- Run: aifo-coder support
-- Animation is enabled only on TTY stderr; non-TTY prints a static matrix after checks complete.
-- Order of checked cells is randomized with a seeded RNG; worker never sleeps.
-
-Environment controls (AIFO_SUPPORT_*)
-- AIFO_SUPPORT_AGENTS: CSV override of agents (default: aider,crush,codex,openhands,opencode,plandex)
-- AIFO_SUPPORT_TOOLCHAINS: CSV override of toolchains (default: rust,node,typescript,python,c-cpp,go)
-- AIFO_SUPPORT_NO_PULL=1: inspect image first; mark FAIL if not present locally (no pull).
-- AIFO_SUPPORT_TIMEOUT_SECS: soft per-check timeout (default: none, best-effort).
-- AIFO_SUPPORT_ANIMATE=0: disable animation even if TTY.
-- AIFO_SUPPORT_ASCII=1: ASCII spinner frames (-\|/).
-- AIFO_SUPPORT_ANIMATE_RATE_MS: spinner tick interval (default 80; clamp to [40, 250]).
-- AIFO_SUPPORT_RAND_SEED: u64 seed for deterministic shuffle (printed in verbose mode).
-
-Layout and tokens
-- Agent column ~16 chars; cell ~6 chars; compresses to single-letter tokens on narrow terminals.
-- Status tokens: PASS (green), WARN (yellow), FAIL (red), PENDING/spinner (dim gray).
-"#]
+#![doc = "Support matrix command: randomized, fast, non-blocking exploration with TTY-only animation."]
+#![doc = ""]
+#![doc = "Usage"]
+#![doc = "- Run: aifo-coder support"]
+#![doc = "- Animation is enabled only on TTY stderr; non-TTY prints a static matrix after checks complete."]
+#![doc = "- Order of checked cells is randomized with a seeded RNG; worker never sleeps."]
+#![doc = ""]
+#![doc = "Environment controls (AIFO_SUPPORT_*)"]
+#![doc = "- AIFO_SUPPORT_AGENTS: CSV override of agents (default: aider,crush,codex,openhands,opencode,plandex)"]
+#![doc = "- AIFO_SUPPORT_TOOLCHAINS: CSV override of toolchains (default: rust,node,typescript,python,c-cpp,go)"]
+#![doc = "- AIFO_SUPPORT_NO_PULL=1: inspect image first; mark FAIL if not present locally (no pull)."]
+#![doc = "- AIFO_SUPPORT_TIMEOUT_SECS: soft per-check timeout (default: none, best-effort)."]
+#![doc = "- AIFO_SUPPORT_ANIMATE=0: disable animation even if TTY."]
+#![doc = "- AIFO_SUPPORT_ASCII=1: ASCII spinner frames (-\\|/)."]
+#![doc = "- AIFO_SUPPORT_ANIMATE_RATE_MS: spinner tick interval (default 80; clamp to [40, 250])."]
+#![doc = "- AIFO_SUPPORT_RAND_SEED: u64 seed for deterministic shuffle (printed in verbose mode)."]
+#![doc = ""]
+#![doc = "Layout and tokens"]
+#![doc = "- Agent column ~16 chars; cell ~6 chars; compresses to single-letter tokens on narrow terminals."]
+#![doc = "- Status tokens: PASS (green), WARN (yellow), FAIL (red), PENDING/spinner (dim gray)."]
 use std::env;
 use std::io::Write as _;
 use std::process::ExitCode;
