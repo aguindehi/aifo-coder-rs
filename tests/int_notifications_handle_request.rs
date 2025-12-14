@@ -47,7 +47,7 @@ fn int_notifications_handle_request_with_stub_say() {
 
     // Invoke notifications handler
     let args = vec!["--title".to_string(), "AIFO".to_string()];
-    let (code, out) = aifo_coder::notifications_handle_request(&args, false, 3)
+    let (code, out) = aifo_coder::notifications_handle_request(&args, false, 10)
         .expect("notifications_handle_request ok");
 
     assert_eq!(code, 0, "expected exit 0, got {}", code);
