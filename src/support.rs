@@ -66,11 +66,11 @@ fn pm_deep_cmd_for(kind: &str) -> Option<String> {
             Some(script)
         }
         "go" => {
-            let src = "package main\nfunc main() {}\n";
+            let src = ["package main", "func main() {}", ""].join("\n");
             let script = ShellScript::new()
                 .push(format!(
                     "printf %s {} > /tmp/aifo-support-go.go",
-                    shell_escape(src)
+                    shell_escape(&src)
                 ))
                 .push("go run /tmp/aifo-support-go.go".to_string())
                 .build()
