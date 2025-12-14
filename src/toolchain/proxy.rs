@@ -182,9 +182,14 @@ fn workspace_access_hint(
         None
     } else {
         let mut msg = String::new();
-        msg.push_str("workspace not readable/traversable for current uid:gid inside container; cwd=/workspace\n");
+        msg.push_str(
+            "workspace not readable/traversable for current uid:gid inside container; cwd=/workspace",
+        );
+        msg.push('\n');
         msg.push_str(&stdout);
-        msg.push_str("\nHint: On macOS, temporary directories may be 0700 and not traversable in Docker. Consider 'chmod -R 755 <project>' or adjust your test harness to relax permissions.\n");
+        msg.push('\n');
+        msg.push_str("Hint: On macOS, temporary directories may be 0700 and not traversable in Docker. Consider 'chmod -R 755 <project>' or adjust your test harness to relax permissions.");
+        msg.push('\n');
         Some(msg.into_bytes())
     }
 }
