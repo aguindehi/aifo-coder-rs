@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use aifo_coder::reject_newlines;
+
 /// Return true if `git` is available on PATH.
 #[allow(dead_code)]
 pub fn have_git() -> bool {
@@ -167,6 +169,10 @@ pub fn stop_container(runtime: &Path, name: &str) {
 
 #[allow(dead_code)]
 pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
+    if let Err(e) = reject_newlines(script, "docker exec sh -c script") {
+        return (1, e);
+    }
+
     let mut cmd = Command::new(runtime);
     cmd.arg("exec")
         .arg(name)
@@ -186,7 +192,8 @@ pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String)
 
 #[allow(dead_code)]
 pub fn wait_for_config_copied(runtime: &Path, name: &str) -> bool {
-    let script = r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
+    let script =
+        r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
     for _ in 0..50 {
         let (_ec, out) = docker_exec_sh(runtime, name, script);
         if out.contains("READY") {

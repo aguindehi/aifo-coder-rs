@@ -6,9 +6,11 @@ pub mod fs;
 pub mod id;
 pub mod shell_file;
 pub mod shell_script;
+pub mod text_lines;
 
 pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
+pub use text_lines::TextLines;
 
 /// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
 ///

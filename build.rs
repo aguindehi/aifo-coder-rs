@@ -12,8 +12,8 @@ fn sanitize_env_value(raw: &str) -> Option<String> {
     Some(s.to_string())
 }
 
-fn first_line(s: &str) -> &str {
-    s.lines().next().unwrap_or("")
+fn first_non_empty_line(s: &str) -> Option<&str> {
+    s.lines().map(|l| l.trim()).find(|l| !l.is_empty())
 }
 
 fn main() {
@@ -58,7 +58,7 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                sanitize_env_value(first_line(&String::from_utf8_lossy(&o.stdout)))
+                first_non_empty_line(&String::from_utf8_lossy(&o.stdout)).and_then(sanitize_env_value)
             } else {
                 None
             }
@@ -92,7 +92,7 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                sanitize_env_value(first_line(&String::from_utf8_lossy(&o.stdout)))
+                first_non_empty_line(&String::from_utf8_lossy(&o.stdout)).and_then(sanitize_env_value)
             } else {
                 None
             }
