@@ -6,12 +6,16 @@ use std::io;
 /// - Commands must not contain `\n` or `\r` (prevents Rust formatting from changing behavior).
 /// - Commands are joined with `; ` into a single line suitable for `sh -c`.
 ///
-/// Fragment boundary rule (important):
+— Fragment boundary rule (important):
 /// - Do not split compound shell constructs across fragments (e.g. `if/then/fi`, `for/do/done`,
 ///   `case/esac`). ShellScript joins fragments with `; `, which can produce invalid syntax if a
 ///   fragment ends at `then`/`do` boundaries (e.g. `then; ...`).
 /// - Keep compound constructs in a single fragment, or rewrite them as a single-line construct
 ///   (`if ...; then ...; fi`) within one fragment.
+///
+/// Multi-line policy note:
+/// - `ShellScript::build()` rejects `\n`, `\r`, and `\0` in every fragment to prevent Rust formatting
+///   (and accidental multi-line literals) from changing runtime behavior.
 #[derive(Debug, Default)]
 pub struct ShellScript {
     parts: Vec<String>,
