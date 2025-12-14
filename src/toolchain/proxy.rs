@@ -318,11 +318,7 @@ fn kill_in_container(
     let sig = signal.to_ascii_uppercase();
     let script = ShellScript::new()
         .extend([
-            format!(r#"pg="/home/coder/.aifo-exec/{exec_id}/pgid""#),
-            r#"if [ -f "$pg" ]; then"#.to_string(),
-            r#"  n=$(cat "$pg" 2>/dev/null)"#.to_string(),
-            format!(r#"  if [ -n "$n" ]; then kill -s {sig} -"$n" || true; fi"#),
-            r#"fi"#.to_string(),
+            format!(r#"pg="/home/coder/.aifo-exec/{exec_id}/pgid"; if [ -f "$pg" ]; then n=$(cat "$pg" 2>/dev/null); if [ -n "$n" ]; then kill -s {sig} -"$n" || true; fi; fi"#),
         ])
         .build()
         .unwrap_or_else(|_| "true".to_string());
