@@ -941,7 +941,7 @@ fn ensure_rust_toolchain_warm(
             return;
         }
     }
-    // docker exec [-u uid:gid] <container> sh -lc "rustc -V >/dev/null 2>&1 || true"
+    // docker exec [-u uid:gid] <container> sh -lc "<script>"
     let mut args: Vec<String> = vec!["docker".into(), "exec".into()];
     if let Some((uid, gid)) = uidgid {
         args.push("-u".into());
@@ -950,7 +950,11 @@ fn ensure_rust_toolchain_warm(
     args.push(container.into());
     args.push("sh".into());
     args.push("-lc".into());
-    args.push("rustc -V >/dev/null 2>&1 || true".into());
+    let script = ShellScript::new()
+        .push("rustc -V >/dev/null 2>&1 || true".to_string())
+        .build()
+        .unwrap_or_else(|_| "true".to_string());
+    args.push(script);
 
     if verbose {
         log_compact(&format!("aifo-coder: docker: {}", shell_join(&args)));

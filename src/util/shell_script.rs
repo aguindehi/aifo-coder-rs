@@ -32,15 +32,17 @@ impl ShellScript {
 
     pub fn build(&self) -> io::Result<String> {
         for (i, p) in self.parts.iter().enumerate() {
-            if p.contains('\n') || p.contains('\r') {
+            if p.contains('\n') || p.contains('\r') || p.contains('\0') {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("shell script fragment {i} contains a newline; use atomic fragments"),
+                    format!(
+                        "shell script fragment {i} contains a newline or NUL; use atomic fragments"
+                    ),
                 ));
             }
         }
         let out = self.parts.join("; ");
-        debug_assert!(!out.contains('\n') && !out.contains('\r'));
+        debug_assert!(!out.contains('\n') && !out.contains('\r') && !out.contains('\0'));
         Ok(out)
     }
 }
