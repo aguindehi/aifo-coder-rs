@@ -4,8 +4,10 @@
 pub mod docker_security;
 pub mod fs;
 pub mod id;
+pub mod shell_file;
 pub mod shell_script;
 
+pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
 
 /// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
