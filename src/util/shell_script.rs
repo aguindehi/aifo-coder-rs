@@ -6,7 +6,7 @@ use std::io;
 /// - Commands must not contain `\n` or `\r` (prevents Rust formatting from changing behavior).
 /// - Commands are joined with `; ` into a single line suitable for `sh -c`.
 ///
-— Fragment boundary rule (important):
+/// Fragment boundary rule (important):
 /// - Do not split compound shell constructs across fragments (e.g. `if/then/fi`, `for/do/done`,
 ///   `case/esac`). ShellScript joins fragments with `; `, which can produce invalid syntax if a
 ///   fragment ends at `then`/`do` boundaries (e.g. `then; ...`).
