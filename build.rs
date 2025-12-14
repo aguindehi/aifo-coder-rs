@@ -58,7 +58,8 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                first_non_empty_line(&String::from_utf8_lossy(&o.stdout)).and_then(sanitize_env_value)
+                first_non_empty_line(&String::from_utf8_lossy(&o.stdout))
+                    .and_then(sanitize_env_value)
             } else {
                 None
             }
@@ -92,7 +93,8 @@ fn main() {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                first_non_empty_line(&String::from_utf8_lossy(&o.stdout)).and_then(sanitize_env_value)
+                first_non_empty_line(&String::from_utf8_lossy(&o.stdout))
+                    .and_then(sanitize_env_value)
             } else {
                 None
             }
