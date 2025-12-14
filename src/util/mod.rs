@@ -8,6 +8,8 @@ pub mod shell_script;
 
 pub use shell_script::ShellScript;
 
+pub use self::reject_newlines;
+
 /// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
 ///
 /// Keep error text stable (tests/UX depend on it).
