@@ -255,6 +255,7 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         r#"if [ "$have_getent" = "1" ]; then getent passwd "$uid" >/dev/null 2>&1 || need_user=1; else grep -q "^[^:]*:[^:]*:$uid:" /etc/passwd || need_user=1; fi"#.to_string(),
         // Keep this nss_wrapper block as a single fragment (compound if/then/fi).
         r#"if [ "$need_user" = "1" ]; then mkdir -p "$HOME/.nss_wrapper"; PASSWD_FILE="$HOME/.nss_wrapper/passwd"; GROUP_FILE="$HOME/.nss_wrapper/group"; echo "coder:x:${uid}:${gid}:,,,:$HOME:/bin/sh" > "$PASSWD_FILE"; echo "coder:x:${gid}:" > "$GROUP_FILE"; for so in /usr/lib/*/libnss_wrapper.so /usr/lib/*/libnss_wrapper.so.* /usr/lib/libnss_wrapper.so /lib/*/libnss_wrapper.so /lib/*/libnss_wrapper.so.*; do if [ -f "$so" ]; then export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$so"; break; fi; done; export NSS_WRAPPER_PASSWD="$PASSWD_FILE" NSS_WRAPPER_GROUP="$GROUP_FILE" USER="coder" LOGNAME="coder"; fi"#.to_string(),
+        // XDG_RUNTIME_DIR init: keep as a single fragment (compound if/then/fi).
         r#"if [ -n "${XDG_RUNTIME_DIR:-}" ]; then mkdir -p "$XDG_RUNTIME_DIR/gnupg" || true; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true; fi"#.to_string(),
         r#"mkdir -p "$HOME/.aifo-logs" || true"#.to_string(),
         r#"if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="$(tty 2>/dev/null || echo /dev/tty)"; fi"#.to_string(),

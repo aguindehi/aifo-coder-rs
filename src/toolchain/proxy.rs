@@ -494,10 +494,18 @@ fn build_exec_args_with_wrapper(
     //
     // IMPORTANT: We intentionally do not interpolate user args into this script.
     let prelude = exec_wrapper_env_prelude();
+
+    // Inner command for the login shell. Validate with ShellScript even though it's embedded,
+    // to enforce the no-newlines invariant and keep this shell-in-shell boundary safe.
     let inner_cmd = ShellScript::new()
         .extend([prelude.clone(), r#"exec "$@" 2>&1"#.to_string()])
         .build()
         .unwrap_or_else(|_| r#"exec "$@""#.to_string());
+
+    // Embed the inner command in a single-quoted sh literal so we don't have to escape `"`, `$`,
+    // or `\` sequences. This is safe because ShellScript fragments reject newlines and NUL, and
+    // `inner_cmd` is constructed only from fixed strings in this module.
+    let inner_cmd_sq = inner_cmd.replace('\'', r#"'\''"#);
 
     let script = ShellScript::new()
         .extend([
@@ -506,9 +514,9 @@ fn build_exec_args_with_wrapper(
             r#"if [ -z "$eid" ]; then exec "$@" 2>&1; fi"#.to_string(),
             r#"d="${HOME:-/home/coder}/.aifo-exec/${AIFO_EXEC_ID:-}""#.to_string(),
             r#"mkdir -p "$d" 2>/dev/null || { d="/tmp/.aifo-exec/${AIFO_EXEC_ID:-}"; mkdir -p "$d" || true; }"#.to_string(),
-            // NOTE: Keep the nested `sh -lc` for login-shell semantics, but validate the embedded
-            // inner command with ShellScript to enforce the no-newlines invariant.
-            format!(r#"( setsid sh -lc "{}" -- "$@" ) & pg=$!"#, inner_cmd),
+            // NOTE: Keep the nested `sh -lc` for login-shell semantics.
+            // Use single quotes around the command so we avoid escaping double quotes inside `inner_cmd`.
+            format!(r#"( setsid sh -lc '{inner_cmd_sq}' -- "$@" ) & pg=$!"#),
             r#"printf "%s\n" "$pg" > "$d/pgid" 2>/dev/null || true"#.to_string(),
             r#"wait "$pg"; rm -rf "$d" || true"#.to_string(),
         ])
@@ -2307,6 +2315,40 @@ mod tests {
             tail.contains(&"echo".to_string()) && tail.contains(&"hello".to_string()),
             "expected user args to be passed after script, got tail: {:?}",
             tail
+        );
+    }
+
+    #[test]
+    fn test_build_exec_args_with_wrapper_script_is_single_line_and_contains_login_shell() {
+        let container = "tc-container";
+        let exec_preview_args: Vec<String> = vec![
+            "docker".into(),
+            "exec".into(),
+            "-w".into(),
+            "/workspace".into(),
+            container.into(),
+            "echo".into(),
+            "hello".into(),
+        ];
+        let out = build_exec_args_with_wrapper(container, &exec_preview_args, false);
+
+        let pos_c = out.iter().position(|s| s == "-c").expect("missing -c");
+        let script = out.get(pos_c + 1).expect("missing script after -c");
+
+        assert!(
+            !script.contains('\n') && !script.contains('\r') && !script.contains('\0'),
+            "script must not contain newlines or NUL: {:?}",
+            script
+        );
+        assert!(
+            script.contains("setsid") && script.contains(r#"exec "$@""#),
+            "expected setsid and exec \"$@\" in wrapper script: {}",
+            script
+        );
+        assert!(
+            script.contains("sh -lc") || script.contains("sh -lc "),
+            "expected nested login shell 'sh -lc' to preserve semantics: {}",
+            script
         );
     }
 }
