@@ -53,6 +53,7 @@ pub fn shim_tool_names() -> &'static [&'static str] {
 pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;
     let shim_path = dir.join("aifo-shim");
+
     // ignore-tidy-linelength
     let shim = r#"#!/bin/sh
 set -e
