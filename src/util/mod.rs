@@ -11,7 +11,7 @@ pub use shell_script::ShellScript;
 /// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
 ///
 /// Keep error text stable (tests/UX depend on it).
-pub(crate) fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
+pub fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
     if s.contains('\n') || s.contains('\r') || s.contains('\0') {
         Err(format!("refusing to execute {what}: contains newline"))
     } else {
