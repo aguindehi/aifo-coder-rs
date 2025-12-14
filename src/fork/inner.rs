@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use aifo_coder::ShellFile;
+
 #[cfg(windows)]
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
@@ -138,7 +140,7 @@ pub fn build_tmux_launch_script(
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
 
-    aifo_coder::ShellFile::new()
+    ShellFile::new()
         .push("#!/usr/bin/env bash".to_string())
         .push("set -e".to_string())
         .extend(exports)
