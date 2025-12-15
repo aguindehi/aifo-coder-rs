@@ -3714,7 +3714,18 @@ publish-macos-signed-zips-local-glab:
 	  if [ -z "$$NOTES" ]; then \
 	    if [ -t 0 ]; then \
 	      echo "Enter release notes (finish with a line containing only EOF):"; \
-	      NOTES="$$(awk 'BEGIN{first=1} {if ($$0==\"EOF\") exit; if (first){printf \"%s\",$$0; first=0} else {printf \"\\n%s\",$$0}} END{}')"; \
+	      NOTES="$$( \
+	        first=1; \
+	        while IFS= read -r line; do \
+	          [ "$$line" = "EOF" ] && break; \
+	          if [ $$first -eq 1 ]; then \
+	            printf '%s' "$$line"; \
+	            first=0; \
+	          else \
+	            printf '\n%s' "$$line"; \
+	          fi; \
+	        done \
+	      )"; \
 	    else \
 	      echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
 	      exit 2; \
