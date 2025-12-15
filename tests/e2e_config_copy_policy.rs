@@ -152,7 +152,7 @@ fn e2e_config_copy_and_permissions_for_aider() {
     );
 
     // Verify files and permissions inside container
-    let script_body = aifo_coder::ShellFile::new()
+    let script = aifo_coder::ShellFile::new()
         .extend([
             "set -e".to_string(),
             r#"ok1=""; ok2=""; ok3=""; ok4=""; ok5="""#.to_string(),
@@ -171,11 +171,7 @@ fn e2e_config_copy_and_permissions_for_aider() {
             r#"echo "OKS=$ok1$ok2$ok3$ok4$ok5""#.to_string(),
         ])
         .build()
-        .expect("script body");
-    let script = aifo_coder::ShellScript::new()
-        .push(format!("sh -c {}", aifo_coder::shell_escape(&script_body)))
-        .build()
-        .expect("single-line control script");
+        .expect("script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
     support::stop_container(&runtime, &name);
 
