@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use aifo_coder::reject_newlines;
 
 /// Return true if `git` is available on PATH.
 #[allow(dead_code)]
@@ -169,7 +168,7 @@ pub fn stop_container(runtime: &Path, name: &str) {
 
 #[allow(dead_code)]
 pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String) {
-    if let Err(e) = reject_newlines(script, "docker exec sh -c script") {
+    if let Err(e) = aifo_coder::validate_sh_c_script(script, "docker exec sh -c script") {
         return (1, e);
     }
 

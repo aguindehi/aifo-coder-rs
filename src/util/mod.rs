@@ -12,7 +12,7 @@ pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
 pub use text_lines::TextLines;
 
-/// Reject strings containing newline, carriage return, or NUL before embedding into a shell command.
+/// Reject strings containing newline, carriage return, or NUL.
 ///
 /// Keep error text stable (tests/UX depend on it).
 pub fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
@@ -21,6 +21,14 @@ pub fn reject_newlines(s: &str, what: &str) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+/// Validate a `sh -c` / `sh -lc` control script.
+///
+/// This is the single boundary to enforce the invariant repository-wide:
+/// scripts passed to `-c`/`-lc` must be single-line (no CR/LF/NUL).
+pub fn validate_sh_c_script(script: &str, what: &str) -> Result<(), String> {
+    reject_newlines(script, what)
 }
 
 pub fn shell_join(args: &[String]) -> String {
