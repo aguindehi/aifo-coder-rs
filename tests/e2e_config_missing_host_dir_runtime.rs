@@ -134,8 +134,10 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
         .extend([
             "set -e".to_string(),
             r#"d="$HOME/.aifo-config""#.to_string(),
-            r#"if [ -d "$d" ]; then echo "DST_DIR=present"; else echo "DST_DIR=missing"; fi"#.to_string(),
-            r#"if [ -f "$d/.copied" ]; then echo "STAMP=present"; else echo "STAMP=absent"; fi"#.to_string(),
+            r#"if [ -d "$d" ]; then echo "DST_DIR=present"; else echo "DST_DIR=missing"; fi"#
+                .to_string(),
+            r#"if [ -f "$d/.copied" ]; then echo "STAMP=present"; else echo "STAMP=absent"; fi"#
+                .to_string(),
         ])
         .build()
         .expect("script");
