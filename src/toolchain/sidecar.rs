@@ -950,6 +950,7 @@ pub fn toolchain_run(
         apparmor_profile.as_deref(),
     );
     let run_preview = shell_join(&run_preview_args);
+    crate::validate_preview_matches_args(&run_preview, &run_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", run_preview));
@@ -1070,6 +1071,7 @@ pub fn toolchain_run(
         args,
     );
     let exec_preview = shell_join(&exec_preview_args);
+    crate::validate_preview_matches_args(&exec_preview, &exec_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", exec_preview));

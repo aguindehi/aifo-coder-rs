@@ -12,6 +12,14 @@ pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
 pub use text_lines::TextLines;
 
+pub(crate) fn validate_preview_matches_args(preview: &str, args: &[String]) {
+    debug_assert_eq!(
+        preview,
+        shell_join(args),
+        "preview must match shell_join(args)"
+    );
+}
+
 /// Reject strings containing newline, carriage return, or NUL.
 ///
 /// Keep error text stable (tests/UX depend on it).

@@ -52,6 +52,9 @@ fn docker_build(target: &str, tag: &str, extra_args: &[&str]) -> Result<(), Stri
 }
 
 fn docker_run(tag: &str, shell: &str, script: &str) -> Result<(), String> {
+    if let Err(e) = aifo_coder::validate_sh_c_script(script, "docker run sh -lc script") {
+        return Err(e);
+    }
     let mut cmd = Command::new("docker");
     cmd.arg("run")
         .arg("--rm")
