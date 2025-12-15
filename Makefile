@@ -2081,7 +2081,8 @@ check-unit: tidy-no-multiline-strings test
 
 tidy-no-multiline-strings:
 	@set -e; \
-	echo "Running tidy: forbid multi-line Rust string literals and continuation strings ..."; \
+	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (Phase 1 scope: src/** + build.rs) ..."; \
+	mkdir -p build; \
 	if command -v rustc >/dev/null 2>&1; then \
 	  rustc -O scripts/tidy_no_multiline_strings.rs -o build/tidy-no-multiline-strings; \
 	  ./build/tidy-no-multiline-strings; \

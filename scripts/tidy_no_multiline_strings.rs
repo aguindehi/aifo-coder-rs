@@ -10,7 +10,23 @@ struct Finding {
 }
 
 fn is_rust_path(p: &Path) -> bool {
-    matches!(p.extension().and_then(|s| s.to_str()), Some("rs")) || p.file_name() == Some("build.rs".as_ref())
+    matches!(p.extension().and_then(|s| s.to_str()), Some("rs"))
+        || p.file_name() == Some("build.rs".as_ref())
+}
+
+fn should_scan_file(p: &Path) -> bool {
+    // Option A: keep the phased plan strict.
+    //
+    // Phase 1 scope: only scan core Rust code (src/** and build.rs).
+    // Do not scan tests/** until later phases, and do not scan scripts/** at all.
+    //
+    // This keeps `make check` actionable while we migrate the repo in phases.
+    if p == Path::new("build.rs") {
+        return true;
+    }
+
+    let s = p.to_string_lossy();
+    s.starts_with("src/")
 }
 
 fn should_skip_dir(name: &str) -> bool {
@@ -263,6 +279,9 @@ fn main() -> io::Result<()> {
 
     let mut findings: Vec<Finding> = Vec::new();
     for p in files {
+        if !should_scan_file(&p) {
+            continue;
+        }
         let Ok(text) = fs::read_to_string(&p) else {
             continue;
         };
