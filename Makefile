@@ -1942,7 +1942,7 @@ build-shim-with-builder:
 	  $(RUST_BUILDER_IMAGE) cargo build $(CARGO_FLAGS) --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
-.PHONY: lint check check-unit test test-cargo test-legacy coverage coverage-html coverage-lcov coverage-data
+.PHONY: lint check check-unit test test-cargo test-legacy tidy-no-multiline-strings coverage coverage-html coverage-lcov coverage-data
 
 lint:
 	@set -e; \
@@ -2075,9 +2075,21 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint lint-docker lint-tests-naming test
+check: lint lint-docker lint-tests-naming tidy-no-multiline-strings test
 
-check-unit: test
+check-unit: tidy-no-multiline-strings test
+
+tidy-no-multiline-strings:
+	@set -e; \
+	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (repo-wide guard: src/** + tests/** + build.rs) ..."; \
+	mkdir -p build; \
+	if command -v rustc >/dev/null 2>&1; then \
+	  rustc -O scripts/tidy_no_multiline_strings.rs -o build/tidy-no-multiline-strings; \
+	  ./build/tidy-no-multiline-strings; \
+	else \
+	  echo "Error: rustc not found; cannot run tidy-no-multiline-strings." >&2; \
+	  exit 1; \
+	fi
 
 test:
 	@set -e; \

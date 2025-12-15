@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use aifo_coder::ShellFile;
+
 #[cfg(windows)]
 /// Build a PowerShell inner command string using the library helper,
 /// then inject AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1 immediately after Set-Location.
@@ -132,43 +134,44 @@ pub fn build_tmux_launch_script(
     pane_state_dir: &Path,
     child_args_joined: &str,
     _launcher_path: &str,
-) -> String {
+) -> std::io::Result<String> {
     let mut exports: Vec<String> = Vec::new();
     for (k, v) in super::env::fork_env_for_pane(sid, pane_index, container_name, pane_state_dir) {
         exports.push(format!("export {}={}", k, aifo_coder::shell_escape(&v)));
     }
-    format!(
-        r#"#!/usr/bin/env bash
-set -e
-{}
-set +e
-{}
-st=$?
-if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then
-  pid="$(tmux display -p '#{{pane_id}}')"
-  secs="${{AIFO_CODER_FORK_SHELL_PROMPT_SECS:-5}}"
-  printf "aifo-coder: agent exited (code %s). Press 's' to open a shell, or wait: " "$st"
-  for ((i=secs; i>=1; i--)); do
-    printf "%s " "$i"
-    if IFS= read -rsn1 -t 1 ch; then
-      echo
-      if [[ -z "$ch" || "$ch" == $'\n' || "$ch" == $'\r' ]]; then
-        tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"
-        exit "$st"
-      elif [[ "$ch" == 's' || "$ch" == 'S' ]]; then
-        exec "${{SHELL:-sh}}"
-      fi
-    fi
-  done
-  echo
-  tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st"
-else
-  exit "$st"
-fi
-"#,
-        exports.join("\n"),
-        child_args_joined
-    )
+
+    ShellFile::new()
+        .push("#!/usr/bin/env bash".to_string())
+        .push("set -e".to_string())
+        .extend(exports)
+        .push("set +e".to_string())
+        .push(child_args_joined.to_string())
+        .push("st=$?".to_string())
+        .push(r#"if [ -t 0 ] && command -v tmux >/dev/null 2>&1; then"#.to_string())
+        .push(r#"  pid="$(tmux display -p '#{pane_id}')""#.to_string())
+        .push(r#"  secs="${AIFO_CODER_FORK_SHELL_PROMPT_SECS:-5}""#.to_string())
+        .push(
+            r#"  printf "aifo-coder: agent exited (code %s). Press 's' to open a shell, or wait: " "$st""#
+                .to_string(),
+        )
+        .push(r#"  for ((i=secs; i>=1; i--)); do"#.to_string())
+        .push(r#"    printf "%s " "$i""#.to_string())
+        .push(r#"    if IFS= read -rsn1 -t 1 ch; then"#.to_string())
+        .push(r#"      echo"#.to_string())
+        .push(r#"      if [[ -z "$ch" || "$ch" == $'\n' || "$ch" == $'\r' ]]; then"#.to_string())
+        .push(r#"        tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st""#.to_string())
+        .push(r#"        exit "$st""#.to_string())
+        .push(r#"      elif [[ "$ch" == 's' || "$ch" == 'S' ]]; then"#.to_string())
+        .push(r#"        exec "${SHELL:-sh}""#.to_string())
+        .push(r#"      fi"#.to_string())
+        .push(r#"    fi"#.to_string())
+        .push(r#"  done"#.to_string())
+        .push(r#"  echo"#.to_string())
+        .push(r#"  tmux kill-pane -t "$pid" >/dev/null 2>&1 || exit "$st""#.to_string())
+        .push("else".to_string())
+        .push(r#"  exit "$st""#.to_string())
+        .push("fi".to_string())
+        .build()
 }
 
 #[cfg(test)]
@@ -235,7 +238,8 @@ mod tests {
             &state_dir,
             "echo hi",
             "/launcher",
-        );
+        )
+        .expect("build tmux launch script");
         // Must contain env exports
         assert!(
             script.contains("export AIFO_CODER_SUPPRESS_TOOLCHAIN_WARNING=1"),

@@ -34,7 +34,7 @@ fn init_named_volume_with_stamp(
     sh.push(r#"mkdir -p "$d""#.to_string());
     sh.push(format!(r#"chown -R {uid}:{gid} "$d" || true"#));
     sh.push(format!(
-        r#"printf '%s\n' '{uid}:{gid}' > "$d/.aifo-init-done" || true"#
+        r#"printf '%s\n' '{uid}:{gid}' > "$d/.aifo-init-done" || true"#,
     ));
     let script = match sh.build() {
         Ok(s) => s,

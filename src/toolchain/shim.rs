@@ -12,7 +12,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use crate::ShellFile;
+use crate::{ShellFile, TextLines};
 
 /// Full set of shim tools to write into the shim dir.
 const SHIM_TOOLS: &[&str] = &[
@@ -111,7 +111,7 @@ fn build_posix_shim_script() -> io::Result<String> {
             "    fi".to_string(),
             r#"    CURL_ARGS="$CURL_ARGS --data-urlencode \"cmd=$tool\"""#.to_string(),
             r#"    for a in "$@"; do CURL_ARGS="$CURL_ARGS --data-urlencode \"arg=$a\""; done"#.to_string(),
-            r#"    if ! sh -c "exec curl $CURL_ARGS \"$URL\"" sh; then"#.to_string(),
+            r#"    if ! sh -c "exec curl $CURL_ARGS \"${URL}\"" sh; then"#.to_string(),
             r#"      : # body printed by curl on error as well"#.to_string(),
             "    fi".to_string(),
             r#"    ec="$(awk '/^X-Exit-Code:/{print $2}' "$tmp/h" | tr -d '\r' | tail -n1)""#.to_string(),
@@ -357,10 +357,13 @@ pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
     }
     for t in SHIM_TOOLS {
         let path = dir.join(t);
-        fs::write(
-            &path,
-            "#!/bin/sh\nexec \"$(dirname \"$0\")/aifo-shim\" \"$@\"\n",
-        )?;
+        let wrapper = TextLines::new()
+            .extend([
+                "#!/bin/sh".to_string(),
+                r#"exec "$(dirname "$0")/aifo-shim" "$@""#.to_string(),
+            ])
+            .build_lf()?;
+        fs::write(&path, wrapper)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -404,7 +407,7 @@ pub fn toolchain_write_shims(dir: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ShellFile;
+    use crate::{ShellFile, TextLines};
 
     #[test]
     fn test_shell_file_rejects_embedded_newlines() {
@@ -412,6 +415,15 @@ mod tests {
         sf.push("ok".to_string());
         sf.push("bad\nline".to_string());
         let err = sf.build().expect_err("expected invalid input");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn test_text_lines_rejects_embedded_newlines() {
+        let mut tl = TextLines::new();
+        tl.push("ok".to_string());
+        tl.push("bad\nline".to_string());
+        let err = tl.build_lf().expect_err("expected invalid input");
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
 

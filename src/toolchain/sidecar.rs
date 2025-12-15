@@ -65,18 +65,14 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
 
     // Create the network (best-effort)
     if verbose {
-        crate::log_info_stderr(
-            use_err,
-            &format!(
-                "aifo-coder: docker: {}",
-                shell_join(&[
-                    "docker".to_string(),
-                    "network".to_string(),
-                    "create".to_string(),
-                    name.to_string()
-                ])
-            ),
-        );
+        let args = vec![
+            "docker".to_string(),
+            "network".to_string(),
+            "create".to_string(),
+            name.to_string(),
+        ];
+        let preview = crate::preview_from_args(&args);
+        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
     let mut cmd = Command::new(runtime);
     cmd.arg("network").arg("create").arg(name);
@@ -134,18 +130,14 @@ pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
     if verbose {
-        crate::log_info_stderr(
-            use_err,
-            &format!(
-                "aifo-coder: docker: {}",
-                shell_join(&[
-                    "docker".to_string(),
-                    "network".to_string(),
-                    "rm".to_string(),
-                    name.to_string()
-                ])
-            ),
-        );
+        let args = vec![
+            "docker".to_string(),
+            "network".to_string(),
+            "rm".to_string(),
+            name.to_string(),
+        ];
+        let preview = crate::preview_from_args(&args);
+        crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
     let _ = cmd.status();
 }
@@ -495,11 +487,14 @@ fn node_overlay_state_and_guard(
         .build()
         .unwrap_or_else(|_| "echo error:overlay-missing".to_string());
 
+    if let Err(msg) = crate::validate_docker_exec_sh_login_script(&script) {
+        return Err(io::Error::other(msg));
+    }
     cmd.arg("exec")
         .arg(container_name)
         .arg("sh")
         .arg("-lc")
-        .arg(script)
+        .arg(&script)
         .stdout(Stdio::piped())
         .stderr(if verbose {
             Stdio::inherit()
@@ -555,11 +550,14 @@ fn ensure_node_overlay_and_install(
         .build()
         .unwrap_or_else(|_| "true".to_string());
 
+    if let Err(msg) = crate::validate_docker_exec_sh_login_script(&script) {
+        return Err(io::Error::other(msg));
+    }
     cmd.arg("exec")
         .arg(container_name)
         .arg("sh")
         .arg("-lc")
-        .arg(script)
+        .arg(&script)
         .stdout(if verbose {
             Stdio::inherit()
         } else {
@@ -949,7 +947,7 @@ pub fn toolchain_run(
         &[],
         apparmor_profile.as_deref(),
     );
-    let run_preview = shell_join(&run_preview_args);
+    let run_preview = crate::preview_from_args(&run_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", run_preview));
@@ -1069,7 +1067,7 @@ pub fn toolchain_run(
         sidecar_kind.as_str(),
         args,
     );
-    let exec_preview = shell_join(&exec_preview_args);
+    let exec_preview = crate::preview_from_args(&exec_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", exec_preview));
@@ -1199,10 +1197,8 @@ pub fn toolchain_start_session(
             apparmor_profile.as_deref(),
         );
         if verbose {
-            crate::log_info_stderr(
-                use_err,
-                &format!("aifo-coder: docker: {}", shell_join(&args)),
-            );
+            let preview = crate::preview_from_args(&args);
+            crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
         }
         // Ensure host .pnpm-store exists and is writable for node session sidecar
         if kind == "node" {

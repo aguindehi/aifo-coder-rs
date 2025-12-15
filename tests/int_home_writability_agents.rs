@@ -44,70 +44,76 @@ mod int_home_writability_agents {
         #[cfg(not(unix))]
         let uidgid: Option<(u32, u32)> = None;
 
-        let script = r#"set -eu
-: "${HOME:=/home/coder}"
-echo "probe: uid=$(id -u) gid=$(id -g) umask=$(umask)"
-
-fail=0
-
-diag() {
-  op="$1"; p="$2"
-  echo "FAIL ${op}: ${p}"
-  echo "  uid:gid=$(id -u):$(id -g) umask=$(umask)"
-  printf "  path stat: "
-  stat -c '%u:%g %a' "$p" 2>/dev/null || echo 'N/A'
-  echo "  path ls: $(ls -ld "$p" 2>&1 || echo 'N/A')"
-  par="$(dirname "$p")"
-  printf "  parent stat: "
-  stat -c '%u:%g %a' "$par" 2>/dev/null || echo 'N/A'
-  echo "  parent ls: $(ls -ld "$par" 2>&1 || echo 'N/A')"
-  echo "  expected: $HOME mode 1777; subtrees 0777"
-}
-
-check_mkdir() {
-  d="$1"
-  if mkdir -p "$d/test.$$" >/dev/null 2>&1; then
-    rmdir "$d/test.$$" >/dev/null 2>&1 || true
-    return 0
-  fi
-  return 1
-}
-
-check_touch() {
-  d="$1"
-  f="$d/.writetest.$$"
-  if : > "$f" >/dev/null 2>&1; then
-    rm -f "$f" >/dev/null 2>&1 || true
-    return 0
-  fi
-  return 1
-}
-
-paths="$HOME/.local $HOME/.local/share $HOME/.local/state $HOME/.local/share/uv $HOME/.local/share/pnpm $HOME/.cache"
-for p in $paths; do
-  if ! check_mkdir "$p"; then
-    diag "mkdir" "$p"
-    fail=1
-  fi
-  if ! check_touch "$p"; then
-    diag "touch" "$p"
-    fail=1
-  fi
-done
-
-if [ "$fail" -eq 0 ]; then
-  echo "ok"
-else
-  exit 1
-fi
-"#;
+        let script = aifo_coder::ShellFile::new()
+            .extend([
+                "set -eu".to_string(),
+                r#": "${HOME:=/home/coder}""#.to_string(),
+                r#"echo "probe: uid=$(id -u) gid=$(id -g) umask=$(umask)""#.to_string(),
+                "".to_string(),
+                "fail=0".to_string(),
+                "".to_string(),
+                "diag() {".to_string(),
+                r#"  op="$1"; p="$2""#.to_string(),
+                r#"  echo "FAIL ${op}: ${p}""#.to_string(),
+                r#"  echo "  uid:gid=$(id -u):$(id -g) umask=$(umask)""#.to_string(),
+                r#"  printf "  path stat: ""#.to_string(),
+                r#"  stat -c '%u:%g %a' "$p" 2>/dev/null || echo 'N/A'"#.to_string(),
+                r#"  echo "  path ls: $(ls -ld "$p" 2>&1 || echo 'N/A')""#.to_string(),
+                r#"  par="$(dirname "$p")""#.to_string(),
+                r#"  printf "  parent stat: ""#.to_string(),
+                r#"  stat -c '%u:%g %a' "$par" 2>/dev/null || echo 'N/A'"#.to_string(),
+                r#"  echo "  parent ls: $(ls -ld "$par" 2>&1 || echo 'N/A')""#.to_string(),
+                r#"  echo "  expected: $HOME mode 1777; subtrees 0777""#.to_string(),
+                "}".to_string(),
+                "".to_string(),
+                "check_mkdir() {".to_string(),
+                r#"  d="$1""#.to_string(),
+                r#"  if mkdir -p "$d/test.$$" >/dev/null 2>&1; then"#.to_string(),
+                r#"    rmdir "$d/test.$$" >/dev/null 2>&1 || true"#.to_string(),
+                "    return 0".to_string(),
+                "  fi".to_string(),
+                "  return 1".to_string(),
+                "}".to_string(),
+                "".to_string(),
+                "check_touch() {".to_string(),
+                r#"  d="$1""#.to_string(),
+                r#"  f="$d/.writetest.$$""#.to_string(),
+                r#"  if : > "$f" >/dev/null 2>&1; then"#.to_string(),
+                r#"    rm -f "$f" >/dev/null 2>&1 || true"#.to_string(),
+                "    return 0".to_string(),
+                "  fi".to_string(),
+                "  return 1".to_string(),
+                "}".to_string(),
+                "".to_string(),
+                r#"paths="$HOME/.local $HOME/.local/share $HOME/.local/state $HOME/.local/share/uv $HOME/.local/share/pnpm $HOME/.cache""#.to_string(),
+                "for p in $paths; do".to_string(),
+                r#"  if ! check_mkdir "$p"; then"#.to_string(),
+                r#"    diag "mkdir" "$p""#.to_string(),
+                "    fail=1".to_string(),
+                "  fi".to_string(),
+                r#"  if ! check_touch "$p"; then"#.to_string(),
+                r#"    diag "touch" "$p""#.to_string(),
+                "    fail=1".to_string(),
+                "  fi".to_string(),
+                "done".to_string(),
+                "".to_string(),
+                r#"if [ "$fail" -eq 0 ]; then"#.to_string(),
+                r#"  echo "ok""#.to_string(),
+                "else".to_string(),
+                "  exit 1".to_string(),
+                "fi".to_string(),
+            ])
+            .build()
+            .expect("writability script");
 
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
         if let Some((uid, gid)) = uidgid {
             cmd.arg("-u").arg(format!("{uid}:{gid}"));
         }
-        cmd.arg(image).arg("sh").arg("-lc").arg(script);
+        cmd.arg(image).arg("sh").arg("-lc").arg(&script);
+
+        assert!(!script.contains('\0'), "script must not contain NUL");
 
         match cmd.output() {
             Ok(out) => {

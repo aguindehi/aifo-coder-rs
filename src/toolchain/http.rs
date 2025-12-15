@@ -316,6 +316,8 @@ fn parse_headers<'a, I: Iterator<Item = &'a str>>(lines: I) -> HeaderMap {
     let mut map = HeaderMap::new();
     for line in lines {
         if let Some((k, v)) = line.split_once(':') {
+            // HTTP allows repeated headers; for our proxy we prefer "last value wins" semantics.
+            // This is important for Transfer-Encoding where multiple headers may be present.
             map.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
         }
     }
@@ -425,18 +427,21 @@ mod http_hardening_tests {
     #[test]
     fn test_te_chunked_preferred_over_conflicting_content_length() {
         // Request with both Transfer-Encoding: chunked and Content-Length present.
-        let req_text = "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Content-Type: application/x-www-form-urlencoded\r\n\
-Content-Length: 5\r\n\
-Transfer-Encoding: chunked\r\n\
-Connection: close\r\n\
-\r\n\
-A;ext=foo=bar\r\n\
-0123456789\r\n\
-0\r\n\
-\r\n";
+        let req_text = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Content-Type: application/x-www-form-urlencoded",
+            "Content-Length: 5",
+            "Transfer-Encoding: chunked",
+            "Connection: close",
+            "",
+            "A;ext=foo=bar",
+            "0123456789",
+            "0",
+            "",
+            "",
+        ]
+        .join("\r\n");
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
         let parsed = read_http_request(&mut cur).expect("parsed");
         // Body should reflect de-chunked payload, ignoring extensions and CL
@@ -446,14 +451,18 @@ A;ext=foo=bar\r\n\
     #[test]
     fn test_invalid_hex_chunk_size_is_rejected() {
         // Invalid chunk size 'G' (not hex) must be rejected in strict chunked decoding.
-        let req_text = "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Transfer-Encoding: chunked\r\n\
-\r\n\
-G\r\n\
-payload\r\n\
-0\r\n\r\n";
+        let req_text = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Transfer-Encoding: chunked",
+            "",
+            "G",
+            "payload",
+            "0",
+            "",
+            "",
+        ]
+        .join("\r\n");
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
         let err = read_http_request(&mut cur).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
@@ -462,12 +471,15 @@ payload\r\n\
     #[test]
     fn test_body_cap_enforced_chunked_large_stream() {
         // Build a chunked body exceeding 1 MiB to assert cap enforcement (1_048_576 bytes)
-        let header = "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Transfer-Encoding: chunked\r\n\
-Connection: close\r\n\
-\r\n";
+        let header = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Transfer-Encoding: chunked",
+            "Connection: close",
+            "",
+            "",
+        ]
+        .join("\r\n");
         // Create many 4096-byte chunks (size hex '1000')
         let chunk_payload = "x".repeat(4096);
         let mut body = String::new();
@@ -494,17 +506,17 @@ Connection: close\r\n\
     fn test_body_cap_enforced_non_chunked_large_stream() {
         // Non-chunked request with a Content-Length larger than BODY_CAP should be capped.
         let payload = "x".repeat(2_000_000);
-        let header = format!(
-            "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Content-Type: application/x-www-form-urlencoded\r\n\
-Content-Length: {}\r\n\
-Connection: close\r\n\
-\r\n",
-            payload.len()
-        );
-        let req_text = format!("{}{}", header, payload);
+        let header = [
+            "POST /exec HTTP/1.1".to_string(),
+            "Host: localhost".to_string(),
+            "Content-Type: application/x-www-form-urlencoded".to_string(),
+            format!("Content-Length: {}", payload.len()),
+            "Connection: close".to_string(),
+            "".to_string(),
+            "".to_string(),
+        ]
+        .join("\r\n");
+        let req_text = format!("{header}{payload}");
         let mut cur = Cursor::new(req_text.into_bytes());
         let parsed = read_http_request(&mut cur).expect("parsed");
         assert_eq!(
@@ -517,19 +529,22 @@ Connection: close\r\n\
     #[test]
     fn test_multiple_transfer_encoding_headers_last_chunked_preferred() {
         // Two TE headers: first identity, second chunked; CL present but chunked must win.
-        let req_text = "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Content-Type: application/x-www-form-urlencoded\r\n\
-Content-Length: 4\r\n\
-Transfer-Encoding: identity\r\n\
-Transfer-Encoding: chunked\r\n\
-Connection: close\r\n\
-\r\n\
-4\r\n\
-okay\r\n\
-0\r\n\
-\r\n";
+        let req_text = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Content-Type: application/x-www-form-urlencoded",
+            "Content-Length: 4",
+            "Transfer-Encoding: identity",
+            "Transfer-Encoding: chunked",
+            "Connection: close",
+            "",
+            "4",
+            "okay",
+            "0",
+            "",
+            "",
+        ]
+        .join("\r\n");
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
         let parsed = read_http_request(&mut cur).expect("parsed");
         assert_eq!(parsed.body, b"okay");
@@ -538,16 +553,18 @@ okay\r\n\
     #[test]
     fn test_multiple_transfer_encoding_headers_last_identity_no_chunked() {
         // Two TE headers: first chunked, second identity; no chunked -> fall back to CL.
-        let req_text = "\
-POST /exec HTTP/1.1\r\n\
-Host: localhost\r\n\
-Content-Type: application/x-www-form-urlencoded\r\n\
-Content-Length: 4\r\n\
-Transfer-Encoding: chunked\r\n\
-Transfer-Encoding: identity\r\n\
-Connection: close\r\n\
-\r\n\
-abcd";
+        let req_text = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Content-Type: application/x-www-form-urlencoded",
+            "Content-Length: 4",
+            "Transfer-Encoding: chunked",
+            "Transfer-Encoding: identity",
+            "Connection: close",
+            "",
+            "abcd",
+        ]
+        .join("\r\n");
         let mut cur = Cursor::new(req_text.as_bytes().to_vec());
         let parsed = read_http_request(&mut cur).expect("parsed");
         assert_eq!(parsed.body, b"abcd");

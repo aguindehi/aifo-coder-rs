@@ -100,7 +100,8 @@ impl Orchestrator for Tmux {
                 &p.state_dir,
                 &child_joined,
                 "/launcher",
-            );
+            )
+            .map_err(|e| format!("failed to build tmux launch script: {}", e))?;
             let script_path = p.state_dir.join("launch.sh");
             let _ = fs::create_dir_all(&p.state_dir);
             let _ = fs::write(&script_path, script.as_bytes());

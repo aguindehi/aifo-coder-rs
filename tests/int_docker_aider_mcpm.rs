@@ -29,12 +29,33 @@ fn run(cmd: &mut Command) -> Result<(), String> {
     Ok(())
 }
 
-fn run_expect_fail(cmd: &mut Command) -> Result<(), String> {
-    let out = cmd.output().map_err(|e| format!("spawn failed: {e}"))?;
-    if out.status.success() {
-        return Err("expected failure but succeeded".to_string());
-    }
-    Ok(())
+fn docker_run_sh_lc(tag: &str, script: &str) -> Result<(), String> {
+    // Centralized boundary validation: keep call sites clean/noisy-free while still enforcing
+    // the "no CR/LF/NUL in sh -lc control scripts" invariant.
+    aifo_coder::validate_sh_c_script(script, "docker run sh -lc script")?;
+
+    // Preview must match execution: build args once and execute from args.
+    let args: Vec<String> = vec![
+        "docker".to_string(),
+        "run".to_string(),
+        "--rm".to_string(),
+        tag.to_string(),
+        "sh".to_string(),
+        "-lc".to_string(),
+        script.to_string(),
+    ];
+    let _preview = aifo_coder::shell_join(&args);
+
+    let mut cmd = Command::new("docker");
+    cmd.arg("run")
+        .arg("--rm")
+        .arg(tag)
+        .arg("sh")
+        .arg("-lc")
+        .arg(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    run(&mut cmd)
 }
 
 fn docker_build(target: &str, tag: &str, extra_args: &[&str]) -> Result<(), String> {
@@ -52,6 +73,9 @@ fn docker_build(target: &str, tag: &str, extra_args: &[&str]) -> Result<(), Stri
 }
 
 fn docker_run(tag: &str, shell: &str, script: &str) -> Result<(), String> {
+    if let Err(e) = aifo_coder::validate_sh_c_script(script, "docker run sh -lc script") {
+        return Err(e);
+    }
     let mut cmd = Command::new("docker");
     cmd.arg("run")
         .arg("--rm")
@@ -124,27 +148,10 @@ fn int_aider_mcpm_disabled_absence() {
     docker_build("aider", tag, &["--build-arg", "WITH_MCPM_AIDER=0"])
         .expect("docker build aider (disabled)");
     // mcpm-aider should be absent
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg("command -v mcpm-aider"),
-    )
-    .expect("mcpm-aider absent");
+    docker_run_sh_lc(tag, "command -v mcpm-aider").expect_err("mcpm-aider absent");
     // real node should be removed
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg("test -x /usr/local/bin/node"),
-    )
-    .expect("node absent");
+    let script = "test -x /usr/local/bin/node";
+    docker_run_sh_lc(tag, script).expect_err("node absent");
     // playwright still ok
     docker_run(
         tag,
@@ -164,27 +171,10 @@ fn int_aider_slim_mcpm_disabled_absence() {
     docker_build("aider-slim", tag, &["--build-arg", "WITH_MCPM_AIDER=0"])
         .expect("docker build aider-slim (disabled)");
     // mcpm-aider should be absent
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg("command -v mcpm-aider"),
-    )
-    .expect("mcpm-aider absent (slim)");
+    docker_run_sh_lc(tag, "command -v mcpm-aider").expect_err("mcpm-aider absent (slim)");
     // real node should be removed
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg("test -x /usr/local/bin/node"),
-    )
-    .expect("node absent (slim)");
+    let script = "test -x /usr/local/bin/node";
+    docker_run_sh_lc(tag, script).expect_err("node absent (slim)");
     // playwright still ok
     docker_run(
         tag,
