@@ -37,8 +37,18 @@ fn run_expect_fail(cmd: &mut Command) -> Result<(), String> {
     Ok(())
 }
 
-fn docker_run_validate_lc_script(script: &str) -> Result<(), String> {
-    aifo_coder::validate_sh_c_script(script, "docker run sh -lc script")
+fn docker_run_sh_lc(tag: &str, script: &str) -> Result<(), String> {
+    aifo_coder::validate_sh_c_script(script, "docker run sh -lc script")?;
+    let mut cmd = Command::new("docker");
+    cmd.arg("run")
+        .arg("--rm")
+        .arg(tag)
+        .arg("sh")
+        .arg("-lc")
+        .arg(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    run(&mut cmd)
 }
 
 fn docker_build(target: &str, tag: &str, extra_args: &[&str]) -> Result<(), String> {
@@ -132,7 +142,6 @@ fn int_aider_mcpm_disabled_absence() {
         .expect("docker build aider (disabled)");
     // mcpm-aider should be absent
     let script = "command -v mcpm-aider";
-    docker_run_validate_lc_script(script).expect("script validate");
     run_expect_fail(
         Command::new("docker")
             .arg("run")
@@ -145,17 +154,7 @@ fn int_aider_mcpm_disabled_absence() {
     .expect("mcpm-aider absent");
     // real node should be removed
     let script = "test -x /usr/local/bin/node";
-    docker_run_validate_lc_script(script).expect("script validate");
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg(script),
-    )
-    .expect("node absent");
+    docker_run_sh_lc(tag, script).expect_err("node absent");
     // playwright still ok
     docker_run(
         tag,
@@ -176,7 +175,6 @@ fn int_aider_slim_mcpm_disabled_absence() {
         .expect("docker build aider-slim (disabled)");
     // mcpm-aider should be absent
     let script = "command -v mcpm-aider";
-    docker_run_validate_lc_script(script).expect("script validate");
     run_expect_fail(
         Command::new("docker")
             .arg("run")
@@ -189,17 +187,7 @@ fn int_aider_slim_mcpm_disabled_absence() {
     .expect("mcpm-aider absent (slim)");
     // real node should be removed
     let script = "test -x /usr/local/bin/node";
-    docker_run_validate_lc_script(script).expect("script validate");
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg(script),
-    )
-    .expect("node absent (slim)");
+    docker_run_sh_lc(tag, script).expect_err("node absent (slim)");
     // playwright still ok
     docker_run(
         tag,
