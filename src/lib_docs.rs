@@ -20,5 +20,5 @@ Environment invariants (documented for contributors)
 - AIFO_CODER_COLOR / NO_COLOR: crate-wide color control; wrappers always preserve message text.
 
 Style guidance
-- Prefer lines ≤100 chars where feasible in non-golden code; never change user-visible strings.
+- Prefer lines <= 100 chars where feasible in non-golden code; never change user-visible strings.
 - Module-level docs should summarize purpose and invariants to aid contributors.
