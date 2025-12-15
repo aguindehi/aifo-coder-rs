@@ -3703,14 +3703,25 @@ publish-macos-signed-zips-local-glab:
 	if ! glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
 	  echo "Release $$TAG not found; creating it."; \
 	  NOTES="$${RELEASE_NOTES:-}"; \
-	  if [ -z "$$NOTES" ]; then \
-	    if [ -t 0 ]; then \
-	      echo "Enter release notes (finish with a line containing only EOF):"; \
-	      NOTES="$$(cat <<'__AIFO_EOF__'\n$$(cat)\n__AIFO_EOF__)" ; \
+	  if [ -z "$$NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	    if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	      NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	    else \
+	      echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
+	      exit 2; \
 	    fi; \
 	  fi; \
 	  if [ -z "$$NOTES" ]; then \
-	    echo "Error: release notes are required (set RELEASE_NOTES or provide input interactively)." >&2; \
+	    if [ -t 0 ]; then \
+	      echo "Enter release notes (finish with a line containing only EOF):"; \
+	      NOTES="$$(awk 'BEGIN{first=1} {if ($$0==\"EOF\") exit; if (first){printf \"%s\",$$0; first=0} else {printf \"\\n%s\",$$0}} END{}')"; \
+	    else \
+	      echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	      exit 2; \
+	    fi; \
+	  fi; \
+	  if [ -z "$$NOTES" ]; then \
+	    echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
 	    exit 2; \
 	  fi; \
 	  if [ -t 0 ]; then \
