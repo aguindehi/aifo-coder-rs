@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-
 /// Return true if `git` is available on PATH.
 #[allow(dead_code)]
 pub fn have_git() -> bool {
