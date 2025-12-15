@@ -38,6 +38,8 @@ fn run_expect_fail(cmd: &mut Command) -> Result<(), String> {
 }
 
 fn docker_run_sh_lc(tag: &str, script: &str) -> Result<(), String> {
+    // Centralized boundary validation: keep call sites clean/noisy-free while still enforcing
+    // the "no CR/LF/NUL in sh -lc control scripts" invariant.
     aifo_coder::validate_sh_c_script(script, "docker run sh -lc script")?;
     let mut cmd = Command::new("docker");
     cmd.arg("run")
@@ -141,17 +143,7 @@ fn int_aider_mcpm_disabled_absence() {
     docker_build("aider", tag, &["--build-arg", "WITH_MCPM_AIDER=0"])
         .expect("docker build aider (disabled)");
     // mcpm-aider should be absent
-    let script = "command -v mcpm-aider";
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg(script),
-    )
-    .expect("mcpm-aider absent");
+    docker_run_sh_lc(tag, "command -v mcpm-aider").expect_err("mcpm-aider absent");
     // real node should be removed
     let script = "test -x /usr/local/bin/node";
     docker_run_sh_lc(tag, script).expect_err("node absent");
@@ -174,17 +166,7 @@ fn int_aider_slim_mcpm_disabled_absence() {
     docker_build("aider-slim", tag, &["--build-arg", "WITH_MCPM_AIDER=0"])
         .expect("docker build aider-slim (disabled)");
     // mcpm-aider should be absent
-    let script = "command -v mcpm-aider";
-    run_expect_fail(
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .arg(tag)
-            .arg("sh")
-            .arg("-lc")
-            .arg(script),
-    )
-    .expect("mcpm-aider absent (slim)");
+    docker_run_sh_lc(tag, "command -v mcpm-aider").expect_err("mcpm-aider absent (slim)");
     // real node should be removed
     let script = "test -x /usr/local/bin/node";
     docker_run_sh_lc(tag, script).expect_err("node absent (slim)");
