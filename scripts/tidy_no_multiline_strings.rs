@@ -15,18 +15,15 @@ fn is_rust_path(p: &Path) -> bool {
 }
 
 fn should_scan_file(p: &Path) -> bool {
-    // Option A: keep the phased plan strict.
+    // Phase 3 scope: src/**, tests/**, build.rs (source-wide cleanliness).
     //
-    // Phase 1 scope: only scan core Rust code (src/** and build.rs).
-    // Do not scan tests/** until later phases, and do not scan scripts/** at all.
-    //
-    // This keeps `make check` actionable while we migrate the repo in phases.
+    // Keep scripts/** excluded so the checker doesn't self-report and to keep tooling decoupled.
     if p == Path::new("build.rs") {
         return true;
     }
 
     let s = p.to_string_lossy();
-    s.starts_with("src/")
+    s.starts_with("src/") || s.starts_with("tests/")
 }
 
 fn should_skip_dir(name: &str) -> bool {
