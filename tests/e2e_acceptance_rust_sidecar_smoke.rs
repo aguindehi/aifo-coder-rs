@@ -113,13 +113,13 @@ fn e2e_toolchain_rust_acceptance_full_suite() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fn chmod_recursive_impl(path: &std::path::Path) {
+        fn e2e_chmod_recursive_impl(path: &std::path::Path) {
             if let Ok(meta) = std::fs::metadata(path) {
                 if meta.is_dir() {
                     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
                     if let Ok(rd) = std::fs::read_dir(path) {
                         for ent in rd.flatten() {
-                            chmod_recursive_impl(&ent.path());
+                            e2e_chmod_recursive_impl(&ent.path());
                         }
                     }
                 } else {
@@ -127,7 +127,7 @@ fn e2e_toolchain_rust_acceptance_full_suite() {
                 }
             }
         }
-        chmod_recursive_impl(&ws);
+        e2e_chmod_recursive_impl(&ws);
     }
 
     // Change into workspace for sidecar execs
