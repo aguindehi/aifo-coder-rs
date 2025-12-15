@@ -152,23 +152,26 @@ fn e2e_config_copy_and_permissions_for_aider() {
     );
 
     // Verify files and permissions inside container
-    let script = r#"
-set -e
-ok1=""; ok2=""; ok3=""; ok4=""; ok5=""
-[ -f "$HOME/.aifo-config/global/config.toml" ] && ok1="1"
-perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null || echo "")"
-[ -n "$perm1" ] && p1="${perm1#${perm1%???}}" || p1=""
-[ "$p1" = "644" ] && ok2="1"
-[ -f "$HOME/.aifo-config/aider/.aider.conf.yml" ] && ok3="1"
-[ -f "$HOME/.aifo-config/aider/creds.token" ] && {
-  perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || echo "")"
-  [ -n "$perm2" ] && p2="${perm2#${perm2%???}}" || p2=""
-  [ "$p2" = "600" ] && ok4="1"
-}
-[ -f "$HOME/.aider.conf.yml" ] && ok5="1"
-[ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing"
-echo "OKS=$ok1$ok2$ok3$ok4$ok5"
-"#;
+    let script = aifo_coder::ShellFile::new()
+        .extend([
+            "set -e".to_string(),
+            r#"ok1=""; ok2=""; ok3=""; ok4=""; ok5="""#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/global/config.toml" ] && ok1="1""#.to_string(),
+            r#"perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null || echo "")""#.to_string(),
+            r#"[ -n "$perm1" ] && p1="${perm1#${perm1%???}}" || p1="""#.to_string(),
+            r#"[ "$p1" = "644" ] && ok2="1""#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/.aider.conf.yml" ] && ok3="1""#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/creds.token" ] && {"#.to_string(),
+            r#"  perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || echo "")""#.to_string(),
+            r#"  [ -n "$perm2" ] && p2="${perm2#${perm2%???}}" || p2="""#.to_string(),
+            r#"  [ "$p2" = "600" ] && ok4="1""#.to_string(),
+            "}".to_string(),
+            r#"[ -f "$HOME/.aider.conf.yml" ] && ok5="1""#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing""#.to_string(),
+            r#"echo "OKS=$ok1$ok2$ok3$ok4$ok5""#.to_string(),
+        ])
+        .build()
+        .expect("script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
     support::stop_container(&runtime, &name);
 
@@ -256,15 +259,18 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         name
     );
 
-    let script = r#"
-set -e
-have_ok=0; have_unknown=0; have_huge=0; have_link=0
-[ -f "$HOME/.aifo-config/aider/ok.yaml" ] && have_ok=1
-[ -f "$HOME/.aifo-config/aider/unknown.xxx" ] && have_unknown=1
-[ -f "$HOME/.aifo-config/aider/huge.yml" ] && have_huge=1
-[ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1
-echo "RES=$have_ok/$have_unknown/$have_huge/$have_link"
-"#;
+    let script = aifo_coder::ShellFile::new()
+        .extend([
+            "set -e".to_string(),
+            r#"have_ok=0; have_unknown=0; have_huge=0; have_link=0"#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/ok.yaml" ] && have_ok=1"#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/unknown.xxx" ] && have_unknown=1"#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/huge.yml" ] && have_huge=1"#.to_string(),
+            r#"[ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1"#.to_string(),
+            r#"echo "RES=$have_ok/$have_unknown/$have_huge/$have_link""#.to_string(),
+        ])
+        .build()
+        .expect("script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
     support::stop_container(&runtime, &name);
 

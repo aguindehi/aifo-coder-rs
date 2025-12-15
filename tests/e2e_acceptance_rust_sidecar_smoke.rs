@@ -73,29 +73,37 @@ fn e2e_toolchain_rust_acceptance_full_suite() {
     let td = tempfile::tempdir().expect("tmpdir");
     let ws = td.path().to_path_buf();
 
-    let cargo_toml = r#"[package]
-name = "aifo_phase8_smoke"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-"#;
+    let cargo_toml = aifo_coder::TextLines::new()
+        .extend([
+            "[package]".to_string(),
+            r#"name = "aifo_phase8_smoke""#.to_string(),
+            r#"version = "0.1.0""#.to_string(),
+            r#"edition = "2021""#.to_string(),
+            "".to_string(),
+            "[dependencies]".to_string(),
+        ])
+        .build_lf()
+        .expect("cargo toml");
     write_file(&ws.join("Cargo.toml"), cargo_toml);
 
     // Keep formatting simple and clippy-clean
-    let lib_rs = r#"pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn e2e_adds() {
-        assert_eq!(add(2, 3), 5);
-    }
-}
-"#;
+    let lib_rs = aifo_coder::TextLines::new()
+        .extend([
+            "pub fn add(a: i32, b: i32) -> i32 {".to_string(),
+            "    a + b".to_string(),
+            "}".to_string(),
+            "".to_string(),
+            "#[cfg(test)]".to_string(),
+            "mod tests {".to_string(),
+            "    use super::*;".to_string(),
+            "    #[test]".to_string(),
+            "    fn e2e_adds() {".to_string(),
+            "        assert_eq!(add(2, 3), 5);".to_string(),
+            "    }".to_string(),
+            "}".to_string(),
+        ])
+        .build_lf()
+        .expect("lib rs");
     write_file(&ws.join("src").join("lib.rs"), lib_rs);
 
     // Ensure repo-root detection works (many functions look for a .git directory)
