@@ -84,7 +84,7 @@ fn e2e_toolchain_rust_acceptance_full_suite() {
         ])
         .build_lf()
         .expect("cargo toml");
-    write_file(&ws.join("Cargo.toml"), cargo_toml);
+    write_file(&ws.join("Cargo.toml"), &cargo_toml);
 
     // Keep formatting simple and clippy-clean
     let lib_rs = aifo_coder::TextLines::new()
@@ -104,7 +104,7 @@ fn e2e_toolchain_rust_acceptance_full_suite() {
         ])
         .build_lf()
         .expect("lib rs");
-    write_file(&ws.join("src").join("lib.rs"), lib_rs);
+    write_file(&ws.join("src").join("lib.rs"), &lib_rs);
 
     // Ensure repo-root detection works (many functions look for a .git directory)
     std::fs::create_dir_all(ws.join(".git")).expect("mkdir .git");

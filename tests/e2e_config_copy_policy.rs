@@ -172,7 +172,7 @@ fn e2e_config_copy_and_permissions_for_aider() {
         ])
         .build()
         .expect("script");
-    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
     support::stop_container(&runtime, &name);
 
     assert!(
@@ -271,7 +271,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         ])
         .build()
         .expect("script");
-    let (_ec, out) = support::docker_exec_sh(&runtime, &name, script);
+    let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
     support::stop_container(&runtime, &name);
 
     assert!(
