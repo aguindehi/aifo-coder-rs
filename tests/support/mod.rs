@@ -205,15 +205,9 @@ pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String)
 
 #[allow(dead_code)]
 pub fn wait_for_config_copied(runtime: &Path, name: &str) -> bool {
-    let script = aifo_coder::ShellScript::new()
-        .push(
-            r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#
-                .to_string(),
-        )
-        .build()
-        .unwrap_or_else(|_| String::new());
+    let script = r#"if [ -f "$HOME/.aifo-config/.copied" ] || [ -d "$HOME/.aifo-config" ]; then echo READY; fi"#;
     for _ in 0..50 {
-        let (_ec, out) = docker_exec_sh(runtime, name, &script);
+        let (_ec, out) = docker_exec_sh(runtime, name, script);
         if out.contains("READY") {
             return true;
         }
