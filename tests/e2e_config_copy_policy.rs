@@ -152,28 +152,8 @@ fn e2e_config_copy_and_permissions_for_aider() {
     );
 
     // Verify files and permissions inside container
-    let script_body = aifo_coder::ShellFile::new()
-        .extend([
-            "set -e".to_string(),
-            r#"ok1=""; ok2=""; ok3=""; ok4=""; ok5="""#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/global/config.toml" ] && ok1="1""#.to_string(),
-            r#"perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null || echo "")""#.to_string(),
-            r#"[ -n "$perm1" ] && p1="${perm1#${perm1%???}}" || p1="""#.to_string(),
-            r#"[ "$p1" = "644" ] && ok2="1""#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/.aider.conf.yml" ] && ok3="1""#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/creds.token" ] && {"#.to_string(),
-            r#"  perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || echo "")""#.to_string(),
-            r#"  [ -n "$perm2" ] && p2="${perm2#${perm2%???}}" || p2="""#.to_string(),
-            r#"  [ "$p2" = "600" ] && ok4="1""#.to_string(),
-            "}".to_string(),
-            r#"[ -f "$HOME/.aider.conf.yml" ] && ok5="1""#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing""#.to_string(),
-            r#"echo "OKS=$ok1$ok2$ok3$ok4$ok5""#.to_string(),
-        ])
-        .build()
-        .expect("script body");
     let script = aifo_coder::ShellScript::new()
-        .push(format!("sh -c {}", aifo_coder::shell_escape(&script_body)))
+        .push(r#"set -e; ok1=""; ok2=""; ok3=""; ok4=""; ok5=""; [ -f "$HOME/.aifo-config/global/config.toml" ] && ok1="1"; perm1="$(stat -c %a "$HOME/.aifo-config/global/config.toml" 2>/dev/null || stat -f %p "$HOME/.aifo-config/global/config.toml" 2>/dev/null || echo "")"; [ -n "$perm1" ] && p1="${perm1#${perm1%???}}" || p1=""; [ "$p1" = "644" ] && ok2="1"; [ -f "$HOME/.aifo-config/aider/.aider.conf.yml" ] && ok3="1"; if [ -f "$HOME/.aifo-config/aider/creds.token" ]; then perm2="$(stat -c %a "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || stat -f %p "$HOME/.aifo-config/aider/creds.token" 2>/dev/null || echo "")"; [ -n "$perm2" ] && p2="${perm2#${perm2%???}}" || p2=""; [ "$p2" = "600" ] && ok4="1"; fi; [ -f "$HOME/.aider.conf.yml" ] && ok5="1"; [ -f "$HOME/.aifo-config/.copied" ] && echo "STAMP=present" || echo "STAMP=missing"; echo "OKS=$ok1$ok2$ok3$ok4$ok5""#)
         .build()
         .expect("single-line control script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
