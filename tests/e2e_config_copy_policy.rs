@@ -259,7 +259,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         name
     );
 
-    let script_body = aifo_coder::ShellFile::new()
+    let script = aifo_coder::ShellFile::new()
         .extend([
             "set -e".to_string(),
             r#"have_ok=0; have_unknown=0; have_huge=0; have_link=0"#.to_string(),
@@ -270,11 +270,7 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
             r#"echo "RES=$have_ok/$have_unknown/$have_huge/$have_link""#.to_string(),
         ])
         .build()
-        .expect("script body");
-    let script = aifo_coder::ShellScript::new()
-        .push(format!("sh -c {}", aifo_coder::shell_escape(&script_body)))
-        .build()
-        .expect("single-line control script");
+        .expect("script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
     support::stop_container(&runtime, &name);
 
