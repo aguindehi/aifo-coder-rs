@@ -316,6 +316,8 @@ fn parse_headers<'a, I: Iterator<Item = &'a str>>(lines: I) -> HeaderMap {
     let mut map = HeaderMap::new();
     for line in lines {
         if let Some((k, v)) = line.split_once(':') {
+            // HTTP allows repeated headers; for our proxy we prefer "last value wins" semantics.
+            // This is important for Transfer-Encoding where multiple headers may be present.
             map.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
         }
     }
