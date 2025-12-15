@@ -59,48 +59,17 @@ fn collect_rust_files(root: &Path) -> io::Result<Vec<PathBuf>> {
 /// Returns true if there is a source-level line-continuation string (`"\` at EOL),
 /// ignoring whitespace after the backslash.
 fn has_continuation_string(line: &str) -> bool {
-    // Scan for "... \ <spaces><EOL>".
-    // We treat any `"\` that is not in a comment as a continuation candidate.
-    // This is conservative and intended as a regression guard.
-    let mut in_string = false;
-    let mut escape = false;
-    let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next() {
-        if !in_string {
-            if c == '/' && chars.peek() == Some(&'/') {
-                return false;
-            }
-            if c == '"' {
-                in_string = true;
-                escape = false;
-            }
-            continue;
-        }
-
-        if escape {
-            escape = false;
-            continue;
-        }
-
-        match c {
-            '\\' => {
-                if chars.peek() == Some(&'\n') {
-                    // Impossible in a single line, but keep structure symmetric.
-                    return true;
-                }
-                escape = true;
-                // Check EOL continuation: `"\` at end of line (allow trailing spaces/tabs).
-                if chars.peek().is_none() {
-                    return true;
-                }
-            }
-            '"' => {
-                in_string = false;
-            }
-            _ => {}
-        }
-    }
-    false
+    // Detect the forbidden source pattern:
+    //   "..."\<optional spaces><EOL>
+    //
+    // Specifically: a double quote, then a backslash, then only whitespace until end-of-line.
+    // Ignore anything after a `//` line comment start.
+    let s = match line.split_once("//") {
+        Some((before, _comment)) => before,
+        None => line,
+    };
+    let trimmed = s.trim_end_matches(|c: char| c == ' ' || c == '\t');
+    trimmed.ends_with("\"\\")
 }
 
 /// Check for a string token that spans multiple *source* lines.
@@ -109,8 +78,23 @@ fn has_continuation_string(line: &str) -> bool {
 /// - Handles raw strings: r#"..."#, r##"..."##, etc.
 /// - Ignores content inside line comments (`// ...`) and block comments (`/* ... */`).
 fn check_file(path: &Path, text: &str) -> Vec<Finding> {
+    // Phase 5: centralize invariants and reduce false positives:
+    // - Continuation strings are checked per-line only (outside of comment-only lines).
+    // - Multi-line literal detection is still a lightweight lexer but reports each literal once.
     let bytes = text.as_bytes();
     let mut out = Vec::new();
+
+    // First pass: explicit continuation string checks per source line.
+    // This is cheap and avoids coupling to the lexer state machine.
+    for (idx0, line) in text.lines().enumerate() {
+        if has_continuation_string(line) {
+            out.push(Finding {
+                path: path.to_path_buf(),
+                line_1: idx0 + 1,
+                msg: r#"forbidden continuation string: `"\` at end of line"#.to_string(),
+            });
+        }
+    }
 
     let mut i: usize = 0;
     let mut line_1: usize = 1;
@@ -162,35 +146,24 @@ fn check_file(path: &Path, text: &str) -> Vec<Finding> {
             }
         }
 
-        // Continuation strings (best-effort; line-local).
-        if b == b'"' {
-            // We'll lex the string below, but also detect the explicit `"\` EOL pattern.
-            // That pattern must be forbidden regardless of runtime content.
-            if let Some(line_end) = text[i..].find('\n') {
-                let line = &text[i..i + line_end];
-                if has_continuation_string(line) {
-                    out.push(Finding {
-                        path: path.to_path_buf(),
-                        line_1,
-                        msg: r#"forbidden continuation string: `"\` at end of line"#.to_string(),
-                    });
-                }
-            }
-        }
-
         // Normal string: "..."
         if b == b'"' {
             let start_line = line_1;
+            let mut reported = false;
+
             i += 1;
             let mut escape = false;
             while i < bytes.len() {
                 let bb = bytes[i];
                 if bb == b'\n' {
-                    out.push(Finding {
-                        path: path.to_path_buf(),
-                        line_1: start_line,
-                        msg: "forbidden multi-line string literal".to_string(),
-                    });
+                    if !reported {
+                        out.push(Finding {
+                            path: path.to_path_buf(),
+                            line_1: start_line,
+                            msg: "forbidden multi-line string literal".to_string(),
+                        });
+                        reported = true;
+                    }
                     // Recover: keep scanning; treat as if string continues until closing quote.
                     line_1 += 1;
                     i += 1;
@@ -226,16 +199,21 @@ fn check_file(path: &Path, text: &str) -> Vec<Finding> {
             }
             if j < bytes.len() && bytes[j] == b'"' {
                 let start_line = line_1;
+                let mut reported = false;
+
                 j += 1; // after opening quote
 
                 // Find closing: `"` + hashes of `#`
                 while j < bytes.len() {
                     if bytes[j] == b'\n' {
-                        out.push(Finding {
-                            path: path.to_path_buf(),
-                            line_1: start_line,
-                            msg: "forbidden multi-line raw string literal".to_string(),
-                        });
+                        if !reported {
+                            out.push(Finding {
+                                path: path.to_path_buf(),
+                                line_1: start_line,
+                                msg: "forbidden multi-line raw string literal".to_string(),
+                            });
+                            reported = true;
+                        }
                         line_1 += 1;
                         j += 1;
                         continue;
