@@ -243,20 +243,8 @@ fn e2e_config_skip_symlink_oversized_disallowed() {
         name
     );
 
-    let script_body = aifo_coder::ShellFile::new()
-        .extend([
-            "set -e".to_string(),
-            r#"have_ok=0; have_unknown=0; have_huge=0; have_link=0"#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/ok.yaml" ] && have_ok=1"#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/unknown.xxx" ] && have_unknown=1"#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/huge.yml" ] && have_huge=1"#.to_string(),
-            r#"[ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1"#.to_string(),
-            r#"echo "RES=$have_ok/$have_unknown/$have_huge/$have_link""#.to_string(),
-        ])
-        .build()
-        .expect("script body");
     let script = aifo_coder::ShellScript::new()
-        .push(format!("sh -c {}", aifo_coder::shell_escape(&script_body)))
+        .push(r#"set -e; have_ok=0; have_unknown=0; have_huge=0; have_link=0; [ -f "$HOME/.aifo-config/aider/ok.yaml" ] && have_ok=1; [ -f "$HOME/.aifo-config/aider/unknown.xxx" ] && have_unknown=1; [ -f "$HOME/.aifo-config/aider/huge.yml" ] && have_huge=1; [ -f "$HOME/.aifo-config/aider/link.yml" ] && have_link=1; echo "RES=$have_ok/$have_unknown/$have_huge/$have_link""#)
         .build()
         .expect("single-line control script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
