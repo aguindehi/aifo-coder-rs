@@ -1,6 +1,7 @@
-#![doc = "Warning utilities: color-aware printing and interactive prompt helpers."]
-#![doc = "Unix single-key input uses stty in best-effort mode; if stty is absent or fails,"]
-#![doc = "errors are ignored and a sane fallback is attempted. Behavior and messages are preserved."]
+//! Warning utilities: color-aware printing and interactive prompt helpers.
+//!
+//! Unix single-key input uses stty in best-effort mode; if stty is absent or fails,
+//! errors are ignored and a sane fallback is attempted. Behavior and messages are preserved.
 #[cfg(unix)]
 use std::io::Read;
 use std::io::Write;
