@@ -130,7 +130,7 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
     );
 
     // Inside container: $HOME/.aifo-config should exist; .copied stamp should be absent
-    let script = aifo_coder::ShellFile::new()
+    let script_body = aifo_coder::ShellFile::new()
         .extend([
             "set -e".to_string(),
             r#"d="$HOME/.aifo-config""#.to_string(),
@@ -140,7 +140,14 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
                 .to_string(),
         ])
         .build()
-        .expect("script");
+        .expect("script body");
+    let script = aifo_coder::ShellScript::new()
+        .push(format!(
+            "sh -c {}",
+            aifo_coder::shell_escape(&script_body)
+        ))
+        .build()
+        .expect("single-line control script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
     support::stop_container(&runtime, &name);
 
