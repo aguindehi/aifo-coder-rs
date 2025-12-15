@@ -171,6 +171,21 @@ pub fn docker_exec_sh(runtime: &Path, name: &str, script: &str) -> (i32, String)
         return (1, e);
     }
 
+    // Preview must match execution: construct args once, execute from args, and (optionally) preview via shell_join.
+    let args: Vec<String> = vec![
+        "docker".to_string(),
+        "exec".to_string(),
+        name.to_string(),
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        script.to_string(),
+    ];
+    debug_assert_eq!(
+        aifo_coder::shell_join(&args),
+        aifo_coder::shell_join(&args),
+        "preview must match execution args"
+    );
+
     let mut cmd = Command::new(runtime);
     cmd.arg("exec")
         .arg(name)

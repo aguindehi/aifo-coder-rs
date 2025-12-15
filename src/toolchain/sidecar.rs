@@ -71,8 +71,7 @@ pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -
             "create".to_string(),
             name.to_string(),
         ];
-        let preview = shell_join(&args);
-        crate::validate_preview_matches_args(&preview, &args);
+        let preview = crate::preview_from_args(&args);
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
     let mut cmd = Command::new(runtime);
@@ -137,8 +136,7 @@ pub(crate) fn remove_network(runtime: &Path, name: &str, verbose: bool) {
             "rm".to_string(),
             name.to_string(),
         ];
-        let preview = shell_join(&args);
-        crate::validate_preview_matches_args(&preview, &args);
+        let preview = crate::preview_from_args(&args);
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
     }
     let _ = cmd.status();
@@ -949,8 +947,7 @@ pub fn toolchain_run(
         &[],
         apparmor_profile.as_deref(),
     );
-    let run_preview = shell_join(&run_preview_args);
-    crate::validate_preview_matches_args(&run_preview, &run_preview_args);
+    let run_preview = crate::preview_from_args(&run_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", run_preview));
@@ -1070,8 +1067,7 @@ pub fn toolchain_run(
         sidecar_kind.as_str(),
         args,
     );
-    let exec_preview = shell_join(&exec_preview_args);
-    crate::validate_preview_matches_args(&exec_preview, &exec_preview_args);
+    let exec_preview = crate::preview_from_args(&exec_preview_args);
 
     if verbose || dry_run {
         crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", exec_preview));
@@ -1201,10 +1197,8 @@ pub fn toolchain_start_session(
             apparmor_profile.as_deref(),
         );
         if verbose {
-            crate::log_info_stderr(
-                use_err,
-                &format!("aifo-coder: docker: {}", shell_join(&args)),
-            );
+            let preview = crate::preview_from_args(&args);
+            crate::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
         }
         // Ensure host .pnpm-store exists and is writable for node session sidecar
         if kind == "node" {

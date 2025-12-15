@@ -41,6 +41,19 @@ fn docker_run_sh_lc(tag: &str, script: &str) -> Result<(), String> {
     // Centralized boundary validation: keep call sites clean/noisy-free while still enforcing
     // the "no CR/LF/NUL in sh -lc control scripts" invariant.
     aifo_coder::validate_sh_c_script(script, "docker run sh -lc script")?;
+
+    // Preview must match execution: build args once and execute from args.
+    let args: Vec<String> = vec![
+        "docker".to_string(),
+        "run".to_string(),
+        "--rm".to_string(),
+        tag.to_string(),
+        "sh".to_string(),
+        "-lc".to_string(),
+        script.to_string(),
+    ];
+    let _preview = aifo_coder::shell_join(&args);
+
     let mut cmd = Command::new("docker");
     cmd.arg("run")
         .arg("--rm")

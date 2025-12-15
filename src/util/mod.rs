@@ -13,11 +13,21 @@ pub use shell_script::ShellScript;
 pub use text_lines::TextLines;
 
 pub(crate) fn validate_preview_matches_args(preview: &str, args: &[String]) {
+    // This is a debug-only guardrail to ensure preview construction shares the same args as
+    // the executed command construction. The preview is derived exclusively from `args`.
     debug_assert_eq!(
         preview,
         shell_join(args),
         "preview must match shell_join(args)"
     );
+}
+
+/// Build the preview string from `args` and assert it matches the same args.
+/// Returns the preview string (shell-escaped).
+pub(crate) fn preview_from_args(args: &[String]) -> String {
+    let preview = shell_join(args);
+    validate_preview_matches_args(&preview, args);
+    preview
 }
 
 /// Reject strings containing newline, carriage return, or NUL.
