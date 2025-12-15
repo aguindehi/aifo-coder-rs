@@ -29,14 +29,6 @@ fn run(cmd: &mut Command) -> Result<(), String> {
     Ok(())
 }
 
-fn run_expect_fail(cmd: &mut Command) -> Result<(), String> {
-    let out = cmd.output().map_err(|e| format!("spawn failed: {e}"))?;
-    if out.status.success() {
-        return Err("expected failure but succeeded".to_string());
-    }
-    Ok(())
-}
-
 fn docker_run_sh_lc(tag: &str, script: &str) -> Result<(), String> {
     // Centralized boundary validation: keep call sites clean/noisy-free while still enforcing
     // the "no CR/LF/NUL in sh -lc control scripts" invariant.
