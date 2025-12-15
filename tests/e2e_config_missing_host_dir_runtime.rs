@@ -142,10 +142,7 @@ fn e2e_config_missing_host_dir_runtime_no_copy_stamp() {
         .build()
         .expect("script body");
     let script = aifo_coder::ShellScript::new()
-        .push(format!(
-            "sh -c {}",
-            aifo_coder::shell_escape(&script_body)
-        ))
+        .push(format!("sh -c {}", aifo_coder::shell_escape(&script_body)))
         .build()
         .expect("single-line control script");
     let (_ec, out) = support::docker_exec_sh(&runtime, &name, &script);
