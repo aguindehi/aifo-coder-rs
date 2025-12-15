@@ -31,6 +31,18 @@ pub fn validate_sh_c_script(script: &str, what: &str) -> Result<(), String> {
     reject_newlines(script, what)
 }
 
+/// Validate a `docker exec <container> sh -c <script>` control script.
+/// Kept as a distinct wrapper so call sites stay explicit and greppable.
+pub fn validate_docker_exec_sh_script(script: &str) -> Result<(), String> {
+    validate_sh_c_script(script, "docker exec sh -c script")
+}
+
+/// Validate a `docker exec <container> sh -lc <script>` control script.
+/// Kept as a distinct wrapper so call sites stay explicit and greppable.
+pub fn validate_docker_exec_sh_login_script(script: &str) -> Result<(), String> {
+    validate_sh_c_script(script, "docker exec sh -lc script")
+}
+
 pub fn shell_join(args: &[String]) -> String {
     args.iter()
         .map(|a| shell_escape(a))
