@@ -505,9 +505,9 @@ mod http_hardening_tests {
         // Non-chunked request with a Content-Length larger than BODY_CAP should be capped.
         let payload = "x".repeat(2_000_000);
         let header = [
-            "POST /exec HTTP/1.1",
-            "Host: localhost",
-            "Content-Type: application/x-www-form-urlencoded",
+            "POST /exec HTTP/1.1".to_string(),
+            "Host: localhost".to_string(),
+            "Content-Type: application/x-www-form-urlencoded".to_string(),
             format!("Content-Length: {}", payload.len()),
             "Connection: close".to_string(),
             "".to_string(),
