@@ -1047,3 +1047,6 @@ See LICENSE
 - OpenAI Codex CLI: https://github.com/openai/codex
 - Charmbracelet Crush: https://github.com/charmbracelet/crush
 - Aider: https://github.com/Aider-AI/aider
+- OpenHands: https://github.com/All-Hands-AI/OpenHands
+- OpenCode: https://github.com/opencode-ai/opencode
+- Plandex: https://github.com/plandex-ai/plandex
