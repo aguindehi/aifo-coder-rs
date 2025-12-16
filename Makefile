@@ -3735,6 +3735,11 @@ publish-macos-signed-zips-local-glab:
 	    echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
 	    exit 2; \
 	  fi; \
+	  if ! git rev-parse "$$TAG^{tag}" >/dev/null 2>&1 && ! git rev-parse "$$TAG" >/dev/null 2>&1; then \
+	    echo "Creating annotated git tag $$TAG with release notes as tag message ..."; \
+	    printf '%s\n' "$$NOTES" | git tag -a "$$TAG" -F -; \
+	    git push origin "$$TAG"; \
+	  fi; \
 	  if [ -t 0 ]; then \
 	    echo "Creating Release $$TAG with provided notes..."; \
 	  fi; \
