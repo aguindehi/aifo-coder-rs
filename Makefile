@@ -1796,7 +1796,7 @@ publish-release-macos-signed:
 	    exit 2 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_POSTFIX|^VERSION|^TAG[[:space:]]*\\?=\" " >&2; \
+	    echo "Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\|^RELEASE_POSTFIX\|^VERSION\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
 	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
