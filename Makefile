@@ -1769,45 +1769,41 @@ publish-release:
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
 .PHONY: publish-release-macos-signed
 publish-release-macos-signed:
-	@/bin/sh -ec "\
+	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo \"publish-release-macos-signed: publish signed macOS zips for a versioned release tag.\"; \
-	if ! command -v glab >/dev/null 2>&1 && [ -z \"\${RELEASE_ASSETS_API_TOKEN:-}\" ]; then \
-	  echo \"Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback.\" >&2; \
-	  echo \"Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN.\" >&2; \
+	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag."; \
+	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
+	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
 	  exit 1; \
 	fi; \
-	ORIG_TAG_ORIGIN='$(origin TAG)'; \
-	if [ \"\$$ORIG_TAG_ORIGIN\" = \"command\" ]; then \
-	  TAG_EFF='$(TAG)'; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
+	  TAG_EFF="$(TAG)"; \
 	else \
-	  TAG_EFF='$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)'; \
+	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
 	fi; \
-	TAG_EFF=\"\$$(
-	  printf '%s' \"\$$TAG_EFF\" \
-	    | tr -d '\r\n' \
-	    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'
-	)\"; \
-	case \"\$$TAG_EFF\" in \
-	  \"\" ) \
-	    echo \"Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX.\" >&2; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
 	    exit 1 ;; \
 	  latest ) \
-	    echo \"Error: refusing to publish macOS signed release with tag 'latest'.\" >&2; \
-	    echo \"Hint: run make publish-release (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION).\" >&2; \
+	    echo "Error: refusing to publish macOS signed release with tag '\''latest'\''." >&2; \
+	    echo "Hint: run make publish-release (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
 	    exit 2 ;; \
 	  -* ) \
-	    echo \"Error: derived release tag '\$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX).\" >&2; \
-	    echo \"Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG\" >&2; \
+	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
-	echo \"Publishing signed macOS zips for \$$TAG_EFF ...\"; \
-	$(MAKE) TAG=\"\$$TAG_EFF\" release-macos-binary-signed; \
-	$(MAKE) TAG=\"\$$TAG_EFF\" publish-macos-signed-zips-local; \
-	echo \"Done. Ensure the git tag '\$$TAG_EFF' exists in GitLab so the Release reflects these assets.\"; \
-	"
+	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-signed-zips-local; \
+	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
+	'
 
 .PHONY: build-slim build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
 build-slim: build-codex-slim build-crush-slim build-aider-slim build-openhands-slim build-opencode-slim build-plandex-slim
