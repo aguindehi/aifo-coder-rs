@@ -58,6 +58,9 @@ CARGO_FLAGS ?= --features otel-otlp
 # Cargo UI flags:
 # - Keep warnings/errors, but suppress per-crate "Compiling/Checking ..." noise.
 # - Override with CARGO_UI_FLAGS= for debugging.
+#
+# Note: cargo honors -q (quiet) and will still print warnings/errors. This is
+# the preferred way to avoid per-crate progress spam while preserving diagnostics.
 CARGO_UI_FLAGS ?= -q
 
 # Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
@@ -1974,7 +1977,7 @@ lint:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "Running cargo fmt --check (sidecar) ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -1986,7 +1989,7 @@ lint:
 	  HAVE_FMT=$$(rustup component list --toolchain stable 2>/dev/null | awk '/^rustfmt .* (installed)/{print 1; exit}'); \
 	  if [ "$$HAVE_FMT" = "1" ]; then \
 	    echo "Using rustup stable rustfmt"; \
-	    rustup run stable cargo fmt -- --check || rustup run stable cargo fmt; \
+	    rustup run stable cargo $(CARGO_UI_FLAGS) fmt -- --check || rustup run stable cargo fmt; \
 	  else \
 	    echo "Using local cargo fmt"; \
 	    cargo fmt -- --check || cargo fmt; \
@@ -2003,7 +2006,7 @@ lint:
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -2017,7 +2020,7 @@ lint:
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
-	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
+	      if cargo fmt --version >/dev/null 2>&1; then cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
 	      cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
@@ -2066,7 +2069,7 @@ lint-ultra:
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -2090,7 +2093,24 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint lint-docker lint-tests-naming tidy-no-multiline-strings test
+check:
+	@set -e; \
+	echo "==> check: fmt + clippy"; \
+	$(MAKE) lint; \
+	echo "OK: lint"; \
+	echo "==> check: docker lint"; \
+	$(MAKE) lint-docker; \
+	echo "OK: lint-docker"; \
+	echo "==> check: test naming lint"; \
+	$(MAKE) lint-tests-naming; \
+	echo "OK: lint-tests-naming"; \
+	echo "==> check: tidy (no multiline strings)"; \
+	$(MAKE) tidy-no-multiline-strings; \
+	echo "OK: tidy-no-multiline-strings"; \
+	echo "==> check: unit tests (cargo nextest)"; \
+	$(MAKE) test; \
+	echo "OK: test"; \
+	echo "OK: check (all steps succeeded)"
 
 check-unit: tidy-no-multiline-strings test
 
