@@ -63,6 +63,10 @@ CARGO_UI_FLAGS ?= -q
 # Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 
+# macOS code signing identity
+#SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+SIGN_IDENTITY ?= Migros AI Foundation Code Signing
+NOTARY_PROFILE ?=
 
 # OpenTelemetry configuration
 # ---------------------------
@@ -3043,9 +3047,6 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
-#SIGN_IDENTITY ?= Migros AI Foundation Code Signer
-SIGN_IDENTITY ?= Migros AI Foundation Code Signing
-NOTARY_PROFILE ?=
 DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
 
 # Install locations (override as needed)
