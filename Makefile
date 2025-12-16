@@ -379,10 +379,8 @@ banner:
 	@echo "    - Optional unix:// proxy on Linux; host-gateway bridging when needed."
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
 	@echo ""
-	@echo " ⚠️  Guardrail: Local builds should prefer docker buildx/BuildKit (DOCKER_BUILDKIT=1)."
-	@echo "    Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo " 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>
+	@echo " 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>"
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 
 help: banner
