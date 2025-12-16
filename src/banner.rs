@@ -117,10 +117,7 @@ pub(crate) fn print_startup_banner() {
     eprintln!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     eprintln!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(concat!(
-        " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros ",
-        "AI Foundation at MGB"
-    ));
+    eprintln!(" 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!();
 }
