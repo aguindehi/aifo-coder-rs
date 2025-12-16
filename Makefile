@@ -1770,21 +1770,31 @@ publish-release-macos-signed:
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
+	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag."; \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
 	  exit 1; \
 	fi; \
-	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
+	  TAG_EFF="$(TAG)"; \
+	else \
+	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
+	fi; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
-	    echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
 	    exit 1 ;; \
+	  latest ) \
+	    echo "Error: refusing to publish macOS signed release with tag 'latest'." >&2; \
+	    echo "Hint: run 'make publish-release' (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    exit 2 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_TAG_EFFECTIVE|^TAG[[:space:]]*\\?=\" " >&2; \
-	    exit 2 ;; \
+	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_POSTFIX|^VERSION|^TAG[[:space:]]*\\?=\" " >&2; \
+	    exit 3 ;; \
 	esac; \
 	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
 	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
