@@ -851,6 +851,7 @@ publish-release:
     - qual-mcap-gcp
   image: repository.migros.net/registry.gitlab.com/gitlab-org/release-cli:v0.24.0
   script:
+    - apk add --no-cache zip
     - |
       set -euo pipefail
       echo "Preparing release artifacts..."
