@@ -1964,6 +1964,7 @@ build-shim-with-builder:
 
 lint:
 	@set -e; \
+	echo ""; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	case "$$OS" in \
@@ -2095,18 +2096,23 @@ lint-ultra:
 
 check:
 	@set -e; \
+	echo ""; \
 	echo "==> check: fmt + clippy"; \
 	$(MAKE) lint; \
 	echo "OK: lint"; \
+	echo ""; \
 	echo "==> check: docker lint"; \
 	$(MAKE) lint-docker; \
 	echo "OK: lint-docker"; \
+	echo ""; \
 	echo "==> check: test naming lint"; \
 	$(MAKE) lint-tests-naming; \
 	echo "OK: lint-tests-naming"; \
+	echo ""; \
 	echo "==> check: tidy (no multiline strings)"; \
 	$(MAKE) tidy-no-multiline-strings; \
 	echo "OK: tidy-no-multiline-strings"; \
+	echo ""; \
 	echo "==> check: unit tests (cargo nextest)"; \
 	$(MAKE) test; \
 	echo "OK: test"; \
@@ -2116,6 +2122,7 @@ check-unit: tidy-no-multiline-strings test
 
 tidy-no-multiline-strings:
 	@set -e; \
+	echo ""; \
 	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (repo-wide guard: src/** + tests/** + build.rs) ..."; \
 	mkdir -p build; \
 	if command -v rustc >/dev/null 2>&1; then \
