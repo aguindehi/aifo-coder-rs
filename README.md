@@ -1038,19 +1038,7 @@ Crush example config:
 
 ## License and copyright
 
-Licensed under the Apache License, Version 2.0.
-
-You may not use this project except in compliance with the License.
-You may obtain a copy of the License at:
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, this software is
-distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-either express or implied. See the License for the specific language governing
-permissions and limitations under the License.
-
-Copyright (c) 2025, Amir Guindehi <amir.guindehi@mgb.ch>, Head of the Migros AI Foundation.
+See LICENSE
 
 ---
 
@@ -1059,3 +1047,6 @@ Copyright (c) 2025, Amir Guindehi <amir.guindehi@mgb.ch>, Head of the Migros AI 
 - OpenAI Codex CLI: https://github.com/openai/codex
 - Charmbracelet Crush: https://github.com/charmbracelet/crush
 - Aider: https://github.com/Aider-AI/aider
+- OpenHands: https://github.com/All-Hands-AI/OpenHands
+- OpenCode: https://github.com/opencode-ai/opencode
+- Plandex: https://github.com/plandex-ai/plandex

@@ -18,7 +18,7 @@
 #     - Optional unix:// proxy on Linux; host-gateway bridging when needed.
 #     - Minimal mounts: project workspace, config files, optional GnuPG keyrings.
 # ──────────────────────────────────────────────────────────────────────────────────────────────
-#  📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB
+#  📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>
 # ──────────────────────────────────────────────────────────────────────────────────────────────
 #
 
@@ -379,10 +379,8 @@ banner:
 	@echo "    - Optional unix:// proxy on Linux; host-gateway bridging when needed."
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
 	@echo ""
-	@echo " ⚠️  Guardrail: Local builds should prefer docker buildx/BuildKit (DOCKER_BUILDKIT=1)."
-	@echo "    Classic 'docker build' (BuildKit disabled) may fail on Dockerfiles using RUN --mount."
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo " 📜 Written 2025 by Amir Guindehi <amir.guindehi@mgb.ch>, Head of Migros AI Foundation at MGB "
+	@echo " 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>"
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 
 help: banner
@@ -578,6 +576,8 @@ help: banner
 	@echo "                                      make publish-release RELEASE_POSTFIX=rc1"
 	@echo "                                      make publish-release REGISTRY=my.registry/prefix/"
 	@echo "                                      make publish-release KEEP_APT=1"
+	@echo ""
+	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -3043,7 +3043,8 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
-SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+#SIGN_IDENTITY ?= Migros AI Foundation Code Signer
+SIGN_IDENTITY ?= Migros AI Foundation Code Signing
 NOTARY_PROFILE ?=
 DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
 
@@ -3699,26 +3700,50 @@ publish-macos-signed-zips-local-glab:
 	echo "Resolved project: $$BASE_WEB (id=$$PID)"; \
 	echo "glab version: $$(glab --version | head -n1)"; \
 	echo "Ensuring GitLab Release exists for tag $$TAG ..."; \
-	if ! glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
-	  echo "Release $$TAG not found; creating it."; \
-	  NOTES="$${RELEASE_NOTES:-}"; \
-	  if [ -z "$$NOTES" ]; then \
-	    if [ -t 0 ]; then \
-	      echo "Enter release notes (finish with a line containing only EOF):"; \
-	      NOTES="$$(cat <<'__AIFO_EOF__'\n$$(cat)\n__AIFO_EOF__)" ; \
-	    fi; \
-	  fi; \
-	  if [ -z "$$NOTES" ]; then \
-	    echo "Error: release notes are required (set RELEASE_NOTES or provide input interactively)." >&2; \
+	NOTES="$${RELEASE_NOTES:-}"; \
+	if [ -z "$$NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	  if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	    NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	  else \
+	    echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
 	    exit 2; \
 	  fi; \
-	  if [ -t 0 ]; then \
-	    echo "Creating Release $$TAG with provided notes..."; \
-	  fi; \
-	  printf "%s" "$$NOTES" >"$(DIST_DIR)/.release-notes.tmp"; \
-	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "@$(DIST_DIR)/.release-notes.tmp"; \
-	  rm -f "$(DIST_DIR)/.release-notes.tmp"; \
 	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  if [ -t 0 ]; then \
+	    echo "Enter release notes (finish with a line containing only EOF):"; \
+	    NOTES="$$( \
+	      first=1; \
+	      while IFS= read -r line; do \
+	        [ "$$line" = "EOF" ] && break; \
+	        if [ $$first -eq 1 ]; then \
+	          printf '%s' "$$line"; \
+	          first=0; \
+	        else \
+	          printf '\n%s' "$$line"; \
+	        fi; \
+	      done \
+	    )"; \
+	  else \
+	    echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	  exit 2; \
+	fi; \
+	echo "Creating/updating annotated git tag $$TAG with release notes as tag message ..."; \
+	printf '%s\n' "$$NOTES" | git tag -a -f "$$TAG" -F -; \
+	git push origin "$$TAG" --force; \
+	if glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "Existing GitLab Release $$TAG found; deleting to recreate with updated notes."; \
+	  glab release delete "$$TAG" -R "$$PROJ_PATH" --yes; \
+	fi; \
+	if [ -t 0 ]; then \
+	  echo "Creating Release $$TAG with provided notes..."; \
+	fi; \
+	glab release create "$$TAG" -R "$$PROJ_PATH" --notes "$$NOTES"; \
 	echo "Uploading signed macOS zip assets to Release $$TAG ..."; \
 	FILES=""; \
 	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
