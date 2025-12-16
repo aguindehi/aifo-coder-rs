@@ -876,26 +876,29 @@ publish-release:
       # Keep a stable 'aifo-coder' binary name inside the archive; version is in the filename.
       ( \
         stage="$(mktemp -d)"; \
+        out="${CI_PROJECT_DIR}/aifo-coder-${VERSION}-linux-x86_64.zip"; \
         install -m 0755 aifo-coder-linux-x86_64 "${stage}/aifo-coder"; \
         install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
         cp -a docs "${stage}/"; \
-        (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-linux-x86_64.zip" .); \
+        (cd "${stage}" && zip -9qr "${out}" .); \
         rm -rf "${stage}"; \
       )
       ( \
         stage="$(mktemp -d)"; \
+        out="${CI_PROJECT_DIR}/aifo-coder-${VERSION}-macos-arm64.zip"; \
         install -m 0755 aifo-coder-macos-arm64 "${stage}/aifo-coder"; \
         install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
         cp -a docs "${stage}/"; \
-        (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-arm64.zip" .); \
+        (cd "${stage}" && zip -9qr "${out}" .); \
         rm -rf "${stage}"; \
       )
       ( \
         stage="$(mktemp -d)"; \
+        out="${CI_PROJECT_DIR}/aifo-coder-${VERSION}-macos-x86_64.zip"; \
         install -m 0755 aifo-coder-macos-x86_64 "${stage}/aifo-coder"; \
         install -m 0644 README.md NOTICE LICENSE "${stage}/"; \
         cp -a docs "${stage}/"; \
-        (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-x86_64.zip" .); \
+        (cd "${stage}" && zip -9qr "${out}" .); \
         rm -rf "${stage}"; \
       )
       echo "Artifacts ready:"

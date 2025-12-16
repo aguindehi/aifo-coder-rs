@@ -58,6 +58,9 @@ CARGO_FLAGS ?= --features otel-otlp
 # Cargo UI flags:
 # - Keep warnings/errors, but suppress per-crate "Compiling/Checking ..." noise.
 # - Override with CARGO_UI_FLAGS= for debugging.
+#
+# Note: cargo honors -q (quiet) and will still print warnings/errors. This is
+# the preferred way to avoid per-crate progress spam while preserving diagnostics.
 CARGO_UI_FLAGS ?= -q
 
 # Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
@@ -1770,21 +1773,31 @@ publish-release-macos-signed:
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-signed: derive TAG from Cargo.toml (release-<version>) unless TAG is overridden."; \
+	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag."; \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
 	  exit 1; \
 	fi; \
-	TAG_EFF="$$(printf "%s" "$(RELEASE_TAG_EFFECTIVE)" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
+	  TAG_EFF="$(TAG)"; \
+	else \
+	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
+	fi; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
-	    echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE). Check VERSION/RELEASE_PREFIX." >&2; \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
 	    exit 1 ;; \
+	  latest ) \
+	    echo "Error: refusing to publish macOS signed release with tag 'latest'." >&2; \
+	    echo "Hint: run 'make publish-release' (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    exit 2 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_TAG_EFFECTIVE|^TAG[[:space:]]*\\?=\" " >&2; \
-	    exit 2 ;; \
+	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_POSTFIX|^VERSION|^TAG[[:space:]]*\\?=\" " >&2; \
+	    exit 3 ;; \
 	esac; \
 	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
 	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
@@ -1951,6 +1964,7 @@ build-shim-with-builder:
 
 lint:
 	@set -e; \
+	echo ""; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	case "$$OS" in \
@@ -1964,7 +1978,7 @@ lint:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  echo "Running cargo fmt --check (sidecar) ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -1976,7 +1990,7 @@ lint:
 	  HAVE_FMT=$$(rustup component list --toolchain stable 2>/dev/null | awk '/^rustfmt .* (installed)/{print 1; exit}'); \
 	  if [ "$$HAVE_FMT" = "1" ]; then \
 	    echo "Using rustup stable rustfmt"; \
-	    rustup run stable cargo fmt -- --check || rustup run stable cargo fmt; \
+	    rustup run stable cargo $(CARGO_UI_FLAGS) fmt -- --check || rustup run stable cargo fmt; \
 	  else \
 	    echo "Using local cargo fmt"; \
 	    cargo fmt -- --check || cargo fmt; \
@@ -1993,7 +2007,7 @@ lint:
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -2007,7 +2021,7 @@ lint:
 	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	    -v "$$PWD/target:/workspace/target" \
 	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; \
-	      if cargo fmt --version >/dev/null 2>&1; then cargo fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
+	      if cargo fmt --version >/dev/null 2>&1; then cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; else echo "warning: cargo-fmt not installed in builder image; skipping format check" >&2; fi; \
 	      cargo $(CARGO_UI_FLAGS) clippy --workspace --all-features -- -D warnings'; \
 	else \
 	  echo "Error: neither rustup/cargo nor docker found; cannot run lint." >&2; \
@@ -2056,7 +2070,7 @@ lint-ultra:
 	elif command -v cargo >/dev/null 2>&1; then \
 	  echo "Running cargo fmt --check ..."; \
 	  if cargo fmt --version >/dev/null 2>&1; then \
-	    cargo fmt -- --check || cargo fmt; \
+	    cargo $(CARGO_UI_FLAGS) fmt -- --check || cargo fmt; \
 	  else \
 	    echo "warning: cargo-fmt not installed; skipping format check" >&2; \
 	  fi; \
@@ -2080,12 +2094,35 @@ lint-ultra:
 	  exit 1; \
 	fi
 
-check: lint lint-docker lint-tests-naming tidy-no-multiline-strings test
+check:
+	@set -e; \
+	echo ""; \
+	echo "==> check: fmt + clippy"; \
+	$(MAKE) lint; \
+	echo "OK: lint"; \
+	echo ""; \
+	echo "==> check: docker lint"; \
+	$(MAKE) lint-docker; \
+	echo "OK: lint-docker"; \
+	echo ""; \
+	echo "==> check: test naming lint"; \
+	$(MAKE) lint-tests-naming; \
+	echo "OK: lint-tests-naming"; \
+	echo ""; \
+	echo "==> check: tidy (no multiline strings)"; \
+	$(MAKE) tidy-no-multiline-strings; \
+	echo "OK: tidy-no-multiline-strings"; \
+	echo ""; \
+	echo "==> check: unit tests (cargo nextest)"; \
+	$(MAKE) test; \
+	echo "OK: test"; \
+	echo "OK: check (all steps succeeded)"
 
 check-unit: tidy-no-multiline-strings test
 
 tidy-no-multiline-strings:
 	@set -e; \
+	echo ""; \
 	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (repo-wide guard: src/** + tests/** + build.rs) ..."; \
 	mkdir -p build; \
 	if command -v rustc >/dev/null 2>&1; then \
