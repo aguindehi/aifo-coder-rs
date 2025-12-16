@@ -66,7 +66,7 @@ MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 # macOS code signing identity
 #SIGN_IDENTITY ?= Migros AI Foundation Code Signer
 #SIGN_IDENTITY ?= Migros AI Foundation - Code Signing
-SIGN_IDENTITY ?= 'Developer ID Application: Migros-Genossenschafts-Bund (QXQ64GKD2R)'
+SIGN_IDENTITY ?= Developer ID Application: Migros-Genossenschafts-Bund (QXQ64GKD2R)
 NOTARY_PROFILE ?=
 
 # OpenTelemetry configuration
