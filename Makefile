@@ -3702,51 +3702,50 @@ publish-macos-signed-zips-local-glab:
 	echo "Resolved project: $$BASE_WEB (id=$$PID)"; \
 	echo "glab version: $$(glab --version | head -n1)"; \
 	echo "Ensuring GitLab Release exists for tag $$TAG ..."; \
-	if ! glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
-	  echo "Release $$TAG not found; creating it."; \
-	  NOTES="$${RELEASE_NOTES:-}"; \
-	  if [ -z "$$NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
-	    if [ -f "$$RELEASE_NOTES_FILE" ]; then \
-	      NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
-	    else \
-	      echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
-	      exit 2; \
-	    fi; \
-	  fi; \
-	  if [ -z "$$NOTES" ]; then \
-	    if [ -t 0 ]; then \
-	      echo "Enter release notes (finish with a line containing only EOF):"; \
-	      NOTES="$$( \
-	        first=1; \
-	        while IFS= read -r line; do \
-	          [ "$$line" = "EOF" ] && break; \
-	          if [ $$first -eq 1 ]; then \
-	            printf '%s' "$$line"; \
-	            first=0; \
-	          else \
-	            printf '\n%s' "$$line"; \
-	          fi; \
-	        done \
-	      )"; \
-	    else \
-	      echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
-	      exit 2; \
-	    fi; \
-	  fi; \
-	  if [ -z "$$NOTES" ]; then \
-	    echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	NOTES="$${RELEASE_NOTES:-}"; \
+	if [ -z "$$NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	  if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	    NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	  else \
+	    echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
 	    exit 2; \
 	  fi; \
-	  if ! git rev-parse "$$TAG^{tag}" >/dev/null 2>&1 && ! git rev-parse "$$TAG" >/dev/null 2>&1; then \
-	    echo "Creating annotated git tag $$TAG with release notes as tag message ..."; \
-	    printf '%s\n' "$$NOTES" | git tag -a "$$TAG" -F -; \
-	    git push origin "$$TAG"; \
-	  fi; \
-	  if [ -t 0 ]; then \
-	    echo "Creating Release $$TAG with provided notes..."; \
-	  fi; \
-	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "$$NOTES"; \
 	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  if [ -t 0 ]; then \
+	    echo "Enter release notes (finish with a line containing only EOF):"; \
+	    NOTES="$$( \
+	      first=1; \
+	      while IFS= read -r line; do \
+	        [ "$$line" = "EOF" ] && break; \
+	        if [ $$first -eq 1 ]; then \
+	          printf '%s' "$$line"; \
+	          first=0; \
+	        else \
+	          printf '\n%s' "$$line"; \
+	        fi; \
+	      done \
+	    )"; \
+	  else \
+	    echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	  exit 2; \
+	fi; \
+	echo "Creating/updating annotated git tag $$TAG with release notes as tag message ..."; \
+	printf '%s\n' "$$NOTES" | git tag -a -f "$$TAG" -F -; \
+	git push origin "$$TAG" --force; \
+	if glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "Existing GitLab Release $$TAG found; deleting to recreate with updated notes."; \
+	  glab release delete "$$TAG" -R "$$PROJ_PATH" --yes; \
+	fi; \
+	if [ -t 0 ]; then \
+	  echo "Creating Release $$TAG with provided notes..."; \
+	fi; \
+	glab release create "$$TAG" -R "$$PROJ_PATH" --notes "$$NOTES"; \
 	echo "Uploading signed macOS zip assets to Release $$TAG ..."; \
 	FILES=""; \
 	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
