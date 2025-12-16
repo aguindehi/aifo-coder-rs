@@ -3738,9 +3738,7 @@ publish-macos-signed-zips-local-glab:
 	  if [ -t 0 ]; then \
 	    echo "Creating Release $$TAG with provided notes..."; \
 	  fi; \
-	  printf "%s" "$$NOTES" >"$(DIST_DIR)/.release-notes.tmp"; \
-	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "@$(DIST_DIR)/.release-notes.tmp"; \
-	  rm -f "$(DIST_DIR)/.release-notes.tmp"; \
+	  glab release create "$$TAG" -R "$$PROJ_PATH" --notes "$$NOTES"; \
 	fi; \
 	echo "Uploading signed macOS zip assets to Release $$TAG ..."; \
 	FILES=""; \
