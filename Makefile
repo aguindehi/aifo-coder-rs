@@ -3599,6 +3599,8 @@ release-macos-binary-signed:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-binary-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
+	echo "Cleaning target/ and $(DIST_DIR)/ for a fresh macOS release build ..."; \
+	rm -rf target "$(DIST_DIR)"; \
 	$(MAKE) release-for-mac; \
 	$(MAKE) build-launcher; \
 	$(MAKE) release-macos-binaries-normalize-local; \
