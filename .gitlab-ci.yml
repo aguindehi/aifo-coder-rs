@@ -918,19 +918,13 @@ publish-release:
         --assets-link "{\"name\":\"aifo-coder-${VERSION}-linux-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-linux-x86_64.zip\"}" \
         --assets-link "{\"name\":\"aifo-coder-${VERSION}-macos-arm64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-arm64.zip\"}" \
         --assets-link "{\"name\":\"aifo-coder-${VERSION}-macos-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-x86_64.zip\"}" \
-        --assets-link "{\"name\":\"aifo-coder-linux-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-linux-x86_64\"}" \
-        --assets-link "{\"name\":\"aifo-coder-macos-arm64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-arm64\"}" \
-        --assets-link "{\"name\":\"aifo-coder-macos-x86_64\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-macos-x86_64\"}" \
         --update
   artifacts:
     expire_in: 1 week
     paths:
-      - aifo-coder-linux-x86_64
-      - aifo-coder-macos-arm64
-      - aifo-coder-macos-x86_64
-      - aifo-coder-${CI_COMMIT_TAG}-linux-x86_64.zip
-      - aifo-coder-${CI_COMMIT_TAG}-macos-arm64.zip
-      - aifo-coder-${CI_COMMIT_TAG}-macos-x86_64.zip
+      - aifo-coder-*-linux-x86_64.zip
+      - aifo-coder-*-macos-arm64.zip
+      - aifo-coder-*-macos-x86_64.zip
       - README.md
       - NOTICE
       - LICENSE
