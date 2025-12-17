@@ -125,11 +125,16 @@ This remains a prerequisite for notarization of the DMG contents.
 - `MACOS_DMG_VERSION ?= $(MACOS_ZIP_VERSION)`
 - `MACOS_CLI_DMG_ARM64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
 - `MACOS_CLI_DMG_X86_64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
-- `MACOS_CLI_RELEASE_FILES := README.md NOTICE LICENSE`
+- `MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE`
 
 Stage directories:
 - `dist/.dmg-cli-root-arm64/`
 - `dist/.dmg-cli-root-x86_64/`
+
+Additional versioned outputs (naming aligned with zip version by default):
+- `MACOS_DMG_VERSION ?= $(MACOS_ZIP_VERSION)`
+- `dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
+- `dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
 
 ### New targets (Darwin-only)
 

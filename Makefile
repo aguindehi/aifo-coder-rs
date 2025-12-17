@@ -248,12 +248,26 @@ RELEASE_POSTFIX ?=
 MACOS_DIST_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-arm64
 MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 
+# Shared release content (single source of truth for macOS CLI packaging).
+# This list is reused by both zip and DMG packaging to prevent drift.
+MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE
+
 # Version string embedded into signed macOS zip names.
 # Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
 MACOS_ZIP_VERSION ?= $(VERSION)
 
 MACOS_ZIP_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-arm64-signed.zip
 MACOS_ZIP_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-x86_64-signed.zip
+
+# Version string embedded into notarized CLI DMG names (v2 spec).
+# Keep this aligned with MACOS_ZIP_VERSION by default so publish-release produces consistent artifacts.
+MACOS_DMG_VERSION ?= $(MACOS_ZIP_VERSION)
+
+MACOS_CLI_DMG_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg
+MACOS_CLI_DMG_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-x86_64.dmg
+
+MACOS_CLI_DMG_STAGE_ARM64 ?= $(DIST_DIR)/.dmg-cli-root-arm64
+MACOS_CLI_DMG_STAGE_X86_64 ?= $(DIST_DIR)/.dmg-cli-root-x86_64
 
 # -----------------------------------------------------------------------------
 # macOS signing helpers (local-only)
@@ -3560,13 +3574,12 @@ release-macos-binaries-zips:
 	$(MACOS_REQUIRE_ZIP); \
 	DIST="$(DIST_DIR)"; \
 	mkdir -p "$$DIST"; \
-	if [ ! -f "README.md" ] || [ ! -f "NOTICE" ] || [ ! -f "LICENSE" ]; then \
-	  echo "Error: missing required docs for zip packaging. Require README.md, NOTICE, LICENSE." >&2; \
-	  [ -f "README.md" ] || echo "Missing: README.md" >&2; \
-	  [ -f "NOTICE" ] || echo "Missing: NOTICE" >&2; \
-	  [ -f "LICENSE" ] || echo "Missing: LICENSE" >&2; \
-	  exit 1; \
-	fi; \
+	for f in $(MACOS_CLI_RELEASE_FILES); do \
+	  if [ ! -f "$$f" ]; then \
+	    echo "Error: missing required release file for zip packaging: $$f" >&2; \
+	    exit 1; \
+	  fi; \
+	done; \
 	ANY=0; \
 	for B in "$(MACOS_DIST_ARM64)" "$(MACOS_DIST_X86_64)"; do \
 	  if [ -f "$$B" ]; then \
@@ -3575,7 +3588,7 @@ release-macos-binaries-zips:
 	    rm -rf "$$STAGE"; \
 	    mkdir -p "$$STAGE"; \
 	    cp "$$B" "$$STAGE/$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch"; \
-	    cp README.md NOTICE LICENSE "$$STAGE/"; \
+	    cp $(MACOS_CLI_RELEASE_FILES) "$$STAGE/"; \
 	    if [ -d docs ]; then cp -a docs "$$STAGE/"; fi; \
 	    (cd "$$STAGE" && zip -9r "../$(BIN_NAME)-$(MACOS_ZIP_VERSION)-macos-$$arch-signed.zip" .); \
 	    rm -rf "$$STAGE"; \
