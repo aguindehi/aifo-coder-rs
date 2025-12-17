@@ -3718,6 +3718,10 @@ release-macos-cli-dmg-notarize:
 	  echo "Error: xcrun notarytool not found; cannot notarize." >&2; \
 	  exit 1; \
 	fi; \
+	if ! xcrun stapler -h >/dev/null 2>&1; then \
+	  echo "Error: xcrun stapler not found; cannot staple notarization ticket." >&2; \
+	  exit 1; \
+	fi; \
 	$(MACOS_DEFAULT_KEYCHAIN); \
 	if [ -z "$$KEYCHAIN" ]; then \
 	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
