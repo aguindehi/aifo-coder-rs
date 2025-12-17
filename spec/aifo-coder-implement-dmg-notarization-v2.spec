@@ -149,11 +149,13 @@ Stage directories:
    - Verifies with `codesign --verify --strict --verbose=4`.
 
 3) `release-macos-cli-dmg-notarize`
-   - Requires `NOTARY_PROFILE` (fail if missing).
-   - Requires Developer ID identity (fail if not).
+   - Darwin-only.
+   - Requires `NOTARY_PROFILE` (hard fail if missing).
+   - Requires a Developer ID identity (hard fail if not).
    - Runs:
      - `xcrun notarytool submit "$(DMG)" --keychain-profile "$(NOTARY_PROFILE)" --wait`
      - `xcrun stapler staple "$(DMG)"`
+     - `xcrun stapler validate "$(DMG)"`
 
 4) `release-macos-cli-dmg-verify`
    - Runs:

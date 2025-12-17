@@ -3702,6 +3702,60 @@ release-macos-cli-dmg-sign:
 	done; \
 	'
 
+.PHONY: release-macos-cli-dmg-notarize
+release-macos-cli-dmg-notarize:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-notarize; \
+	$(MACOS_REQUIRE_DARWIN); \
+	NOTARY="$(NOTARY_PROFILE)"; \
+	if [ -z "$$NOTARY" ]; then \
+	  echo "Error: NOTARY_PROFILE is required for release-macos-cli-dmg-notarize." >&2; \
+	  echo "Hint: create a notarytool keychain profile and set NOTARY_PROFILE=<profile>." >&2; \
+	  exit 1; \
+	fi; \
+	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
+	if ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "Error: xcrun notarytool not found; cannot notarize." >&2; \
+	  exit 1; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "Error: SIGN_IDENTITY is not a Developer ID identity; notarization requires Developer ID." >&2; \
+	  echo "SIGN_IDENTITY=$(SIGN_IDENTITY)" >&2; \
+	  exit 1; \
+	fi; \
+	D1="$(MACOS_CLI_DMG_ARM64)"; \
+	D2="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$D1" ] && [ ! -f "$$D2" ]; then \
+	  echo "No CLI DMGs found in $(DIST_DIR) to notarize." >&2; \
+	  echo "Hint: run '\''make release-macos-cli-dmg'\'' and '\''make release-macos-cli-dmg-sign'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	for D in "$$D1" "$$D2"; do \
+	  if [ -f "$$D" ]; then \
+	    echo "Submitting $$D for notarization with profile $$NOTARY ..."; \
+	    OUT="$$(mktemp)"; \
+	    if ! xcrun notarytool submit "$$D" --keychain-profile "$$NOTARY" --wait >"$$OUT" 2>&1; then \
+	      cat "$$OUT" >&2; \
+	      rm -f "$$OUT"; \
+	      echo "Error: notarization failed for $$D" >&2; \
+	      exit 1; \
+	    fi; \
+	    rm -f "$$OUT"; \
+	    echo "Stapling notarization ticket to $$D ..."; \
+	    xcrun stapler staple "$$D"; \
+	    echo "Validating stapled ticket (stapler validate) ..."; \
+	    xcrun stapler validate "$$D"; \
+	  fi; \
+	done; \
+	'
+
 .PHONY: release-macos-binaries-zips-notarize
 release-macos-binaries-zips-notarize:
 	@/bin/sh -ec '\
