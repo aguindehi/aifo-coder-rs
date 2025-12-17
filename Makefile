@@ -4784,7 +4784,7 @@ check-macos-cli-dmg-plan:
 	need "^publish-macos-cli-dmg-local-glab:"; \
 	need "^\\.PHONY: publish-macos-cli-dmg-local-curl$$"; \
 	need "^publish-macos-cli-dmg-local-curl:"; \
-	need_lit '$(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg'; \
-	need_lit '$(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-x86_64.dmg'; \
+	need_lit 'MACOS_CLI_DMG_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg'; \
+	need_lit 'MACOS_CLI_DMG_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-x86_64.dmg'; \
 	echo "OK: macOS CLI DMG plan wiring present."; \
 	'
