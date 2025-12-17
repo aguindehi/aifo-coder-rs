@@ -2423,7 +2423,17 @@ test-acceptance-suite:
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
-	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS); \
+	if ! command -v cargo >/dev/null 2>&1; then \
+	  echo "Error: cargo not found; cannot run acceptance tests." >&2; \
+	  exit 1; \
+	fi; \
+	if ! cargo nextest -V >/dev/null 2>&1; then \
+	  echo "cargo-nextest not found; installing with 'cargo install cargo-nextest --locked' ..."; \
+	  cargo install cargo-nextest --locked; \
+	fi; \
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
+	  cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS); \
 	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
 	  $(MAKE) test-macos-cross-image; \
