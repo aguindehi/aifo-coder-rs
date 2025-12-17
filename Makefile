@@ -3659,6 +3659,49 @@ release-macos-cli-dmg:
 	fi; \
 	'
 
+.PHONY: release-macos-cli-dmg-sign
+release-macos-cli-dmg-sign:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-sign; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,security codesign); \
+	D1="$(MACOS_CLI_DMG_ARM64)"; \
+	D2="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$D1" ] && [ ! -f "$$D2" ]; then \
+	  echo "No CLI DMGs found to sign under $(DIST_DIR)." >&2; \
+	  echo "Hint: run '\''make release-macos-cli-dmg'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain (is your login keychain available?)" >&2; \
+	  exit 1; \
+	fi; \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	if [ -z "$${SIGN_IDENTITY:-}" ]; then \
+	  APPLE_DEV=0; export APPLE_DEV; \
+	  echo "SIGN_IDENTITY not set; using ad-hoc signing for local use."; \
+	else \
+	  $(MACOS_DETECT_APPLE_DEV); \
+	  if [ "$${APPLE_DEV:-0}" = "1" ]; then \
+	    echo "Detected Apple Developer identity."; \
+	  else \
+	    echo "Using non-Apple/local identity."; \
+	  fi; \
+	fi; \
+	$(MACOS_SET_SIGN_FLAGS); \
+	for D in "$$D1" "$$D2"; do \
+	  if [ -f "$$D" ]; then \
+	    if command -v xattr >/dev/null 2>&1; then xattr -cr "$$D" 2>/dev/null || true; fi; \
+	    echo "Signing $$D ..."; \
+	    SIGN_BIN="$$D"; \
+	    $(MACOS_SIGN_ONE_BINARY); \
+	    echo "Verifying $$D ..."; \
+	    codesign --verify --strict --verbose=4 "$$D"; \
+	  fi; \
+	done; \
+	'
+
 .PHONY: release-macos-binaries-zips-notarize
 release-macos-binaries-zips-notarize:
 	@/bin/sh -ec '\

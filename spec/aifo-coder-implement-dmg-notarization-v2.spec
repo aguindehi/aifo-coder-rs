@@ -144,7 +144,9 @@ Stage directories:
    - Creates DMG per arch with `hdiutil create` (UDZO).
 
 2) `release-macos-cli-dmg-sign`
+   - Darwin-only.
    - Signs each DMG using existing `MACOS_SIGN_ONE_BINARY`.
+   - Verifies with `codesign --verify --strict --verbose=4`.
 
 3) `release-macos-cli-dmg-notarize`
    - Requires `NOTARY_PROFILE` (fail if missing).
