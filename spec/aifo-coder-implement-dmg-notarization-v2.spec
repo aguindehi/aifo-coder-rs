@@ -248,3 +248,4 @@ Phase 6: Integrate into publish-release
 
 Phase 7: Add Linux/CI guardrail self-check
 - Add `check-macos-cli-dmg-plan` to prevent accidental removal of DMG flow wiring.
+- Gate: run this in CI on Linux (as part of `make check` or a dedicated CI job).

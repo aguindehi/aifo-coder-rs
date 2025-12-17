@@ -2169,6 +2169,10 @@ check:
 	$(MAKE) tidy-no-multiline-strings; \
 	echo "OK: tidy-no-multiline-strings"; \
 	echo ""; \
+	echo "==> check: guardrails"; \
+	$(MAKE) check-macos-cli-dmg-plan; \
+	echo "OK: guardrails"; \
+	echo ""; \
 	echo "==> check: unit tests (cargo nextest)"; \
 	$(MAKE) test; \
 	echo "OK: test"; \
@@ -4728,3 +4732,52 @@ endif
 .PHONY: cov-results
 cov-results:
 	open build/coverage/html/index.html
+
+# -----------------------------------------------------------------------------
+# Guardrails (CI-capable; Linux OK)
+# -----------------------------------------------------------------------------
+#
+# Regression guard for the notarized CLI DMG flow wiring.
+# This does not test notarization (macOS-only), it only asserts that the required
+# Makefile targets/variables exist and that expected artifact name patterns are present.
+.PHONY: check-macos-cli-dmg-plan
+check-macos-cli-dmg-plan:
+	@/bin/sh -ec '\
+	FILE="Makefile"; \
+	need() { \
+	  pat="$$1"; \
+	  grep -Eq "$$pat" "$$FILE" || { \
+	    echo "Error: missing required Makefile pattern: $$pat" >&2; \
+	    exit 1; \
+	  }; \
+	}; \
+	echo "Checking macOS CLI DMG plan wiring (static grep guard) ..."; \
+	need "^MACOS_DMG_VERSION[[:space:]]*\\?="; \
+	need "^MACOS_CLI_RELEASE_FILES[[:space:]]*\\?="; \
+	need "^MACOS_CLI_DMG_ARM64[[:space:]]*\\?="; \
+	need "^MACOS_CLI_DMG_X86_64[[:space:]]*\\?="; \
+	need "^MACOS_CLI_DMG_STAGE_ARM64[[:space:]]*\\?="; \
+	need "^MACOS_CLI_DMG_STAGE_X86_64[[:space:]]*\\?="; \
+	need "^MACOS_CLI_DMG_VOLNAME[[:space:]]*\\?="; \
+	need "^\\.PHONY: release-macos-cli-dmg$$"; \
+	need "^release-macos-cli-dmg:"; \
+	need "^\\.PHONY: release-macos-cli-dmg-sign$$"; \
+	need "^release-macos-cli-dmg-sign:"; \
+	need "^\\.PHONY: release-macos-cli-dmg-notarize$$"; \
+	need "^release-macos-cli-dmg-notarize:"; \
+	need "^\\.PHONY: release-macos-cli-dmg-verify$$"; \
+	need "^release-macos-cli-dmg-verify:"; \
+	need "^\\.PHONY: release-macos-cli-dmg-signed$$"; \
+	need "^release-macos-cli-dmg-signed:"; \
+	need "^\\.PHONY: publish-release-macos-cli-dmg-signed$$"; \
+	need "^publish-release-macos-cli-dmg-signed:"; \
+	need "^\\.PHONY: publish-macos-cli-dmg-local$$"; \
+	need "^publish-macos-cli-dmg-local:"; \
+	need "^\\.PHONY: publish-macos-cli-dmg-local-glab$$"; \
+	need "^publish-macos-cli-dmg-local-glab:"; \
+	need "^\\.PHONY: publish-macos-cli-dmg-local-curl$$"; \
+	need "^publish-macos-cli-dmg-local-curl:"; \
+	need "dist/\\$\\(BIN_NAME\\)-\\$\\(MACOS_DMG_VERSION\\)-macos-arm64\\.dmg"; \
+	need "dist/\\$\\(BIN_NAME\\)-\\$\\(MACOS_DMG_VERSION\\)-macos-x86_64\\.dmg"; \
+	echo "OK: macOS CLI DMG plan wiring present."; \
+	'
