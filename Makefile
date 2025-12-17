@@ -1777,21 +1777,59 @@ publish-release:
 	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
 	@$(MAKE) publish-release-images
 	@echo
-	@echo "==> Running publish-release-macos-signed (build, sign and upload macOS launchers) ..."
-	@$(MAKE) publish-release-macos-signed
+	@echo "==> Running publish-release-macos-cli-dmg-signed (build, sign, notarize, verify and upload macOS CLI DMGs) ..."
+	@$(MAKE) publish-release-macos-cli-dmg-signed
 	@echo
 	@echo "Tag and GitLab Release have been created/updated locally."
 	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
+.PHONY: publish-release-macos-cli-dmg-signed
+publish-release-macos-cli-dmg-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-cli-dmg-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	echo "publish-release-macos-cli-dmg-signed: publish signed+notarized macOS CLI DMGs for a versioned release tag."; \
+	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
+	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
+	  exit 1; \
+	fi; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
+	  TAG_EFF="$(TAG)"; \
+	else \
+	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
+	fi; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
+	    exit 1 ;; \
+	  latest ) \
+	    echo "Error: refusing to publish macOS signed release with tag '\''latest'\''." >&2; \
+	    echo "Hint: run make publish-release (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    exit 2 ;; \
+	  -* ) \
+	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: make -npr publish-release-macos-cli-dmg-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
+	    exit 3 ;; \
+	esac; \
+	echo "Publishing signed+notarized macOS CLI DMGs for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-cli-dmg-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-cli-dmg-local; \
+	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
+	'
+
 .PHONY: publish-release-macos-signed
 publish-release-macos-signed:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag."; \
+	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag (legacy)."; \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
@@ -1817,7 +1855,7 @@ publish-release-macos-signed:
 	    echo "Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
-	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \
+	echo "Publishing signed macOS zips for $$TAG_EFF (legacy) ..."; \
 	$(MAKE) TAG="$$TAG_EFF" release-macos-binary-signed; \
 	$(MAKE) TAG="$$TAG_EFF" publish-macos-signed-zips-local; \
 	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
@@ -3790,6 +3828,19 @@ release-macos-cli-dmg-verify:
 	echo "OK: CLI DMG verification passed."; \
 	'
 
+.PHONY: release-macos-cli-dmg-signed
+release-macos-cli-dmg-signed:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-signed; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(MAKE) release-macos-binaries-normalize-local; \
+	$(MAKE) release-macos-binaries-sign; \
+	$(MAKE) release-macos-cli-dmg; \
+	$(MAKE) release-macos-cli-dmg-sign; \
+	$(MAKE) release-macos-cli-dmg-notarize; \
+	$(MAKE) release-macos-cli-dmg-verify; \
+	'
+
 .PHONY: release-macos-binaries-zips-notarize
 release-macos-binaries-zips-notarize:
 	@/bin/sh -ec '\
@@ -3881,7 +3932,156 @@ publish-macos-signed-zips-local:
 	  $(MAKE) publish-macos-signed-zips-local-curl; \
 	fi
 
+.PHONY: publish-macos-cli-dmg-local
+publish-macos-cli-dmg-local:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if command -v glab >/dev/null 2>&1; then \
+	  $(MAKE) publish-macos-cli-dmg-local-glab; \
+	else \
+	  if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	    echo "Error: glab not found and RELEASE_ASSETS_API_TOKEN not set; cannot upload." >&2; \
+	    echo "Hint: install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
+	    exit 1; \
+	  fi; \
+	  $(MAKE) publish-macos-cli-dmg-local-curl; \
+	fi
+
 # glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
+.PHONY: publish-macos-cli-dmg-local-glab
+publish-macos-cli-dmg-local-glab:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local-glab; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git glab); \
+	export GLAB_CHECK_FOR_UPDATES=false; \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	ARM="$(MACOS_CLI_DMG_ARM64)"; \
+	X86="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS CLI DMG artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-cli-dmg-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ORIGIN" in \
+	  git@*:* ) HOST="$${ORIGIN#git@}"; HOST="$${HOST%%:*}"; PROJ_PATH="$${ORIGIN#*:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@*/* ) HOST="$${ORIGIN#ssh://git@}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#ssh://git@$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://*/* ) HOST="$${ORIGIN#https://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#https://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://*/* ) HOST="$${ORIGIN#http://}"; HOST="$${HOST%%/*}"; PROJ_PATH="$${ORIGIN#http://$$HOST/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  * ) HOST=""; PROJ_PATH="" ;; \
+	esac; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: could not derive GitLab host/project path from origin remote: $$ORIGIN" >&2; \
+	  exit 1; \
+	fi; \
+	echo "Checking glab auth for host $$HOST ..."; \
+	STATUS_OUT="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	printf "%s\n" "$$STATUS_OUT"; \
+	printf "%s\n" "$$STATUS_OUT" | grep -q "Logged in to $$HOST" || { \
+	  if [ "$${AIFO_GLAB_AUTOLOGIN:-0}" = "1" ] && [ -t 0 ]; then \
+	    echo "Not authenticated; attempting interactive glab auth login for $$HOST ..."; \
+	    glab auth login --hostname "$$HOST"; \
+	    STATUS_OUT2="$$(glab auth status --hostname "$$HOST" 2>&1 || true)"; \
+	    printf "%s\n" "$$STATUS_OUT2"; \
+	    printf "%s\n" "$$STATUS_OUT2" | grep -q "Logged in to $$HOST" || { \
+	      echo "Error: glab authentication still not configured for $$HOST." >&2; \
+	      exit 2; \
+	    }; \
+	  else \
+	    echo "Error: glab is not authenticated for $$HOST." >&2; \
+	    echo "Run: glab auth login --hostname $$HOST" >&2; \
+	    echo "Or set AIFO_GLAB_AUTOLOGIN=1 to prompt automatically (TTY only)." >&2; \
+	    exit 2; \
+	  fi; \
+	}; \
+	echo "Resolving project via glab (from origin remote path) ..."; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
+	PROJ_JSON="$$(glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>/dev/null || true)"; \
+	if command -v python3 >/dev/null 2>&1; then \
+	  PID="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || true)"; \
+	  BASE_WEB="$$(printf "%s" "$$PROJ_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('web_url',''))" 2>/dev/null || true)"; \
+	else \
+	  PID=""; BASE_WEB=""; \
+	fi; \
+	if [ -z "$$PID" ] || [ -z "$$BASE_WEB" ]; then \
+	  echo "Error: could not resolve project via glab for $$PROJ_PATH on $$HOST." >&2; \
+	  echo "Hint: install python3 or ensure glab outputs pure JSON (update notices break parsing on glab 1.48.0)." >&2; \
+	  echo "glab stdout (first 60 lines):" >&2; \
+	  printf "%s\n" "$$PROJ_JSON" | sed -n "1,60p" >&2; \
+	  echo "glab stderr (first 60 lines):" >&2; \
+	  glab api --hostname "$$HOST" "projects/$$PROJ_ENC" 2>&1 >/dev/null | sed -n "1,60p" >&2 || true; \
+	  exit 1; \
+	fi; \
+	echo "Resolved project: $$BASE_WEB (id=$$PID)"; \
+	echo "glab version: $$(glab --version | head -n1)"; \
+	echo "Ensuring GitLab Release exists for tag $$TAG ..."; \
+	NOTES="$${RELEASE_NOTES:-}"; \
+	if [ -z "$$NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	  if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	    NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	  else \
+	    echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  if [ -t 0 ]; then \
+	    echo "Enter release notes (finish with a line containing only EOF):"; \
+	    NOTES="$$( \
+	      first=1; \
+	      while IFS= read -r line; do \
+	        [ "$$line" = "EOF" ] && break; \
+	        if [ $$first -eq 1 ]; then \
+	          printf '%s' "$$line"; \
+	          first=0; \
+	        else \
+	          printf '\n%s' "$$line"; \
+	        fi; \
+	      done \
+	    )"; \
+	  else \
+	    echo "Error: release notes are required in non-interactive mode; set RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
+	if [ -z "$$NOTES" ]; then \
+	  echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	  exit 2; \
+	fi; \
+	echo "Creating/updating annotated git tag $$TAG with release notes as tag message ..."; \
+	printf '%s\n' "$$NOTES" | git tag -a -f "$$TAG" -F -; \
+	git push origin "$$TAG" --force; \
+	if glab release view "$$TAG" -R "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "Existing GitLab Release $$TAG found; deleting to recreate with updated notes."; \
+	  glab release delete "$$TAG" -R "$$PROJ_PATH" --yes; \
+	fi; \
+	if [ -t 0 ]; then \
+	  echo "Creating Release $$TAG with provided notes..."; \
+	fi; \
+	glab release create "$$TAG" -R "$$PROJ_PATH" --notes "$$NOTES"; \
+	echo "Uploading signed macOS CLI DMG assets to Release $$TAG ..."; \
+	FILES=""; \
+	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
+	if [ -f "$$X86" ]; then FILES="$$FILES $$X86"; fi; \
+	if [ -z "$$FILES" ]; then \
+	  echo "Error: no macOS DMG artifacts found to upload (expected $$ARM and/or $$X86)." >&2; \
+	  exit 1; \
+	fi; \
+	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
+	echo "Upload complete (glab)."
+
 .PHONY: publish-macos-signed-zips-local-glab
 publish-macos-signed-zips-local-glab:
 	@set -eu; \
@@ -4014,6 +4214,116 @@ publish-macos-signed-zips-local-glab:
 	fi; \
 	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
 	echo "Upload complete (glab)."
+
+.PHONY: publish-macos-cli-dmg-local-curl
+publish-macos-cli-dmg-local-curl:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local-curl; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git curl); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
+	  echo "Error: RELEASE_ASSETS_API_TOKEN is required to upload macOS DMGs and update the GitLab Release." >&2; \
+	  echo "Hint: set it in a local .env file (not committed), or export it in your shell." >&2; \
+	  exit 1; \
+	fi; \
+	ORIGIN="$$(git remote -v | grep -E '^origin[[:space:]]' | head -n1 | awk '{print $$2}')"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote from 'git remote -v'." >&2; \
+	  exit 1; \
+	fi; \
+	HOST="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@([^:]+):.*#\1#p")"; \
+	PROJ_PATH="$$(printf "%s" "$$ORIGIN" | sed -nE "s#^git@[^:]+:([^ ]+?)(\.git)?\$$#\1#p")"; \
+	PROJ_PATH="$${PROJ_PATH%.git}"; \
+	if [ -z "$$HOST" ] || [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: unsupported origin remote format: $$ORIGIN" >&2; \
+	  echo "Expected SSH form: git@<host>:<group>/<project>.git" >&2; \
+	  exit 1; \
+	fi; \
+	API_V4="https://$$HOST/api/v4"; \
+	PROJ_ENC="$$(printf "%s" "$$PROJ_PATH" | sed "s#/#%2F#g")"; \
+	RES="$$(mktemp)"; \
+	STATUS="$$(curl -sS -w "%{http_code}" -o "$$RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	  "$$API_V4/projects/$$PROJ_ENC" || echo 000)"; \
+	PID="$$(sed -nE "s/.*\"id\":[[:space:]]*([0-9]+).*/\1/p" "$$RES" | head -n1)"; \
+	if [ -z "$$PID" ]; then \
+	  echo "Error: failed to resolve project id via GitLab API for $$PROJ_PATH (host $$HOST)." >&2; \
+	  echo "HTTP status: $$STATUS" >&2; \
+	  echo "Response body (first 80 lines):" >&2; \
+	  sed -n "1,80p" "$$RES" >&2; \
+	  rm -f "$$RES"; \
+	  exit 1; \
+	fi; \
+	rm -f "$$RES"; \
+	ARM="$(MACOS_CLI_DMG_ARM64)"; \
+	X86="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS DMG artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-cli-dmg-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	UPLOAD_AND_GET_URL() { \
+	  file="$$1"; \
+	  [ -f "$$file" ] || { echo ""; return 0; }; \
+	  echo "Uploading $$file via project uploads API ..."; \
+	  out="$$(mktemp)"; \
+	  if ! curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    -F "file=@$$file" \
+	    "$$API_V4/projects/$$PID/uploads" >"$$out"; then \
+	    echo "Error: upload failed for $$file" >&2; \
+	    cat "$$out" >&2 || true; \
+	    rm -f "$$out"; \
+	    exit 1; \
+	  fi; \
+	  url="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$out" | head -n1)"; \
+	  rm -f "$$out"; \
+	  if [ -z "$$url" ]; then \
+	    echo "Error: could not parse upload URL for $$file" >&2; \
+	    exit 1; \
+	  fi; \
+	  printf "%s" "$$url"; \
+	}; \
+	ARM_URL="$$(UPLOAD_AND_GET_URL "$$ARM")"; \
+	X86_URL="$$(UPLOAD_AND_GET_URL "$$X86")"; \
+	if [ -z "$$ARM_URL" ] && [ -z "$$X86_URL" ]; then \
+	  echo "Error: uploads did not produce any URLs; aborting." >&2; \
+	  exit 1; \
+	fi; \
+	BASE_WEB="https://$$HOST/$$PROJ_PATH"; \
+	RELEASE_API="$$API_V4/projects/$$PID/releases/$$TAG"; \
+	echo "Fetching existing release assets for tag $$TAG ..."; \
+	REL_RES="$$(mktemp)"; \
+	REL_STATUS="$$(curl -sS -w "%{http_code}" -o "$$REL_RES" -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" "$$RELEASE_API" || echo 000)"; \
+	if [ "$$REL_STATUS" != "200" ]; then \
+	  echo "Warning: release for tag $$TAG not found (HTTP $$REL_STATUS). Links will be attached only if release exists." >&2; \
+	  cat "$$REL_RES" >&2 || true; \
+	fi; \
+	EXISTING_URLS="$$(sed -nE "s/.*\"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$$REL_RES" | tr "\n" " ")" ; \
+	rm -f "$$REL_RES"; \
+	ADD_LINK() { \
+	  name="$$1"; rel_path="$$2"; \
+	  [ -n "$$rel_path" ] || return 0; \
+	  full_url="$$BASE_WEB$$rel_path"; \
+	  case " $$EXISTING_URLS " in \
+	    *" $$full_url "*) \
+	      echo "Release link already present: $$name -> $$full_url"; \
+	      return 0 ;; \
+	  esac; \
+	  echo "Adding release link: $$name -> $$full_url"; \
+	  curl -sS -X POST -H "PRIVATE-TOKEN: $$RELEASE_ASSETS_API_TOKEN" \
+	    --data-urlencode "name=$$name" \
+	    --data-urlencode "url=$$full_url" \
+	    "$$RELEASE_API/assets/links" >/dev/null || true; \
+	}; \
+	[ -n "$$ARM_URL" ] && ADD_LINK "$$(basename "$$ARM")" "$$ARM_URL"; \
+	[ -n "$$X86_URL" ] && ADD_LINK "$$(basename "$$X86")" "$$X86_URL"; \
+	echo "Upload and release link attachment complete (curl)."
 
 .PHONY: publish-macos-signed-zips-local-curl
 publish-macos-signed-zips-local-curl:
