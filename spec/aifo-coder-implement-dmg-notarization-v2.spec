@@ -61,7 +61,7 @@ path as the default production artifact while keeping the old zip targets availa
 4) **Release content drift risk**
    - Zip packaging currently requires `README.md`, `NOTICE`, `LICENSE`; v1 plan suggests “same set” but does not enforce
      single source of truth.
-   - Correction: define `MACOS_CLI_RELEASE_FILES := README.md NOTICE LICENSE` and reuse it for both zip and DMG staging.
+   - Correction: define `MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE` and reuse it for both zip and DMG staging.
      Keep `docs/` conditional.
 
 5) **Notarization behavior must be “fail hard” in the production chain**
