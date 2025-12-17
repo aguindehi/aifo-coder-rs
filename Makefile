@@ -252,6 +252,10 @@ MACOS_DIST_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-macos-x86_64
 # This list is reused by both zip and DMG packaging to prevent drift.
 MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE
 
+# Stage dir and volume name used when building CLI DMGs.
+# Keep the volume name stable to reduce Finder “disk name” churn.
+MACOS_CLI_DMG_VOLNAME ?= aifo-coder
+
 # Version string embedded into signed macOS zip names.
 # Defaults to VERSION from Cargo.toml so artifacts match release-<version> tags.
 MACOS_ZIP_VERSION ?= $(VERSION)
@@ -3600,6 +3604,57 @@ release-macos-binaries-zips:
 	done; \
 	if [ "$$ANY" -eq 0 ]; then \
 	  echo "No macOS binaries in dist/ to zip; run normalization and signing first." >&2; \
+	  exit 1; \
+	fi; \
+	'
+
+.PHONY: release-macos-cli-dmg
+release-macos-cli-dmg:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,hdiutil); \
+	DIST="$(DIST_DIR)"; \
+	mkdir -p "$$DIST"; \
+	for f in $(MACOS_CLI_RELEASE_FILES); do \
+	  if [ ! -f "$$f" ]; then \
+	    echo "Error: missing required release file for DMG packaging: $$f" >&2; \
+	    exit 1; \
+	  fi; \
+	done; \
+	build_one() { \
+	  arch="$$1"; \
+	  src="$$2"; \
+	  stage="$$3"; \
+	  out="$$4"; \
+	  if [ ! -f "$$src" ]; then \
+	    echo "$$src missing; skipping DMG for $$arch."; \
+	    return 0; \
+	  fi; \
+	  echo "Staging CLI DMG root for $$arch ..."; \
+	  rm -rf "$$stage"; \
+	  mkdir -p "$$stage"; \
+	  install -m 0755 "$$src" "$$stage/$(BIN_NAME)"; \
+	  for f in $(MACOS_CLI_RELEASE_FILES); do \
+	    install -m 0644 "$$f" "$$stage/"; \
+	  done; \
+	  if [ -d docs ]; then cp -a docs "$$stage/"; fi; \
+	  echo "Creating DMG: $$out"; \
+	  rm -f "$$out"; \
+	  hdiutil create -ov -format UDZO -imagekey zlib-level=9 \
+	    -volname "$(MACOS_CLI_DMG_VOLNAME)" \
+	    -srcfolder "$$stage" \
+	    "$$out" >/dev/null; \
+	  chmod 0644 "$$out" || true; \
+	  echo "Wrote $$out"; \
+	}; \
+	ANY=0; \
+	build_one arm64 "$(MACOS_DIST_ARM64)" "$(MACOS_CLI_DMG_STAGE_ARM64)" "$(MACOS_CLI_DMG_ARM64)" && \
+	  [ -f "$(MACOS_CLI_DMG_ARM64)" ] && ANY=1 || true; \
+	build_one x86_64 "$(MACOS_DIST_X86_64)" "$(MACOS_CLI_DMG_STAGE_X86_64)" "$(MACOS_CLI_DMG_X86_64)" && \
+	  [ -f "$(MACOS_CLI_DMG_X86_64)" ] && ANY=1 || true; \
+	if [ "$$ANY" -eq 0 ]; then \
+	  echo "No macOS binaries in dist/ to package into DMGs; run normalization and signing first." >&2; \
 	  exit 1; \
 	fi; \
 	'

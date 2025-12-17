@@ -126,6 +126,7 @@ This remains a prerequisite for notarization of the DMG contents.
 - `MACOS_CLI_DMG_ARM64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
 - `MACOS_CLI_DMG_X86_64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
 - `MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE`
+- `MACOS_CLI_DMG_VOLNAME ?= aifo-coder`
 
 Stage directories:
 - `dist/.dmg-cli-root-arm64/`
