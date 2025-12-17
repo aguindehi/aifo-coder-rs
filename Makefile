@@ -3760,6 +3760,36 @@ release-macos-cli-dmg-notarize:
 	done; \
 	'
 
+.PHONY: release-macos-cli-dmg-verify
+release-macos-cli-dmg-verify:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-verify; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,codesign spctl xcrun); \
+	if ! xcrun stapler -h >/dev/null 2>&1; then \
+	  echo "Error: xcrun stapler not found; cannot validate stapled ticket." >&2; \
+	  exit 1; \
+	fi; \
+	D1="$(MACOS_CLI_DMG_ARM64)"; \
+	D2="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$D1" ] && [ ! -f "$$D2" ]; then \
+	  echo "No CLI DMGs found in $(DIST_DIR) to verify." >&2; \
+	  echo "Hint: run '\''make release-macos-cli-dmg'\'' first." >&2; \
+	  exit 1; \
+	fi; \
+	for D in "$$D1" "$$D2"; do \
+	  if [ -f "$$D" ]; then \
+	    echo "==> Verifying codesign: $$D"; \
+	    codesign --verify --strict --verbose=4 "$$D"; \
+	    echo "==> Validating stapled ticket: $$D"; \
+	    xcrun stapler validate "$$D"; \
+	    echo "==> Gatekeeper assessment (spctl --type open): $$D"; \
+	    spctl --assess --type open --verbose=4 "$$D"; \
+	  fi; \
+	done; \
+	echo "OK: CLI DMG verification passed."; \
+	'
+
 .PHONY: release-macos-binaries-zips-notarize
 release-macos-binaries-zips-notarize:
 	@/bin/sh -ec '\

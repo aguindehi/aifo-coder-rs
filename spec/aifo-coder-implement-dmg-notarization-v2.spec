@@ -158,6 +158,7 @@ Stage directories:
      - `xcrun stapler validate "$(DMG)"`
 
 4) `release-macos-cli-dmg-verify`
+   - Darwin-only.
    - Runs:
      - `codesign --verify --strict --verbose=4 "$(DMG)"`
      - `xcrun stapler validate "$(DMG)"`
