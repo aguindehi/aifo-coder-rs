@@ -918,15 +918,57 @@ publish-release:
       echo "  2) Upload dist/*.zip to the GitLab Package Registry under ${CI_COMMIT_TAG} (or run: make publish-macos-signed-zips-local)"
       echo "  3) CI will auto-attach signed zip links if they exist in the registry (publish-macos-signed-zips)."
       echo
-      echo "Creating or updating GitLab Release via release-cli..."
-      release-cli create \
-        --name "Release ${CI_COMMIT_TAG}" \
-        --tag-name "${CI_COMMIT_TAG}" \
-        --description "${CI_COMMIT_MESSAGE}" \
-        --assets-link "{\"name\":\"aifo-coder-${VERSION}-linux-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-linux-x86_64.zip\"}" \
-        --assets-link "{\"name\":\"aifo-coder-${VERSION}-macos-arm64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-arm64.zip\"}" \
-        --assets-link "{\"name\":\"aifo-coder-${VERSION}-macos-x86_64.zip\",\"url\":\"${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-x86_64.zip\"}" \
-        --update
+      echo "Ensuring GitLab Release exists and attaching CI artifact links via API..."
+      # Prefer an explicit API token when available; otherwise fall back to CI_JOB_TOKEN.
+      if [ -n "${GITLAB_API_TOKEN:-}" ]; then
+        AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_API_TOKEN}"
+      else
+        AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+      fi
+
+      RELEASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
+
+      echo "Checking if release ${CI_COMMIT_TAG} exists..."
+      rel_status="$(curl -sS -o release.json -w '%{http_code}' -H "${AUTH_HEADER}" "${RELEASE_URL}" || echo 000)"
+
+      if [ "${rel_status}" = "404" ]; then
+        echo "Error: GitLab Release for tag ${CI_COMMIT_TAG} does not exist yet." >&2
+        echo "Hint: Create the canonical release (with signed macOS assets) from macOS first using:" >&2
+        echo "  make publish-release-macos-signed" >&2
+        exit 1
+      elif [ "${rel_status}" != "200" ]; then
+        echo "Error: failed to query existing release ${CI_COMMIT_TAG} (HTTP ${rel_status})." >&2
+        sed -n '1,80p' release.json >&2 || true
+        exit 1
+      fi
+
+      echo "Release ${CI_COMMIT_TAG} exists; will only ensure CI artifact links are present."
+
+      existing_urls="$(jq -r '.assets.links[].url // empty' release.json 2>/dev/null | tr '\n' ' ' || true)"
+
+      add_link_if_missing() {
+        name="$1"
+        url="$2"
+        if echo " ${existing_urls} " | grep -Fq " ${url} "; then
+          echo "Release link already present: ${name} -> ${url}"
+          return 0
+        fi
+        echo "Adding release link: ${name} -> ${url}"
+        curl -sS -X POST -H "${AUTH_HEADER}" \
+          --data-urlencode "name=${name}" \
+          --data-urlencode "url=${url}" \
+          "${RELEASE_URL}/assets/links" >/dev/null
+      }
+
+      linux_url="${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-linux-x86_64.zip"
+      mac_arm_url="${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-arm64.zip"
+      mac_x86_url="${CI_JOB_URL}/artifacts/file/aifo-coder-${VERSION}-macos-x86_64.zip"
+
+      add_link_if_missing "aifo-coder-${VERSION}-linux-x86_64.zip" "${linux_url}"
+      add_link_if_missing "aifo-coder-${VERSION}-macos-arm64.zip" "${mac_arm_url}"
+      add_link_if_missing "aifo-coder-${VERSION}-macos-x86_64.zip" "${mac_x86_url}"
+
+      echo "GitLab Release links updated (CI unsigned artifacts attached if missing)."
   artifacts:
     expire_in: 1 week
     paths:
