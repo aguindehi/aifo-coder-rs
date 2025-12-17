@@ -4751,6 +4751,13 @@ check-macos-cli-dmg-plan:
 	    exit 1; \
 	  }; \
 	}; \
+	need_lit() { \
+	  s="$$1"; \
+	  grep -Fq "$$s" "$$FILE" || { \
+	    echo "Error: missing required Makefile substring: $$s" >&2; \
+	    exit 1; \
+	  }; \
+	}; \
 	echo "Checking macOS CLI DMG plan wiring (static grep guard) ..."; \
 	need "^MACOS_DMG_VERSION[[:space:]]*\\?="; \
 	need "^MACOS_CLI_RELEASE_FILES[[:space:]]*\\?="; \
@@ -4777,7 +4784,7 @@ check-macos-cli-dmg-plan:
 	need "^publish-macos-cli-dmg-local-glab:"; \
 	need "^\\.PHONY: publish-macos-cli-dmg-local-curl$$"; \
 	need "^publish-macos-cli-dmg-local-curl:"; \
-	need "dist/\\$\\(BIN_NAME\\)-\\$\\(MACOS_DMG_VERSION\\)-macos-arm64\\.dmg"; \
-	need "dist/\\$\\(BIN_NAME\\)-\\$\\(MACOS_DMG_VERSION\\)-macos-x86_64\\.dmg"; \
+	need_lit "$(MACOS_CLI_DMG_ARM64)"; \
+	need_lit "$(MACOS_CLI_DMG_X86_64)"; \
 	echo "OK: macOS CLI DMG plan wiring present."; \
 	'
