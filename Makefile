@@ -3832,11 +3832,33 @@ release-macos-cli-dmg-verify:
 	echo "OK: CLI DMG verification passed."; \
 	'
 
+.PHONY: release-macos-cli-binaries-build
+release-macos-cli-binaries-build:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=release-macos-cli-binaries-build; \
+	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
+	if [ "$$OS" = "Darwin" ]; then \
+	  $(MAKE) build-launcher; \
+	  if command -v rustup >/dev/null 2>&1; then \
+	    rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null 2>&1 || true; \
+	    rustup run stable cargo build $(CARGO_FLAGS) --release --target aarch64-apple-darwin; \
+	    rustup run stable cargo build $(CARGO_FLAGS) --release --target x86_64-apple-darwin; \
+	  else \
+	    cargo build $(CARGO_FLAGS) --release --target aarch64-apple-darwin; \
+	    cargo build $(CARGO_FLAGS) --release --target x86_64-apple-darwin; \
+	  fi; \
+	else \
+	  $(MAKE) build-launcher-macos-cross; \
+	  echo "Built macOS binaries via cross build on $$OS. DMG signing/notarization must run on macOS."; \
+	fi; \
+	'
+
 .PHONY: release-macos-cli-dmg-signed
 release-macos-cli-dmg-signed:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
+	$(MAKE) release-macos-cli-binaries-build; \
 	$(MAKE) release-macos-binaries-normalize-local; \
 	$(MAKE) release-macos-binaries-sign; \
 	$(MAKE) release-macos-cli-dmg; \
