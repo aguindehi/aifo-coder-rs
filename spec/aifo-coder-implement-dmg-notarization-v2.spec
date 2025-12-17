@@ -132,11 +132,6 @@ Stage directories:
 - `dist/.dmg-cli-root-arm64/`
 - `dist/.dmg-cli-root-x86_64/`
 
-Additional versioned outputs (naming aligned with zip version by default):
-- `MACOS_DMG_VERSION ?= $(MACOS_ZIP_VERSION)`
-- `dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
-- `dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
-
 ### New targets (Darwin-only)
 
 1) `release-macos-cli-dmg`
