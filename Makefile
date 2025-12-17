@@ -1791,12 +1791,12 @@ publish-release-macos-signed:
 	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
 	    exit 1 ;; \
 	  latest ) \
-	    echo "Error: refusing to publish macOS signed release with tag 'latest'." >&2; \
-	    echo "Hint: run 'make publish-release' (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    echo "Error: refusing to publish macOS signed release with tag '\''latest'\''." >&2; \
+	    echo "Hint: run make publish-release (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
 	    exit 2 ;; \
 	  -* ) \
-	    echo "Error: derived release tag '$$TAG_EFF' starts with '-' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: run: make -npr publish-release-macos-signed | grep -E \"^RELEASE_PREFIX|^RELEASE_POSTFIX|^VERSION|^TAG[[:space:]]*\\?=\" " >&2; \
+	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
 	echo "Publishing signed macOS zips for $$TAG_EFF ..."; \

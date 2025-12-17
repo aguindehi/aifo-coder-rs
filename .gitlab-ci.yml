@@ -215,6 +215,9 @@ build:
     matrix:
       - TARGET: [ "codex","crush","aider","openhands","opencode","plandex",
                   "codex-slim","crush-slim","aider-slim","openhands-slim","opencode-slim","plandex-slim" ]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
 
 build-toolchain:
   extends: container-build
@@ -238,7 +241,9 @@ build-toolchain:
     IMAGE_PREFIX: "coder-toolchain"
     DOCKER_FILE: "toolchains/$FOLDER/Dockerfile"
     KANIKO_CUSTOM_BUILD_ARGUMENTS: "REGISTRY_PREFIX=repository.migros.net/"
-  rules: *rules_build_image
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
   parallel:
     matrix:
       - FOLDER: [ "rust", "node", "cpp" ]
