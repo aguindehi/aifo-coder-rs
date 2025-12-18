@@ -342,8 +342,7 @@ export SIGN_FLAGS
 endef
 
 define MACOS_DEFAULT_KEYCHAIN
-KEYCHAIN="$$(security default-keychain -d user \
-  | sed -e 's/^ *"//' -e 's/"$$//' -e 's/^ *//' -e 's/ *$$//')"; \
+KEYCHAIN="$$(security default-keychain -d user 2>/dev/null | tr -d '"' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//')"; \
 export KEYCHAIN
 endef
 
