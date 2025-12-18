@@ -108,8 +108,17 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     //
     // Phase 1 only wires env vars; the shim must implement the behavior (Phase 2/3).
     //
-    // Master toggle: pass through if set on host.
-    push_env_kv_if_set(&mut env_flags, "AIFO_SHIM_SMART");
+    // Master toggle: explicitly opt-in for agents where we enable smart behavior.
+    // This keeps default behavior unchanged for other agents.
+    match agent {
+        "codex" | "crush" | "opencode" | "aider" | "openhands" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART", "1");
+        }
+        _ => {
+            // Allow host override for any other agent/debug usage.
+            push_env_kv_if_set(&mut env_flags, "AIFO_SHIM_SMART");
+        }
+    }
 
     // Agent label: always set (lets the shim log/branch per-agent deterministically).
     push_env_kv(&mut env_flags, "AIFO_AGENT_NAME", agent);

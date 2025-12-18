@@ -5,6 +5,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 const WORKSPACE_PREFIX: &str = "/workspace";
 
 fn env_is_truthy(key: &str) -> bool {
@@ -51,6 +54,16 @@ fn pick_local_node_path() -> Option<&'static str> {
     None
 }
 
+fn pick_local_proxy_shim_path() -> Option<&'static str> {
+    // Absolute paths to avoid PATH recursion.
+    for p in ["/opt/aifo/bin/aifo-shim-proxy", "/usr/local/bin/aifo-shim-proxy"] {
+        if Path::new(p).is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 /// Return the "main program" arg for `node` invocations, following the v1 rules:
 /// - honor `--` separator
 /// - skip known flags that consume an argument
@@ -87,8 +100,21 @@ fn node_main_program_arg(argv: &[OsString]) -> Option<String> {
             || a == "--loader"
             || a == "--import"
             || a == "--eval-file"
+            || a == "--inspect-port"
+            || a == "--title"
         {
             i += 2;
+            continue;
+        }
+
+        // Flags that are `--flag=value` forms that consume their value inline.
+        if a.starts_with("--require=")
+            || a.starts_with("--loader=")
+            || a.starts_with("--import=")
+            || a.starts_with("--inspect-port=")
+            || a.starts_with("--title=")
+        {
+            i += 1;
             continue;
         }
 
@@ -138,12 +164,40 @@ fn should_smart_local_node(tool: &str, argv: &[OsString]) -> Option<PathBuf> {
 }
 
 fn exec_local(local_bin: &str, argv: &[OsString]) -> ExitCode {
-    // argv[0] is the shim name; replace it with the real runtime path.
     let mut cmd = Command::new(local_bin);
     if argv.len() > 1 {
         cmd.args(&argv[1..]);
     }
-    let status = cmd.status().unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
+    let status = match cmd.status() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("aifo-shim: failed to exec local runtime: {e}");
+            return ExitCode::from(1);
+        }
+    };
+    ExitCode::from(status.code().unwrap_or(1) as u8)
+}
+
+fn exec_proxy(tool: &str, argv: &[OsString]) -> ExitCode {
+    // Delegate to a dedicated proxy shim binary (keeps this file focused on smart routing).
+    // This also avoids recursion: we call an absolute path that must not point back to us.
+    let Some(proxy) = pick_local_proxy_shim_path() else {
+        eprintln!("aifo-shim: proxy shim not found (expected /opt/aifo/bin/aifo-shim-proxy)");
+        return ExitCode::from(86);
+    };
+
+    let mut cmd = Command::new(proxy);
+    cmd.arg(tool);
+    if argv.len() > 1 {
+        cmd.args(&argv[1..]);
+    }
+    let status = match cmd.status() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("aifo-shim: failed to exec proxy shim: {e}");
+            return ExitCode::from(1);
+        }
+    };
     ExitCode::from(status.code().unwrap_or(1) as u8)
 }
 
@@ -156,37 +210,15 @@ fn main() -> ExitCode {
 
     if let Some(program) = should_smart_local_node(&tool, &argv) {
         let Some(local) = pick_local_node_path() else {
-            // If smart is enabled but we cannot find local node, fall back to proxy
-            // by exiting with a distinct error (proxy wrapper will handle it).
             if verbose_enabled() {
                 eprintln!("aifo-shim: smart: tool=node wanted local but no local node found");
             }
-            // Proxy behavior is implemented elsewhere; returning 86 keeps parity with
-            // "proxy not configured" style errors.
-            return ExitCode::from(86);
+            return exec_proxy(&tool, &argv);
         };
 
         log_smart_line("node", "outside-workspace", Some(&program), Some(local));
-        // Best-effort direct local exec; do not proxy signals.
-        let mut cmd = Command::new(local);
-        if argv.len() > 1 {
-            cmd.args(&argv[1..]);
-        }
-        let status = match cmd.status() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("aifo-shim: failed to exec local node: {e}");
-                return ExitCode::from(1);
-            }
-        };
-        return ExitCode::from(status.code().unwrap_or(1) as u8);
+        return exec_local(local, &argv);
     }
 
-    // Phase 2 only: if we didn't take local path, keep existing behavior.
-    // This file is a placeholder shim main; the actual proxy behavior must already exist
-    // in the environment's /opt/aifo/bin/aifo-shim script/binary.
-    //
-    // If this binary is invoked directly without proxy wiring, fail clearly.
-    eprintln!("aifo-shim: proxy behavior not implemented in this build");
-    ExitCode::from(86)
+    exec_proxy(&tool, &argv)
 }
