@@ -40,7 +40,6 @@ pub use sidecar::{
 mod proxy;
 pub use proxy::toolexec_start_proxy;
 
-mod shim;
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exec_id: &str) {
     if verbose {
