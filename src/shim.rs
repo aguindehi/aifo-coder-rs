@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 const WORKSPACE_PREFIX: &str = "/workspace";
 
 pub fn env_is_truthy(key: &str) -> bool {
-    match env::var(key).ok().as_deref() {
-        Some("1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON") => true,
-        _ => false,
-    }
+    matches!(
+        env::var(key).ok().as_deref(),
+        Some("1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+    )
 }
 
 /// Best-effort absolute-ish path resolution:
