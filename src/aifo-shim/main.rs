@@ -52,6 +52,16 @@ fn pick_local_node_path() -> Option<&'static str> {
     None
 }
 
+fn pick_local_python_path() -> Option<&'static str> {
+    // Prefer distro python first (common in Debian/Ubuntu), fallback to /usr/local.
+    for p in ["/usr/bin/python3", "/usr/local/bin/python3"] {
+        if Path::new(p).is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 fn proxied_exec_url() -> Option<String> {
     env::var("AIFO_TOOLEEXEC_URL")
         .ok()
@@ -165,6 +175,87 @@ fn should_smart_local_node(tool: &str, argv: &[OsString]) -> Option<PathBuf> {
     None
 }
 
+fn python_script_arg(argv: &[OsString]) -> Option<String> {
+    // argv includes argv0 at index 0
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy().to_string();
+
+        if a == "--" {
+            if i + 1 < argv.len() {
+                return Some(argv[i + 1].to_string_lossy().to_string());
+            }
+            return None;
+        }
+
+        // -m module: treat as local in v1 when smart python enabled
+        if a == "-m" {
+            return None;
+        }
+        if a.starts_with("-m") && a.len() > 2 {
+            return None;
+        }
+
+        // Options that consume a following value; skip both.
+        if a == "-c" || a == "-W" || a == "-X" {
+            i += 2;
+            continue;
+        }
+
+        // Generic option, keep scanning.
+        if a.starts_with('-') {
+            i += 1;
+            continue;
+        }
+
+        // First non-flag token treated as script path.
+        return Some(a);
+    }
+    None
+}
+
+fn python_is_module_mode(argv: &[OsString]) -> bool {
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy();
+        if a == "--" {
+            return false;
+        }
+        if a == "-m" {
+            return true;
+        }
+        if a.starts_with("-m") && a.len() > 2 {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+fn should_smart_local_python(tool: &str, argv: &[OsString]) -> Option<Option<PathBuf>> {
+    if tool != "python" && tool != "python3" {
+        return None;
+    }
+    if !env_is_truthy("AIFO_SHIM_SMART") || !env_is_truthy("AIFO_SHIM_SMART_PYTHON") {
+        return None;
+    }
+
+    // `python -m module` => local (v1 conservative default)
+    if python_is_module_mode(argv) {
+        return Some(None);
+    }
+
+    // `python /path/to/script.py` => local if script outside /workspace
+    if let Some(script) = python_script_arg(argv) {
+        let p = resolve_program_path(&script);
+        if !is_under_workspace(&p) {
+            return Some(Some(p));
+        }
+    }
+
+    None
+}
+
 fn exec_local(local_bin: &str, argv: &[OsString]) -> ExitCode {
     let mut cmd = Command::new(local_bin);
     if argv.len() > 1 {
@@ -246,6 +337,26 @@ fn main() -> ExitCode {
         };
 
         log_smart_line("node", "outside-workspace", Some(&program), Some(local));
+        return exec_local(local, &argv);
+    }
+
+    if let Some(program_opt) = should_smart_local_python(&tool, &argv) {
+        let Some(local) = pick_local_python_path() else {
+            if verbose_enabled() {
+                eprintln!("aifo-shim: smart: tool=python wanted local but no local python found");
+            }
+            return exec_proxy(&tool, &argv);
+        };
+
+        match program_opt {
+            Some(script) => {
+                log_smart_line("python", "outside-workspace", Some(&script), Some(local));
+            }
+            None => {
+                log_smart_line("python", "module-mode", None, Some(local));
+            }
+        }
+
         return exec_local(local, &argv);
     }
 
