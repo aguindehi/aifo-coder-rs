@@ -4921,6 +4921,8 @@ check-macos-cli-dmg-plan:
 	need "^release-macos-dmg-notarize:"; \
 	need "^\\.PHONY: release-macos-dmg-verify$$"; \
 	need "^release-macos-dmg-verify:"; \
+	need "^\\.PHONY: release-macos-binaries-build$$"; \
+	need "^release-macos-binaries-build:"; \
 	need "^\\.PHONY: release-macos-dmg-signed$$"; \
 	need "^release-macos-dmg-signed:"; \
 	need "^\\.PHONY: publish-release-macos-dmg-signed$$"; \
