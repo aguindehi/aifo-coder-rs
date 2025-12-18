@@ -12,4 +12,3 @@ fn unit_test_aifo_shim_exits_86_without_proxy_env() {
         .expect("exec aifo-shim");
     assert_eq!(status.code().unwrap_or(0), 86, "expected exit 86");
 }
-
