@@ -29,7 +29,7 @@ mod auth;
 mod http;
 mod notifications;
 
-mod shim;
+pub(crate) mod shim;
 
 mod sidecar;
 pub use sidecar::{
