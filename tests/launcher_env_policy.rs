@@ -7,21 +7,26 @@ fn build_preview(agent: &str) -> String {
 }
 
 fn assert_has_env_kv(preview: &str, k: &str, v: &str) {
-    // Preview is a shell-escaped docker argv string; env flags are emitted as:
-    //   -e 'KEY=VALUE'
-    // We check for the specific, stable substring including quotes.
-    let needle = format!("-e '{k}={v}'");
+    // build_docker_preview_only() shell-escapes each argv token. For -e env flags, the preview
+    // contains two adjacent tokens:
+    //   -e KEY=VALUE
+    //
+    // Values that contain '$' are quoted by shell_escape() with single quotes, so we accept
+    // either the quoted or unquoted form.
+    let a = format!("-e {k}={v}");
+    let b = format!("-e {k}='{v}'");
     assert!(
-        preview.contains(&needle),
-        "expected preview to contain env kv: {needle}\npreview:\n{preview}"
+        preview.contains(&a) || preview.contains(&b),
+        "expected preview to contain env kv: {k}={v}\npreview:\n{preview}"
     );
 }
 
 fn assert_lacks_env_kv(preview: &str, k: &str, v: &str) {
-    let needle = format!("-e '{k}={v}'");
+    let a = format!("-e {k}={v}");
+    let b = format!("-e {k}='{v}'");
     assert!(
-        !preview.contains(&needle),
-        "did not expect preview to contain env kv: {needle}\npreview:\n{preview}"
+        !preview.contains(&a) && !preview.contains(&b),
+        "did not expect preview to contain env kv: {k}={v}\npreview:\n{preview}"
     );
 }
 
