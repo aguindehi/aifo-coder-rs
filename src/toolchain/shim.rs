@@ -1,6 +1,4 @@
-use std::io;
-
-const SHIM_TOOLS: &[&str] = &[
+pub(crate) const SHIM_TOOLS: &[&str] = &[
     "cargo",
     "rustc",
     "node",
@@ -47,11 +45,5 @@ mod tests {
         assert!(SHIM_TOOLS.contains(&"cargo"));
         assert!(SHIM_TOOLS.contains(&"uv"));
         assert!(SHIM_TOOLS.contains(&"uvx"));
-    }
-
-    #[test]
-    fn test_line_length_smoke() {
-        // Keep a placeholder test module so this file isn't empty beyond the list.
-        assert_eq!(io::ErrorKind::InvalidInput, io::ErrorKind::InvalidInput);
     }
 }
