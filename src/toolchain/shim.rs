@@ -1,22 +1,3 @@
-/*!
-Shim writer module: emits tool shims/wrappers under /opt/aifo/bin.
-
-Phase 2 (smart shims v2): the authoritative shim implementation is the Rust binary
-`aifo-shim` (fused smart routing + proxy protocol). Therefore this module must NOT
-generate a proxy-implementing POSIX `aifo-shim` script anymore.
-
-This module only writes:
-- tool entrypoint wrappers (node/python/pip/...) that exec the local `aifo-shim` binary
-- optional shell wrappers (sh/bash/dash) for session UX
-
-The actual proxy protocol semantics live in `src/bin/aifo-shim.rs` and must be kept
-single-source-of-truth.
-*/
-use std::fs;
-use std::io;
-use std::path::Path;
-
-use crate::{ShellFile, TextLines};
 
 /// Full set of shim tools to write into the shim dir.
 const SHIM_TOOLS: &[&str] = &[
