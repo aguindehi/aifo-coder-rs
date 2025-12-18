@@ -298,14 +298,9 @@ fn agent_cli_for(agent: &str) -> String {
 }
 
 /// PATH to use for agent probes, mirroring runtime PATH composition.
-fn agent_path_for(agent: &str) -> &'static str {
-    match agent {
-        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "openhands" => "/opt/venv-openhands/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        // Include /opt/aifo/bin for shims; otherwise a standard UNIX PATH
-        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-    }
+fn agent_path_for(_agent: &str) -> &'static str {
+    // Phase 4 (smart shims v2): uniform shim-first PATH. The shim is the single source of truth.
+    "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 }
 
 /// Build a robust agent probe: export PATH, check absolute path and basename, tolerate odd --version exits.
