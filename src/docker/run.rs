@@ -111,7 +111,7 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     // Master toggle: explicitly opt-in for agents where we enable smart behavior.
     // This keeps default behavior unchanged for other agents.
     match agent {
-        "codex" | "crush" | "opencode" | "aider" | "openhands" => {
+        "codex" | "crush" | "opencode" | "letta" | "aider" | "openhands" => {
             push_env_kv(&mut env_flags, "AIFO_SHIM_SMART", "1");
         }
         _ => {
@@ -126,7 +126,7 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     // Tool-specific toggles: set conservatively per agent runtime needs.
     match agent {
         // Node-based agents
-        "codex" | "crush" | "opencode" => {
+        "codex" | "crush" | "opencode" | "letta" => {
             push_env_kv(&mut env_flags, "AIFO_SHIM_SMART_NODE", "1");
         }
         // Python-based agents

@@ -5,8 +5,6 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 
 const WORKSPACE_PREFIX: &str = "/workspace";
 
@@ -55,8 +53,9 @@ fn pick_local_node_path() -> Option<&'static str> {
 }
 
 fn pick_local_proxy_shim_path() -> Option<&'static str> {
-    // Absolute paths to avoid PATH recursion.
-    for p in ["/opt/aifo/bin/aifo-shim-proxy", "/usr/local/bin/aifo-shim-proxy"] {
+    // Prefer the in-image proxy shim. Fall back to the legacy location if the images
+    // haven't been updated yet.
+    for p in ["/opt/aifo/bin/aifo-shim-proxy", "/opt/aifo/bin/aifo-shim"] {
         if Path::new(p).is_file() {
             return Some(p);
         }
