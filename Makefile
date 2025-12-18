@@ -3696,6 +3696,7 @@ release-macos-cli-dmg:
 	  rm -rf "$$stage"; \
 	  mkdir -p "$$stage"; \
 	  install -m 0755 "$$src" "$$stage/$(BIN_NAME)"; \
+	  ln -sf /usr/local/bin "$$stage/usr-local-bin"; \
 	  for f in $(MACOS_CLI_RELEASE_FILES); do \
 	    install -m 0644 "$$f" "$$stage/"; \
 	  done; \
