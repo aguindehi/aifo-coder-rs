@@ -300,7 +300,15 @@ Add/extend tests to ensure:
 
 #### Phase 6: Validation
 
-- Run `make check`.
+After landing Phases 1–5:
+
+1. Run formatting:
+   - `./x fmt` (when applicable in the hosting repo)
+2. Run the full test suite:
+   - `make check`
+
+Validation is complete when `make check` passes with shims-first PATH and smart routing enabled for
+the target agents.
 
 ## Acceptance criteria
 
