@@ -369,8 +369,7 @@ else \
   if codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIGN_IDENTITY" "$$B"; then \
     :; \
   else \
-    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z --keychain "$$KEYCHAIN" 2>/dev/null \
-      | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
+    SIG_SHA1="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -Z --keychain "$$KEYCHAIN" 2>/dev/null | awk '\''/^SHA-1 hash:/{print $$3; exit}'\'')"; \
     if [ -n "$$SIG_SHA1" ] && codesign $$SIGN_FLAGS --keychain "$$KEYCHAIN" -s "$$SIG_SHA1" "$$B"; then \
       :; \
     else \
