@@ -108,6 +108,9 @@ check uses 'cargo nextest' which is a lot faster then 'cargo test'.
 As a general rule, do not use specification / plan phase informations in comments as
 these are transient and specification / plan dependant.
 
+Never mention implementation phases in comments as they are transient and only relevant
+in the contect of a specific specification.
+
 # Recommended project-wide standard
 
 This section is written for both humans and LLM/Coding Agents. Follow these
