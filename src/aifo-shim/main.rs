@@ -52,15 +52,21 @@ fn pick_local_node_path() -> Option<&'static str> {
     None
 }
 
-fn pick_local_proxy_shim_path() -> Option<&'static str> {
-    // Prefer the in-image proxy shim. Fall back to the legacy location if the images
-    // haven't been updated yet.
-    for p in ["/opt/aifo/bin/aifo-shim-proxy", "/opt/aifo/bin/aifo-shim"] {
-        if Path::new(p).is_file() {
-            return Some(p);
-        }
-    }
-    None
+fn proxied_exec_url() -> Option<String> {
+    // Keep naming consistent with existing env wiring in docker run.
+    // (typo preserved intentionally for compatibility)
+    env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .or_else(|| env::var("AIFO_TOOLEEXEC_URL").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn proxied_exec_token() -> Option<String> {
+    env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Return the "main program" arg for `node` invocations, following the v1 rules:
@@ -178,22 +184,49 @@ fn exec_local(local_bin: &str, argv: &[OsString]) -> ExitCode {
 }
 
 fn exec_proxy(tool: &str, argv: &[OsString]) -> ExitCode {
-    // Delegate to a dedicated proxy shim binary (keeps this file focused on smart routing).
-    // This also avoids recursion: we call an absolute path that must not point back to us.
-    let Some(proxy) = pick_local_proxy_shim_path() else {
-        eprintln!("aifo-shim: proxy shim not found (expected /opt/aifo/bin/aifo-shim-proxy)");
+    // Phase 2 requires that proxied execution remains available in the same shim.
+    // The real proxy sidecar HTTP protocol is implemented by the existing aifo toolchain.
+    //
+    // In this codebase, we keep it simple and invoke `aifo-toolexec` if present, falling back
+    // to a clear error if proxy config is missing.
+    //
+    // NOTE: This intentionally does NOT consult PATH for the runtime tool (to avoid recursion);
+    // it delegates to a dedicated proxy client binary.
+    let url = match proxied_exec_url() {
+        Some(u) => u,
+        None => {
+            eprintln!("aifo-shim: proxy disabled: missing AIFO_TOOLEEXEC_URL");
+            return ExitCode::from(86);
+        }
+    };
+    let token = proxied_exec_token().unwrap_or_default();
+
+    // Prefer the in-image client.
+    let client = if Path::new("/usr/local/bin/aifo-toolexec").is_file() {
+        "/usr/local/bin/aifo-toolexec"
+    } else if Path::new("/opt/aifo/bin/aifo-toolexec").is_file() {
+        "/opt/aifo/bin/aifo-toolexec"
+    } else {
+        eprintln!("aifo-shim: proxy client not found (aifo-toolexec)");
         return ExitCode::from(86);
     };
 
-    let mut cmd = Command::new(proxy);
-    cmd.arg(tool);
-    if argv.len() > 1 {
-        cmd.args(&argv[1..]);
+    let mut cmd = Command::new(client);
+    cmd.arg("--url").arg(url);
+    if !token.is_empty() {
+        cmd.arg("--token").arg(token);
     }
+    cmd.arg("--tool").arg(tool);
+    if argv.len() > 1 {
+        for a in &argv[1..] {
+            cmd.arg(a);
+        }
+    }
+
     let status = match cmd.status() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("aifo-shim: failed to exec proxy shim: {e}");
+            eprintln!("aifo-shim: failed to exec proxy client: {e}");
             return ExitCode::from(1);
         }
     };
