@@ -1,5 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
 
+const SHIM_FIRST_PATH: &str =
+    "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH";
+
 fn build_args(agent: &str) -> Vec<String> {
     // Use the structured argv (not the shell-escaped preview string) for stable assertions.
     //
@@ -28,15 +31,26 @@ fn expect_no_env_kv(args: &[String], key: &str, val: &str) {
     }
 }
 
+fn container_sh_c_script(args: &[String]) -> &str {
+    for i in 0..args.len().saturating_sub(1) {
+        if args[i] == "-c" {
+            return &args[i + 1];
+        }
+    }
+    panic!("missing /bin/sh -c script in args: {args:?}");
+}
+
 #[test]
 fn unit_launcher_sets_agent_name_and_uniform_path() {
     for agent in ["codex", "crush", "opencode", "letta", "aider", "openhands"] {
         let args = build_args(agent);
         expect_env_kv(&args, "AIFO_AGENT_NAME", agent);
-        expect_env_kv(
-            &args,
-            "PATH",
-            "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+
+        let script = container_sh_c_script(&args);
+        let expected = format!(r#"export PATH="{SHIM_FIRST_PATH}""#);
+        assert!(
+            script.contains(&expected),
+            "missing shim-first PATH export '{expected}' in container script: {script}"
         );
     }
 }
