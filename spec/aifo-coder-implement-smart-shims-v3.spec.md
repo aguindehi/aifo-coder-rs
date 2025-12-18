@@ -11,6 +11,23 @@ Status: draft
 Owner: aifo-coder  
 Date: 2025-12-18  
 
+Phase 1 status (spec + design convergence): complete
+- End state confirmed: a single fused Rust `aifo-shim` binary is authoritative for both:
+  - smart routing (local vs proxy) and
+  - proxied execution (existing proxy protocol semantics).
+- Confirmed packaging direction:
+  - Do not install a proxy-implementing POSIX `/opt/aifo/bin/aifo-shim` script in v2+.
+  - Do not require a separate `/opt/aifo/bin/aifo-shim-proxy` artifact.
+  - Tool wrappers/symlinks in `/opt/aifo/bin` must invoke the fused Rust `aifo-shim`.
+
+Implementation notes (from current repo state)
+- `src/bin/aifo-shim.rs` is the existing full-feature proxy shim implementation.
+- `src/aifo-shim/main.rs` currently implements smart routing + delegates proxying via `aifo-toolexec`.
+- `src/toolchain/shim.rs` currently generates a POSIX `aifo-shim` script; this must be removed or turned into a thin
+  trampoline in Phase 2 so it cannot shadow the Rust binary.
+
+These notes are part of Phase 1 to ensure the spec matches the implementation plan and to prevent diverging shims.
+
 Scope: make the embedded shim (`aifo-shim`) the single source of truth for routing decisions
 (local vs proxied), eliminate per-agent PATH special-casing in the launcher, and converge the shim
 implementations to one auditable design.
