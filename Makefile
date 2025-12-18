@@ -316,11 +316,13 @@ endef
 define MACOS_DETECT_APPLE_DEV
 APPLE_DEV=0; \
 if [ -n "$${SIGN_IDENTITY:-}" ]; then \
-  if security find-certificate -a -c "$$SIGN_IDENTITY" -Z -p --keychain "$$KEYCHAIN" 2>/dev/null \
-    | grep -Eiq "Developer ID Application|Apple Distribution|Apple Development"; then \
-    APPLE_DEV=1; \
-  elif command -v openssl >/dev/null 2>&1; then \
-    SUBJ="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -p --keychain "$$KEYCHAIN" 2>/dev/null \
+  if security find-identity -p codesigning -v 2>/dev/null | grep -Fq "$$SIGN_IDENTITY"; then \
+    case "$$SIGN_IDENTITY" in \
+      *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; \
+    esac; \
+  fi; \
+  if [ "$$APPLE_DEV" -eq 0 ] && command -v openssl >/dev/null 2>&1; then \
+    SUBJ="$$(security find-certificate -a -c "$$SIGN_IDENTITY" -p 2>/dev/null \
       | openssl x509 -noout -subject 2>/dev/null | head -n1)"; \
     case "$$SUBJ" in \
       *"Developer ID Application"*|*"Apple Distribution"*|*"Apple Development"*) APPLE_DEV=1 ;; \
