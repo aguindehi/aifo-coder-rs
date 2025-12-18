@@ -83,7 +83,7 @@ fn pm_deep_cmd_for(kind: &str) -> Option<String> {
 
 /// Build an optional agent+toolchain combo probe command to run inside the agent image.
 /// This verifies that, with the agent's PATH, the primary tool for the given kind is reachable.
-fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
+fn combo_probe_cmd(_agent: &str, kind: &str) -> Option<String> {
     let pathv = SHIM_FIRST_PATH;
     let tool_cmd = match kind {
         "rust" => "command -v rustc",

@@ -3,6 +3,7 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 #[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
