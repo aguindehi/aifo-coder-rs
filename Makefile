@@ -3927,10 +3927,22 @@ release-macos-cli-dmg-verify:
 	        if command -v xattr >/dev/null 2>&1; then \
 	          echo "spctl reported Insufficient Context; simulating downloaded quarantine and retrying..."; \
 	          xattr -w com.apple.quarantine "0081;$$(date +%s);aifo-coder;00000000-0000-0000-0000-000000000000" "$$D" || true; \
-	          spctl --assess --type open --verbose=4 "$$D"; \
+	          OUT2="$$(mktemp)"; \
+	          if spctl --assess --type open --verbose=4 "$$D" >"$$OUT2" 2>&1; then \
+	            cat "$$OUT2"; \
+	          else \
+	            cat "$$OUT2"; \
+	            if grep -q "source=Insufficient Context" "$$OUT2"; then \
+	              echo "Warning: spctl still reports Insufficient Context; continuing because codesign + stapler validate passed." >&2; \
+	            else \
+	              rm -f "$$OUT2"; \
+	              exit 3; \
+	            fi; \
+	          fi; \
+	          rm -f "$$OUT2"; \
 	          xattr -d com.apple.quarantine "$$D" 2>/dev/null || true; \
 	        else \
-	          echo "Warning: xattr not available; cannot simulate quarantine. Treating Insufficient Context as non-fatal." >&2; \
+	          echo "Warning: xattr not available; cannot simulate quarantine. Continuing because codesign + stapler validate passed." >&2; \
 	        fi; \
 	      else \
 	        rm -f "$$OUT"; \
