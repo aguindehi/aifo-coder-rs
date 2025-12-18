@@ -46,6 +46,14 @@ mod ui;
 mod util;
 
 pub mod shim;
+
+/// Return the set of tool wrapper names we expect in `/opt/aifo/bin` in agent images.
+///
+/// Used by tests that validate embedded shim presence.
+pub fn shim_tool_names() -> &'static [&'static str] {
+    crate::toolchain::shim::SHIM_TOOLS
+}
+
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;

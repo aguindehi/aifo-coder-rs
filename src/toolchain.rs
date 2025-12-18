@@ -29,6 +29,8 @@ mod auth;
 mod http;
 mod notifications;
 
+mod shim;
+
 mod sidecar;
 pub use sidecar::{
     build_sidecar_exec_preview, build_sidecar_run_preview,
