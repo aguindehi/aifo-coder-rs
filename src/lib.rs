@@ -44,6 +44,8 @@ mod telemetry;
 mod toolchain;
 mod ui;
 mod util;
+
+pub mod shim;
 pub use apparmor::*;
 pub use color::*;
 pub use docker::*;

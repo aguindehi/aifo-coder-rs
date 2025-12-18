@@ -18,30 +18,6 @@ const PROTO_VERSION: &str = "2";
 // Notification tools handled via /notify (extendable)
 const NOTIFY_TOOLS: &[&str] = &["say"];
 
-const WORKSPACE_PREFIX: &str = "/workspace";
-
-fn env_is_truthy(key: &str) -> bool {
-    match env::var(key).ok().as_deref() {
-        Some("1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON") => true,
-        _ => false,
-    }
-}
-
-fn resolve_program_path(program: &str) -> PathBuf {
-    if program.starts_with('/') {
-        PathBuf::from(program)
-    } else {
-        env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(program)
-    }
-}
-
-fn is_under_workspace(p: &Path) -> bool {
-    let s = p.to_string_lossy();
-    s == WORKSPACE_PREFIX || s.starts_with(&format!("{WORKSPACE_PREFIX}/"))
-}
-
 fn pick_local_node_path() -> Option<&'static str> {
     for p in ["/usr/local/bin/node", "/usr/bin/node"] {
         if Path::new(p).is_file() {
@@ -58,115 +34,6 @@ fn pick_local_python_path() -> Option<&'static str> {
         }
     }
     None
-}
-
-fn node_main_program_arg(argv: &[OsString]) -> Option<String> {
-    let mut i = 1usize;
-    while i < argv.len() {
-        let a = argv[i].to_string_lossy().to_string();
-
-        if a == "--" {
-            if i + 1 < argv.len() {
-                return Some(argv[i + 1].to_string_lossy().to_string());
-            }
-            return None;
-        }
-
-        if a == "-e"
-            || a == "--eval"
-            || a == "-p"
-            || a == "--print"
-            || a == "-h"
-            || a == "--help"
-            || a == "-v"
-            || a == "--version"
-        {
-            return None;
-        }
-
-        if a == "-r"
-            || a == "--require"
-            || a == "--loader"
-            || a == "--import"
-            || a == "--eval-file"
-            || a == "--inspect-port"
-            || a == "--title"
-        {
-            i += 2;
-            continue;
-        }
-
-        if a.starts_with("--require=")
-            || a.starts_with("--loader=")
-            || a.starts_with("--import=")
-            || a.starts_with("--inspect-port=")
-            || a.starts_with("--title=")
-        {
-            i += 1;
-            continue;
-        }
-
-        if a.starts_with('-') {
-            i += 1;
-            continue;
-        }
-
-        return Some(a);
-    }
-
-    None
-}
-
-fn python_script_arg(argv: &[OsString]) -> Option<String> {
-    let mut i = 1usize;
-    while i < argv.len() {
-        let a = argv[i].to_string_lossy().to_string();
-
-        if a == "--" {
-            if i + 1 < argv.len() {
-                return Some(argv[i + 1].to_string_lossy().to_string());
-            }
-            return None;
-        }
-
-        if a == "-m" {
-            return None;
-        }
-        if a.starts_with("-m") && a.len() > 2 {
-            return None;
-        }
-
-        if a == "-c" || a == "-W" || a == "-X" {
-            i += 2;
-            continue;
-        }
-
-        if a.starts_with('-') {
-            i += 1;
-            continue;
-        }
-
-        return Some(a);
-    }
-    None
-}
-
-fn python_is_module_mode(argv: &[OsString]) -> bool {
-    let mut i = 1usize;
-    while i < argv.len() {
-        let a = argv[i].to_string_lossy();
-        if a == "--" {
-            return false;
-        }
-        if a == "-m" {
-            return true;
-        }
-        if a.starts_with("-m") && a.len() > 2 {
-            return true;
-        }
-        i += 1;
-    }
-    false
 }
 
 fn log_smart_line(tool: &str, reason: &str, program: Option<&Path>, local_bin: Option<&str>) {
@@ -1303,11 +1170,13 @@ fn main() {
 
     // v1/v2 rule: pip/uv always proxy (no auto-local bypass)
     if tool != "pip" && tool != "pip3" && tool != "uv" && tool != "uvx" {
-        if tool == "node" && env_is_truthy("AIFO_SHIM_SMART") && env_is_truthy("AIFO_SHIM_SMART_NODE")
+        if tool == "node"
+            && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
+            && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_NODE")
         {
-            if let Some(program) = node_main_program_arg(&argv_os) {
-                let p = resolve_program_path(&program);
-                if !is_under_workspace(&p) {
+            if let Some(program) = aifo_coder::shim::node_main_program_arg(&argv_os) {
+                let p = aifo_coder::shim::resolve_program_path(&program);
+                if !aifo_coder::shim::is_under_workspace(&p) {
                     if let Some(local) = pick_local_node_path() {
                         log_smart_line("node", "outside-workspace", Some(&p), Some(local));
                         let mut cmd = Command::new(local);
@@ -1325,10 +1194,10 @@ fn main() {
         }
 
         if (tool == "python" || tool == "python3")
-            && env_is_truthy("AIFO_SHIM_SMART")
-            && env_is_truthy("AIFO_SHIM_SMART_PYTHON")
+            && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
+            && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_PYTHON")
         {
-            let module_mode = python_is_module_mode(&argv_os);
+            let module_mode = aifo_coder::shim::python_is_module_mode(&argv_os);
             if module_mode {
                 if let Some(local) = pick_local_python_path() {
                     log_smart_line("python", "module-mode", None, Some(local));
@@ -1342,9 +1211,9 @@ fn main() {
                     });
                     process::exit(st.code().unwrap_or(1));
                 }
-            } else if let Some(script) = python_script_arg(&argv_os) {
-                let p = resolve_program_path(&script);
-                if !is_under_workspace(&p) {
+            } else if let Some(script) = aifo_coder::shim::python_script_arg(&argv_os) {
+                let p = aifo_coder::shim::resolve_program_path(&script);
+                if !aifo_coder::shim::is_under_workspace(&p) {
                     if let Some(local) = pick_local_python_path() {
                         log_smart_line("python", "outside-workspace", Some(&p), Some(local));
                         let mut cmd = Command::new(local);
