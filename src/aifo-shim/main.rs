@@ -328,6 +328,11 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     };
 
+    // Phase 3 (smart-python v1): pip/uv remain proxied (no automatic local bypass in v1).
+    if tool == "pip" || tool == "pip3" || tool == "uv" || tool == "uvx" {
+        return exec_proxy(&tool, &argv);
+    }
+
     if let Some(program) = should_smart_local_node(&tool, &argv) {
         let Some(local) = pick_local_node_path() else {
             if verbose_enabled() {
