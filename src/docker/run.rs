@@ -893,12 +893,12 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         fields(agent = %agent)
     )
 )]
-pub fn build_docker_preview_only(
+pub fn build_docker_preview_args_only(
     agent: &str,
     passthrough: &[String],
     image: &str,
     apparmor_profile: Option<&str>,
-) -> String {
+) -> Vec<String> {
     // TTY flags
     let tty_flags: Vec<&str> = if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
         vec!["-it"]
@@ -998,6 +998,15 @@ pub fn build_docker_preview_only(
     preview_args.push(sh_cmd);
 
     preview_args
+}
+
+pub fn build_docker_preview_only(
+    agent: &str,
+    passthrough: &[String],
+    image: &str,
+    apparmor_profile: Option<&str>,
+) -> String {
+    build_docker_preview_args_only(agent, passthrough, image, apparmor_profile)
         .into_iter()
         .map(|p| crate::shell_escape(&p))
         .collect::<Vec<_>>()
