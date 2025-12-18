@@ -59,23 +59,16 @@ fn int_notify_unix_socket_say_ok_linux_only() {
     let (url, token, flag, handle) =
         aifo_coder::toolexec_start_proxy(&sid, false).expect("start proxy");
 
-    // Write shims and invoke say over UDS
-    let tmp = tempfile::tempdir().expect("tmpdir2");
-    aifo_coder::toolchain_write_shims(tmp.path()).expect("write shims");
-    let shim = tmp.path().join("say");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&shim, fs::Permissions::from_mode(0o755));
-    }
+    // Invoke the compiled aifo-shim directly (no test-only shim generation needed).
+    let shim = env!("CARGO_BIN_EXE_aifo-shim");
 
-    let status = Command::new(&shim)
+    let status = Command::new(shim)
         .arg("--title")
         .arg("AIFO")
         .env("AIFO_TOOLEEXEC_URL", &url)
         .env("AIFO_TOOLEEXEC_TOKEN", &token)
         .status()
-        .expect("exec say shim");
+        .expect("exec aifo-shim");
     let code = status.code().unwrap_or(1);
     assert_eq!(code, 0, "expected exit 0 via UDS, got {}", code);
 
