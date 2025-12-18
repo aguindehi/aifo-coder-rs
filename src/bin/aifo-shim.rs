@@ -20,21 +20,15 @@ const PROTO_VERSION: &str = "2";
 const NOTIFY_TOOLS: &[&str] = &["say"];
 
 fn pick_local_node_path() -> Option<&'static str> {
-    for p in ["/usr/local/bin/node", "/usr/bin/node"] {
-        if Path::new(p).is_file() {
-            return Some(p);
-        }
-    }
-    None
+    ["/usr/local/bin/node", "/usr/bin/node"]
+        .into_iter()
+        .find(|&p| Path::new(p).is_file())
 }
 
 fn pick_local_python_path() -> Option<&'static str> {
-    for p in ["/usr/bin/python3", "/usr/local/bin/python3"] {
-        if Path::new(p).is_file() {
-            return Some(p);
-        }
-    }
-    None
+    ["/usr/bin/python3", "/usr/local/bin/python3"]
+        .into_iter()
+        .find(|&p| Path::new(p).is_file())
 }
 
 fn log_smart_line(tool: &str, reason: &str, program: Option<&Path>, local_bin: Option<&str>) {
