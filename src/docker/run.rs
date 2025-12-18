@@ -29,6 +29,7 @@ fn agent_bin_and_path(agent: &str) -> (String, String) {
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
+        "letta" => "/usr/local/bin/letta",
         "openhands" => "/opt/venv-openhands/bin/openhands",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
@@ -38,7 +39,9 @@ fn agent_bin_and_path(agent: &str) -> (String, String) {
 
     let path = match agent {
         "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
+        "codex" | "crush" | "letta" => {
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH"
+        }
         _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
     }
     .to_string();
