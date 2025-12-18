@@ -2,7 +2,9 @@
 
 fn build_args(agent: &str) -> Vec<String> {
     // Use the structured argv (not the shell-escaped preview string) for stable assertions.
-    aifo_coder::docker::build_docker_preview_args_only(agent, &[], "node:22-bookworm-slim", None)
+    //
+    // `aifo_coder::docker` is an internal module; public APIs are re-exported at crate root.
+    aifo_coder::build_docker_preview_args_only(agent, &[], "node:22-bookworm-slim", None)
 }
 
 fn expect_env_kv(args: &[String], key: &str, val: &str) {
