@@ -78,7 +78,7 @@ You can also provide values non-interactively via env vars:
 ### Build + sign + notarize + staple + verify (Darwin-only)
 
 ```bash
-make release-macos-cli-dmg-signed
+make release-macos-dmg-signed
 ```
 
 Outputs:
@@ -88,7 +88,7 @@ Outputs:
 ### Publish to GitLab Release (Darwin-only)
 
 ```bash
-make publish-release-macos-cli-dmg-signed
+make publish-release-macos-dmg-signed
 ```
 
 Notes:

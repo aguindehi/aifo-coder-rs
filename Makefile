@@ -601,9 +601,9 @@ help: banner
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-release ............. Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
 	@echo "  publish-release-images ...... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
-	@echo "  publish-release-macos-cli-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized CLI DMGs"
+	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and NOTARY_PROFILE."
-	@echo "  publish-release-macos-signed  Darwin-only: legacy zip flow (kept for one migration cycle)"
+	@echo "  publish-release-macos-zip-signed  Darwin-only: legacy zip flow (kept for one migration cycle)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
 	@echo ""
 	@echo "                                Single-arch CI pushes are tagged with -linux-<arch> suffix to avoid colliding with multi-arch release tags."
@@ -620,8 +620,8 @@ help: banner
 	@echo "                                      make publish-release KEEP_APT=1"
 	@echo ""
 	@echo "  macos-notary-setup .......... One-time setup: stores notarytool credentials in macOS keychain (prompts for missing values)"
-	@echo "  release-macos-cli-dmg-signed  Build+sign+notarize+staple+verify per-arch CLI DMGs (Darwin-only)"
-	@echo "  publish-release-macos-cli-dmg-signed  Create/update GitLab Release and upload notarized CLI DMGs (Darwin-only)"
+	@echo "  release-macos-dmg-signed  Build+sign+notarize+staple+verify per-arch macOS DMGs (Darwin-only)"
+	@echo "  publish-release-macos-dmg-signed  Create/update GitLab Release and upload notarized macOS DMGs (Darwin-only)"
 	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab (legacy)"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -1796,21 +1796,21 @@ publish-release:
 	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
 	@$(MAKE) publish-release-images
 	@echo
-	@echo "==> Running publish-release-macos-cli-dmg-signed (build, sign, notarize, verify and upload macOS CLI DMGs) ..."
-	@$(MAKE) publish-release-macos-cli-dmg-signed
+	@echo "==> Running publish-release-macos-dmg-signed (build, sign, notarize, verify and upload macOS DMGs) ..."
+	@$(MAKE) publish-release-macos-dmg-signed
 	@echo
 	@echo "Tag and GitLab Release have been created/updated locally."
 	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
-.PHONY: publish-release-macos-cli-dmg-signed
-publish-release-macos-cli-dmg-signed:
+.PHONY: publish-release-macos-dmg-signed
+publish-release-macos-dmg-signed:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=publish-release-macos-cli-dmg-signed; \
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-dmg-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-cli-dmg-signed: publish signed+notarized macOS CLI DMGs for a versioned release tag."; \
+	echo "publish-release-macos-dmg-signed: publish signed+notarized macOS DMGs for a versioned release tag."; \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
@@ -1833,22 +1833,22 @@ publish-release-macos-cli-dmg-signed:
 	    exit 2 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: make -npr publish-release-macos-cli-dmg-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
+	    echo "Hint: make -npr publish-release-macos-dmg-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
-	echo "Publishing signed+notarized macOS CLI DMGs for $$TAG_EFF ..."; \
-	$(MAKE) TAG="$$TAG_EFF" release-macos-cli-dmg-signed; \
-	$(MAKE) TAG="$$TAG_EFF" publish-macos-cli-dmg-local; \
+	echo "Publishing signed+notarized macOS DMGs for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-dmg-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-dmg-local; \
 	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
 	'
 
-.PHONY: publish-release-macos-signed
-publish-release-macos-signed:
+.PHONY: publish-release-macos-zip-signed
+publish-release-macos-zip-signed:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=publish-release-macos-signed; \
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-zip-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-signed: publish signed macOS zips for a versioned release tag (legacy)."; \
+	echo "publish-release-macos-zip-signed: publish signed macOS zips for a versioned release tag (legacy)."; \
 	if ! command -v glab >/dev/null 2>&1 && [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	  echo "Error: RELEASE_ASSETS_API_TOKEN not set; required for curl-based upload fallback." >&2; \
 	  echo "Hint: either install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
@@ -1871,7 +1871,7 @@ publish-release-macos-signed:
 	    exit 2 ;; \
 	  -* ) \
 	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
-	    echo "Hint: make -npr publish-release-macos-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
+	    echo "Hint: make -npr publish-release-macos-zip-signed | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
 	    exit 3 ;; \
 	esac; \
 	echo "Publishing signed macOS zips for $$TAG_EFF (legacy) ..."; \
@@ -3669,10 +3669,10 @@ release-macos-binaries-zips:
 	fi; \
 	'
 
-.PHONY: release-macos-cli-dmg
-release-macos-cli-dmg:
+.PHONY: release-macos-dmg
+release-macos-dmg:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-dmg; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,hdiutil); \
 	DIST="$(DIST_DIR)"; \
@@ -3721,10 +3721,10 @@ release-macos-cli-dmg:
 	fi; \
 	'
 
-.PHONY: release-macos-cli-dmg-sign
-release-macos-cli-dmg-sign:
+.PHONY: release-macos-dmg-sign
+release-macos-dmg-sign:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-sign; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-dmg-sign; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,security codesign); \
 	D1="$(MACOS_CLI_DMG_ARM64)"; \
@@ -3826,10 +3826,10 @@ macos-notary-setup:
 	echo "Next: make release-macos-cli-dmg-signed NOTARY_PROFILE=$$PROFILE"; \
 	'
 
-.PHONY: release-macos-cli-dmg-notarize
-release-macos-cli-dmg-notarize:
+.PHONY: release-macos-dmg-notarize
+release-macos-dmg-notarize:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-notarize; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-dmg-notarize; \
 	$(MACOS_REQUIRE_DARWIN); \
 	NOTARY="$${NOTARY_PROFILE:-$${AIFO_NOTARY_PROFILE:-aifo-notary-profile}}"; \
 	if ! xcrun notarytool history --keychain-profile "$$NOTARY" >/dev/null 2>&1; then \
@@ -3893,10 +3893,10 @@ release-macos-cli-dmg-notarize:
 	done; \
 	'
 
-.PHONY: release-macos-cli-dmg-verify
-release-macos-cli-dmg-verify:
+.PHONY: release-macos-dmg-verify
+release-macos-dmg-verify:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-verify; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-dmg-verify; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,codesign spctl xcrun); \
 	if ! xcrun --find stapler >/dev/null 2>&1; then \
@@ -3955,10 +3955,10 @@ release-macos-cli-dmg-verify:
 	echo "OK: CLI DMG verification passed."; \
 	'
 
-.PHONY: release-macos-cli-binaries-build
-release-macos-cli-binaries-build:
+.PHONY: release-macos-binaries-build
+release-macos-binaries-build:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-binaries-build; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-binaries-build; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Darwin" ]; then \
 	  $(MAKE) build-launcher; \
@@ -3976,18 +3976,18 @@ release-macos-cli-binaries-build:
 	fi; \
 	'
 
-.PHONY: release-macos-cli-dmg-signed
-release-macos-cli-dmg-signed:
+.PHONY: release-macos-dmg-signed
+release-macos-dmg-signed:
 	@/bin/sh -ec '\
-	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-signed; \
+	AIFO_DARWIN_TARGET_NAME=release-macos-dmg-signed; \
 	$(MACOS_REQUIRE_DARWIN); \
-	$(MAKE) release-macos-cli-binaries-build; \
+	$(MAKE) release-macos-binaries-build; \
 	$(MAKE) release-macos-binaries-normalize-local; \
 	$(MAKE) release-macos-binaries-sign; \
-	$(MAKE) release-macos-cli-dmg; \
-	$(MAKE) release-macos-cli-dmg-sign; \
-	$(MAKE) release-macos-cli-dmg-notarize; \
-	$(MAKE) release-macos-cli-dmg-verify; \
+	$(MAKE) release-macos-dmg; \
+	$(MAKE) release-macos-dmg-sign; \
+	$(MAKE) release-macos-dmg-notarize; \
+	$(MAKE) release-macos-dmg-verify; \
 	'
 
 .PHONY: release-macos-binaries-zips-notarize
@@ -4081,27 +4081,27 @@ publish-macos-signed-zips-local:
 	  $(MAKE) publish-macos-signed-zips-local-curl; \
 	fi
 
-.PHONY: publish-macos-cli-dmg-local
-publish-macos-cli-dmg-local:
+.PHONY: publish-macos-dmg-local
+publish-macos-dmg-local:
 	@set -eu; \
-	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if command -v glab >/dev/null 2>&1; then \
-	  $(MAKE) publish-macos-cli-dmg-local-glab; \
+	  $(MAKE) publish-macos-dmg-local-glab; \
 	else \
 	  if [ -z "$${RELEASE_ASSETS_API_TOKEN:-}" ]; then \
 	    echo "Error: glab not found and RELEASE_ASSETS_API_TOKEN not set; cannot upload." >&2; \
 	    echo "Hint: install/authenticate glab (preferred) or set RELEASE_ASSETS_API_TOKEN." >&2; \
 	    exit 1; \
 	  fi; \
-	  $(MAKE) publish-macos-cli-dmg-local-curl; \
+	  $(MAKE) publish-macos-dmg-local-curl; \
 	fi
 
 # glab 1.48.0 still attempts update checks; at least avoid glab.com resolution via env where supported. \
-.PHONY: publish-macos-cli-dmg-local-glab
-publish-macos-cli-dmg-local-glab:
+.PHONY: publish-macos-dmg-local-glab
+publish-macos-dmg-local-glab:
 	@set -eu; \
-	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local-glab; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local-glab; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
 	export GLAB_CHECK_FOR_UPDATES=false; \
@@ -4364,10 +4364,10 @@ publish-macos-signed-zips-local-glab:
 	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
 	echo "Upload complete (glab)."
 
-.PHONY: publish-macos-cli-dmg-local-curl
-publish-macos-cli-dmg-local-curl:
+.PHONY: publish-macos-dmg-local-curl
+publish-macos-dmg-local-curl:
 	@set -eu; \
-	AIFO_DARWIN_TARGET_NAME=publish-macos-cli-dmg-local-curl; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local-curl; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git curl); \
 	if [ -f ./.env ]; then . ./.env; fi; \
@@ -4913,24 +4913,24 @@ check-macos-cli-dmg-plan:
 	need "^MACOS_CLI_DMG_VOLNAME[[:space:]]*\\?="; \
 	need "^\\.PHONY: macos-notary-setup$$"; \
 	need "^macos-notary-setup:"; \
-	need "^\\.PHONY: release-macos-cli-dmg$$"; \
-	need "^release-macos-cli-dmg:"; \
-	need "^\\.PHONY: release-macos-cli-dmg-sign$$"; \
-	need "^release-macos-cli-dmg-sign:"; \
-	need "^\\.PHONY: release-macos-cli-dmg-notarize$$"; \
-	need "^release-macos-cli-dmg-notarize:"; \
-	need "^\\.PHONY: release-macos-cli-dmg-verify$$"; \
-	need "^release-macos-cli-dmg-verify:"; \
-	need "^\\.PHONY: release-macos-cli-dmg-signed$$"; \
-	need "^release-macos-cli-dmg-signed:"; \
-	need "^\\.PHONY: publish-release-macos-cli-dmg-signed$$"; \
-	need "^publish-release-macos-cli-dmg-signed:"; \
-	need "^\\.PHONY: publish-macos-cli-dmg-local$$"; \
-	need "^publish-macos-cli-dmg-local:"; \
-	need "^\\.PHONY: publish-macos-cli-dmg-local-glab$$"; \
-	need "^publish-macos-cli-dmg-local-glab:"; \
-	need "^\\.PHONY: publish-macos-cli-dmg-local-curl$$"; \
-	need "^publish-macos-cli-dmg-local-curl:"; \
+	need "^\\.PHONY: release-macos-dmg$$"; \
+	need "^release-macos-dmg:"; \
+	need "^\\.PHONY: release-macos-dmg-sign$$"; \
+	need "^release-macos-dmg-sign:"; \
+	need "^\\.PHONY: release-macos-dmg-notarize$$"; \
+	need "^release-macos-dmg-notarize:"; \
+	need "^\\.PHONY: release-macos-dmg-verify$$"; \
+	need "^release-macos-dmg-verify:"; \
+	need "^\\.PHONY: release-macos-dmg-signed$$"; \
+	need "^release-macos-dmg-signed:"; \
+	need "^\\.PHONY: publish-release-macos-dmg-signed$$"; \
+	need "^publish-release-macos-dmg-signed:"; \
+	need "^\\.PHONY: publish-macos-dmg-local$$"; \
+	need "^publish-macos-dmg-local:"; \
+	need "^\\.PHONY: publish-macos-dmg-local-glab$$"; \
+	need "^publish-macos-dmg-local-glab:"; \
+	need "^\\.PHONY: publish-macos-dmg-local-curl$$"; \
+	need "^publish-macos-dmg-local-curl:"; \
 	need_lit 'MACOS_CLI_DMG_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg'; \
 	need_lit 'MACOS_CLI_DMG_X86_64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-x86_64.dmg'; \
 	echo "OK: macOS CLI DMG plan wiring present."; \

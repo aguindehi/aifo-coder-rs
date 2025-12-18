@@ -28,7 +28,7 @@ path as the default production artifact while keeping the old zip targets availa
 - DMG filename is versioned; binary inside DMG is stable (unversioned) and named `aifo-coder`.
 - Integrate with existing Makefile helpers and conventions (signing macros, notarization profile).
 - Add local (Darwin-only) verification gates since there are no macOS runners.
-- Wire the new `release-macos-cli-dmg-signed` into the Makefile `publish-release` flow.
+- Wire the new `release-macos-dmg-signed` into the Makefile `publish-release` flow.
 
 ## Non-goals (v2)
 
@@ -123,8 +123,8 @@ This remains a prerequisite for notarization of the DMG contents.
 ### New variables
 
 - `MACOS_DMG_VERSION ?= $(MACOS_ZIP_VERSION)`
-- `MACOS_CLI_DMG_ARM64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
-- `MACOS_CLI_DMG_X86_64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
+- `MACOS_DMG_ARM64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-arm64.dmg`
+- `MACOS_DMG_X86_64 = dist/aifo-coder-$(MACOS_DMG_VERSION)-macos-x86_64.dmg`
 - `MACOS_CLI_RELEASE_FILES ?= README.md NOTICE LICENSE`
 - `MACOS_CLI_DMG_VOLNAME ?= aifo-coder`
 
@@ -134,7 +134,7 @@ Stage directories:
 
 ### New targets (Darwin-only)
 
-1) `release-macos-cli-dmg`
+1) `release-macos-dmg`
    - Requires normalized + signed binaries exist:
      - `dist/aifo-coder-macos-arm64`
      - `dist/aifo-coder-macos-x86_64`
@@ -143,12 +143,12 @@ Stage directories:
      - copies `$(MACOS_CLI_RELEASE_FILES)` and `docs/` when present
    - Creates DMG per arch with `hdiutil create` (UDZO).
 
-2) `release-macos-cli-dmg-sign`
+2) `release-macos-dmg-sign`
    - Darwin-only.
    - Signs each DMG using existing `MACOS_SIGN_ONE_BINARY`.
    - Verifies with `codesign --verify --strict --verbose=4`.
 
-3) `release-macos-cli-dmg-notarize`
+3) `release-macos-dmg-notarize`
    - Darwin-only.
    - When `NOTARY_PROFILE` is missing:
      - Interactive shells will prompt via `make macos-notary-setup`.
@@ -159,14 +159,14 @@ Stage directories:
      - `xcrun stapler staple "$(DMG)"`
      - `xcrun stapler validate "$(DMG)"`
 
-4) `release-macos-cli-dmg-verify`
+4) `release-macos-dmg-verify`
    - Darwin-only.
    - Runs:
      - `codesign --verify --strict --verbose=4 "$(DMG)"`
      - `xcrun stapler validate "$(DMG)"`
      - `spctl --assess --type open --verbose=4 "$(DMG)"`
 
-5) Aggregate: `release-macos-cli-dmg-signed`
+5) Aggregate: `release-macos-dmg-signed`
    - Chain:
      1. `release-macos-binaries-normalize-local`
      2. `release-macos-binaries-sign`
@@ -177,7 +177,7 @@ Stage directories:
 
 ### Publish-release integration
 
-- Add `publish-release-macos-cli-dmg-signed` and update `publish-release` to call it.
+- Add `publish-release-macos-dmg-signed` and update `publish-release` to call it.
 - Keep `publish-release-macos-signed` (zip flow) for one migration cycle:
   - Mark as legacy and remove from default `publish-release`.
   - Optionally keep as a manual target for users who insist on zips.
