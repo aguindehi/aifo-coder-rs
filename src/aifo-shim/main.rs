@@ -53,11 +53,11 @@ fn pick_local_node_path() -> Option<&'static str> {
 }
 
 fn proxied_exec_url() -> Option<String> {
-    // Keep naming consistent with existing env wiring in docker run.
-    // (typo preserved intentionally for compatibility)
+    // Prefer the correct key used by the docker launcher.
+    // Also accept a legacy typo variant if it exists in older environments.
     env::var("AIFO_TOOLEEXEC_URL")
         .ok()
-        .or_else(|| env::var("AIFO_TOOLEEXEC_URL").ok())
+        .or_else(|| env::var("AIFO_TOOLE_EXEC_URL").ok())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
 }
