@@ -150,7 +150,9 @@ Stage directories:
 
 3) `release-macos-cli-dmg-notarize`
    - Darwin-only.
-   - Requires `NOTARY_PROFILE` (hard fail if missing).
+   - When `NOTARY_PROFILE` is missing:
+     - Interactive shells will prompt via `make macos-notary-setup`.
+     - Non-interactive shells hard-fail with instructions.
    - Requires a Developer ID identity (hard fail if not).
    - Runs:
      - `xcrun notarytool submit "$(DMG)" --keychain-profile "$(NOTARY_PROFILE)" --wait`
@@ -206,6 +208,7 @@ For each CLI DMG:
 Add a Makefile self-check target (e.g. `check-macos-cli-dmg-plan`) runnable on Linux that:
 - asserts required Makefile target names exist (grep-based)
 - asserts DMG output naming patterns exist (grep-based)
+- asserts `macos-notary-setup` exists (so new dev ergonomics don't regress)
 
 This is a regression guard, not a notarization test.
 

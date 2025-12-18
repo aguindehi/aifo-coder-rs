@@ -340,7 +340,8 @@ export SIGN_FLAGS
 endef
 
 define MACOS_DEFAULT_KEYCHAIN
-KEYCHAIN="$$(security default-keychain -d user | tr -d " \"")"; \
+KEYCHAIN="$$(security default-keychain -d user \
+  | sed -e 's/^ *"//' -e 's/"$$//' -e 's/^ *//' -e 's/ *$$//')"; \
 export KEYCHAIN
 endef
 
@@ -3744,15 +3745,82 @@ release-macos-cli-dmg-sign:
 	done; \
 	'
 
+.PHONY: macos-notary-setup
+macos-notary-setup:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=macos-notary-setup; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
+	if ! xcrun notarytool --help >/dev/null 2>&1; then \
+	  echo "Error: xcrun notarytool not found; cannot configure NOTARY_PROFILE." >&2; \
+	  exit 1; \
+	fi; \
+	$(MACOS_DEFAULT_KEYCHAIN); \
+	if [ -z "$$KEYCHAIN" ]; then \
+	  echo "Error: could not determine default user keychain." >&2; \
+	  exit 1; \
+	fi; \
+	SIGN_IDENTITY="$(SIGN_IDENTITY)"; \
+	$(MACOS_DETECT_APPLE_DEV); \
+	if [ "$${APPLE_DEV:-0}" != "1" ]; then \
+	  echo "Error: SIGN_IDENTITY does not look like a Developer ID identity." >&2; \
+	  echo "SIGN_IDENTITY=$(SIGN_IDENTITY)" >&2; \
+	  echo "Hint: security find-identity -p codesigning -v" >&2; \
+	  exit 1; \
+	fi; \
+	TEAM_ID="$$(printf "%s" "$$SIGN_IDENTITY" | sed -nE "s/.*\\(([A-Z0-9]{10})\\).*/\\1/p" | head -n1)"; \
+	if [ -z "$$TEAM_ID" ]; then \
+	  echo "Error: could not parse Team ID from SIGN_IDENTITY." >&2; \
+	  echo "SIGN_IDENTITY=$(SIGN_IDENTITY)" >&2; \
+	  exit 1; \
+	fi; \
+	PROFILE="$${NOTARY_PROFILE:-$${AIFO_NOTARY_PROFILE:-}}"; \
+	APPLE_ID="$${APPLE_ID:-$${AIFO_APPLE_ID:-}}"; \
+	APPLE_PW="$${APPLE_APP_PASSWORD:-$${AIFO_APPLE_APP_PASSWORD:-$${NOTARYTOOL_PASSWORD:-}}}"; \
+	if [ -z "$$PROFILE" ] && [ -t 0 ]; then \
+	  printf "NOTARY_PROFILE name (default: aifo-notary-profile): "; \
+	  read -r PROFILE; \
+	  PROFILE="$$(printf "%s" "$$PROFILE" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	fi; \
+	if [ -z "$$PROFILE" ]; then PROFILE="aifo-notary-profile"; fi; \
+	if [ -z "$$APPLE_ID" ] && [ -t 0 ]; then \
+	  printf "Apple ID (email): "; \
+	  read -r APPLE_ID; \
+	  APPLE_ID="$$(printf "%s" "$$APPLE_ID" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	fi; \
+	if [ -z "$$APPLE_ID" ]; then \
+	  echo "Error: missing APPLE_ID. Set APPLE_ID=... (or AIFO_APPLE_ID) or run interactively." >&2; \
+	  exit 1; \
+	fi; \
+	if [ -z "$$APPLE_PW" ] && [ -t 0 ]; then \
+	  printf "App-specific password (will not echo): "; \
+	  stty -echo; read -r APPLE_PW; stty echo; printf "\n"; \
+	  APPLE_PW="$$(printf "%s" "$$APPLE_PW" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	fi; \
+	if [ -z "$$APPLE_PW" ]; then \
+	  echo "Error: missing app-specific password. Set APPLE_APP_PASSWORD=... (or NOTARYTOOL_PASSWORD) or run interactively." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Storing notary credentials in keychain profile: $$PROFILE (team-id $$TEAM_ID)"; \
+	xcrun notarytool store-credentials "$$PROFILE" --team-id "$$TEAM_ID" --apple-id "$$APPLE_ID" --password "$$APPLE_PW"; \
+	echo "OK: stored NOTARY_PROFILE=$$PROFILE"; \
+	echo "Next: make release-macos-cli-dmg-signed NOTARY_PROFILE=$$PROFILE"; \
+	'
+
 .PHONY: release-macos-cli-dmg-notarize
 release-macos-cli-dmg-notarize:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-notarize; \
 	$(MACOS_REQUIRE_DARWIN); \
-	NOTARY="$(NOTARY_PROFILE)"; \
+	NOTARY="$${NOTARY_PROFILE:-}"; \
+	if [ -z "$$NOTARY" ] && [ -t 0 ]; then \
+	  echo "NOTARY_PROFILE is not set. Launching interactive notary profile setup..."; \
+	  $(MAKE) macos-notary-setup; \
+	  NOTARY="$${NOTARY_PROFILE:-$${AIFO_NOTARY_PROFILE:-aifo-notary-profile}}"; \
+	fi; \
 	if [ -z "$$NOTARY" ]; then \
 	  echo "Error: NOTARY_PROFILE is required for release-macos-cli-dmg-notarize." >&2; \
-	  echo "Hint: create a notarytool keychain profile and set NOTARY_PROFILE=<profile>." >&2; \
+	  echo "Hint: run: make macos-notary-setup (default NOTARY_PROFILE=aifo-notary-profile) or set NOTARY_PROFILE=..." >&2; \
 	  exit 1; \
 	fi; \
 	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
@@ -4788,6 +4856,8 @@ check-macos-cli-dmg-plan:
 	need "^MACOS_CLI_DMG_STAGE_ARM64[[:space:]]*\\?="; \
 	need "^MACOS_CLI_DMG_STAGE_X86_64[[:space:]]*\\?="; \
 	need "^MACOS_CLI_DMG_VOLNAME[[:space:]]*\\?="; \
+	need "^\\.PHONY: macos-notary-setup$$"; \
+	need "^macos-notary-setup:"; \
 	need "^\\.PHONY: release-macos-cli-dmg$$"; \
 	need "^release-macos-cli-dmg:"; \
 	need "^\\.PHONY: release-macos-cli-dmg-sign$$"; \
