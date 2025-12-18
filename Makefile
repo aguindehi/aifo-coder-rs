@@ -3830,23 +3830,27 @@ release-macos-cli-dmg-notarize:
 	@/bin/sh -ec '\
 	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-notarize; \
 	$(MACOS_REQUIRE_DARWIN); \
-	NOTARY="$${NOTARY_PROFILE:-}"; \
-	if [ -z "$$NOTARY" ] && [ -t 0 ]; then \
-	  echo "NOTARY_PROFILE is not set. Launching interactive notary profile setup..."; \
-	  $(MAKE) macos-notary-setup; \
-	  NOTARY="$${NOTARY_PROFILE:-$${AIFO_NOTARY_PROFILE:-aifo-notary-profile}}"; \
-	fi; \
-	if [ -z "$$NOTARY" ]; then \
-	  echo "Error: NOTARY_PROFILE is required for release-macos-cli-dmg-notarize." >&2; \
-	  echo "Hint: run: make macos-notary-setup (default NOTARY_PROFILE=aifo-notary-profile) or set NOTARY_PROFILE=..." >&2; \
-	  exit 1; \
+	NOTARY="$${NOTARY_PROFILE:-$${AIFO_NOTARY_PROFILE:-aifo-notary-profile}}"; \
+	if ! xcrun notarytool history --keychain-profile "$$NOTARY" >/dev/null 2>&1; then \
+	  if [ -t 0 ]; then \
+	    echo "Notary profile '\''$$NOTARY'\'' not found or not usable. Launching interactive setup..."; \
+	    $(MAKE) macos-notary-setup NOTARY_PROFILE="$$NOTARY"; \
+	    xcrun notarytool history --keychain-profile "$$NOTARY" >/dev/null 2>&1 || { \
+	      echo "Error: notary profile '\''$$NOTARY'\'' still not usable after setup." >&2; \
+	      exit 1; \
+	    }; \
+	  else \
+	    echo "Error: notary profile '\''$$NOTARY'\'' not found or not usable." >&2; \
+	    echo "Hint: run '\''make macos-notary-setup NOTARY_PROFILE=$$NOTARY'\'' (interactive) or set APPLE_ID/APPLE_APP_PASSWORD." >&2; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	$(call MACOS_REQUIRE_TOOLS,security xcrun); \
 	if ! xcrun notarytool --help >/dev/null 2>&1; then \
 	  echo "Error: xcrun notarytool not found; cannot notarize." >&2; \
 	  exit 1; \
 	fi; \
-	if ! xcrun stapler -h >/dev/null 2>&1; then \
+	if ! xcrun --find stapler >/dev/null 2>&1; then \
 	  echo "Error: xcrun stapler not found; cannot staple notarization ticket." >&2; \
 	  exit 1; \
 	fi; \
@@ -3894,7 +3898,7 @@ release-macos-cli-dmg-verify:
 	AIFO_DARWIN_TARGET_NAME=release-macos-cli-dmg-verify; \
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,codesign spctl xcrun); \
-	if ! xcrun stapler -h >/dev/null 2>&1; then \
+	if ! xcrun --find stapler >/dev/null 2>&1; then \
 	  echo "Error: xcrun stapler not found; cannot validate stapled ticket." >&2; \
 	  exit 1; \
 	fi; \
