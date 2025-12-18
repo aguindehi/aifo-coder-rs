@@ -55,7 +55,6 @@ pub fn shim_tool_names() -> &'static [&'static str] {
     SHIM_TOOLS
 }
 
-
 fn build_sh_wrapper_script() -> io::Result<String> {
     ShellFile::new()
         .extend([
@@ -188,7 +187,6 @@ mod tests {
         let err = tl.build_lf().expect_err("expected invalid input");
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
-
 
     #[test]
     fn test_build_sh_wrapper_script_smoke() {
