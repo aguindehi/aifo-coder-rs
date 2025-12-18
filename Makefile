@@ -3916,7 +3916,27 @@ release-macos-cli-dmg-verify:
 	    echo "==> Validating stapled ticket: $$D"; \
 	    xcrun stapler validate "$$D"; \
 	    echo "==> Gatekeeper assessment (spctl --type open): $$D"; \
-	    spctl --assess --type open --verbose=4 "$$D"; \
+	    OUT="$$(mktemp)"; \
+	    if spctl --assess --type open --verbose=4 "$$D" >"$$OUT" 2>&1; then \
+	      cat "$$OUT"; \
+	      rm -f "$$OUT"; \
+	    else \
+	      cat "$$OUT"; \
+	      if grep -q "source=Insufficient Context" "$$OUT"; then \
+	        rm -f "$$OUT"; \
+	        if command -v xattr >/dev/null 2>&1; then \
+	          echo "spctl reported Insufficient Context; simulating downloaded quarantine and retrying..."; \
+	          xattr -w com.apple.quarantine "0081;$$(date +%s);aifo-coder;00000000-0000-0000-0000-000000000000" "$$D" || true; \
+	          spctl --assess --type open --verbose=4 "$$D"; \
+	          xattr -d com.apple.quarantine "$$D" 2>/dev/null || true; \
+	        else \
+	          echo "Warning: xattr not available; cannot simulate quarantine. Treating Insufficient Context as non-fatal." >&2; \
+	        fi; \
+	      else \
+	        rm -f "$$OUT"; \
+	        exit 3; \
+	      fi; \
+	    fi; \
 	  fi; \
 	done; \
 	echo "OK: CLI DMG verification passed."; \
