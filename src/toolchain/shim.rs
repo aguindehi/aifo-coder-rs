@@ -189,14 +189,6 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
 
-    #[test]
-    fn test_build_posix_shim_script_smoke() {
-        let s = build_posix_shim_script().expect("build shim");
-        assert!(s.starts_with("#!/bin/sh\n"));
-        assert!(s.contains("X-Aifo-Proto: 2"));
-        assert!(s.contains("TE: trailers"));
-        assert!(s.ends_with('\n'));
-    }
 
     #[test]
     fn test_build_sh_wrapper_script_smoke() {

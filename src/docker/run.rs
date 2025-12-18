@@ -37,14 +37,10 @@ fn agent_bin_and_path(agent: &str) -> (String, String) {
     }
     .to_string();
 
-    let path = match agent {
-        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "codex" | "crush" | "letta" => {
-            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH"
-        }
-        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-    }
-    .to_string();
+    // Phase 4 (smart shims v2): uniform shim-first PATH. The shim is the single source of truth.
+    let path =
+        "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+            .to_string();
 
     (abs, path)
 }

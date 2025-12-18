@@ -288,6 +288,7 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
 fn resolve_agent_and_args(cli: &Cli) -> Option<(&'static str, Vec<String>)> {
     match &cli.command {
         Agent::Codex { args } => ("codex", args.clone()).into(),
+        Agent::Letta { args } => ("letta", args.clone()).into(),
         Agent::Crush { args } => ("crush", args.clone()).into(),
         Agent::Aider { args } => ("aider", args.clone()).into(),
         Agent::OpenHands { args } => ("openhands", args.clone()).into(),

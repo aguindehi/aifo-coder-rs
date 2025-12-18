@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -17,6 +17,172 @@ const PROTO_VERSION: &str = "2";
 
 // Notification tools handled via /notify (extendable)
 const NOTIFY_TOOLS: &[&str] = &["say"];
+
+const WORKSPACE_PREFIX: &str = "/workspace";
+
+fn env_is_truthy(key: &str) -> bool {
+    match env::var(key).ok().as_deref() {
+        Some("1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON") => true,
+        _ => false,
+    }
+}
+
+fn resolve_program_path(program: &str) -> PathBuf {
+    if program.starts_with('/') {
+        PathBuf::from(program)
+    } else {
+        env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(program)
+    }
+}
+
+fn is_under_workspace(p: &Path) -> bool {
+    let s = p.to_string_lossy();
+    s == WORKSPACE_PREFIX || s.starts_with(&format!("{WORKSPACE_PREFIX}/"))
+}
+
+fn pick_local_node_path() -> Option<&'static str> {
+    for p in ["/usr/local/bin/node", "/usr/bin/node"] {
+        if Path::new(p).is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn pick_local_python_path() -> Option<&'static str> {
+    for p in ["/usr/bin/python3", "/usr/local/bin/python3"] {
+        if Path::new(p).is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn node_main_program_arg(argv: &[OsString]) -> Option<String> {
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy().to_string();
+
+        if a == "--" {
+            if i + 1 < argv.len() {
+                return Some(argv[i + 1].to_string_lossy().to_string());
+            }
+            return None;
+        }
+
+        if a == "-e"
+            || a == "--eval"
+            || a == "-p"
+            || a == "--print"
+            || a == "-h"
+            || a == "--help"
+            || a == "-v"
+            || a == "--version"
+        {
+            return None;
+        }
+
+        if a == "-r"
+            || a == "--require"
+            || a == "--loader"
+            || a == "--import"
+            || a == "--eval-file"
+            || a == "--inspect-port"
+            || a == "--title"
+        {
+            i += 2;
+            continue;
+        }
+
+        if a.starts_with("--require=")
+            || a.starts_with("--loader=")
+            || a.starts_with("--import=")
+            || a.starts_with("--inspect-port=")
+            || a.starts_with("--title=")
+        {
+            i += 1;
+            continue;
+        }
+
+        if a.starts_with('-') {
+            i += 1;
+            continue;
+        }
+
+        return Some(a);
+    }
+
+    None
+}
+
+fn python_script_arg(argv: &[OsString]) -> Option<String> {
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy().to_string();
+
+        if a == "--" {
+            if i + 1 < argv.len() {
+                return Some(argv[i + 1].to_string_lossy().to_string());
+            }
+            return None;
+        }
+
+        if a == "-m" {
+            return None;
+        }
+        if a.starts_with("-m") && a.len() > 2 {
+            return None;
+        }
+
+        if a == "-c" || a == "-W" || a == "-X" {
+            i += 2;
+            continue;
+        }
+
+        if a.starts_with('-') {
+            i += 1;
+            continue;
+        }
+
+        return Some(a);
+    }
+    None
+}
+
+fn python_is_module_mode(argv: &[OsString]) -> bool {
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy();
+        if a == "--" {
+            return false;
+        }
+        if a == "-m" {
+            return true;
+        }
+        if a.starts_with("-m") && a.len() > 2 {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+fn log_smart_line(tool: &str, reason: &str, program: Option<&Path>, local_bin: Option<&str>) {
+    let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
+    if !verbose {
+        return;
+    }
+    let mut msg = format!("aifo-shim: smart: tool={tool} mode=local reason={reason}");
+    if let Some(p) = program {
+        msg.push_str(&format!(" program={}", p.display()));
+    }
+    if let Some(b) = local_bin {
+        msg.push_str(&format!(" local={b}"));
+    }
+    eprintln!("{msg}");
+}
 
 #[cfg(unix)]
 static SIGINT_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -1129,6 +1295,72 @@ fn main() {
             pb.file_name().map(|s| s.to_string_lossy().to_string())
         })
         .unwrap_or_else(|| "unknown".to_string());
+
+    // Fused shim: smart routing (local vs proxy) for node/python.
+    //
+    // This keeps the proxy implementation in this binary as the single source of truth.
+    let argv_os: Vec<OsString> = std::env::args_os().collect();
+
+    // v1/v2 rule: pip/uv always proxy (no auto-local bypass)
+    if tool != "pip" && tool != "pip3" && tool != "uv" && tool != "uvx" {
+        if tool == "node" && env_is_truthy("AIFO_SHIM_SMART") && env_is_truthy("AIFO_SHIM_SMART_NODE")
+        {
+            if let Some(program) = node_main_program_arg(&argv_os) {
+                let p = resolve_program_path(&program);
+                if !is_under_workspace(&p) {
+                    if let Some(local) = pick_local_node_path() {
+                        log_smart_line("node", "outside-workspace", Some(&p), Some(local));
+                        let mut cmd = Command::new(local);
+                        if argv_os.len() > 1 {
+                            cmd.args(&argv_os[1..]);
+                        }
+                        let st = cmd.status().unwrap_or_else(|e| {
+                            eprintln!("aifo-shim: failed to exec local node: {e}");
+                            process::exit(1);
+                        });
+                        process::exit(st.code().unwrap_or(1));
+                    }
+                }
+            }
+        }
+
+        if (tool == "python" || tool == "python3")
+            && env_is_truthy("AIFO_SHIM_SMART")
+            && env_is_truthy("AIFO_SHIM_SMART_PYTHON")
+        {
+            let module_mode = python_is_module_mode(&argv_os);
+            if module_mode {
+                if let Some(local) = pick_local_python_path() {
+                    log_smart_line("python", "module-mode", None, Some(local));
+                    let mut cmd = Command::new(local);
+                    if argv_os.len() > 1 {
+                        cmd.args(&argv_os[1..]);
+                    }
+                    let st = cmd.status().unwrap_or_else(|e| {
+                        eprintln!("aifo-shim: failed to exec local python: {e}");
+                        process::exit(1);
+                    });
+                    process::exit(st.code().unwrap_or(1));
+                }
+            } else if let Some(script) = python_script_arg(&argv_os) {
+                let p = resolve_program_path(&script);
+                if !is_under_workspace(&p) {
+                    if let Some(local) = pick_local_python_path() {
+                        log_smart_line("python", "outside-workspace", Some(&p), Some(local));
+                        let mut cmd = Command::new(local);
+                        if argv_os.len() > 1 {
+                            cmd.args(&argv_os[1..]);
+                        }
+                        let st = cmd.status().unwrap_or_else(|e| {
+                            eprintln!("aifo-shim: failed to exec local python: {e}");
+                            process::exit(1);
+                        });
+                        process::exit(st.code().unwrap_or(1));
+                    }
+                }
+            }
+        }
+    }
 
     // Notification tools early path (native + curl)
     if NOTIFY_TOOLS.contains(&tool.as_str()) {

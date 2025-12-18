@@ -153,6 +153,13 @@ pub(crate) enum Agent {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+
+    /// Run Letta
+    Letta {
+        /// Additional arguments passed through to the agent
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
     /// Run Charmbracelet Crush
     Crush {
         /// Additional arguments passed through to the agent
