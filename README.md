@@ -45,6 +45,52 @@ make build-launcher
 ./scripts/build-images.sh
 ```
 
+## macOS notarized CLI DMG (recommended for distribution)
+
+This repo can produce per-arch **signed + notarized + stapled** CLI DMGs to minimize Gatekeeper warnings.
+
+### One-time setup (stores credentials in your macOS keychain)
+
+Run:
+
+```bash
+make macos-notary-setup
+```
+
+This will prompt for:
+- `NOTARY_PROFILE` (default: `aifo-notary-profile`)
+- Apple ID (email)
+- App-specific password (input hidden)
+
+#### Create an Apple app-specific password
+
+1. Go to https://appleid.apple.com
+2. Sign in
+3. Go to **Sign-In and Security**
+4. Under **App-Specific Passwords**, select **Generate an app-specific password**
+5. Name it something like `aifo-coder-notarytool` and copy the generated password
+
+You can also provide values non-interactively via env vars:
+- `NOTARY_PROFILE` (or `AIFO_NOTARY_PROFILE`)
+- `APPLE_ID` (or `AIFO_APPLE_ID`)
+- `APPLE_APP_PASSWORD` (or `AIFO_APPLE_APP_PASSWORD` / `NOTARYTOOL_PASSWORD`)
+
+### Build + sign + notarize + staple + verify (Darwin-only)
+
+```bash
+make release-macos-cli-dmg-signed
+```
+
+Outputs:
+- `dist/aifo-coder-<version>-macos-arm64.dmg`
+- `dist/aifo-coder-<version>-macos-x86_64.dmg`
+
+### Publish to GitLab Release (Darwin-only)
+
+```bash
+make publish-release-macos-cli-dmg-signed
+```
+
 Notes:
 - By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
 - The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.

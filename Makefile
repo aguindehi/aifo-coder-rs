@@ -70,6 +70,19 @@ MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 #SIGN_IDENTITY ?= Migros AI Foundation Code Signer
 #SIGN_IDENTITY ?= Migros AI Foundation - Code Signing
 SIGN_IDENTITY ?= Developer ID Application: Migros-Genossenschafts-Bund (QXQ64GKD2R)
+
+# Notarytool keychain profile used for notarization (Darwin-only).
+#
+# Setup (interactive; writes to macOS keychain):
+#   make macos-notary-setup
+#
+# Where to create the required app-specific password:
+#   https://appleid.apple.com -> Sign-In and Security -> App-Specific Passwords
+#
+# Env vars supported by `make macos-notary-setup`:
+# - NOTARY_PROFILE (default: aifo-notary-profile), or AIFO_NOTARY_PROFILE
+# - APPLE_ID (Apple ID email), or AIFO_APPLE_ID
+# - APPLE_APP_PASSWORD (app-specific password), or AIFO_APPLE_APP_PASSWORD / NOTARYTOOL_PASSWORD
 NOTARY_PROFILE ?=
 
 # OpenTelemetry configuration
@@ -604,7 +617,10 @@ help: banner
 	@echo "                                      make publish-release REGISTRY=my.registry/prefix/"
 	@echo "                                      make publish-release KEEP_APT=1"
 	@echo ""
-	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab"
+	@echo "  macos-notary-setup .......... One-time setup: stores notarytool credentials in macOS keychain (prompts for missing values)"
+	@echo "  release-macos-cli-dmg-signed  Build+sign+notarize+staple+verify per-arch CLI DMGs (Darwin-only)"
+	@echo "  publish-release-macos-cli-dmg-signed  Create/update GitLab Release and upload notarized CLI DMGs (Darwin-only)"
+	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab (legacy)"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-toolchain-node ...... Buildx multi-arch and push Node toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
