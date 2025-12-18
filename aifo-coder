@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# ignore-tidy-linelength
 # Tiny wrapper to execute the Rust-based launcher.
 # It prefers an existing compiled binary (release or debug),
 # otherwise attempts to build with cargo and run it.
