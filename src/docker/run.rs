@@ -101,6 +101,32 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     push_env_kv(&mut env_flags, "GNUPGHOME", "/home/coder/.gnupg");
     push_env_kv(&mut env_flags, "SHELL", "/opt/aifo/bin/sh");
 
+    // Phase 1 (smart shims): policy plumbing (opt-in)
+    //
+    // The embedded /opt/aifo/bin shims can proxy runtime tools (node/python) into sidecars,
+    // which can break agents that need to execute their own runtime locally.
+    //
+    // Phase 1 only wires env vars; the shim must implement the behavior (Phase 2/3).
+    //
+    // Master toggle: pass through if set on host.
+    push_env_kv_if_set(&mut env_flags, "AIFO_SHIM_SMART");
+
+    // Agent label: always set (lets the shim log/branch per-agent deterministically).
+    push_env_kv(&mut env_flags, "AIFO_AGENT_NAME", agent);
+
+    // Tool-specific toggles: set conservatively per agent runtime needs.
+    match agent {
+        // Node-based agents
+        "codex" | "crush" | "opencode" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART_NODE", "1");
+        }
+        // Python-based agents
+        "aider" | "openhands" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART_PYTHON", "1");
+        }
+        _ => {}
+    }
+
     // Phase 1: Config clone policy envs (entrypoint will perform the copy)
     // Always set in-container host config mount path explicitly.
     push_env_kv(
