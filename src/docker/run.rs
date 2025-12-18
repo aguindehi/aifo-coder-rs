@@ -853,17 +853,6 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         );
     }
 
-    // Optional shim dir
-    if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
-        if let Some(dir) = validate_mount_source_dir(&shim_dir, "AIFO_SHIM_DIR") {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!(
-                "{}:/opt/aifo/bin:ro",
-                dir.display()
-            )));
-        }
-    }
-
     // Optional unix socket dir
     if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
         if let Some(p) = validate_mount_source_dir(&dir, "AIFO_TOOLEEXEC_UNIX_DIR") {
