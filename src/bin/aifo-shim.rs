@@ -3,8 +3,6 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 #[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
-use which::which;
-use which_in;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
@@ -15,6 +13,8 @@ use std::path::{Path, PathBuf};
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use which::which;
+use which_in;
 
 const PROTO_VERSION: &str = "2";
 
@@ -1259,7 +1259,10 @@ fn main() {
     // first in PATH and still supporting proxying when configured.
     let proxy_configured = url_opt.is_some() && token_opt.is_some();
 
-    if effective_tool != "pip" && effective_tool != "pip3" && effective_tool != "uv" && effective_tool != "uvx"
+    if effective_tool != "pip"
+        && effective_tool != "pip3"
+        && effective_tool != "uv"
+        && effective_tool != "uvx"
     {
         if effective_tool == "node"
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
