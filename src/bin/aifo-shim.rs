@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
 
- // Notification tools handled via /notify (extendable)
+// Notification tools handled via /notify (extendable)
 const NOTIFY_TOOLS: &[&str] = &["say"];
 
 // Tools that are shebang scripts (`#!/usr/bin/env node`) shipped in the agent image.
