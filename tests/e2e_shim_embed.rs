@@ -27,8 +27,8 @@ fn e2e_embedded_shim_presence_in_agent_image() {
         return;
     }
 
-    // Verify that /opt/aifo/bin/aifo-shim exists and PATH resolves cargo/npx
-    let cmd = "set -e; command -v cargo >/dev/null 2>&1 && command -v npx >/dev/null 2>&1 && [ -x /opt/aifo/bin/aifo-shim ] && echo ok";
+    // Verify that /opt/aifo/bin/aifo-shim exists and PATH resolves key wrappers
+    let cmd = "set -e; command -v cargo >/dev/null 2>&1 && command -v npx >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && command -v bun >/dev/null 2>&1 && [ -x /opt/aifo/bin/aifo-shim ] && echo ok";
     let out = std::process::Command::new("docker")
         .args(["run", "--rm", &image, "sh", "-lc", cmd])
         .output();
@@ -93,6 +93,8 @@ fn e2e_embedded_shims_present_across_agent_images() {
         for t in tools {
             script.push_str(&format!("test -x \"/opt/aifo/bin/{}\"; ", t));
         }
+        // Extra guard: python3 and bun wrappers are part of the embedded shim set.
+        script.push_str("test -x /opt/aifo/bin/python3; test -x /opt/aifo/bin/bun; ");
         script.push_str("echo ok");
 
         let out = std::process::Command::new("docker")
