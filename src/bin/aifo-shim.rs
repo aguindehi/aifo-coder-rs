@@ -16,8 +16,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTO_VERSION: &str = "2";
 
-// Notification tools handled via /notify (extendable)
+ // Notification tools handled via /notify (extendable)
 const NOTIFY_TOOLS: &[&str] = &["say"];
+
+// Tools that are shebang scripts (`#!/usr/bin/env node`) shipped in the agent image.
+// When invoked via their shim wrapper name, `env` may run `node --help/--version`
+// without passing the script path, making it impossible to apply workspace-based
+// heuristics. In smart mode, conservatively run local node for these wrappers.
+const SMART_NODE_LOCAL_WRAPPERS: &[&str] = &["letta", "codex", "crush", "opencode"];
 
 fn pick_local_node_path() -> Option<&'static str> {
     [
@@ -1233,6 +1239,12 @@ fn main() {
     // This keeps the proxy implementation in this binary as the single source of truth.
     let argv_os: Vec<OsString> = std::env::args_os().collect();
 
+    // Wrapper tool name (before any env trampoline normalization). This is important:
+    // for shebang scripts like `letta` that use `#!/usr/bin/env node`, `env` may invoke
+    // `node --help/--version` without including the script path, so the smart-node
+    // parser cannot infer outside-/workspace. The wrapper name remains a stable signal.
+    let invoked_tool = tool.clone();
+
     // If invoked via /usr/bin/env trampoline, recover the intended tool and argv.
     let (effective_tool, effective_argv_os) =
         parse_env_trampoline(&argv_os).unwrap_or_else(|| (tool.clone(), argv_os.clone()));
@@ -1266,6 +1278,29 @@ fn main() {
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_NODE")
         {
+            // Special-case: shebang script wrappers shipped in the agent image.
+            //
+            // For `#!/usr/bin/env node` entrypoints, `env` may invoke `node --help/--version`
+            // without passing the script path, so we cannot apply workspace heuristics.
+            // When the invoked wrapper name matches a known agent entrypoint, run local node.
+            if SMART_NODE_LOCAL_WRAPPERS
+                .iter()
+                .any(|w| w.eq_ignore_ascii_case(invoked_tool.as_str()))
+            {
+                if let Some(local) = pick_local_node_path() {
+                    log_smart_line("node", "agent-wrapper", None, Some(local));
+                    let mut cmd = Command::new(local);
+                    if effective_argv_os.len() > 1 {
+                        cmd.args(&effective_argv_os[1..]);
+                    }
+                    let st = cmd.status().unwrap_or_else(|e| {
+                        eprintln!("aifo-shim: failed to exec local node: {e}");
+                        process::exit(1);
+                    });
+                    process::exit(st.code().unwrap_or(1));
+                }
+            }
+
             // Primary: spec parser
             let program_opt = aifo_coder::shim::node_main_program_arg(&effective_argv_os);
 
@@ -1423,7 +1458,7 @@ fn main() {
     }
 
     // Notification tools early path (native + curl)
-    if NOTIFY_TOOLS.contains(&tool.as_str()) {
+    if NOTIFY_TOOLS.contains(&invoked_tool.as_str()) {
         let start = std::time::Instant::now();
         if verbose {
             let prefer_native = std::env::var("AIFO_SHIM_NATIVE_HTTP").ok().as_deref() != Some("0");
@@ -1440,7 +1475,7 @@ fn main() {
             let argv_joined_verbose = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
             println!(
                 "aifo-coder: proxy notify parsed cmd={} argv='{}' cwd={} client={}",
-                tool, argv_joined_verbose, cwd_verbose, client
+                invoked_tool, argv_joined_verbose, cwd_verbose, client
             );
             if std::env::var("AIFO_SHIM_LOG_VARIANT").ok().as_deref() == Some("1") {
                 println!(
@@ -1450,7 +1485,7 @@ fn main() {
             }
             println!(
                 "aifo-shim: notify cmd={} argv={} client={}",
-                tool,
+                invoked_tool,
                 std::env::args().skip(1).collect::<Vec<_>>().join(" "),
                 client
             );
@@ -1478,7 +1513,7 @@ fn main() {
             curl_args.push("-H".to_string());
             curl_args.push("Content-Type: application/x-www-form-urlencoded".to_string());
             curl_args.push("--data-urlencode".to_string());
-            curl_args.push(format!("cmd={}", tool));
+            curl_args.push(format!("cmd={}", invoked_tool));
             for a in &args_vec {
                 curl_args.push("--data-urlencode".to_string());
                 curl_args.push(format!("arg={}", a));
@@ -1504,12 +1539,12 @@ fn main() {
             }
             // If spawning curl failed, fall back to synchronous behavior below
         }
-        if let Some(code) = try_notify_native(&url, &token, &tool, &args_vec, verbose) {
+        if let Some(code) = try_notify_native(&url, &token, &invoked_tool, &args_vec, verbose) {
             if verbose {
                 let dur_ms = start.elapsed().as_millis();
                 println!(
                     "aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}",
-                    tool, code, dur_ms
+                    invoked_tool, code, dur_ms
                 );
                 let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                     .ok()
@@ -1551,7 +1586,7 @@ fn main() {
         args.push("Content-Type: application/x-www-form-urlencoded".to_string());
 
         args.push("--data-urlencode".to_string());
-        args.push(format!("cmd={}", tool));
+        args.push(format!("cmd={}", invoked_tool));
         for a in &args_vec {
             args.push("--data-urlencode".to_string());
             args.push(format!("arg={}", a));
@@ -1599,7 +1634,7 @@ fn main() {
             let dur_ms = start.elapsed().as_millis();
             println!(
                 "aifo-coder: proxy result tool={} kind=notify code={} dur_ms={}",
-                tool, exit_code, dur_ms
+                invoked_tool, exit_code, dur_ms
             );
             let delay = std::env::var("AIFO_NOTIFY_EXIT_DELAY_SECS")
                 .ok()
@@ -2287,3 +2322,4 @@ mod tests {
         let _ = handle.join();
     }
 }
+make check
