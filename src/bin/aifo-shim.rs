@@ -2322,4 +2322,3 @@ mod tests {
         let _ = handle.join();
     }
 }
-make check
