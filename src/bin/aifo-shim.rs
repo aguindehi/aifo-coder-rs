@@ -14,7 +14,6 @@ use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use which::which;
-use which_in;
 
 const PROTO_VERSION: &str = "2";
 
@@ -59,8 +58,8 @@ fn base_sanitized_path() -> String {
 }
 
 fn which_sanitized(tool: &str) -> Option<PathBuf> {
-    let path = base_sanitized_path();
-    which_in::which_in(tool, Some(&path), "/").ok()
+    // Use which::which_in with an explicit PATH that excludes /opt/aifo/bin to avoid shim recursion.
+    which::which_in(tool, Some(base_sanitized_path()), "/").ok()
 }
 
 /// If invoked as `env ...` (e.g. `#!/usr/bin/env node`), try to recover the intended tool and argv.

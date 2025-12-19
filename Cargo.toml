@@ -13,7 +13,6 @@ build = "build.rs"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 which = "6"
-which_in = "0.2"
 atty = "0.2"
 nix = { version = "0.29", default-features = false, features = ["fs", "process", "user", "signal"] }
 home = "0.5"
