@@ -46,7 +46,7 @@ fn e2e_smart_node_outside_workspace_runs_local_and_does_not_proxy() {
             &image,
             "sh",
             "-lc",
-            "set -e; codex --version >/dev/null 2>&1; echo OK",
+            "set -e; codex --version >/dev/null; echo OK",
         ])
         .output()
         .expect("docker run");
