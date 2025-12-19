@@ -2195,7 +2195,7 @@ check:
 	echo "==> check: unit tests (cargo nextest)"; \
 	$(MAKE) test; \
 	echo "OK: test"; \
-	echo "OK: check (all steps succeeded)"
+	echo "OK: check (all steps successful)"
 
 check-unit: tidy-no-multiline-strings test
 
@@ -2221,7 +2221,7 @@ test:
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	case "$$OS" in \
 	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
-	  *) case "$$ARCH$${ARCH:+}" in \
+	  *) case "$$ARCH" in \
 	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
 	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
 	       *) DOCKER_PLATFORM_ARGS="" ;; \
@@ -2237,7 +2237,7 @@ test:
 	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
 	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
 	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
-	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$(NEXTEST_VERSION)/cargo-nextest-$(NEXTEST_VERSION)-$$tgt.tar.gz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tgz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz || true; fi; fi; \
+	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$(NEXTEST_VERSION)/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
 	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
@@ -2546,7 +2546,7 @@ check-int:
 	$(MAKE) test-integration-suite
 
 check-all: check
-	@echo "Running full test suite incluing ignored-by-default (unit + integration + all e2e tests) ..."
+	@echo "Running full test suite including ignored-by-default (unit + integration + all e2e tests) ..."
 	$(MAKE) ensure-macos-cross-image
 	$(MAKE) test-acceptance-suite
 	$(MAKE) test-integration-suite
@@ -2559,8 +2559,8 @@ test-all-junit:
 	mkdir -p target/nextest/ci; \
 	if [ "$$OS" = "Linux" ]; then \
 	  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0; \
-	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/divert/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
-	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/divert/null 2>&1; then \
+	  if CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest -V >/dev/null 2>&1; then :; else cargo install cargo-nextest --locked; fi; \
+	  if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then \
 	    FEX='!test(/^int_/) & !test(/^e2e_/)' ; \
 	    CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E "$$FEX" $(ARGS); \
 	  else \
@@ -4876,7 +4876,7 @@ endif
 
 .PHONY: cov-results
 cov-results:
-	open build/coverage/html/index.html
+	xdg-open build/coverage/html/index.html
 
 # -----------------------------------------------------------------------------
 # Guardrails (CI-capable; Linux OK)

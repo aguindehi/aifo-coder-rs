@@ -162,7 +162,8 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python python3 pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  for p in /usr/bin/python3.*; do b="$(basename "$p")"; [ -x "$p" ] && ln -sf aifo-shim "/opt/aifo/bin/$b" || true; done && \
   install -d -m 0755 /usr/local/bin && \
   cat >/usr/local/bin/aifo-entrypoint <<'SH'
 #!/bin/sh

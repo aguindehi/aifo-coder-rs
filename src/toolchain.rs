@@ -29,6 +29,8 @@ mod auth;
 mod http;
 mod notifications;
 
+pub(crate) mod shim;
+
 mod sidecar;
 pub use sidecar::{
     build_sidecar_exec_preview, build_sidecar_run_preview,
@@ -39,9 +41,6 @@ pub use sidecar::{
 
 mod proxy;
 pub use proxy::toolexec_start_proxy;
-
-mod shim;
-pub use shim::{shim_tool_names, toolchain_write_shims};
 
 fn log_parsed_request(verbose: bool, tool: &str, argv: &[String], cwd: &str, exec_id: &str) {
     if verbose {

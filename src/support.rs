@@ -83,8 +83,8 @@ fn pm_deep_cmd_for(kind: &str) -> Option<String> {
 
 /// Build an optional agent+toolchain combo probe command to run inside the agent image.
 /// This verifies that, with the agent's PATH, the primary tool for the given kind is reachable.
-fn combo_probe_cmd(agent: &str, kind: &str) -> Option<String> {
-    let pathv = agent_path_for(agent);
+fn combo_probe_cmd(_agent: &str, kind: &str) -> Option<String> {
+    let pathv = SHIM_FIRST_PATH;
     let tool_cmd = match kind {
         "rust" => "command -v rustc",
         "node" => "command -v node || command -v nodejs",
@@ -297,21 +297,13 @@ fn agent_cli_for(agent: &str) -> String {
     }
 }
 
-/// PATH to use for agent probes, mirroring runtime PATH composition.
-fn agent_path_for(agent: &str) -> &'static str {
-    match agent {
-        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "openhands" => "/opt/venv-openhands/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        // Include /opt/aifo/bin for shims; otherwise a standard UNIX PATH
-        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-    }
-}
+const SHIM_FIRST_PATH: &str =
+    "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH";
 
 /// Build a robust agent probe: export PATH, check absolute path and basename, tolerate odd --version exits.
 /// OpenHands may be installed in different venv prefixes across images; try both.
 fn agent_check_cmd(agent: &str) -> String {
-    let pathv = agent_path_for(agent);
+    let pathv = SHIM_FIRST_PATH;
 
     match agent {
         "openhands" => {

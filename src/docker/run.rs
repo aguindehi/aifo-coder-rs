@@ -24,11 +24,15 @@ use crate::docker_mod::docker::mounts::{
 use crate::docker_mod::docker::runtime::container_runtime_path;
 use crate::ShellScript;
 
+const SHIM_FIRST_PATH: &str =
+    "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH";
+
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",
         "codex" => "/usr/local/bin/codex",
         "crush" => "/usr/local/bin/crush",
+        "letta" => "/usr/local/bin/letta",
         "openhands" => "/opt/venv-openhands/bin/openhands",
         "opencode" => "/usr/local/bin/opencode",
         "plandex" => "/usr/local/bin/plandex",
@@ -36,12 +40,8 @@ fn agent_bin_and_path(agent: &str) -> (String, String) {
     }
     .to_string();
 
-    let path = match agent {
-        "aider" => "/opt/aifo/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        "codex" | "crush" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/aifo/bin:$PATH",
-        _ => "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-    }
-    .to_string();
+    // Phase 4 (smart shims v2): uniform shim-first PATH. The shim is the single source of truth.
+    let path = SHIM_FIRST_PATH.to_string();
 
     (abs, path)
 }
@@ -100,6 +100,41 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     push_env_kv(&mut env_flags, "CODEX_HOME", "/home/coder/.codex");
     push_env_kv(&mut env_flags, "GNUPGHOME", "/home/coder/.gnupg");
     push_env_kv(&mut env_flags, "SHELL", "/opt/aifo/bin/sh");
+
+    // Phase 1 (smart shims): policy plumbing (opt-in)
+    //
+    // The embedded /opt/aifo/bin shims can proxy runtime tools (node/python) into sidecars,
+    // which can break agents that need to execute their own runtime locally.
+    //
+    // Phase 1 only wires env vars; the shim must implement the behavior (Phase 2/3).
+    //
+    // Master toggle: explicitly opt-in for agents where we enable smart behavior.
+    // This keeps default behavior unchanged for other agents.
+    match agent {
+        "codex" | "crush" | "opencode" | "letta" | "aider" | "openhands" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART", "1");
+        }
+        _ => {
+            // Allow host override for any other agent/debug usage.
+            push_env_kv_if_set(&mut env_flags, "AIFO_SHIM_SMART");
+        }
+    }
+
+    // Agent label: always set (lets the shim log/branch per-agent deterministically).
+    push_env_kv(&mut env_flags, "AIFO_AGENT_NAME", agent);
+
+    // Tool-specific toggles: set conservatively per agent runtime needs.
+    match agent {
+        // Node-based agents
+        "codex" | "crush" | "opencode" | "letta" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART_NODE", "1");
+        }
+        // Python-based agents
+        "aider" | "openhands" => {
+            push_env_kv(&mut env_flags, "AIFO_SHIM_SMART_PYTHON", "1");
+        }
+        _ => {}
+    }
 
     // Phase 1: Config clone policy envs (entrypoint will perform the copy)
     // Always set in-container host config mount path explicitly.
@@ -818,17 +853,6 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         );
     }
 
-    // Optional shim dir
-    if let Ok(shim_dir) = env::var("AIFO_SHIM_DIR") {
-        if let Some(dir) = validate_mount_source_dir(&shim_dir, "AIFO_SHIM_DIR") {
-            volume_flags.push(OsString::from("-v"));
-            volume_flags.push(OsString::from(format!(
-                "{}:/opt/aifo/bin:ro",
-                dir.display()
-            )));
-        }
-    }
-
     // Optional unix socket dir
     if let Ok(dir) = env::var("AIFO_TOOLEEXEC_UNIX_DIR") {
         if let Some(p) = validate_mount_source_dir(&dir, "AIFO_TOOLEEXEC_UNIX_DIR") {
@@ -858,12 +882,12 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         fields(agent = %agent)
     )
 )]
-pub fn build_docker_preview_only(
+pub fn build_docker_preview_args_only(
     agent: &str,
     passthrough: &[String],
     image: &str,
     apparmor_profile: Option<&str>,
-) -> String {
+) -> Vec<String> {
     // TTY flags
     let tty_flags: Vec<&str> = if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
         vec!["-it"]
@@ -963,6 +987,15 @@ pub fn build_docker_preview_only(
     preview_args.push(sh_cmd);
 
     preview_args
+}
+
+pub fn build_docker_preview_only(
+    agent: &str,
+    passthrough: &[String],
+    image: &str,
+    apparmor_profile: Option<&str>,
+) -> String {
+    build_docker_preview_args_only(agent, passthrough, image, apparmor_profile)
         .into_iter()
         .map(|p| crate::shell_escape(&p))
         .collect::<Vec<_>>()
