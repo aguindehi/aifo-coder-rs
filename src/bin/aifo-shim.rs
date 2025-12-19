@@ -4,6 +4,7 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 use nix::unistd::Pid;
 use std::env;
 use which::which;
+use which_in;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
@@ -21,15 +22,109 @@ const PROTO_VERSION: &str = "2";
 const NOTIFY_TOOLS: &[&str] = &["say"];
 
 fn pick_local_node_path() -> Option<&'static str> {
-    ["/usr/local/bin/node", "/usr/bin/node"]
-        .into_iter()
-        .find(|&p| Path::new(p).is_file())
+    [
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+        "/usr/local/bin/nodejs",
+        "/usr/bin/nodejs",
+    ]
+    .into_iter()
+    .find(|&p| Path::new(p).is_file())
 }
 
 fn pick_local_python_path() -> Option<&'static str> {
     ["/usr/bin/python3", "/usr/local/bin/python3"]
         .into_iter()
         .find(|&p| Path::new(p).is_file())
+}
+
+fn base_sanitized_path() -> String {
+    let base = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+    if let Ok(p) = env::var("PATH") {
+        let mut out: Vec<&str> = Vec::new();
+        out.push(base);
+        for part in p.split(':') {
+            let t = part.trim();
+            if t.is_empty() || t == "/opt/aifo/bin" {
+                continue;
+            }
+            if !out.iter().any(|&x| x == t) {
+                out.push(t);
+            }
+        }
+        out.join(":")
+    } else {
+        base.to_string()
+    }
+}
+
+fn which_sanitized(tool: &str) -> Option<PathBuf> {
+    let path = base_sanitized_path();
+    which_in::which_in(tool, Some(&path), "/").ok()
+}
+
+/// If invoked as `env ...` (e.g. `#!/usr/bin/env node`), try to recover the intended tool and argv.
+///
+/// Supports:
+/// - `env <tool> ...`
+/// - `env -S <tool> <arg> ...`
+/// - ignores common env flags that don't affect argv tool selection (`-i`, `--ignore-environment`,
+///   `-u VAR`, `--unset VAR`).
+///
+/// Returns (tool, argv) where argv[0] is set to tool.
+fn parse_env_trampoline(argv_os: &[OsString]) -> Option<(String, Vec<OsString>)> {
+    if argv_os.is_empty() {
+        return None;
+    }
+    let tool0 = PathBuf::from(&argv_os[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    if tool0 != "env" {
+        return None;
+    }
+
+    let mut i = 1usize;
+
+    // Skip env flags until we find the tool name.
+    while i < argv_os.len() {
+        let a = argv_os[i].to_string_lossy().to_string();
+        if a == "-i" || a == "--ignore-environment" {
+            i += 1;
+            continue;
+        }
+        if a == "-u" || a == "--unset" {
+            // consumes VAR name
+            i += 2;
+            continue;
+        }
+        if a == "-S" {
+            // GNU env: split-string mode; for our purposes treat remaining argv tokens as already split.
+            i += 1;
+            break;
+        }
+        if a.starts_with('-') {
+            // Unknown flag: stop parsing to avoid wrong assumptions.
+            return None;
+        }
+        break;
+    }
+
+    if i >= argv_os.len() {
+        return None;
+    }
+
+    let tool = argv_os[i].to_string_lossy().to_string();
+    if tool.trim().is_empty() {
+        return None;
+    }
+
+    let mut out_argv: Vec<OsString> = Vec::new();
+    out_argv.push(OsString::from(tool.clone()));
+    if i + 1 < argv_os.len() {
+        out_argv.extend_from_slice(&argv_os[i + 1..]);
+    }
+    Some((tool, out_argv))
 }
 
 fn log_smart_line(tool: &str, reason: &str, program: Option<&Path>, local_bin: Option<&str>) {
@@ -1140,6 +1235,10 @@ fn main() {
     // This keeps the proxy implementation in this binary as the single source of truth.
     let argv_os: Vec<OsString> = std::env::args_os().collect();
 
+    // If invoked via /usr/bin/env trampoline, recover the intended tool and argv.
+    let (effective_tool, effective_argv_os) =
+        parse_env_trampoline(&argv_os).unwrap_or_else(|| (tool.clone(), argv_os.clone()));
+
     let url_opt = env::var("AIFO_TOOLEEXEC_URL")
         .ok()
         .map(|v| v.trim().to_string())
@@ -1156,22 +1255,23 @@ fn main() {
     // - Smart bypass rules still apply when enabled; for node we use an additional robust
     //   fallback: argv[1] absolute path outside /workspace => local.
     //
-    // This ensures node-based agents can start without --toolchain while keeping /opt/aifo/bin
+    // This ensures runtime-based agents can start without --toolchain while keeping /opt/aifo/bin
     // first in PATH and still supporting proxying when configured.
     let proxy_configured = url_opt.is_some() && token_opt.is_some();
 
-    if tool != "pip" && tool != "pip3" && tool != "uv" && tool != "uvx" {
-        if tool == "node"
+    if effective_tool != "pip" && effective_tool != "pip3" && effective_tool != "uv" && effective_tool != "uvx"
+    {
+        if effective_tool == "node"
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_NODE")
         {
             // Primary: spec parser
-            let program_opt = aifo_coder::shim::node_main_program_arg(&argv_os);
+            let program_opt = aifo_coder::shim::node_main_program_arg(&effective_argv_os);
 
             // Fallback: if parser fails, but argv[1] is an absolute path, treat it as the program.
             let program_opt = program_opt.or_else(|| {
-                if argv_os.len() >= 2 {
-                    let a1 = argv_os[1].to_string_lossy().to_string();
+                if effective_argv_os.len() >= 2 {
+                    let a1 = effective_argv_os[1].to_string_lossy().to_string();
                     if a1.starts_with('/') {
                         return Some(a1);
                     }
@@ -1185,8 +1285,8 @@ fn main() {
                     if let Some(local) = pick_local_node_path() {
                         log_smart_line("node", "outside-workspace", Some(&p), Some(local));
                         let mut cmd = Command::new(local);
-                        if argv_os.len() > 1 {
-                            cmd.args(&argv_os[1..]);
+                        if effective_argv_os.len() > 1 {
+                            cmd.args(&effective_argv_os[1..]);
                         }
                         let st = cmd.status().unwrap_or_else(|e| {
                             eprintln!("aifo-shim: failed to exec local node: {e}");
@@ -1198,17 +1298,17 @@ fn main() {
             }
         }
 
-        if (tool == "python" || tool == "python3")
+        if (effective_tool == "python" || effective_tool == "python3")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_PYTHON")
         {
-            let module_mode = aifo_coder::shim::python_is_module_mode(&argv_os);
+            let module_mode = aifo_coder::shim::python_is_module_mode(&effective_argv_os);
             if module_mode {
                 if let Some(local) = pick_local_python_path() {
                     log_smart_line("python", "module-mode", None, Some(local));
                     let mut cmd = Command::new(local);
-                    if argv_os.len() > 1 {
-                        cmd.args(&argv_os[1..]);
+                    if effective_argv_os.len() > 1 {
+                        cmd.args(&effective_argv_os[1..]);
                     }
                     let st = cmd.status().unwrap_or_else(|e| {
                         eprintln!("aifo-shim: failed to exec local python: {e}");
@@ -1216,14 +1316,14 @@ fn main() {
                     });
                     process::exit(st.code().unwrap_or(1));
                 }
-            } else if let Some(script) = aifo_coder::shim::python_script_arg(&argv_os) {
+            } else if let Some(script) = aifo_coder::shim::python_script_arg(&effective_argv_os) {
                 let p = aifo_coder::shim::resolve_program_path(&script);
                 if !aifo_coder::shim::is_under_workspace(&p) {
                     if let Some(local) = pick_local_python_path() {
                         log_smart_line("python", "outside-workspace", Some(&p), Some(local));
                         let mut cmd = Command::new(local);
-                        if argv_os.len() > 1 {
-                            cmd.args(&argv_os[1..]);
+                        if effective_argv_os.len() > 1 {
+                            cmd.args(&effective_argv_os[1..]);
                         }
                         let st = cmd.status().unwrap_or_else(|e| {
                             eprintln!("aifo-shim: failed to exec local python: {e}");
@@ -1236,18 +1336,19 @@ fn main() {
         }
     }
 
-    // No proxy env: try to exec local tool via PATH lookup. We intentionally avoid printing the
-    // "proxy not configured" message here because node-based agents must still run normally.
+    // No proxy env: try to exec local tool via PATH lookup with a sanitized PATH that
+    // cannot recurse back into /opt/aifo/bin (env shebangs, etc.).
     if !proxy_configured {
-        if let Ok(real) = which(&tool) {
+        if let Some(real) = which_sanitized(&effective_tool) {
             // Avoid recursion: if "real" resolves back to /opt/aifo/bin/aifo-shim, do not exec.
             if real != Path::new("/opt/aifo/bin/aifo-shim") {
                 let mut cmd = Command::new(real);
-                if argv_os.len() > 1 {
-                    cmd.args(&argv_os[1..]);
+                cmd.env("PATH", base_sanitized_path());
+                if effective_argv_os.len() > 1 {
+                    cmd.args(&effective_argv_os[1..]);
                 }
                 let st = cmd.status().unwrap_or_else(|e| {
-                    eprintln!("aifo-shim: failed to exec local tool '{tool}': {e}");
+                    eprintln!("aifo-shim: failed to exec local tool '{effective_tool}': {e}");
                     process::exit(1);
                 });
                 process::exit(st.code().unwrap_or(1));
@@ -1255,11 +1356,12 @@ fn main() {
         }
 
         // Hard fallbacks for common runtime tools to avoid PATH recursion.
-        if tool == "node" {
+        if effective_tool == "node" {
             if let Some(local) = pick_local_node_path() {
                 let mut cmd = Command::new(local);
-                if argv_os.len() > 1 {
-                    cmd.args(&argv_os[1..]);
+                cmd.env("PATH", base_sanitized_path());
+                if effective_argv_os.len() > 1 {
+                    cmd.args(&effective_argv_os[1..]);
                 }
                 let st = cmd.status().unwrap_or_else(|e| {
                     eprintln!("aifo-shim: failed to exec local node: {e}");
@@ -1268,14 +1370,32 @@ fn main() {
                 process::exit(st.code().unwrap_or(1));
             }
         }
-        if tool == "python" || tool == "python3" {
+        if effective_tool == "python" || effective_tool == "python3" {
             if let Some(local) = pick_local_python_path() {
                 let mut cmd = Command::new(local);
+                cmd.env("PATH", base_sanitized_path());
+                if effective_argv_os.len() > 1 {
+                    cmd.args(&effective_argv_os[1..]);
+                }
+                let st = cmd.status().unwrap_or_else(|e| {
+                    eprintln!("aifo-shim: failed to exec local python: {e}");
+                    process::exit(1);
+                });
+                process::exit(st.code().unwrap_or(1));
+            }
+        }
+
+        // Generic last-chance: if we were invoked as /usr/bin/env trampoline but couldn't parse flags,
+        // try to exec real env with sanitized PATH so it can't recurse into the shim.
+        if tool == "env" {
+            if let Ok(real_env) = which_sanitized("env") {
+                let mut cmd = Command::new(real_env);
+                cmd.env("PATH", base_sanitized_path());
                 if argv_os.len() > 1 {
                     cmd.args(&argv_os[1..]);
                 }
                 let st = cmd.status().unwrap_or_else(|e| {
-                    eprintln!("aifo-shim: failed to exec local python: {e}");
+                    eprintln!("aifo-shim: failed to exec local env: {e}");
                     process::exit(1);
                 });
                 process::exit(st.code().unwrap_or(1));

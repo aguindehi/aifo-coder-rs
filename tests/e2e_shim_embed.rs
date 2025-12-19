@@ -89,13 +89,22 @@ fn e2e_embedded_shims_present_across_agent_images() {
     let tools = aifo_coder::shim_tool_names();
 
     for image in present {
-        let mut script = String::from("set -e; test -x /opt/aifo/bin/aifo-shim; ");
+        let mut script = String::from(
+            "set -e; \
+             test -x /opt/aifo/bin/aifo-shim || { echo 'missing executable: /opt/aifo/bin/aifo-shim' >&2; exit 1; }; ",
+        );
         for t in tools {
-            script.push_str(&format!("test -x \"/opt/aifo/bin/{}\"; ", t));
+            script.push_str(&format!(
+                "test -e \"/opt/aifo/bin/{0}\" || {{ echo \"missing: /opt/aifo/bin/{0}\" >&2; exit 1; }}; ",
+                t
+            ));
         }
         // Extra guard: python3 and bun wrappers are part of the embedded shim set.
-        script.push_str("test -x /opt/aifo/bin/python3; test -x /opt/aifo/bin/bun; ");
-        script.push_str("echo ok");
+        script.push_str(
+            "test -e /opt/aifo/bin/python3 || { echo 'missing: /opt/aifo/bin/python3' >&2; exit 1; }; \
+             test -e /opt/aifo/bin/bun || { echo 'missing: /opt/aifo/bin/bun' >&2; exit 1; }; \
+             echo ok",
+        );
 
         let out = std::process::Command::new("docker")
             .args(["run", "--rm", &image, "sh", "-lc", &script])
@@ -106,7 +115,7 @@ fn e2e_embedded_shims_present_across_agent_images() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
                 assert!(
                     o.status.success(),
-                    "docker run failed for image {}: status={:?}, stdout={}, stderr={}",
+                    "docker run failed for image {}: status={:?}\nstdout:\n{}\nstderr:\n{}",
                     image,
                     o.status.code(),
                     s,

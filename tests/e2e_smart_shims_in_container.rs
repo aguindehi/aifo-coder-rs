@@ -27,7 +27,11 @@ fn e2e_smart_node_outside_workspace_runs_local_and_does_not_proxy() {
         return;
     }
 
-    // Run `node /usr/local/bin/codex` which is outside /workspace and should therefore be local.
+    // Run `codex --version` which is outside /workspace and should therefore be local.
+    //
+    // Codex is a shebang script (`#!/usr/bin/env node`), so this exercises the env trampoline path
+    // (env -> node -> codex) and must still bypass the proxy.
+    //
     // We enable verbose mode so the shim emits the smart bypass line, and we set the smart toggles.
     let out = std::process::Command::new("docker")
         .args([
@@ -42,7 +46,7 @@ fn e2e_smart_node_outside_workspace_runs_local_and_does_not_proxy() {
             &image,
             "sh",
             "-lc",
-            "set -e; node /usr/local/bin/codex --version >/dev/null 2>&1; echo OK",
+            "set -e; codex --version >/dev/null 2>&1; echo OK",
         ])
         .output()
         .expect("docker run");
