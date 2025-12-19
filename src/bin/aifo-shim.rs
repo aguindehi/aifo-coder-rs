@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use which::which;
 
 const PROTO_VERSION: &str = "2";
 
@@ -1390,7 +1389,7 @@ fn main() {
         // Generic last-chance: if we were invoked as /usr/bin/env trampoline but couldn't parse flags,
         // try to exec real env with sanitized PATH so it can't recurse into the shim.
         if tool == "env" {
-            if let Ok(real_env) = which_sanitized("env") {
+            if let Some(real_env) = which_sanitized("env") {
                 let mut cmd = Command::new(real_env);
                 cmd.env("PATH", base_sanitized_path());
                 if argv_os.len() > 1 {
