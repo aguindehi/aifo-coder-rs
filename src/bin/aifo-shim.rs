@@ -3,6 +3,7 @@ use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
 #[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::env;
+use which::which;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
@@ -1124,31 +1125,7 @@ fn try_notify_native(
 }
 
 fn main() {
-    let url = match env::var("AIFO_TOOLEEXEC_URL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => {
-            eprintln!("aifo-shim: proxy not configured. Please launch agent with --toolchain.");
-            process::exit(86);
-        }
-    };
-    let token = match env::var("AIFO_TOOLEEXEC_TOKEN") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => {
-            eprintln!("aifo-shim: proxy token missing. Please launch agent with --toolchain.");
-            process::exit(86);
-        }
-    };
     let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
-    if verbose {
-        eprintln!(
-            "aifo-shim: build={} target={} profile={} rust={} ver={}",
-            env!("AIFO_SHIM_BUILD_DATE"),
-            env!("AIFO_SHIM_BUILD_TARGET"),
-            env!("AIFO_SHIM_BUILD_PROFILE"),
-            env!("AIFO_SHIM_BUILD_RUSTC"),
-            env!("CARGO_PKG_VERSION")
-        );
-    }
 
     let tool = std::env::args_os()
         .next()
@@ -1163,13 +1140,46 @@ fn main() {
     // This keeps the proxy implementation in this binary as the single source of truth.
     let argv_os: Vec<OsString> = std::env::args_os().collect();
 
-    // v1/v2 rule: pip/uv always proxy (no auto-local bypass)
+    let url_opt = env::var("AIFO_TOOLEEXEC_URL")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let token_opt = env::var("AIFO_TOOLEEXEC_TOKEN")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    // Smart shims / no-toolchain mode: allow local execution without proxy config.
+    //
+    // Policy:
+    // - If proxy env is missing, attempt to run locally (absolute tool path preferred).
+    // - Smart bypass rules still apply when enabled; for node we use an additional robust
+    //   fallback: argv[1] absolute path outside /workspace => local.
+    //
+    // This ensures node-based agents can start without --toolchain while keeping /opt/aifo/bin
+    // first in PATH and still supporting proxying when configured.
+    let proxy_configured = url_opt.is_some() && token_opt.is_some();
+
     if tool != "pip" && tool != "pip3" && tool != "uv" && tool != "uvx" {
         if tool == "node"
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_NODE")
         {
-            if let Some(program) = aifo_coder::shim::node_main_program_arg(&argv_os) {
+            // Primary: spec parser
+            let program_opt = aifo_coder::shim::node_main_program_arg(&argv_os);
+
+            // Fallback: if parser fails, but argv[1] is an absolute path, treat it as the program.
+            let program_opt = program_opt.or_else(|| {
+                if argv_os.len() >= 2 {
+                    let a1 = argv_os[1].to_string_lossy().to_string();
+                    if a1.starts_with('/') {
+                        return Some(a1);
+                    }
+                }
+                None
+            });
+
+            if let Some(program) = program_opt {
                 let p = aifo_coder::shim::resolve_program_path(&program);
                 if !aifo_coder::shim::is_under_workspace(&p) {
                     if let Some(local) = pick_local_node_path() {
@@ -1224,6 +1234,71 @@ fn main() {
                 }
             }
         }
+    }
+
+    // No proxy env: try to exec local tool via PATH lookup. We intentionally avoid printing the
+    // "proxy not configured" message here because node-based agents must still run normally.
+    if !proxy_configured {
+        if let Ok(real) = which(&tool) {
+            // Avoid recursion: if "real" resolves back to /opt/aifo/bin/aifo-shim, do not exec.
+            if real != Path::new("/opt/aifo/bin/aifo-shim") {
+                let mut cmd = Command::new(real);
+                if argv_os.len() > 1 {
+                    cmd.args(&argv_os[1..]);
+                }
+                let st = cmd.status().unwrap_or_else(|e| {
+                    eprintln!("aifo-shim: failed to exec local tool '{tool}': {e}");
+                    process::exit(1);
+                });
+                process::exit(st.code().unwrap_or(1));
+            }
+        }
+
+        // Hard fallbacks for common runtime tools to avoid PATH recursion.
+        if tool == "node" {
+            if let Some(local) = pick_local_node_path() {
+                let mut cmd = Command::new(local);
+                if argv_os.len() > 1 {
+                    cmd.args(&argv_os[1..]);
+                }
+                let st = cmd.status().unwrap_or_else(|e| {
+                    eprintln!("aifo-shim: failed to exec local node: {e}");
+                    process::exit(1);
+                });
+                process::exit(st.code().unwrap_or(1));
+            }
+        }
+        if tool == "python" || tool == "python3" {
+            if let Some(local) = pick_local_python_path() {
+                let mut cmd = Command::new(local);
+                if argv_os.len() > 1 {
+                    cmd.args(&argv_os[1..]);
+                }
+                let st = cmd.status().unwrap_or_else(|e| {
+                    eprintln!("aifo-shim: failed to exec local python: {e}");
+                    process::exit(1);
+                });
+                process::exit(st.code().unwrap_or(1));
+            }
+        }
+
+        // Nothing workable found: preserve existing behavior and exit 86.
+        eprintln!("aifo-shim: proxy not configured. Please launch agent with --toolchain.");
+        process::exit(86);
+    }
+
+    let url = url_opt.unwrap();
+    let token = token_opt.unwrap();
+
+    if verbose {
+        eprintln!(
+            "aifo-shim: build={} target={} profile={} rust={} ver={}",
+            env!("AIFO_SHIM_BUILD_DATE"),
+            env!("AIFO_SHIM_BUILD_TARGET"),
+            env!("AIFO_SHIM_BUILD_PROFILE"),
+            env!("AIFO_SHIM_BUILD_RUSTC"),
+            env!("CARGO_PKG_VERSION")
+        );
     }
 
     // Notification tools early path (native + curl)
