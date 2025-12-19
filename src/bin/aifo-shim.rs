@@ -46,7 +46,7 @@ fn base_sanitized_path() -> String {
             if t.is_empty() || t == "/opt/aifo/bin" {
                 continue;
             }
-            if !out.iter().any(|&x| x == t) {
+            if !out.contains(&t) {
                 out.push(t);
             }
         }
