@@ -139,7 +139,7 @@ Phase 2 – Makefile extensions (normalize + local signing/zipping)
   - SIGN_IDENTITY:
     - Common Name of the certificate to use with codesign.
     - Examples:
-      - “Migros AI Foundation Code Signer” (self-signed).
+      - “AI Foundation Code Signer” (self-signed).
       - “Developer ID Application: Migros AI Foundation (TEAMID)” (Apple Dev ID).
   - NOTARY_PROFILE:
     - Optional keychain profile for xcrun notarytool.

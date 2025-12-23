@@ -378,7 +378,7 @@ Steps:
 1) On macOS, ensure Rust toolchain and certificate:
    - Install Rust: https://rustup.rs
    - Create or reuse a local code signing certificate:
-     - e.g., SIGN_IDENTITY="Migros AI Foundation Code Signer"
+     - e.g., SIGN_IDENTITY="AI Foundation Code Signer"
 2) Build, sign, and zip:
    - export SIGN_IDENTITY="Migros AI Foundation Code Signer"
    - unset NOTARY_PROFILE (or leave empty).

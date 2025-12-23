@@ -65,7 +65,7 @@ The following variables are assumed to exist or be added to the Makefile:
 - SIGN_IDENTITY (no default; MUST be provided by user for meaningful signing):
   - Common Name (CN) of the certificate for codesign.
   - Examples:
-    - "Migros AI Foundation Code Signer" (self-signed / internal).
+    - "AI Foundation Code Signer" (self-signed / internal).
     - "Developer ID Application: Migros AI Foundation (TEAMID)" (Apple Dev ID).
 - NOTARY_PROFILE (optional; empty by default):
   - A keychain profile name configured for xcrun notarytool.

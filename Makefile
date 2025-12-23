@@ -1,15 +1,15 @@
 #
 # ──────────────────────────────────────────────────────────────────────────────────────────────
-#  🚀  Welcome to the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀
+#      🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀
 # ──────────────────────────────────────────────────────────────────────────────────────────────
-#  🔒  Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO
+#  🔒  Secuity by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed for you
 #
 #  ✨ Features:
 #     - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces.
 #     - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM.
 #     - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration.
 #
-#  🔧 Building a safer future for coding automation in Migros Group...
+#  🔧 Building a safer future for coding automation...
 #     - Containerized agents; no privileged mode, no host Docker socket.
 #     - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available.
 #     - Seccomp and cgroup namespaces as reported by Docker.
@@ -18,7 +18,7 @@
 #     - Optional unix:// proxy on Linux; host-gateway bridging when needed.
 #     - Minimal mounts: project workspace, config files, optional GnuPG keyrings.
 # ──────────────────────────────────────────────────────────────────────────────────────────────
-#  📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>
+#                 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>
 # ──────────────────────────────────────────────────────────────────────────────────────────────
 #
 
@@ -67,8 +67,8 @@ CARGO_UI_FLAGS ?= -q
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 
 # macOS code signing identity
-#SIGN_IDENTITY ?= Migros AI Foundation Code Signer
-#SIGN_IDENTITY ?= Migros AI Foundation - Code Signing
+#SIGN_IDENTITY ?= AI Foundation Code Signer
+#SIGN_IDENTITY ?= AI Foundation - Code Signing
 SIGN_IDENTITY ?= Developer ID Application: Migros-Genossenschafts-Bund (QXQ64GKD2R)
 
 # Notarytool keychain profile used for notarization (Darwin-only).
@@ -401,16 +401,16 @@ endef
 banner:
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo " 🚀  Welcome to the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀  "
+	@echo "     🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀  "
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo " 🔒  Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO   "
+	@echo " 🔒  Security by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed for you "
 	@echo ""
 	@echo " ✨ Features:"
 	@echo "    - Linux: Docker containers with AppArmor when available; seccomp and cgroup namespaces."
 	@echo "    - macOS: Docker Desktop/Colima VM isolation; same security features inside the VM."
 	@echo "    - Windows: Docker Desktop VM; Windows Terminal/PowerShell/Git Bash fork orchestration."
 	@echo ""
-	@echo " 🔧 Building a safer future for coding automation in Migros Group..."
+	@echo " 🔧 Building a safer future for coding automation..."
 	@echo "    - Containerized agents; no privileged mode, no host Docker socket."
 	@echo "    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available."
 	@echo "    - Seccomp and cgroup namespaces as reported by Docker."
@@ -420,7 +420,7 @@ banner:
 	@echo "    - Minimal mounts: project workspace, config files, optional GnuPG keyrings."
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo " 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>"
+	@echo "                  📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>"
 	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
 
 help: banner
@@ -1740,9 +1740,9 @@ publish-plandex-slim:
 publish:
 	@clear
 	@echo ""
-	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
-	@echo "  🚀  Release of the Migros AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀 "
-	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo "───────────────────────────────────────────────────────────────────────────────────────"
+	@echo "  🚀  Release of the AI Foundation Coding Agent Wrapper  -  The AIFO Coder Agent    🚀 "
+	@echo "───────────────────────────────────────────────────────────────────────────────────────"
 	@echo ""
 	@echo "VERSION                  : $(VERSION)"
 	@echo "RELEASE_PREFIX           : $(RELEASE_PREFIX)"
@@ -1756,7 +1756,7 @@ publish:
 	@echo "KEEP_APT                 : $(KEEP_APT)"
 	@echo "REGISTRY                 : $(REGISTRY)"
 	@echo ""
-	@echo "──────────────────────────────────────────────────────────────────────────────────────────────"
+	@echo "───────────────────────────────────────────────────────────────────────────────────────"
 	@echo ""
 	@read -r -p "Press Enter to continue and push the release (or press ctrl-c to stop) ... " _
 	@echo ""

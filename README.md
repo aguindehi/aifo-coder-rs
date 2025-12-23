@@ -1,7 +1,7 @@
 
-# 🚀  Welcome to the Migros AI Foundaton Coder  🚀
+# 🚀  Welcome to the AI Foundaton Coder  🚀
 
-🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO
+🔒 Security by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed for you
 
 ## ✨ Features:
 - Linux: Coding agents run securely inside Docker containers with AppArmor.
@@ -11,7 +11,7 @@
 - Environment with Secure Containerization Enabled
 - Platform with Adaptive Security for Linux & macOS
 
-## 🔧 Building a safer future for coding automation in Migros Group
+## 🔧 Building a safer future for coding automation...
 - Container isolation on Linux & macOS
 - Agents run inside a container, not on your host runtimes
 - AppArmor Support (via Docker or Colima)
@@ -652,7 +652,7 @@ Two supported local workflows:
 
 1) Self-signed / non-Apple identity (internal use)
 - Configure a local signing identity (login keychain), e.g.:
-  - `export SIGN_IDENTITY="Migros AI Foundation Code Signer"`
+  - `export SIGN_IDENTITY="AI Foundation Code Signer"`
   - `unset NOTARY_PROFILE`
 - Run:
   - `make release-macos-binary-signed`
@@ -753,7 +753,7 @@ Self‑signed certificate via Keychain Access (login keychain):
 - Open Keychain Access.
 - Ensure “login” is the active keychain.
 - Menu: Keychain Access → Certificate Assistant → Create a Certificate…
-  - Name: choose a clear name (e.g., Migros AI Foundation Code Signer)
+  - Name: choose a clear name (e.g., AI Foundation Code Signer)
   - Identity Type: Self Signed Root
   - Certificate Type: Code Signing (ensures Extended Key Usage includes Code Signing)
   - Key Size: 2048 (or 4096)
@@ -764,7 +764,7 @@ Self‑signed certificate via Keychain Access (login keychain):
 Build and sign with your chosen identity name:
 ```bash
 make release-app
-make release-dmg-sign SIGN_IDENTITY="Migros AI Foundation Code Signer"
+make release-dmg-sign SIGN_IDENTITY="AI Foundation Code Signer"
 ```
 
 Notes for self‑signed usage:
