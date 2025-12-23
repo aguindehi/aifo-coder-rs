@@ -3,11 +3,11 @@ pub(crate) fn print_startup_banner() {
     eprintln!();
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!(
-        " 🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder v{}   🚀 ",
+        "      🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder v{}   🚀 ",
         version
     );
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(" 🔒  Secure by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed by AIFO");
+    eprintln!(" 🔒  Security by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed for you");
     eprintln!();
 
     // Host/platform info
@@ -103,7 +103,7 @@ pub(crate) fn print_startup_banner() {
     eprintln!();
 
     // Safety highlights (concise, current capabilities)
-    eprintln!(" 🔧 Building a safer future for coding automation in Migros Group...");
+    eprintln!(" 🔧 Building a safer future for coding automation...");
     eprintln!("    - Containerized agents; no privileged mode, no host Docker socket.");
     eprintln!(
         "    - AppArmor (Linux) with custom 'aifo-coder' or 'docker-default' when available."
@@ -117,7 +117,7 @@ pub(crate) fn print_startup_banner() {
     eprintln!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     eprintln!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(" 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>, <amir.guindehi@mgb.ch>");
+    eprintln!("                 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!();
 }
