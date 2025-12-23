@@ -59,7 +59,7 @@ Phase 1 – Certificate strategy (local-only)
 1.1 Current certificate: local/self-signed
 - Use-case:
   - Immediate need: sign binaries with an existing cert in the developer’s keychain (e.g. self-signed
-    “Migros AI Foundation Code Signer”) without notarization.
+    “AI Foundation Code Signer”) without notarization.
 - Behavior:
   - codesign with basic flags (no hardened runtime) is permitted for non-Apple certs.
   - Notarization is automatically skipped if the cert is not Apple-trusted.
