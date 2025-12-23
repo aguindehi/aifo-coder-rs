@@ -12,7 +12,7 @@ load: .aider.mcp.cmd
 no-show-release-notes: true
 
 notifications: true
-notifications-command: "say 'Task complete. What is your next assignment?'"
+notifications-command: /usr/bin/say "Task complete. What is your next assignment?"
 
 # restoring chat history leads to $ 3.8188 3,055,042 chat history
 #restore-chat-history: true
