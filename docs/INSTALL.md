@@ -1,4 +1,3 @@
-
 Prerequisites:
 - Docker installed and running
 - Git installed and available in PATH
@@ -107,7 +106,7 @@ Useful Makefile targets:
 macOS code signing with a self‑signed certificate (no Apple Developer account)
 - Create a self‑signed “Code Signing” certificate in your login keychain using Keychain Access:
   1) Open Keychain Access → Keychain: login → Menu: Keychain Access → Certificate Assistant → Create a Certificate…
-  2) Name: choose a clear name (e.g., Migros AI Foundation Code Signer)
+  2) Name: choose a clear name (e.g., AI Foundation Code Signer)
   3) Identity Type: Self Signed Root
   4) Certificate Type: Code Signing (ensures Extended Key Usage includes Code Signing)
   5) Key Size: 2048 (or 4096), Location: login keychain
