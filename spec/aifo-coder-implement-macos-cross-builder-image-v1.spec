@@ -1,7 +1,6 @@
 Title: Implement macOS cross-builder image (osxcross) for aifo-coder
 Version: v1
 Status: Approved
-Author: Migros AI Foundation
 Date: 2025-11-10
 
 Executive summary
