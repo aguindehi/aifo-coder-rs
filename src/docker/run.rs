@@ -179,20 +179,33 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     }
 
     // Unified AIFO_* → OpenAI/Azure mappings
+    //
+    // OpenCode policy: NEVER pass OpenAI/Azure OpenAI envs (OPENAI_*/AZURE_OPENAI_*) or base/version.
+    // Only allow:
+    // - AZURE_API_KEY (from AIFO_API_KEY)
+    // - AZURE_RESOURCE_NAME (derived from AIFO_API_BASE unless explicitly set)
+    let is_opencode = agent == "opencode";
+
     if let Ok(v) = env::var("AIFO_API_KEY") {
         if !v.is_empty() {
-            push_env_kv(&mut env_flags, "OPENAI_API_KEY", &v);
-            push_env_kv(&mut env_flags, "AZURE_OPENAI_API_KEY", &v);
-            push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            if is_opencode {
+                push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            } else {
+                push_env_kv(&mut env_flags, "OPENAI_API_KEY", &v);
+                push_env_kv(&mut env_flags, "AZURE_OPENAI_API_KEY", &v);
+                push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            }
         }
     }
     if let Ok(v) = env::var("AIFO_API_BASE") {
         if !v.is_empty() {
-            push_env_kv(&mut env_flags, "OPENAI_BASE_URL", &v);
-            push_env_kv(&mut env_flags, "OPENAI_API_BASE", &v);
-            push_env_kv(&mut env_flags, "AZURE_OPENAI_ENDPOINT", &v);
-            push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
-            push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
+            if !is_opencode {
+                push_env_kv(&mut env_flags, "OPENAI_BASE_URL", &v);
+                push_env_kv(&mut env_flags, "OPENAI_API_BASE", &v);
+                push_env_kv(&mut env_flags, "AZURE_OPENAI_ENDPOINT", &v);
+                push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
+                push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
+            }
 
             // Derive AZURE_RESOURCE_NAME from AIFO_API_BASE when it looks like an Azure OpenAI endpoint,
             // e.g. https://<resource>.openai.azure.com/.
@@ -218,7 +231,7 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
         }
     }
     if let Ok(v) = env::var("AIFO_API_VERSION") {
-        if !v.is_empty() {
+        if !v.is_empty() && !is_opencode {
             push_env_kv(&mut env_flags, "OPENAI_API_VERSION", &v);
             push_env_kv(&mut env_flags, "AZURE_OPENAI_API_VERSION", &v);
             push_env_kv(&mut env_flags, "AZURE_API_VERSION", &v);
