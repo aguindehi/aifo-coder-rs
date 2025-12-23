@@ -67,7 +67,7 @@ Phase 1 – Certificate strategy (local-only)
 Self-signed certificate creation (recap)
 - In Keychain Access (login keychain):
   - Menu: Keychain Access → Certificate Assistant → Create a Certificate…
-  - Name: e.g. “Migros AI Foundation Code Signer”.
+  - Name: e.g. “AI Foundation Code Signer”.
   - Identity Type: Self Signed Root.
   - Certificate Type: Code Signing.
   - Key Size: 2048 or 4096.

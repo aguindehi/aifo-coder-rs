@@ -1,5 +1,5 @@
 
-# 🚀  Welcome to the Migros AI Foundaton Coder  🚀
+# 🚀  Welcome to the AI Foundaton Coder  🚀
 
 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO
 
@@ -652,7 +652,7 @@ Two supported local workflows:
 
 1) Self-signed / non-Apple identity (internal use)
 - Configure a local signing identity (login keychain), e.g.:
-  - `export SIGN_IDENTITY="Migros AI Foundation Code Signer"`
+  - `export SIGN_IDENTITY="AI Foundation Code Signer"`
   - `unset NOTARY_PROFILE`
 - Run:
   - `make release-macos-binary-signed`
@@ -764,7 +764,7 @@ Self‑signed certificate via Keychain Access (login keychain):
 Build and sign with your chosen identity name:
 ```bash
 make release-app
-make release-dmg-sign SIGN_IDENTITY="Migros AI Foundation Code Signer"
+make release-dmg-sign SIGN_IDENTITY="AI Foundation Code Signer"
 ```
 
 Notes for self‑signed usage:

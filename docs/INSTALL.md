@@ -115,11 +115,11 @@ macOS code signing with a self‑signed certificate (no Apple Developer account)
 - Verify codesign can find and use it:
 ```bash
 security find-identity -p basic -v | grep -i 'Code Sign' || true
-security find-certificate -a -c "Migros AI Foundation Code Signer" -Z 2>/dev/null | sed -n '1,12p'
+security find-certificate -a -c "AI Foundation Code Signer" -Z 2>/dev/null | sed -n '1,12p'
 ```
 - Build and sign on macOS:
 ```bash
-make release-dmg-sign SIGN_IDENTITY="Migros AI Foundation Code Signer"
+make release-dmg-sign SIGN_IDENTITY="AI Foundation Code Signer"
 ```
 - The Makefile will use basic signing flags for non‑Apple identities and will skip notarization automatically.
 
