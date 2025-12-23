@@ -37,6 +37,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
  "urlencoding",
  "wait-timeout",
  "walkdir",

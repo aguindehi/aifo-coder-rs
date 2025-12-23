@@ -37,6 +37,7 @@ urlencoding = "2"
 tempfile = "3"
 walkdir = "2"
 wait-timeout = "0.2"
+url = "2"
 
 [features]
 otel = [
