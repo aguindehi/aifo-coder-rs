@@ -1467,29 +1467,30 @@ fn main() {
             } else {
                 "rust-shim-curl"
             };
-            // Emit aifo-coder-style parsed line on agent stdout to avoid cross-stream races
+            // Notify output is interpreted as the tool output by callers (e.g. Aider).
+            // Keep stdout clean: send all shim diagnostics to stderr.
             let cwd_verbose = env::current_dir()
                 .ok()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| ".".to_string());
             let argv_joined_verbose = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
-            println!(
+            eprintln!(
                 "aifo-coder: proxy notify parsed cmd={} argv='{}' cwd={} client={}",
                 invoked_tool, argv_joined_verbose, cwd_verbose, client
             );
             if std::env::var("AIFO_SHIM_LOG_VARIANT").ok().as_deref() == Some("1") {
-                println!(
+                eprintln!(
                     "aifo-shim: variant=rust transport={}",
                     if prefer_native { "native" } else { "curl" }
                 );
             }
-            println!(
+            eprintln!(
                 "aifo-shim: notify cmd={} argv={} client={}",
                 invoked_tool,
                 std::env::args().skip(1).collect::<Vec<_>>().join(" "),
                 client
             );
-            println!(
+            eprintln!(
                 "aifo-shim: preparing request to /notify (proto={}) client={}",
                 PROTO_VERSION, client
             );
