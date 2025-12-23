@@ -8,6 +8,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use url::Url;
+
 #[cfg(unix)]
 use nix::unistd::{getgid, getuid};
 
@@ -191,6 +193,28 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
             push_env_kv(&mut env_flags, "AZURE_OPENAI_ENDPOINT", &v);
             push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
             push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
+
+            // Derive AZURE_RESOURCE_NAME from AIFO_API_BASE when it looks like an Azure OpenAI endpoint,
+            // e.g. https://<resource>.openai.azure.com/.
+            //
+            // Do not override an explicit host-provided AZURE_RESOURCE_NAME.
+            if env::var("AZURE_RESOURCE_NAME")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_none()
+            {
+                if let Ok(url) = Url::parse(&v) {
+                    if let Some(host) = url.host_str() {
+                        if host.ends_with(".openai.azure.com") {
+                            if let Some(resource) = host.split('.').next() {
+                                if !resource.trim().is_empty() {
+                                    push_env_kv(&mut env_flags, "AZURE_RESOURCE_NAME", resource);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     if let Ok(v) = env::var("AIFO_API_VERSION") {
