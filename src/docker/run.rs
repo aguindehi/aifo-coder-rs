@@ -827,26 +827,14 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             if let Some(ref dirs) = opencode_dirs {
                 extra_dirs.push((dirs.config.clone(), "/home/coder/.config/opencode"));
                 extra_dirs.push((dirs.cache.clone(), "/home/coder/.cache/opencode"));
+                // For previews/tests, also show the active share mount at the traditional path.
+                extra_dirs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
             }
             if agent == "openhands" {
                 extra_dirs.push((openhands_home, "/home/coder/.openhands"));
             }
             if agent == "plandex" {
                 extra_dirs.push((plandex_home, "/home/coder/.plandex-home"));
-            }
-
-            // For unit tests and dry-run previews, also bind-mount the active opencode share
-            // when host HOME is the test sandbox tempdir (so tests see share+config+cache).
-            if agent == "opencode" {
-                if let Some(ref dirs) = opencode_dirs {
-                    if let Ok(tmpdir) = env::var("AIFO_CODER_TEST_HOME") {
-                        let tmp = tmpdir.trim();
-                        if !tmp.is_empty() && host_home.to_string_lossy().starts_with(tmp) {
-                            extra_dirs
-                                .push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
-                        }
-                    }
-                }
             }
 
             for (src, dst) in extra_dirs {
