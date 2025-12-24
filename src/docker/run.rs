@@ -29,6 +29,50 @@ use crate::ShellScript;
 const SHIM_FIRST_PATH: &str =
     "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH";
 
+#[derive(Debug, Clone)]
+struct OpencodeDirs {
+    share: PathBuf,
+    config: PathBuf,
+    cache: PathBuf,
+}
+
+fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
+    #[cfg(windows)]
+    {
+        let share_base = env::var("LOCALAPPDATA")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| host_home.join(".local").join("share"));
+        let share = share_base.join("opencode");
+        let config = env::var("APPDATA")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| host_home.join(".config"))
+            .join("opencode");
+        let cache = env::var("LOCALAPPDATA")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| host_home.join(".cache"))
+            .join("opencode");
+        OpencodeDirs {
+            share,
+            config,
+            cache,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        OpencodeDirs {
+            share: host_home.join(".local").join("share").join("opencode"),
+            config: host_home.join(".config").join("opencode"),
+            cache: host_home.join(".cache").join("opencode"),
+        }
+    }
+}
+
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",
@@ -626,7 +670,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 (base.join(".crush"), "/home/coder/.crush"),
                 (base.join(".local_state"), "/home/coder/.local/state"),
             ];
-            if agent == "opencode" {
+            if agent != "opencode" {
                 pairs.push((base.join(".opencode"), "/home/coder/.local/share/opencode"));
                 pairs.push((
                     base.join(".opencode_config"),
@@ -645,6 +689,24 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(crate::path_pair(&src, dst));
             }
+            if agent == "opencode" {
+                let opencode_dirs = host_opencode_dirs(host_home);
+                for dir in [
+                    &opencode_dirs.share,
+                    &opencode_dirs.config,
+                    &opencode_dirs.cache,
+                ] {
+                    fs::create_dir_all(dir).ok();
+                }
+                for (src, dst) in [
+                    (&opencode_dirs.share, "/home/coder/.local/share/opencode"),
+                    (&opencode_dirs.config, "/home/coder/.config/opencode"),
+                    (&opencode_dirs.cache, "/home/coder/.cache/opencode"),
+                ] {
+                    volume_flags.push(OsString::from("-v"));
+                    volume_flags.push(crate::path_pair(src, dst));
+                }
+            }
             // When using fork state, skip HOME-based mounts entirely.
             return volume_flags;
         }
@@ -653,15 +715,11 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
-        #[cfg(windows)]
-        let opencode_share = env::var("LOCALAPPDATA")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| host_home.join(".local").join("share"))
-            .join("opencode");
-        #[cfg(not(windows))]
-        let opencode_share = host_home.join(".local").join("share").join("opencode");
+        let opencode_dirs = if agent == "opencode" {
+            Some(host_opencode_dirs(host_home))
+        } else {
+            None
+        };
         let local_state_dir = host_home.join(".local").join("state");
         let crush_state_dir = host_home.join(".crush");
         let codex_dir = host_home.join(".codex");
@@ -675,8 +733,8 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 &codex_dir,
                 &aider_dir,
             ];
-            if agent == "opencode" {
-                base_dirs.push(&opencode_share);
+            if let Some(dirs) = opencode_dirs.as_ref() {
+                base_dirs.push(dirs.share.as_path());
             }
             for d in base_dirs {
                 fs::create_dir_all(d).ok();
@@ -691,8 +749,8 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 (codex_dir, "/home/coder/.codex"),
                 (aider_dir, "/home/coder/.aider"),
             ];
-            if agent == "opencode" {
-                pairs.push((opencode_share, "/home/coder/.local/share/opencode"));
+            if let Some(dirs) = opencode_dirs.as_ref() {
+                pairs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
             }
             for (src, dst) in pairs {
                 volume_flags.push(OsString::from("-v"));
@@ -701,36 +759,14 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         }
 
         // OpenCode config/cache (HOME/XDG), OpenHands, Plandex
-        #[cfg(windows)]
-        let (opencode_config, opencode_cache) = {
-            let cfg = env::var("APPDATA")
-                .ok()
-                .filter(|v| !v.trim().is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| host_home.join(".config"))
-                .join("opencode");
-            let lapp = env::var("LOCALAPPDATA")
-                .ok()
-                .filter(|v| !v.trim().is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| host_home.join(".cache"))
-                .join("opencode");
-            (cfg, lapp)
-        };
-        #[cfg(not(windows))]
-        let (opencode_config, opencode_cache) = (
-            host_home.join(".config").join("opencode"),
-            host_home.join(".cache").join("opencode"),
-        );
-
         let openhands_home = host_home.join(".openhands");
         let plandex_home = host_home.join(".plandex-home");
 
         {
             let mut extra_dirs: Vec<(PathBuf, &str)> = Vec::new();
-            if agent == "opencode" {
-                extra_dirs.push((opencode_config, "/home/coder/.config/opencode"));
-                extra_dirs.push((opencode_cache, "/home/coder/.cache/opencode"));
+            if let Some(dirs) = opencode_dirs {
+                extra_dirs.push((dirs.config, "/home/coder/.config/opencode"));
+                extra_dirs.push((dirs.cache, "/home/coder/.cache/opencode"));
             }
             if agent == "openhands" {
                 extra_dirs.push((openhands_home, "/home/coder/.openhands"));
