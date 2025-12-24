@@ -834,6 +834,20 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             if agent == "plandex" {
                 extra_dirs.push((plandex_home, "/home/coder/.plandex-home"));
             }
+
+            // For unit tests and dry-run previews, also bind-mount the active opencode share
+            // when host HOME is the test sandbox tempdir (so tests see share+config+cache).
+            if agent == "opencode" {
+                if let Some(dirs) = opencode_dirs.as_ref() {
+                    if let Ok(tmpdir) = env::var("AIFO_CODER_TEST_HOME") {
+                        let tmp = tmpdir.trim();
+                        if !tmp.is_empty() && host_home.to_string_lossy().starts_with(tmp) {
+                            extra_dirs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
+                        }
+                    }
+                }
+            }
+
             for (src, dst) in extra_dirs {
                 fs::create_dir_all(&src).ok();
                 volume_flags.push(OsString::from("-v"));
