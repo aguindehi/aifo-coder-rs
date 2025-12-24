@@ -67,9 +67,9 @@ fn host_xdg_dirs(host_home: &Path) -> HostXdgDirs {
         if cfg!(target_os = "windows") {
             env_path("LOCALAPPDATA")
                 .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
-        } else if cfg!(target_os = "macos") {
-            fallback_local(host_home, &["Library", "Application Support"])
         } else {
+            // On non-Windows (including macOS), align with opencode's observed behavior:
+            // default to ~/.local/share when XDG_DATA_HOME is unset.
             fallback_local(host_home, &[".local", "share"])
         }
     });
