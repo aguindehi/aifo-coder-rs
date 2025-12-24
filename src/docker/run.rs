@@ -824,9 +824,9 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
 
         {
             let mut extra_dirs: Vec<(PathBuf, &str)> = Vec::new();
-            if let Some(dirs) = opencode_dirs {
-                extra_dirs.push((dirs.config, "/home/coder/.config/opencode"));
-                extra_dirs.push((dirs.cache, "/home/coder/.cache/opencode"));
+            if let Some(ref dirs) = opencode_dirs {
+                extra_dirs.push((dirs.config.clone(), "/home/coder/.config/opencode"));
+                extra_dirs.push((dirs.cache.clone(), "/home/coder/.cache/opencode"));
             }
             if agent == "openhands" {
                 extra_dirs.push((openhands_home, "/home/coder/.openhands"));
@@ -838,7 +838,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             // For unit tests and dry-run previews, also bind-mount the active opencode share
             // when host HOME is the test sandbox tempdir (so tests see share+config+cache).
             if agent == "opencode" {
-                if let Some(dirs) = opencode_dirs.as_ref() {
+                if let Some(ref dirs) = opencode_dirs {
                     if let Ok(tmpdir) = env::var("AIFO_CODER_TEST_HOME") {
                         let tmp = tmpdir.trim();
                         if !tmp.is_empty() && host_home.to_string_lossy().starts_with(tmp) {
