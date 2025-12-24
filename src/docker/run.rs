@@ -1024,6 +1024,12 @@ pub fn build_docker_preview_args_only(
 
     // Volume mounts
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
+    // Important: do not export host XDG_* into the agent container. The agent must compute its
+    // own Global.Path.data based on HOME=/home/coder so that session storage is decoupled and
+    // only shared via the mounted directories (not by inheriting host XDG_*).
+    for k in ["XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"] {
+        env::remove_var(k);
+    }
     let volume_flags = collect_volume_flags(agent, &host_home, &pwd);
 
     // User and security flags
