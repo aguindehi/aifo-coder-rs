@@ -772,9 +772,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 &codex_dir,
                 &aider_dir,
             ];
-            if let Some(dirs) = opencode_dirs.as_ref() {
-                base_dirs.push(dirs.share.as_path());
-            }
+            // For opencode, do not create a host-backed share dir here; storage will be container-local.
             for d in base_dirs {
                 fs::create_dir_all(d).ok();
             }
@@ -788,9 +786,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 (codex_dir, "/home/coder/.codex"),
                 (aider_dir, "/home/coder/.aider"),
             ];
-            if let Some(dirs) = opencode_dirs.as_ref() {
-                pairs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
-            }
+            // Intentionally do not bind-mount host opencode share; let /home/coder/.local/share/opencode be container-local.
             for (src, dst) in pairs {
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(crate::path_pair(&src, dst));
