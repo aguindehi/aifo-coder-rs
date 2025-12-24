@@ -78,9 +78,8 @@ fn host_xdg_dirs(host_home: &Path) -> HostXdgDirs {
         if cfg!(target_os = "windows") {
             env_path("APPDATA")
                 .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Roaming"]))
-        } else if cfg!(target_os = "macos") {
-            fallback_local(host_home, &["Library", "Application Support"])
         } else {
+            // For HOME-based mounts (including tests), use ~/.config when XDG_CONFIG_HOME is unset.
             fallback_local(host_home, &[".config"])
         }
     });
@@ -89,9 +88,8 @@ fn host_xdg_dirs(host_home: &Path) -> HostXdgDirs {
         if cfg!(target_os = "windows") {
             env_path("LOCALAPPDATA")
                 .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
-        } else if cfg!(target_os = "macos") {
-            fallback_local(host_home, &["Library", "Caches"])
         } else {
+            // For HOME-based mounts (including tests), use ~/.cache when XDG_CACHE_HOME is unset.
             fallback_local(host_home, &[".cache"])
         }
     });
