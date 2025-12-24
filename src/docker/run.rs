@@ -759,7 +759,6 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         } else {
             None
         };
-        let host_opencode_share = host_home.join(".local").join("share").join("opencode");
         let local_state_dir = host_home.join(".local").join("state");
         // Host view of OpenCode storage for unison sync (read-only in container)
         let opencode_host_view = host_home.join(".local").join("share").join("opencode");
@@ -768,7 +767,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         let aider_dir = host_home.join(".aider");
 
         {
-            let mut base_dirs: Vec<&Path> = vec![
+            let base_dirs: Vec<&Path> = vec![
                 &crush_dir,
                 &local_state_dir,
                 &crush_state_dir,
@@ -782,7 +781,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         }
 
         {
-            let mut pairs: Vec<(PathBuf, &str)> = vec![
+            let pairs: Vec<(PathBuf, &str)> = vec![
                 (crush_dir, "/home/coder/.local/share/crush"),
                 (local_state_dir, "/home/coder/.local/state"),
                 (crush_state_dir, "/home/coder/.crush"),
