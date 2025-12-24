@@ -36,6 +36,82 @@ struct OpencodeDirs {
     cache: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+struct HostXdgDirs {
+    data: PathBuf,
+    config: PathBuf,
+    cache: PathBuf,
+}
+
+fn host_xdg_dirs(host_home: &Path) -> HostXdgDirs {
+    fn env_path(var: &str) -> Option<PathBuf> {
+        env::var(var).ok().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(trimmed))
+            }
+        })
+    }
+
+    fn fallback_local(host_home: &Path, subdirs: &[&str]) -> PathBuf {
+        let mut path = host_home.to_path_buf();
+        for part in subdirs {
+            path = path.join(part);
+        }
+        path
+    }
+
+    let data = env_path("XDG_DATA_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("LOCALAPPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
+        } else if cfg!(target_os = "macos") {
+            fallback_local(host_home, &["Library", "Application Support"])
+        } else {
+            fallback_local(host_home, &[".local", "share"])
+        }
+    });
+
+    let config = env_path("XDG_CONFIG_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("APPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Roaming"]))
+        } else if cfg!(target_os = "macos") {
+            fallback_local(host_home, &["Library", "Application Support"])
+        } else {
+            fallback_local(host_home, &[".config"])
+        }
+    });
+
+    let cache = env_path("XDG_CACHE_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("LOCALAPPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
+        } else if cfg!(target_os = "macos") {
+            fallback_local(host_home, &["Library", "Caches"])
+        } else {
+            fallback_local(host_home, &[".cache"])
+        }
+    });
+
+    HostXdgDirs {
+        data,
+        config,
+        cache,
+    }
+}
+
+fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
+    let xdg = host_xdg_dirs(host_home);
+    OpencodeDirs {
+        share: xdg.data.join("opencode"),
+        config: xdg.config.join("opencode"),
+        cache: xdg.cache.join("opencode"),
+    }
+}
+
 fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
     #[cfg(windows)]
     {
