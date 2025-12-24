@@ -342,13 +342,17 @@ if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; the
     # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
     # -silent: avoid noisy logs when there is nothing to sync
     unison "$HOST_STORE" "$LOCAL_STORE" -batch -prefer "$HOST_STORE" -silent || true
-    # Wrap exec to perform a final two-way sync on exit
+    # Wrap exec to perform a final two-way sync on exit. Ignore INT/TERM in the wrapper so that
+    # Ctrl-C only terminates the OpenCode process, not this wrapper shell.
     OPENCODE_CMD="$*"
     AIFO_OPENCODE_WRAPPED=1 sh -c '
       set -e
-      # Run the original OpenCode command
-      eval "exec $OPENCODE_CMD"
-    ' || true
+      trap "" INT TERM
+      eval "$OPENCODE_CMD" &
+      child_pid=$!
+      wait "$child_pid"
+      exit "$?"
+    '
     # After opencode exits, perform bi-directional sync (container <-> host)
     unison "$HOST_STORE" "$LOCAL_STORE" -batch -auto || true
     exit 0
