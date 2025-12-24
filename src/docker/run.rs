@@ -825,8 +825,8 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             if let Some(ref dirs) = opencode_dirs {
                 extra_dirs.push((dirs.config.clone(), "/home/coder/.config/opencode"));
                 extra_dirs.push((dirs.cache.clone(), "/home/coder/.cache/opencode"));
-                // For previews/tests, also show the active share mount at the traditional path.
-                extra_dirs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
+                // NOTE: do not mount dirs.share at /home/coder/.local/share/opencode here;
+                // that directory must remain container-local for OpenCode storage to avoid SSHFS races.
             }
             if agent == "openhands" {
                 extra_dirs.push((openhands_home, "/home/coder/.openhands"));
