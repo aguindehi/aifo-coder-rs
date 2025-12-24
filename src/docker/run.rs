@@ -759,7 +759,16 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         } else {
             None
         };
+        let host_opencode_share = host_home
+            .join(".local")
+            .join("share")
+            .join("opencode");
         let local_state_dir = host_home.join(".local").join("state");
+        // Host view of OpenCode storage for unison sync (read-only in container)
+        let opencode_host_view = host_home
+            .join(".local")
+            .join("share")
+            .join("opencode");
         let crush_state_dir = host_home.join(".crush");
         let codex_dir = host_home.join(".codex");
         let aider_dir = host_home.join(".aider");
@@ -786,10 +795,33 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 (codex_dir, "/home/coder/.codex"),
                 (aider_dir, "/home/coder/.aider"),
             ];
-            // Intentionally do not bind-mount host opencode share; let /home/coder/.local/share/opencode be container-local.
+            // Intentionally do not bind-mount host opencode share for active storage;
+            // let /home/coder/.local/share/opencode be container-local.
             for (src, dst) in pairs {
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(crate::path_pair(&src, dst));
+            }
+
+            // For opencode, expose host storage read-only at a separate path for unison sync.
+            if agent == "opencode" {
+                fs::create_dir_all(&opencode_host_view).ok();
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(OsString::from(format!(
+                    "{}:/home/coder/.local/share/opencode-host:ro",
+                    opencode_host_view.display()
+                )));
+                // Pass the host storage path into the container so aifo-entrypoint can run unison.
+                push_env_kv(
+                    &mut volume_flags,
+                    "AIFO_OPENCODE_HOST_STORAGE",
+                    "/home/coder/.local/share/opencode-host",
+                );
+                // Also pass container-local storage root explicitly.
+                push_env_kv(
+                    &mut volume_flags,
+                    "AIFO_OPENCODE_STORAGE",
+                    "/home/coder/.local/share/opencode",
+                );
             }
         }
 
