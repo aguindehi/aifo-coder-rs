@@ -331,6 +331,29 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     fi
   fi
 fi
+# OpenCode storage sync via unison (host <-> container) when configured
+if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; then
+  HOST_STORE="${AIFO_OPENCODE_HOST_STORAGE:-}"
+  LOCAL_STORE="${AIFO_OPENCODE_STORAGE:-$HOME/.local/share/opencode}"
+  if [ -n "$HOST_STORE" ] && [ -d "$HOST_STORE" ]; then
+    # Ensure local storage dir exists
+    install -d -m 0700 "$LOCAL_STORE" >/dev/null 2>&1 || true
+    # Initial sync: prefer host contents into container-local storage (host -> container)
+    # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
+    # -silent: avoid noisy logs when there is nothing to sync
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -prefer "$HOST_STORE" -silent || true
+    # Wrap exec to perform a final two-way sync on exit
+    OPENCODE_CMD="$*"
+    AIFO_OPENCODE_WRAPPED=1 sh -c '
+      set -e
+      # Run the original OpenCode command
+      eval "exec $OPENCODE_CMD"
+    ' || true
+    # After opencode exits, perform bi-directional sync (container <-> host)
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -auto || true
+    exit 0
+  fi
+fi
 exec "$@"
 SH
 
