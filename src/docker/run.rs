@@ -842,7 +842,8 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                     if let Ok(tmpdir) = env::var("AIFO_CODER_TEST_HOME") {
                         let tmp = tmpdir.trim();
                         if !tmp.is_empty() && host_home.to_string_lossy().starts_with(tmp) {
-                            extra_dirs.push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
+                            extra_dirs
+                                .push((dirs.share.clone(), "/home/coder/.local/share/opencode"));
                         }
                     }
                 }
