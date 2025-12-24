@@ -793,12 +793,13 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 volume_flags.push(crate::path_pair(&src, dst));
             }
 
-            // For opencode, expose host storage read-only at a separate path for unison sync.
+            // For opencode, expose host storage at a separate path for unison sync.
+            // This mount must be writable so unison can propagate container-side changes back.
             if agent == "opencode" {
                 fs::create_dir_all(&opencode_host_view).ok();
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(OsString::from(format!(
-                    "{}:/home/coder/.local/share/opencode-host:ro",
+                    "{}:/home/coder/.local/share/opencode-host",
                     opencode_host_view.display()
                 )));
                 // Pass the host storage path into the container so aifo-entrypoint can run unison.
