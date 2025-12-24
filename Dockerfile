@@ -654,6 +654,18 @@ FROM base AS opencode
 ARG OPENCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# Install unison for host<->container storage sync
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  if [ -f /run/secrets/migros_root_ca ]; then \
+    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison; \
+  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
@@ -1060,6 +1072,18 @@ FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# Install unison for host<->container storage sync
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  if [ -f /run/secrets/migros_root_ca ]; then \
+    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison; \
+  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
