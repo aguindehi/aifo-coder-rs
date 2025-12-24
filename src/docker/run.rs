@@ -759,16 +759,10 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         } else {
             None
         };
-        let host_opencode_share = host_home
-            .join(".local")
-            .join("share")
-            .join("opencode");
+        let host_opencode_share = host_home.join(".local").join("share").join("opencode");
         let local_state_dir = host_home.join(".local").join("state");
         // Host view of OpenCode storage for unison sync (read-only in container)
-        let opencode_host_view = host_home
-            .join(".local")
-            .join("share")
-            .join("opencode");
+        let opencode_host_view = host_home.join(".local").join("share").join("opencode");
         let crush_state_dir = host_home.join(".crush");
         let codex_dir = host_home.join(".codex");
         let aider_dir = host_home.join(".aider");
