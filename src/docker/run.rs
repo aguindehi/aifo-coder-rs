@@ -112,43 +112,6 @@ fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
     }
 }
 
-fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
-    #[cfg(windows)]
-    {
-        let share_base = env::var("LOCALAPPDATA")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| host_home.join(".local").join("share"));
-        let share = share_base.join("opencode");
-        let config = env::var("APPDATA")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| host_home.join(".config"))
-            .join("opencode");
-        let cache = env::var("LOCALAPPDATA")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| host_home.join(".cache"))
-            .join("opencode");
-        OpencodeDirs {
-            share,
-            config,
-            cache,
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        OpencodeDirs {
-            share: host_home.join(".local").join("share").join("opencode"),
-            config: host_home.join(".config").join("opencode"),
-            cache: host_home.join(".cache").join("opencode"),
-        }
-    }
-}
-
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",
