@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::path::PathBuf;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 
 // Internal modules
 mod agent_images;
@@ -52,6 +52,59 @@ fn apply_cli_globals(cli: &Cli) {
     // Propagate verbosity to runtime so image pulls can stream progress/output.
     if cli.verbose {
         std::env::set_var("AIFO_CODER_VERBOSE", "1");
+    }
+}
+
+const FULLSCREEN_GPG_AGENTS: &[&str] = &["opencode"];
+
+fn is_fullscreen_agent(agent: &str) -> bool {
+    FULLSCREEN_GPG_AGENTS.iter().any(|a| *a == agent)
+}
+
+fn git_signing_enabled() -> bool {
+    if let Ok(output) = Command::new("git")
+        .args(["config", "--bool", "commit.gpgsign"])
+        .output()
+    {
+        if output.status.success() {
+            let val = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .to_ascii_lowercase();
+            return matches!(val.as_str(), "true");
+        }
+    }
+    false
+}
+
+fn host_has_gpg_secret_key() -> bool {
+    if let Ok(output) = Command::new("gpg")
+        .args(["--list-secret-keys", "--with-colons"])
+        .output()
+    {
+        if output.status.success() {
+            return String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .any(|line| line.starts_with("sec"));
+        }
+    }
+    false
+}
+
+fn configure_gpg_env(agent: &str, signing_enabled: bool) {
+    if !signing_enabled {
+        std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
+        std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");
+        std::env::remove_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS");
+        return;
+    }
+    if is_fullscreen_agent(agent) {
+        std::env::set_var("AIFO_GPG_REQUIRE_PRIME", "1");
+        std::env::set_var("AIFO_GPG_CACHE_TTL_SECONDS", "43200");
+        std::env::set_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS", "172800");
+    } else {
+        std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
+        std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");
+        std::env::remove_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS");
     }
 }
 
@@ -497,6 +550,15 @@ fn main() -> ExitCode {
 
         return ExitCode::from(1);
     }
+
+    let signing_enabled = git_signing_enabled();
+    if signing_enabled && !host_has_gpg_secret_key() {
+        aifo_coder::log_warn_stderr(
+            use_err,
+            "aifo-coder: warning: commit.gpgsign is enabled but no secret key was found; mount your ~/.gnupg or disable signing.",
+        );
+    }
+    configure_gpg_env(agent, signing_enabled);
 
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;

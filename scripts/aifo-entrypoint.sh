@@ -4,61 +4,24 @@ umask 077
 
 log_prefix="aifo-entrypoint"
 log_verbose="${AIFO_TOOLCHAIN_VERBOSE:-0}"
-resolve_home() {
-    home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
-    if [ -z "$home_path" ]; then
-        home_path="/home/$1"
-    fi
-    printf '%s' "$home_path"
-}
-
 runtime_user="${AIFO_RUNTIME_USER:-coder}"
-
-
-maybe_chmod() {
-    if [ "$IS_ROOT" = "1" ]; then
-        chmod "$@" 2>/dev/null || true
-    fi
-}
-
-copy_with_mode() {
-    mode="$1"
-    src="$2"
-    dest="$3"
-    if [ "$IS_ROOT" = "1" ]; then
-        install -m "$mode" "$src" "$dest" 2>/dev/null || cp "$src" "$dest" 2>/dev/null || true
-    else
-        cp "$src" "$dest" 2>/dev/null || true
-    fi
-}
-resolve_home() {
-    home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
-    if [ -z "$home_path" ]; then
-        home_path="/home/$1"
-    fi
-    printf '%s' "$home_path"
-}
-runtime_home="$(resolve_home "$runtime_user")"
-[ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
 IS_ROOT=0
 if [ "$(id -u)" = "0" ]; then
     IS_ROOT=1
-fi
-
-if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
-    safe_install_dir "$runtime_home" 0750
-    chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
-    export HOME="$runtime_home"
-    if command -v gosu >/dev/null 2>&1; then
-        exec env AIFO_ENTRYPOINT_REEXEC=1 gosu "$runtime_user" "$0" "$@"
-    fi
-    printf '%s: warning: gosu missing; continuing as root\n' "$log_prefix" >&2
 fi
 
 log_debug() {
     if [ "$log_verbose" = "1" ]; then
         printf '%s: %s\n' "$log_prefix" "$1" >&2
     fi
+}
+
+resolve_home() {
+    home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
+    if [ -z "$home_path" ]; then
+        home_path="/home/$1"
+    fi
+    printf '%s' "$home_path"
 }
 
 safe_install_dir() {
@@ -88,7 +51,44 @@ copy_with_mode() {
     fi
 }
 
+prime_gpg_agent_if_requested() {
+    if [ "${AIFO_GPG_REQUIRE_PRIME:-0}" != "1" ]; then
+        return
+    fi
+    if [ "${AIFO_CODER_NON_INTERACTIVE:-0}" = "1" ]; then
+        printf '%s: warning: gpg priming skipped in non-interactive mode\n' "$log_prefix" >&2
+        return
+    fi
+    if ! command -v gpg >/dev/null 2>&1; then
+        return
+    fi
+    if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
+        printf '%s: warning: commit signing enabled but no secret key found in container.\n' "$log_prefix" >&2
+        return
+    fi
+    printf '%s: gpg: priming agent for signed commits...\n' "$log_prefix" >&2
+    if gpg --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
+        printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
+    else
+        printf '%s: warning: gpg priming failed (maybe cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
+    fi
+}
+
+runtime_home="$(resolve_home "$runtime_user")"
+[ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
+
+if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
+    safe_install_dir "$runtime_home" 0750
+    chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
+    export HOME="$runtime_home"
+    if command -v gosu >/dev/null 2>&1; then
+        exec env AIFO_ENTRYPOINT_REEXEC=1 gosu "$runtime_user" "$0" "$@"
+    fi
+    printf '%s: warning: gosu missing; continuing as root\n' "$log_prefix" >&2
+fi
+
 # Ensure HOME is sane and writable
+
 if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
     export HOME="$runtime_home"
 fi
@@ -139,10 +139,12 @@ if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null
 fi
 ( grep -q '^allow-loopback-pinentry' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
     printf '%s\n' "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf" ) || true
+cache_ttl="${AIFO_GPG_CACHE_TTL_SECONDS:-7200}"
+max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
 ( grep -q '^default-cache-ttl ' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
-    printf '%s\n' "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf" ) || true
+    printf '%s\n' "default-cache-ttl ${cache_ttl}" >> "$GNUPGHOME/gpg-agent.conf" ) || true
 ( grep -q '^max-cache-ttl ' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
-    printf '%s\n' "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf" ) || true
+    printf '%s\n' "max-cache-ttl ${max_cache_ttl}" >> "$GNUPGHOME/gpg-agent.conf" ) || true
 if [ -t 0 ] || [ -t 1 ]; then
     export GPG_TTY="${GPG_TTY:-/dev/tty}"
 fi
@@ -171,6 +173,7 @@ configure_git_gpg_wrapper() {
 }
 
 configure_git_gpg_wrapper
+prime_gpg_agent_if_requested
 
 sanitize_name() {
     case "$1" in
