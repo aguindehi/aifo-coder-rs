@@ -51,6 +51,19 @@ copy_with_mode() {
     fi
 }
 
+ensure_conf_line() {
+    file="$1"
+    prefix="$2"
+    newline="$3"
+    tmp="$(mktemp "$file.tmp.XXXXXX" 2>/dev/null || mktemp)"
+    touch "$file"
+    grep -v "^$prefix" "$file" 2>/dev/null > "$tmp" || true
+    printf '%s
+' "$newline" >> "$tmp"
+    mv "$tmp" "$file"
+    maybe_chmod 0600 "$file"
+}
+
 sync_host_gpg() {
     host_dir="$HOME/.gnupg-host"
     [ -d "$host_dir" ] || return
@@ -63,34 +76,6 @@ sync_host_gpg() {
         cp -a "$host_dir"/. "$GNUPGHOME"/ 2>/dev/null || true
     fi
     chmod 700 "$GNUPGHOME" 2>/dev/null || true
-}
-
-prompt_for_passphrase() {
-    if [ ! -t 0 ] && [ ! -t 1 ]; then
-        printf '%s' ""
-        return
-    fi
-    printf '%s: gpg: enter passphrase (input hidden): ' "$log_prefix" >&2
-    passphrase=""
-    has_stty=0
-    saved_stty=""
-    if command -v stty >/dev/null 2>&1; then
-        has_stty=1
-        saved_stty="$(stty -g 2>/dev/null || printf '')"
-        stty -echo 2>/dev/null || true
-        trap 'stty echo 2>/dev/null || true' INT TERM
-    fi
-    IFS= read -r passphrase || passphrase=""
-    printf '\n' >&2
-    if [ "$has_stty" -eq 1 ]; then
-        if [ -n "$saved_stty" ]; then
-            stty "$saved_stty" 2>/dev/null || true
-        else
-            stty echo 2>/dev/null || true
-        fi
-    fi
-    trap - INT TERM
-    printf '%s' "$passphrase"
 }
 
 detect_signing_key() {
@@ -120,23 +105,19 @@ prime_gpg_agent_if_requested() {
         return
     fi
     signing_key="$(detect_signing_key)"
-    if [ -z "$signing_key" ]; then
-        printf '%s: warning: unable to determine signing key; set git config user.signingkey.\n' "$log_prefix" >&2
-        return
-    fi
-    passphrase="$(prompt_for_passphrase)"
-    if [ -z "$passphrase" ]; then
-        printf '%s: warning: gpg priming cancelled; signed commits may prompt later.\n' "$log_prefix" >&2
-        return
-    fi
-    if printf '%s' "$passphrase" \
-        | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --local-user "$signing_key" --default-key "$signing_key" \
-            --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
-        printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
+    if [ -n "$signing_key" ]; then
+        if gpg --yes --armor --sign --detach-sig --local-user "$signing_key" --default-key "$signing_key" /dev/null >/dev/null 2>&1; then
+            printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
+        else
+            printf '%s: warning: gpg priming failed (maybe user cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
+        fi
     else
-        printf '%s: warning: gpg priming failed (maybe incorrect passphrase). Signed commits may prompt later.\n' "$log_prefix" >&2
+        if gpg --yes --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
+            printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
+        else
+            printf '%s: warning: gpg priming failed (maybe user cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
+        fi
     fi
-    passphrase=""
 }
 
 runtime_home="$(resolve_home "$runtime_user")"
@@ -172,6 +153,14 @@ maybe_chmod 0700 "$GNUPGHOME"
 
 sync_host_gpg
 
+cache_ttl="${AIFO_GPG_CACHE_TTL_SECONDS:-7200}"
+max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
+conf="$GNUPGHOME/gpg-agent.conf"
+ensure_conf_line "$conf" "pinentry-program " "pinentry-program /usr/bin/pinentry-curses"
+ensure_conf_line "$conf" "allow-loopback-pinentry" "allow-loopback-pinentry"
+ensure_conf_line "$conf" "default-cache-ttl " "default-cache-ttl ${cache_ttl}"
+ensure_conf_line "$conf" "max-cache-ttl " "max-cache-ttl ${max_cache_ttl}"
+
 if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
     export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
 fi
@@ -188,17 +177,6 @@ ensure_local_tree() {
 ensure_local_tree
 
 # Bootstrap gnupg configs
-if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then
-    printf '%s\n' "pinentry-program /usr/bin/pinentry-curses" > "$GNUPGHOME/gpg-agent.conf"
-fi
-( grep -q '^allow-loopback-pinentry' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
-    printf '%s\n' "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf" ) || true
-cache_ttl="${AIFO_GPG_CACHE_TTL_SECONDS:-7200}"
-max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
-( grep -q '^default-cache-ttl ' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
-    printf '%s\n' "default-cache-ttl ${cache_ttl}" >> "$GNUPGHOME/gpg-agent.conf" ) || true
-( grep -q '^max-cache-ttl ' "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || \
-    printf '%s\n' "max-cache-ttl ${max_cache_ttl}" >> "$GNUPGHOME/gpg-agent.conf" ) || true
 if [ -t 0 ] || [ -t 1 ]; then
     export GPG_TTY="${GPG_TTY:-/dev/tty}"
 fi
