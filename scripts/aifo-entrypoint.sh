@@ -5,8 +5,20 @@ umask 077
 log_prefix="aifo-entrypoint"
 log_verbose="${AIFO_TOOLCHAIN_VERBOSE:-0}"
 runtime_user="${AIFO_RUNTIME_USER:-coder}"
+resolve_home() {
+    home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
+    if [ -z "$home_path" ]; then
+        home_path="/home/$1"
+    fi
+    printf '%s' "$home_path"
+}
+runtime_home="$(resolve_home "$runtime_user")"
+[ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
 
 if [ "$(id -u)" = "0" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
+    install -d -m 0750 "$runtime_home" 2>/dev/null || true
+    chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
+    export HOME="$runtime_home"
     if command -v gosu >/dev/null 2>&1; then
         exec env AIFO_ENTRYPOINT_REEXEC=1 gosu "$runtime_user" "$0" "$@"
     fi
@@ -21,9 +33,11 @@ log_debug() {
 
 # Ensure HOME is sane and writable
 if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
-    export HOME="/home/coder"
+    export HOME="$runtime_home"
 fi
-mkdir -p "$HOME"
+if [ ! -d "$HOME" ] && [ "$(id -u)" = "0" ]; then
+    mkdir -p "$HOME" 2>/dev/null || true
+fi
 chmod 0750 "$HOME" 2>/dev/null || true
 
 if [ -z "${GNUPGHOME:-}" ]; then
