@@ -66,8 +66,12 @@ copy_with_mode() {
 if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
     export HOME="$runtime_home"
 fi
-safe_install_dir "$HOME" 0750
-maybe_chmod 1777 "$HOME"
+if [ "$IS_ROOT" = "1" ]; then
+    safe_install_dir "$HOME" 0750
+    maybe_chmod 1777 "$HOME"
+else
+    mkdir -p "$HOME" 2>/dev/null || true
+fi
 
 if [ -z "${GNUPGHOME:-}" ]; then
     export GNUPGHOME="$HOME/.gnupg"
