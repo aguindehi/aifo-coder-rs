@@ -1198,10 +1198,12 @@ pub fn build_docker_cmd(
     // Export only when we generated a fresh name, so tests don't see cross-agent reuse.
     let cn_env = env::var("AIFO_CODER_CONTAINER_NAME").ok();
     let cn_src = env::var("AIFO_CODER_CONTAINER_NAME_SOURCE").ok();
-    if cn_env.is_none()
-        || (cn_src.as_deref() == Some("generated")
-            && !cn_env.as_ref().unwrap().contains(&format!("-{}-", agent)))
-    {
+    let needs_export = match (cn_env.as_deref(), cn_src.as_deref()) {
+        (None, _) => true,
+        (Some(name), Some("generated")) => !name.contains(&format!("-{}-", agent)),
+        _ => false,
+    };
+    if needs_export {
         env::set_var("AIFO_CODER_CONTAINER_NAME", &container_name);
         env::set_var("AIFO_CODER_CONTAINER_NAME_SOURCE", "generated");
     }

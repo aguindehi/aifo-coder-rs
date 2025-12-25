@@ -2,12 +2,14 @@
 //! Small utilities: shell/json escaping, URL decoding, header parsing, simple tokenization.
 
 pub mod docker_security;
+pub mod exec;
 pub mod fs;
 pub mod id;
 pub mod shell_file;
 pub mod shell_script;
 pub mod text_lines;
 
+pub use exec::{ExecOutput, ExecRequest, ExecService};
 pub use shell_file::ShellFile;
 pub use shell_script::ShellScript;
 pub use text_lines::TextLines;

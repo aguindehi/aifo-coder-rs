@@ -4,12 +4,14 @@
 
 use once_cell::sync::{Lazy, OnceCell};
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use which::which;
+
+use crate::util::{ExecRequest, ExecService};
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
@@ -20,6 +22,25 @@ static MIRROR_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
 // Internal registry (env-only): in-process cache and source
 static INTERNAL_REGISTRY_PREFIX_CACHE: OnceCell<String> = OnceCell::new();
 static INTERNAL_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
+static REGISTRY_EXEC: Lazy<ExecService> = Lazy::new(|| ExecService::new(Duration::from_secs(3)));
+
+fn curl_head(url: &str) -> Option<bool> {
+    if which("curl").is_err() {
+        return None;
+    }
+    let args = ["--connect-timeout", "1", "--max-time", "2", "-sSI", url]
+        .into_iter()
+        .map(OsString::from);
+    let request = ExecRequest::new("curl")
+        .args(args)
+        .inherit_env(true)
+        .timeout(Duration::from_secs(3))
+        .capture_output(true);
+    match REGISTRY_EXEC.run(request) {
+        Ok(output) => Some(output.status.success()),
+        Err(_) => None,
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum RegistryProbeTestMode {
@@ -138,49 +159,24 @@ pub fn preferred_mirror_registry_prefix_quiet() -> String {
         return s;
     }
 
-    let _started = std::time::Instant::now();
-    if which("curl").is_ok() {
-        let status = Command::new("curl")
-            .args([
-                "--connect-timeout",
-                "1",
-                "--max-time",
-                "2",
-                "-sSI",
-                "https://repository.migros.net/v2/",
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if let Ok(st) = status {
-            if st.success() {
-                let v = "repository.migros.net/".to_string();
-                let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
+    let _started = Instant::now();
+    if let Some(success) = curl_head("https://repository.migros.net/v2/") {
+        let value = if success {
+            "repository.migros.net/".to_string()
+        } else {
+            String::new()
+        };
+        let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(value.clone());
+        let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
+        write_registry_cache_disk(&value);
 
-                #[cfg(feature = "otel")]
-                {
-                    let secs = _started.elapsed().as_secs_f64();
-                    crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
-                }
-
-                return v;
-            } else {
-                let v = String::new();
-                let _ = MIRROR_REGISTRY_PREFIX_CACHE.set(v.clone());
-                let _ = MIRROR_REGISTRY_SOURCE.set("curl".to_string());
-                write_registry_cache_disk(&v);
-
-                #[cfg(feature = "otel")]
-                {
-                    let secs = _started.elapsed().as_secs_f64();
-                    crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
-                }
-
-                return v;
-            }
+        #[cfg(feature = "otel")]
+        {
+            let secs = _started.elapsed().as_secs_f64();
+            crate::telemetry::metrics::record_registry_probe_duration("curl", secs);
         }
+
+        return value;
     }
 
     let v = if is_host_port_reachable("repository.migros.net", 443, 300) {
@@ -306,23 +302,9 @@ fn is_our_image(image: &str) -> bool {
 
 /// Probe default internal registry reachability (curl HEAD, else TCP).
 fn internal_registry_reachable() -> bool {
-    if which("curl").is_ok() {
-        let status = Command::new("curl")
-            .args([
-                "--connect-timeout",
-                "1",
-                "--max-time",
-                "2",
-                "-sSI",
-                &format!("https://{}/v2/", DEFAULT_INTERNAL_HOST),
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if let Ok(st) = status {
-            if st.success() {
-                return true;
-            }
+    if let Some(success) = curl_head(&format!("https://{}/v2/", DEFAULT_INTERNAL_HOST)) {
+        if success {
+            return true;
         }
     }
     is_host_port_reachable(DEFAULT_INTERNAL_HOST, 443, 300)

@@ -2,12 +2,36 @@
 //! Image selection helpers and staging cleanup for agent runs.
 
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use once_cell::sync::Lazy;
 
 use crate::docker_mod::docker::images::image_exists;
 use crate::docker_mod::docker::runtime::container_runtime_path;
+use crate::util::{ExecOutput, ExecRequest, ExecService};
+
+static DOCKER_EXEC: Lazy<ExecService> = Lazy::new(|| ExecService::new(Duration::from_secs(300)));
+
+fn run_runtime_command<I>(
+    runtime: &Path,
+    args: I,
+    capture: bool,
+    timeout: Duration,
+) -> io::Result<ExecOutput>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let request = ExecRequest::new(runtime.as_os_str().to_os_string())
+        .args(args)
+        .inherit_env(true)
+        .timeout(timeout)
+        .capture_output(capture);
+    DOCKER_EXEC.run(request).map_err(io::Error::other)
+}
 
 /// Derive registry host from an image reference (first component if qualified).
 fn parse_registry_host(image: &str) -> Option<String> {
@@ -27,37 +51,32 @@ pub fn pull_image_with_autologin(
     verbose: bool,
     agent_label: Option<&str>,
 ) -> io::Result<()> {
-    use std::process::Stdio;
-
     // Effective verbosity: honor explicit flag or env set by CLI --verbose.
     let eff_verbose = verbose || env::var("AIFO_CODER_VERBOSE").ok().as_deref() == Some("1");
     let use_err = crate::color_enabled_stderr();
 
     // Helper to do a pull with inherited stdio so progress is visible.
     let pull_inherit = |rt: &Path, img: &str| -> io::Result<bool> {
-        let st = std::process::Command::new(rt)
-            .arg("pull")
-            .arg(img)
-            .status()?;
-        Ok(st.success())
+        let out = run_runtime_command(
+            rt,
+            ["pull", img].into_iter().map(OsString::from),
+            false,
+            Duration::from_secs(300),
+        )?;
+
+        Ok(out.status.success())
     };
 
     // Helper to do a pull with captured output so we can parse error text.
     let pull_captured = |rt: &Path, img: &str| -> io::Result<(bool, String)> {
-        let out = std::process::Command::new(rt)
-            .arg("pull")
-            .arg(img)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
-        let ok = out.status.success();
-        let combined = format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&out.stdout),
-            String::from_utf8_lossy(&out.stderr)
-        )
-        .to_ascii_lowercase();
-        Ok((ok, combined))
+        let out = run_runtime_command(
+            rt,
+            ["pull", img].into_iter().map(OsString::from),
+            true,
+            Duration::from_secs(300),
+        )?;
+        let combined = format!("{}\n{}", out.stdout, out.stderr).to_ascii_lowercase();
+        Ok((out.status.success(), combined))
     };
 
     let auth_patterns = [
@@ -85,18 +104,20 @@ pub fn pull_image_with_autologin(
 
         if auto_enabled && interactive && looks_auth_error {
             let host = parse_registry_host(image);
-            let mut login_cmd = std::process::Command::new(runtime);
-            login_cmd.arg("login");
+            let mut login_args = vec![OsString::from("login")];
             if let Some(h) = host.as_deref() {
                 crate::log_info_stderr(use_err, &format!("aifo-coder: docker: docker login {}", h));
-                login_cmd.arg(h);
+                login_args.push(OsString::from(h));
             } else {
                 crate::log_info_stderr(use_err, "aifo-coder: docker: docker login");
             }
-            let st = login_cmd.status().map_err(|e| {
-                io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
-            })?;
-            if !st.success() {
+            let login_out = run_runtime_command(
+                runtime,
+                login_args.into_iter(),
+                false,
+                Duration::from_secs(120),
+            )?;
+            if !login_out.status.success() {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "docker login failed",
@@ -152,24 +173,19 @@ pub fn pull_image_with_autologin(
         };
         crate::log_info_stderr(use_err, &msg);
 
-        let out = std::process::Command::new(runtime)
-            .arg("pull")
-            .arg(image)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
+        let out = run_runtime_command(
+            runtime,
+            ["pull", image].into_iter().map(OsString::from),
+            true,
+            Duration::from_secs(300),
+        )?;
         if out.status.success() {
             return Ok(());
         }
 
         let auto_enabled = env::var("AIFO_CODER_AUTO_LOGIN").ok().as_deref() != Some("0");
         let interactive = atty::is(atty::Stream::Stdin);
-        let combined = format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&out.stdout),
-            String::from_utf8_lossy(&out.stderr)
-        )
-        .to_ascii_lowercase();
+        let combined = format!("{}\n{}", out.stdout, out.stderr).to_ascii_lowercase();
         let looks_auth_error = auth_patterns.iter().any(|p| combined.contains(p));
 
         if auto_enabled && interactive && looks_auth_error {
@@ -179,15 +195,17 @@ pub fn pull_image_with_autologin(
             } else {
                 crate::log_info_stderr(use_err, "aifo-coder: docker login");
             }
-            let mut login = std::process::Command::new(runtime);
-            login.arg("login");
+            let mut login_args = vec![OsString::from("login")];
             if let Some(h) = host.as_deref() {
-                login.arg(h);
+                login_args.push(OsString::from(h));
             }
-            let st = login.status().map_err(|e| {
-                io::Error::new(e.kind(), format!("docker login failed to start: {}", e))
-            })?;
-            if !st.success() {
+            let st = run_runtime_command(
+                runtime,
+                login_args.into_iter(),
+                false,
+                Duration::from_secs(120),
+            )?;
+            if !st.status.success() {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "docker login failed",
@@ -195,12 +213,12 @@ pub fn pull_image_with_autologin(
             }
 
             crate::log_info_stderr(use_err, "aifo-coder: retrying pull after login");
-            let out2 = std::process::Command::new(runtime)
-                .arg("pull")
-                .arg(image)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()?;
+            let out2 = run_runtime_command(
+                runtime,
+                ["pull", image].into_iter().map(OsString::from),
+                true,
+                Duration::from_secs(300),
+            )?;
             if out2.status.success() {
                 return Ok(());
             }
@@ -225,12 +243,12 @@ pub fn pull_image_with_autologin(
                 tail.split_once(':').map(|(n, _)| n).unwrap_or(tail),
                 tag
             );
-            let out_hub = std::process::Command::new(runtime)
-                .arg("pull")
-                .arg(&unqual)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()?;
+            let out_hub = run_runtime_command(
+                runtime,
+                ["pull", unqual.as_str()].into_iter().map(OsString::from),
+                true,
+                Duration::from_secs(300),
+            )?;
             if out_hub.status.success() {
                 Ok(())
             } else {

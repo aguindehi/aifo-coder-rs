@@ -942,7 +942,7 @@ fn ensure_rust_toolchain_warm(
     verbose: bool,
 ) {
     {
-        let warmed = RUST_WARMED.lock().unwrap();
+        let warmed = RUST_WARMED.lock().unwrap_or_else(|e| e.into_inner());
         if warmed.contains(container) {
             return;
         }
@@ -973,7 +973,7 @@ fn ensure_rust_toolchain_warm(
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
     let _ = cmd.status();
 
-    let mut warmed = RUST_WARMED.lock().unwrap();
+    let mut warmed = RUST_WARMED.lock().unwrap_or_else(|e| e.into_inner());
     warmed.insert(container.to_string());
 }
 
@@ -1298,14 +1298,18 @@ fn handle_connection<S: Read + Write>(
                     let _ = stream.flush();
                     return;
                 }
-                let container =
-                    if let Some(name) = exec_registry.lock().unwrap().get(&exec_id).cloned() {
-                        name
-                    } else {
-                        respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
-                        let _ = stream.flush();
-                        return;
-                    };
+                let container = if let Some(name) = exec_registry
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .get(&exec_id)
+                    .cloned()
+                {
+                    name
+                } else {
+                    respond_plain(stream, "404 Not Found", 86, ERR_NOT_FOUND);
+                    let _ = stream.flush();
+                    return;
+                };
                 // Allow only a safe subset of signals
                 let sig = signal.to_ascii_uppercase();
                 let allowed = ["INT", "TERM", "HUP", "KILL"];
@@ -1322,7 +1326,7 @@ fn handle_connection<S: Read + Write>(
                 }
                 // Record recent /signal for this exec immediately to suppress duplicate disconnect escalation
                 {
-                    let mut rs = recent_signals.lock().unwrap();
+                    let mut rs = recent_signals.lock().unwrap_or_else(|e| e.into_inner());
                     rs.insert(exec_id.clone(), std::time::Instant::now());
                 }
                 kill_in_container(&ctx.runtime, &container, &exec_id, &sig, verbose);
@@ -1402,7 +1406,7 @@ fn handle_connection<S: Read + Write>(
 
     // Route to sidecar kind and enforce allowlist
     let selected_kind = {
-        let mut cache = tool_cache.lock().unwrap();
+        let mut cache = tool_cache.lock().unwrap_or_else(|e| e.into_inner());
         select_kind_for_tool(session, &tool, timeout_secs, &mut cache)
     };
     let kind = selected_kind.as_str();
@@ -1487,7 +1491,7 @@ fn handle_connection<S: Read + Write>(
     // ExecId already determined above; reuse
     // Register exec_id -> container
     {
-        let mut er = exec_registry.lock().unwrap();
+        let mut er = exec_registry.lock().unwrap_or_else(|e| e.into_inner());
         er.insert(exec_id.clone(), name.clone());
     }
 
@@ -1918,7 +1922,7 @@ fn handle_connection<S: Read + Write>(
                 let deadline = std::time::Instant::now() + Duration::from_millis(grace_ms);
                 loop {
                     let seen = {
-                        let rs = recent_signals.lock().unwrap();
+                        let rs = recent_signals.lock().unwrap_or_else(|e| e.into_inner());
                         rs.get(&exec_id)
                             .map(|ts| ts.elapsed() < Duration::from_millis(2300))
                             .unwrap_or(false)
@@ -1948,11 +1952,11 @@ fn handle_connection<S: Read + Write>(
             // Mark watcher done and remove from registry
             done.store(true, std::sync::atomic::Ordering::SeqCst);
             {
-                let mut er = exec_registry.lock().unwrap();
+                let mut er = exec_registry.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = er.remove(&exec_id);
             }
             {
-                let mut rs = recent_signals.lock().unwrap();
+                let mut rs = recent_signals.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = rs.remove(&exec_id);
             }
             return;
@@ -1970,11 +1974,11 @@ fn handle_connection<S: Read + Write>(
         // Mark watcher done and remove from registry
         done.store(true, std::sync::atomic::Ordering::SeqCst);
         {
-            let mut er = exec_registry.lock().unwrap();
+            let mut er = exec_registry.lock().unwrap_or_else(|e| e.into_inner());
             let _ = er.remove(&exec_id);
         }
         {
-            let mut rs = recent_signals.lock().unwrap();
+            let mut rs = recent_signals.lock().unwrap_or_else(|e| e.into_inner());
             let _ = rs.remove(&exec_id);
         }
         log_request_result(verbose, &tool, kind, code, &started);
@@ -2197,11 +2201,11 @@ fn handle_connection<S: Read + Write>(
     }
 
     {
-        let mut er = exec_registry.lock().unwrap();
+        let mut er = exec_registry.lock().unwrap_or_else(|e| e.into_inner());
         let _ = er.remove(&exec_id);
     }
     {
-        let mut rs = recent_signals.lock().unwrap();
+        let mut rs = recent_signals.lock().unwrap_or_else(|e| e.into_inner());
         let _ = rs.remove(&exec_id);
     }
     let code = final_code;
