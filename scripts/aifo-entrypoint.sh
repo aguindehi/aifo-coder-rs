@@ -14,9 +14,13 @@ resolve_home() {
 }
 runtime_home="$(resolve_home "$runtime_user")"
 [ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
+IS_ROOT=0
+if [ "$(id -u)" = "0" ]; then
+    IS_ROOT=1
+fi
 
-if [ "$(id -u)" = "0" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
-    install -d -m 0750 "$runtime_home" 2>/dev/null || true
+if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
+    safe_install_dir "$runtime_home" 0750
     chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
     export HOME="$runtime_home"
     if command -v gosu >/dev/null 2>&1; then
@@ -31,16 +35,39 @@ log_debug() {
     fi
 }
 
+safe_install_dir() {
+    dir="$1"
+    mode="${2:-0700}"
+    if [ "$IS_ROOT" = "1" ]; then
+        install -d -m "$mode" "$dir" 2>/dev/null || true
+    else
+        mkdir -p "$dir" 2>/dev/null || true
+    fi
+}
+
+maybe_chmod() {
+    if [ "$IS_ROOT" = "1" ]; then
+        chmod "$@" 2>/dev/null || true
+    fi
+}
+
+copy_with_mode() {
+    mode="$1"
+    src="$2"
+    dest="$3"
+    if [ "$IS_ROOT" = "1" ]; then
+        install -m "$mode" "$src" "$dest" 2>/dev/null || cp "$src" "$dest" 2>/dev/null || true
+    else
+        cp "$src" "$dest" 2>/dev/null || true
+    fi
+}
+
 # Ensure HOME is sane and writable
 if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
     export HOME="$runtime_home"
 fi
-if [ ! -d "$HOME" ] && [ "$(id -u)" = "0" ]; then
-    mkdir -p "$HOME" 2>/dev/null || true
-fi
-if [ "$(id -u)" = "0" ]; then
-    chmod 1777 "$HOME" 2>/dev/null || true
-fi
+safe_install_dir "$HOME" 0750
+maybe_chmod 1777 "$HOME"
 
 if [ -z "${GNUPGHOME:-}" ]; then
     export GNUPGHOME="$HOME/.gnupg"
@@ -70,8 +97,7 @@ chmod 0700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true
 ensure_local_tree() {
     for d in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
              "$HOME/.local/share/uv" "$HOME/.local/share/pnpm" "$HOME/.cache"; do
-        mkdir -p "$d"
-        chmod 0755 "$d" 2>/dev/null || true
+        safe_install_dir "$d" 0755
     done
 }
 
@@ -181,9 +207,9 @@ copy_safe_file() {
     if is_secret_name "$base"; then
         mode=0600
     fi
-    install -d -m 0700 "$dest_dir"
-    install -m "$mode" "$src" "$dest_dir/$base" 2>/dev/null || cp "$src" "$dest_dir/$base"
-    chmod "$mode" "$dest_dir/$base" 2>/dev/null || true
+    safe_install_dir "$dest_dir" 0700
+    copy_with_mode "$mode" "$src" "$dest_dir/$base"
+    maybe_chmod "$mode" "$dest_dir/$base"
 }
 
 copy_tree_contents() {
@@ -197,7 +223,7 @@ copy_tree_contents() {
         fi
         if [ -d "$item" ] && [ ! -h "$item" ]; then
             sub="$dst_dir/$base"
-            install -d -m 0700 "$sub"
+            safe_install_dir "$sub" 0700
             copy_tree_contents "$item" "$sub"
             continue
         fi
@@ -209,24 +235,24 @@ copy_agent_configs() {
     if [ -d "$CFG_DST/aider" ]; then
         for f in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do
             [ -f "$CFG_DST/aider/$f" ] || continue
-            install -m 0644 "$CFG_DST/aider/$f" "$HOME/$f" 2>/dev/null || cp "$CFG_DST/aider/$f" "$HOME/$f"
+            copy_with_mode 0644 "$CFG_DST/aider/$f" "$HOME/$f"
         done
     fi
     if [ -d "$CFG_DST/crush" ]; then
-        install -d -m 0700 "$HOME/.crush"
+        safe_install_dir "$HOME/.crush" 0700
         copy_tree_contents "$CFG_DST/crush" "$HOME/.crush"
     fi
     if [ -d "$CFG_DST/openhands" ]; then
-        install -d -m 0700 "$HOME/.openhands"
+        safe_install_dir "$HOME/.openhands" 0700
         copy_tree_contents "$CFG_DST/openhands" "$HOME/.openhands"
     fi
     if [ -d "$CFG_DST/opencode" ]; then
-        install -d -m 0700 "$HOME/.config"
-        install -d -m 0700 "$HOME/.config/opencode"
+        safe_install_dir "$HOME/.config" 0700
+        safe_install_dir "$HOME/.config/opencode" 0700
         copy_tree_contents "$CFG_DST/opencode" "$HOME/.config/opencode"
     fi
     if [ -d "$CFG_DST/plandex" ]; then
-        install -d -m 0700 "$HOME/.plandex-home"
+        safe_install_dir "$HOME/.plandex-home" 0700
         copy_tree_contents "$CFG_DST/plandex" "$HOME/.plandex-home"
     fi
 }
@@ -245,7 +271,7 @@ maybe_copy_configs() {
     [ "$CFG_ENABLE" = "1" ] || return
     [ -d "$CFG_HOST" ] || return
 
-    install -d -m 0700 "$CFG_DST"
+    safe_install_dir "$CFG_DST" 0700
 
     stamp="$CFG_DST/.copied"
     should_copy=1
@@ -273,7 +299,11 @@ maybe_copy_configs() {
             copy_tree_contents "$d" "$dest"
         done
         copy_agent_configs
-        install -m 0600 /dev/null "$stamp" 2>/dev/null || :
+        if [ "$IS_ROOT" = "1" ]; then
+            install -m 0600 /dev/null "$stamp" 2>/dev/null || :
+        else
+            :
+        fi
         touch "$stamp"
     else
         log_debug "config: skip copy (up-to-date)"
@@ -305,7 +335,7 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     link_path="$link_dir/claude_desktop_config.json"
     if [ -f "$real_conf" ] || [ -L "$real_conf" ]; then
         if [ ! -e "$link_path" ]; then
-            install -d -m 0700 "$link_dir"
+            safe_install_dir "$link_dir" 0700
             ln -s "$real_conf" "$link_path" 2>/dev/null || true
         fi
     fi
