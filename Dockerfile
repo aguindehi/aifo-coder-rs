@@ -336,8 +336,9 @@ if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; the
   HOST_STORE="${AIFO_OPENCODE_HOST_STORAGE:-}"
   LOCAL_STORE="${AIFO_OPENCODE_STORAGE:-$HOME/.local/share/opencode}"
   if [ -n "$HOST_STORE" ] && [ -d "$HOST_STORE" ]; then
-    # Ensure local storage dir exists
+    # Ensure local storage dir and log dir exist
     install -d -m 0700 "$LOCAL_STORE" >/dev/null 2>&1 || true
+    install -d -m 0700 "$HOME/.aifo-logs" >/dev/null 2>&1 || true
     # Initial sync: prefer host contents into container-local storage (host -> container)
     # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
     # -silent/-terse: avoid noisy logs on the TTY; log to a file instead.
