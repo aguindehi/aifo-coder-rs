@@ -1258,6 +1258,24 @@ fn main() {
         .map(|v| v.trim().to_string())
         .filter(|s| !s.is_empty());
 
+    // Special-case: for OpenCode agent, always use local python inside the agent container,
+    // even when a proxy is configured. This ensures python3 runs from the opencode image.
+    let agent_name = env::var("AIFO_AGENT_NAME").ok().unwrap_or_default();
+    if agent_name == "opencode" && (effective_tool == "python" || effective_tool == "python3") {
+        if let Some(local) = pick_local_python_path() {
+            let mut cmd = Command::new(local);
+            cmd.env("PATH", base_sanitized_path());
+            if effective_argv_os.len() > 1 {
+                cmd.args(&effective_argv_os[1..]);
+            }
+            let st = cmd.status().unwrap_or_else(|e| {
+                eprintln!("aifo-shim: failed to exec local python: {e}");
+                process::exit(1);
+            });
+            process::exit(st.code().unwrap_or(1));
+        }
+    }
+
     // Smart shims / no-toolchain mode: allow local execution without proxy config.
     //
     // Policy:
