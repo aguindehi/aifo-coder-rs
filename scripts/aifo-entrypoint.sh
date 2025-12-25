@@ -4,7 +4,33 @@ umask 077
 
 log_prefix="aifo-entrypoint"
 log_verbose="${AIFO_TOOLCHAIN_VERBOSE:-0}"
+resolve_home() {
+    home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
+    if [ -z "$home_path" ]; then
+        home_path="/home/$1"
+    fi
+    printf '%s' "$home_path"
+}
+
 runtime_user="${AIFO_RUNTIME_USER:-coder}"
+
+
+maybe_chmod() {
+    if [ "$IS_ROOT" = "1" ]; then
+        chmod "$@" 2>/dev/null || true
+    fi
+}
+
+copy_with_mode() {
+    mode="$1"
+    src="$2"
+    dest="$3"
+    if [ "$IS_ROOT" = "1" ]; then
+        install -m "$mode" "$src" "$dest" 2>/dev/null || cp "$src" "$dest" 2>/dev/null || true
+    else
+        cp "$src" "$dest" 2>/dev/null || true
+    fi
+}
 resolve_home() {
     home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
     if [ -z "$home_path" ]; then
