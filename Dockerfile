@@ -340,24 +340,16 @@ if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; the
     install -d -m 0700 "$LOCAL_STORE" >/dev/null 2>&1 || true
     # Initial sync: prefer host contents into container-local storage (host -> container)
     # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
-    # -silent/-terse: avoid noisy logs when there is nothing to sync
-    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -prefer "$HOST_STORE" -silent -terse || true
-    # Wrap exec to perform a final two-way sync on exit. Ignore INT/TERM in the wrapper so that
-    # Ctrl-C only terminates the OpenCode process, not this wrapper shell.
-    AIFO_OPENCODE_WRAPPED=1 sh -c '
-      set -e
-      trap "" INT TERM
-      if [ "$#" -eq 0 ]; then
-        exit 0
-      fi
-      "$@" &
-      child_pid=$!
-      wait "$child_pid"
-      exit "$?"
-    ' opencode "$@"
+    # -silent/-terse: avoid noisy logs on the TTY; log to a file instead.
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -prefer "$HOST_STORE" -silent -terse \
+      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
+    # Run the original command (typically opencode) in the foreground so it owns the TTY.
+    "$@"
+    code=$?
     # After opencode exits, perform bi-directional sync (container <-> host)
-    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -auto -silent -terse || true
-    exit 0
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -auto -silent -terse \
+      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
+    exit "$code"
   fi
 fi
 exec "$@"
