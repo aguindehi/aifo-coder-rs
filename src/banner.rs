@@ -3,11 +3,11 @@ pub(crate) fn print_startup_banner() {
     eprintln!();
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!(
-        "      🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder v{}   🚀 ",
+        "    🚀  Welcome to the AI Foundation Coding Agent Wrapper  -  The AIFO Coder v{}   🚀 ",
         version
     );
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!(" 🔒  Security by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed for you");
+    eprintln!(" 🔒  Security by Design  |  🌍 Cross-Platform  |  🦀 Powered by Rust  |  🧠 Developed for You");
     eprintln!();
 
     // Host/platform info
@@ -99,7 +99,6 @@ pub(crate) fn print_startup_banner() {
         cgroupns,
         if rootless { "yes" } else { "no" }
     );
-    eprintln!("    - Version: {}", version);
     eprintln!();
 
     // Safety highlights (concise, current capabilities)
@@ -117,7 +116,7 @@ pub(crate) fn print_startup_banner() {
     eprintln!("    - Optional unix:// proxy on Linux; host-gateway bridging when needed.");
     eprintln!("    - Minimal mounts: project workspace, config files, optional GnuPG keyrings.");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
-    eprintln!("                 📜 Written 2025 by Amir Guindehi <amir@guindehi.ch>");
+    eprintln!("                    📜 Copyrght (C) 2025 by Amir Guindehi <amir@guindehi.ch>");
     eprintln!("──────────────────────────────────────────────────────────────────────────────────────────────");
     eprintln!();
 }
