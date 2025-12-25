@@ -38,7 +38,9 @@ fi
 if [ ! -d "$HOME" ] && [ "$(id -u)" = "0" ]; then
     mkdir -p "$HOME" 2>/dev/null || true
 fi
-chmod 0750 "$HOME" 2>/dev/null || true
+if [ "$(id -u)" = "0" ]; then
+    chmod 1777 "$HOME" 2>/dev/null || true
+fi
 
 if [ -z "${GNUPGHOME:-}" ]; then
     export GNUPGHOME="$HOME/.gnupg"

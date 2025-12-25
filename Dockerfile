@@ -189,7 +189,7 @@ RUN set -eux; \
         useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
         useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
     fi; \
-    chmod 0750 "/home/${RUNTIME_USER}" || true
+    chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN set -eux; \
     for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
@@ -206,7 +206,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
 COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
-RUN set -eux; install -d -m 0750 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
+RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
@@ -631,7 +631,7 @@ RUN set -eux; \
         useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
         useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
     fi; \
-    chmod 0750 "/home/${RUNTIME_USER}" || true
+    chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN set -eux; \
     for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
@@ -648,7 +648,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
 COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
-RUN set -eux; install -d -m 0750 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
+RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]

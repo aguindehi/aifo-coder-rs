@@ -395,9 +395,7 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         format!(r#"export PATH="{path_value}""#),
         r#"sed_port(){ if [ "${AIFO_SED_PORTABLE:-1}" = "1" ]; then sed -i'' "$@"; else sed -i "$@"; fi; }"#.to_string(),
         r#"uid="$(id -u)"; gid="$(id -g)""#.to_string(),
-        r#"mkdir -p "$HOME" "$GNUPGHOME""#.to_string(),
-        r#"chmod 700 "$HOME" "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
-        r#"chown "$uid:$gid" "$HOME" 2>/dev/null || true"#.to_string(),
+        r#"if [ "$(id -u)" = "0" ]; then mkdir -p "$HOME" "$GNUPGHOME" && chmod 700 "$HOME" "$GNUPGHOME" && chown "$uid:$gid" "$HOME"; else mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME" 2>/dev/null || true; fi"#.to_string(),
         // nss_wrapper: create a passwd/group entry for arbitrary uid to avoid surprises in tools.
         //
         // NOTE: ShellScript joins fragments with `; `. Avoid splitting compound shell constructs
