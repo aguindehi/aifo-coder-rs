@@ -193,7 +193,7 @@ RUN set -eux; \
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN set -eux; \
     for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
-        install -d -m 0755 "/home/${RUNTIME_USER}/${d}"; \
+        install -d -m 1777 "/home/${RUNTIME_USER}/${d}"; \
     done; \
     chown -R "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 WORKDIR /workspace
@@ -635,7 +635,7 @@ RUN set -eux; \
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN set -eux; \
     for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
-        install -d -m 0755 "/home/${RUNTIME_USER}/${d}"; \
+        install -d -m 1777 "/home/${RUNTIME_USER}/${d}"; \
     done; \
     chown -R "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 WORKDIR /workspace
