@@ -29,6 +29,87 @@ use crate::ShellScript;
 const SHIM_FIRST_PATH: &str =
     "/opt/aifo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH";
 
+#[derive(Debug, Clone)]
+struct OpencodeDirs {
+    share: PathBuf,
+    config: PathBuf,
+    cache: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct HostXdgDirs {
+    data: PathBuf,
+    config: PathBuf,
+    cache: PathBuf,
+}
+
+fn host_xdg_dirs(host_home: &Path) -> HostXdgDirs {
+    fn env_path(var: &str) -> Option<PathBuf> {
+        env::var(var).ok().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(trimmed))
+            }
+        })
+    }
+
+    fn fallback_local(host_home: &Path, subdirs: &[&str]) -> PathBuf {
+        let mut path = host_home.to_path_buf();
+        for part in subdirs {
+            path = path.join(part);
+        }
+        path
+    }
+
+    let data = env_path("XDG_DATA_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("LOCALAPPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
+        } else {
+            // On non-Windows (including macOS), align with opencode's observed behavior:
+            // default to ~/.local/share when XDG_DATA_HOME is unset.
+            fallback_local(host_home, &[".local", "share"])
+        }
+    });
+
+    let config = env_path("XDG_CONFIG_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("APPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Roaming"]))
+        } else {
+            // For HOME-based mounts (including tests), use ~/.config when XDG_CONFIG_HOME is unset.
+            fallback_local(host_home, &[".config"])
+        }
+    });
+
+    let cache = env_path("XDG_CACHE_HOME").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            env_path("LOCALAPPDATA")
+                .unwrap_or_else(|| fallback_local(host_home, &["AppData", "Local"]))
+        } else {
+            // For HOME-based mounts (including tests), use ~/.cache when XDG_CACHE_HOME is unset.
+            fallback_local(host_home, &[".cache"])
+        }
+    });
+
+    HostXdgDirs {
+        data,
+        config,
+        cache,
+    }
+}
+
+fn host_opencode_dirs(host_home: &Path) -> OpencodeDirs {
+    let xdg = host_xdg_dirs(host_home);
+    OpencodeDirs {
+        share: xdg.data.join("opencode"),
+        config: xdg.config.join("opencode"),
+        cache: xdg.cache.join("opencode"),
+    }
+}
+
 fn agent_bin_and_path(agent: &str) -> (String, String) {
     let abs = match agent {
         "aider" => "/opt/venv/bin/aider",
@@ -179,20 +260,33 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
     }
 
     // Unified AIFO_* → OpenAI/Azure mappings
+    //
+    // OpenCode policy: NEVER pass OpenAI/Azure OpenAI envs (OPENAI_*/AZURE_OPENAI_*) or base/version.
+    // Only allow:
+    // - AZURE_API_KEY (from AIFO_API_KEY)
+    // - AZURE_RESOURCE_NAME (derived from AIFO_API_BASE unless explicitly set)
+    let is_opencode = agent == "opencode";
+
     if let Ok(v) = env::var("AIFO_API_KEY") {
         if !v.is_empty() {
-            push_env_kv(&mut env_flags, "OPENAI_API_KEY", &v);
-            push_env_kv(&mut env_flags, "AZURE_OPENAI_API_KEY", &v);
-            push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            if is_opencode {
+                push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            } else {
+                push_env_kv(&mut env_flags, "OPENAI_API_KEY", &v);
+                push_env_kv(&mut env_flags, "AZURE_OPENAI_API_KEY", &v);
+                push_env_kv(&mut env_flags, "AZURE_API_KEY", &v);
+            }
         }
     }
     if let Ok(v) = env::var("AIFO_API_BASE") {
         if !v.is_empty() {
-            push_env_kv(&mut env_flags, "OPENAI_BASE_URL", &v);
-            push_env_kv(&mut env_flags, "OPENAI_API_BASE", &v);
-            push_env_kv(&mut env_flags, "AZURE_OPENAI_ENDPOINT", &v);
-            push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
-            push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
+            if !is_opencode {
+                push_env_kv(&mut env_flags, "OPENAI_BASE_URL", &v);
+                push_env_kv(&mut env_flags, "OPENAI_API_BASE", &v);
+                push_env_kv(&mut env_flags, "AZURE_OPENAI_ENDPOINT", &v);
+                push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
+                push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
+            }
 
             // Derive AZURE_RESOURCE_NAME from AIFO_API_BASE when it looks like an Azure OpenAI endpoint,
             // e.g. https://<resource>.openai.azure.com/.
@@ -218,7 +312,7 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
         }
     }
     if let Ok(v) = env::var("AIFO_API_VERSION") {
-        if !v.is_empty() {
+        if !v.is_empty() && !is_opencode {
             push_env_kv(&mut env_flags, "OPENAI_API_VERSION", &v);
             push_env_kv(&mut env_flags, "AZURE_OPENAI_API_VERSION", &v);
             push_env_kv(&mut env_flags, "AZURE_API_VERSION", &v);
@@ -613,7 +707,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 (base.join(".crush"), "/home/coder/.crush"),
                 (base.join(".local_state"), "/home/coder/.local/state"),
             ];
-            if agent == "opencode" {
+            if agent != "opencode" {
                 pairs.push((base.join(".opencode"), "/home/coder/.local/share/opencode"));
                 pairs.push((
                     base.join(".opencode_config"),
@@ -632,6 +726,24 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(crate::path_pair(&src, dst));
             }
+            if agent == "opencode" {
+                let opencode_dirs = host_opencode_dirs(host_home);
+                for dir in [
+                    &opencode_dirs.share,
+                    &opencode_dirs.config,
+                    &opencode_dirs.cache,
+                ] {
+                    fs::create_dir_all(dir).ok();
+                }
+                for (src, dst) in [
+                    (&opencode_dirs.share, "/home/coder/.local/share/opencode"),
+                    (&opencode_dirs.config, "/home/coder/.config/opencode"),
+                    (&opencode_dirs.cache, "/home/coder/.cache/opencode"),
+                ] {
+                    volume_flags.push(OsString::from("-v"));
+                    volume_flags.push(crate::path_pair(src, dst));
+                }
+            }
             // When using fork state, skip HOME-based mounts entirely.
             return volume_flags;
         }
@@ -640,84 +752,82 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
-        #[cfg(windows)]
-        let opencode_share = env::var("LOCALAPPDATA")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| host_home.join(".local").join("share"))
-            .join("opencode");
-        #[cfg(not(windows))]
-        let opencode_share = host_home.join(".local").join("share").join("opencode");
+        let opencode_dirs = if agent == "opencode" {
+            Some(host_opencode_dirs(host_home))
+        } else {
+            None
+        };
         let local_state_dir = host_home.join(".local").join("state");
+        // Host view of OpenCode storage for unison sync (read-only in container)
+        let opencode_host_view = host_home.join(".local").join("share").join("opencode");
         let crush_state_dir = host_home.join(".crush");
         let codex_dir = host_home.join(".codex");
         let aider_dir = host_home.join(".aider");
 
         {
-            let mut base_dirs: Vec<&Path> = vec![
+            let base_dirs: Vec<&Path> = vec![
                 &crush_dir,
                 &local_state_dir,
                 &crush_state_dir,
                 &codex_dir,
                 &aider_dir,
             ];
-            if agent == "opencode" {
-                base_dirs.push(&opencode_share);
-            }
+            // For opencode, do not create a host-backed share dir here; storage will be container-local.
             for d in base_dirs {
                 fs::create_dir_all(d).ok();
             }
         }
 
         {
-            let mut pairs: Vec<(PathBuf, &str)> = vec![
+            let pairs: Vec<(PathBuf, &str)> = vec![
                 (crush_dir, "/home/coder/.local/share/crush"),
                 (local_state_dir, "/home/coder/.local/state"),
                 (crush_state_dir, "/home/coder/.crush"),
                 (codex_dir, "/home/coder/.codex"),
                 (aider_dir, "/home/coder/.aider"),
             ];
-            if agent == "opencode" {
-                pairs.push((opencode_share, "/home/coder/.local/share/opencode"));
-            }
+            // Intentionally do not bind-mount host opencode share for active storage;
+            // let /home/coder/.local/share/opencode be container-local.
             for (src, dst) in pairs {
                 volume_flags.push(OsString::from("-v"));
                 volume_flags.push(crate::path_pair(&src, dst));
             }
+
+            // For opencode, expose host storage at a separate path for unison sync.
+            // This mount must be writable so unison can propagate container-side changes back.
+            if agent == "opencode" {
+                fs::create_dir_all(&opencode_host_view).ok();
+                volume_flags.push(OsString::from("-v"));
+                volume_flags.push(OsString::from(format!(
+                    "{}:/home/coder/.local/share/opencode-host",
+                    opencode_host_view.display()
+                )));
+                // Pass the host storage path into the container so aifo-entrypoint can run unison.
+                push_env_kv(
+                    &mut volume_flags,
+                    "AIFO_OPENCODE_HOST_STORAGE",
+                    "/home/coder/.local/share/opencode-host",
+                );
+                // Also pass container-local storage root explicitly.
+                push_env_kv(
+                    &mut volume_flags,
+                    "AIFO_OPENCODE_STORAGE",
+                    "/home/coder/.local/share/opencode",
+                );
+            }
         }
 
         // OpenCode config/cache (HOME/XDG), OpenHands, Plandex
-        #[cfg(windows)]
-        let (opencode_config, opencode_cache) = {
-            let cfg = env::var("APPDATA")
-                .ok()
-                .filter(|v| !v.trim().is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| host_home.join(".config"))
-                .join("opencode");
-            let lapp = env::var("LOCALAPPDATA")
-                .ok()
-                .filter(|v| !v.trim().is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| host_home.join(".cache"))
-                .join("opencode");
-            (cfg, lapp)
-        };
-        #[cfg(not(windows))]
-        let (opencode_config, opencode_cache) = (
-            host_home.join(".config").join("opencode"),
-            host_home.join(".cache").join("opencode"),
-        );
-
         let openhands_home = host_home.join(".openhands");
         let plandex_home = host_home.join(".plandex-home");
 
         {
             let mut extra_dirs: Vec<(PathBuf, &str)> = Vec::new();
-            if agent == "opencode" {
-                extra_dirs.push((opencode_config, "/home/coder/.config/opencode"));
-                extra_dirs.push((opencode_cache, "/home/coder/.cache/opencode"));
+            if let Some(ref dirs) = opencode_dirs {
+                extra_dirs.push((dirs.config.clone(), "/home/coder/.config/opencode"));
+                extra_dirs.push((dirs.cache.clone(), "/home/coder/.cache/opencode"));
+                // NOTE: do not mount dirs.share at /home/coder/.local/share/opencode here;
+                // that directory must remain container-local for OpenCode storage to avoid SSHFS races.
             }
             if agent == "openhands" {
                 extra_dirs.push((openhands_home, "/home/coder/.openhands"));
@@ -725,6 +835,7 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             if agent == "plandex" {
                 extra_dirs.push((plandex_home, "/home/coder/.plandex-home"));
             }
+
             for (src, dst) in extra_dirs {
                 fs::create_dir_all(&src).ok();
                 volume_flags.push(OsString::from("-v"));
@@ -936,6 +1047,12 @@ pub fn build_docker_preview_args_only(
 
     // Volume mounts
     let host_home = home::home_dir().unwrap_or_else(|| PathBuf::from(""));
+    // Important: do not export host XDG_* into the agent container. The agent must compute its
+    // own Global.Path.data based on HOME=/home/coder so that session storage is decoupled and
+    // only shared via the mounted directories (not by inheriting host XDG_*).
+    for k in ["XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"] {
+        env::remove_var(k);
+    }
     let volume_flags = collect_volume_flags(agent, &host_home, &pwd);
 
     // User and security flags

@@ -331,6 +331,28 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     fi
   fi
 fi
+# OpenCode storage sync via unison (host <-> container) when configured
+if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; then
+  HOST_STORE="${AIFO_OPENCODE_HOST_STORAGE:-}"
+  LOCAL_STORE="${AIFO_OPENCODE_STORAGE:-$HOME/.local/share/opencode}"
+  if [ -n "$HOST_STORE" ] && [ -d "$HOST_STORE" ]; then
+    # Ensure local storage dir and log dir exist
+    install -d -m 0700 "$LOCAL_STORE" >/dev/null 2>&1 || true
+    install -d -m 0700 "$HOME/.aifo-logs" >/dev/null 2>&1 || true
+    # Initial sync: prefer host contents into container-local storage (host -> container)
+    # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
+    # -silent/-terse: avoid noisy logs on the TTY; log to a file instead.
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -prefer "$HOST_STORE" -silent -terse \
+      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
+    # Run the original command (typically opencode) in the foreground so it owns the TTY.
+    "$@"
+    code=$?
+    # After opencode exits, perform bi-directional sync (container <-> host)
+    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -auto -silent -terse \
+      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
+    exit "$code"
+  fi
+fi
 exec "$@"
 SH
 
@@ -654,6 +676,18 @@ FROM base AS opencode
 ARG OPENCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# Install unison for host<->container storage sync
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  if [ -f /run/secrets/migros_root_ca ]; then \
+    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison; \
+  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
@@ -1060,6 +1094,18 @@ FROM base-slim AS opencode-slim
 ARG OPENCODE_VERSION=latest
 ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
+# Install unison for host<->container storage sync
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
+  if [ -f /run/secrets/migros_root_ca ]; then \
+    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison; \
+  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
+  if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
+    rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; \
+    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
+  fi'
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
