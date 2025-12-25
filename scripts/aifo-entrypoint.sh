@@ -82,6 +82,24 @@ else
     gpg-agent --daemon >/dev/null 2>&1 || true
 fi
 
+configure_git_gpg_wrapper() {
+    if [ "${AIFO_DISABLE_GPG_LOOPBACK:-0}" = "1" ]; then
+        return
+    fi
+    if ! command -v git >/dev/null 2>&1; then
+        return
+    fi
+    if [ ! -x /usr/local/bin/aifo-gpg-wrapper ]; then
+        return
+    fi
+    current=$(git config --global --get gpg.program 2>/dev/null || true)
+    if [ "$current" != "/usr/local/bin/aifo-gpg-wrapper" ]; then
+        git config --global gpg.program /usr/local/bin/aifo-gpg-wrapper >/dev/null 2>&1 || true
+    fi
+}
+
+configure_git_gpg_wrapper
+
 sanitize_name() {
     case "$1" in
         *[!A-Za-z0-9._-]*|"") return 1 ;;

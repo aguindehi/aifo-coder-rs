@@ -170,7 +170,8 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   install -d -m 0755 /usr/local/bin
 
 COPY scripts/aifo-entrypoint.sh /usr/local/bin/aifo-entrypoint
-RUN chmod 0755 /usr/local/bin/aifo-entrypoint
+COPY scripts/aifo-gpg-wrapper.sh /usr/local/bin/aifo-gpg-wrapper
+RUN chmod 0755 /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-gpg-wrapper
 
 
 # --- Base layer: Node image + common OS tools used by all agents ---
@@ -203,6 +204,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
+COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
 RUN set -eux; install -d -m 0750 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
@@ -644,6 +646,7 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
+COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
 RUN set -eux; install -d -m 0750 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
