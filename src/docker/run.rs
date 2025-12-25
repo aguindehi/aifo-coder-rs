@@ -393,50 +393,17 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
         "umask 077".to_string(),
         r#"if [ "${AIFO_AGENT_IGNORE_SIGINT:-0}" = "1" ]; then trap '' INT; fi"#.to_string(),
         format!(r#"export PATH="{path_value}""#),
-        r#"sed_port(){ if [ "${AIFO_SED_PORTABLE:-1}" = "1" ]; then sed -i'' "$@"; else sed -i "$@"; fi; }"#.to_string(),
         r#"uid="$(id -u)"; gid="$(id -g)""#.to_string(),
-        r#"if [ "$(id -u)" = "0" ]; then mkdir -p "$HOME" "$GNUPGHOME" && chmod 700 "$HOME" "$GNUPGHOME" && chown "$uid:$gid" "$HOME"; else mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME" 2>/dev/null || true; fi"#.to_string(),
-        // nss_wrapper: create a passwd/group entry for arbitrary uid to avoid surprises in tools.
-        //
-        // NOTE: ShellScript joins fragments with `; `. Avoid splitting compound shell constructs
-        // (if/then/fi, for/do/done, etc.) across fragments, or the inserted separators can
-        // produce invalid shell syntax (e.g. `then; ...`).
+        r#"if [ "$(id -u)" = "0" ]; then mkdir -p "$HOME" && chmod 700 "$HOME" && chown "$uid:$gid" "$HOME"; fi"#.to_string(),
         r#"have_getent=0; command -v getent >/dev/null 2>&1 && have_getent=1"#.to_string(),
         r#"need_user=0"#.to_string(),
         r#"if [ "$have_getent" = "1" ]; then getent passwd "$uid" >/dev/null 2>&1 || need_user=1; else grep -q "^[^:]*:[^:]*:$uid:" /etc/passwd || need_user=1; fi"#.to_string(),
-        // Keep this nss_wrapper block as a single fragment (compound if/then/fi).
         r#"if [ "$need_user" = "1" ]; then mkdir -p "$HOME/.nss_wrapper"; PASSWD_FILE="$HOME/.nss_wrapper/passwd"; GROUP_FILE="$HOME/.nss_wrapper/group"; echo "coder:x:${uid}:${gid}:,,,:$HOME:/bin/sh" > "$PASSWD_FILE"; echo "coder:x:${gid}:" > "$GROUP_FILE"; for so in /usr/lib/*/libnss_wrapper.so /usr/lib/*/libnss_wrapper.so.* /usr/lib/libnss_wrapper.so /lib/*/libnss_wrapper.so /lib/*/libnss_wrapper.so.*; do if [ -f "$so" ]; then export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$so"; break; fi; done; export NSS_WRAPPER_PASSWD="$PASSWD_FILE" NSS_WRAPPER_GROUP="$GROUP_FILE" USER="coder" LOGNAME="coder"; fi"#.to_string(),
-        // XDG_RUNTIME_DIR init: keep as a single fragment (compound if/then/fi).
         r#"if [ -n "${XDG_RUNTIME_DIR:-}" ]; then mkdir -p "$XDG_RUNTIME_DIR/gnupg" || true; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true; fi"#.to_string(),
         r#"mkdir -p "$HOME/.aifo-logs" || true"#.to_string(),
         r#"if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="$(tty 2>/dev/null || echo /dev/tty)"; fi"#.to_string(),
-        // gpg-agent.conf edits: keep sequential edits split into atomic pushes for maintainability
-        r#"touch "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"sed_port -e "/^pinentry-program /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"printf '%s\n' "pinentry-program /usr/bin/pinentry-curses" >> "$GNUPGHOME/gpg-agent.conf""#
-            .to_string(),
-        r#"sed_port -e "/^log-file /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"sed_port -e "/^debug-level /d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"sed_port -e "/^verbose$/d" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || true"#.to_string(),
-        r#"printf '%s\n' "log-file /home/coder/.gnupg/gpg-agent.log" >> "$GNUPGHOME/gpg-agent.conf""#
-            .to_string(),
-        r#"printf '%s\n' "debug-level basic" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"printf '%s\n' "verbose" >> "$GNUPGHOME/gpg-agent.conf""#.to_string(),
-        r#"if ! grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        r#"if ! grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null; then printf '%s\n' "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"; fi"#.to_string(),
-        // Host keyring copy loop: keep as one fragment (compound for/do/done).
-        r#"for item in private-keys-v1.d openpgp-revocs.d pubring.kbx trustdb.gpg gpg.conf; do if [ ! -e "$GNUPGHOME/$item" ] && [ -e "/home/coder/.gnupg-host/$item" ]; then cp -a "/home/coder/.gnupg-host/$item" "$GNUPGHOME/" 2>/dev/null || true; fi; done"#.to_string(),
-        // gpg.conf edits (sequential, safe to split)
-        r#"touch "$GNUPGHOME/gpg.conf""#.to_string(),
-        r#"sed_port -e "/^pinentry-mode /d" "$GNUPGHOME/gpg.conf" 2>/dev/null || true"#.to_string(),
-        r#"printf '%s\n' "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf""#.to_string(),
-        r#"chmod -R go-rwx "$GNUPGHOME" 2>/dev/null || true"#.to_string(),
-        r#"unset GPG_AGENT_INFO; gpgconf --kill gpg-agent >/dev/null 2>&1 || true"#.to_string(),
-        r#"gpgconf --launch gpg-agent >/dev/null 2>&1 || true"#.to_string(),
         r#"if [ -f "/var/log/host/apparmor.log" ]; then (nohup tail -n0 -F /var/log/host/apparmor.log >> "$HOME/.aifo-logs/apparmor.log" 2>&1 </dev/null >/dev/null 2>&1 &); fi"#.to_string(),
-        r#"/usr/local/bin/aifo-entrypoint >/dev/null 2>&1 || true"#.to_string(),
-        format!("exec {agent_joined}"),
+        format!(r#"exec /usr/local/bin/aifo-entrypoint {agent_joined}"#),
     ]);
     sh.build()
 }
