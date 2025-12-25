@@ -90,8 +90,8 @@ fn host_has_gpg_secret_key() -> bool {
     false
 }
 
-fn configure_gpg_env(agent: &str, signing_enabled: bool) {
-    if !signing_enabled {
+fn configure_gpg_env(agent: &str, signing_enabled: bool, host_has_key: bool) {
+    if !signing_enabled || !host_has_key {
         std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
         std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");
         std::env::remove_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS");
@@ -552,13 +552,14 @@ fn main() -> ExitCode {
     }
 
     let signing_enabled = git_signing_enabled();
-    if signing_enabled && !host_has_gpg_secret_key() {
+    let host_has_key = host_has_gpg_secret_key();
+    if signing_enabled && !host_has_key {
         aifo_coder::log_warn_stderr(
             use_err,
             "aifo-coder: warning: commit.gpgsign is enabled but no secret key was found; mount your ~/.gnupg or disable signing.",
         );
     }
-    configure_gpg_env(agent, signing_enabled);
+    configure_gpg_env(agent, signing_enabled, host_has_key);
 
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;

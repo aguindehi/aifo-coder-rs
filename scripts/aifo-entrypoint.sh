@@ -51,12 +51,65 @@ copy_with_mode() {
     fi
 }
 
+sync_host_gpg() {
+    host_dir="$HOME/.gnupg-host"
+    [ -d "$host_dir" ] || return
+    safe_install_dir "$GNUPGHOME" 0700
+    find "$GNUPGHOME" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete "$host_dir"/ "$GNUPGHOME"/ >/dev/null 2>&1 || \
+            cp -a "$host_dir"/. "$GNUPGHOME"/ 2>/dev/null || true
+    else
+        cp -a "$host_dir"/. "$GNUPGHOME"/ 2>/dev/null || true
+    fi
+    chmod 700 "$GNUPGHOME" 2>/dev/null || true
+}
+
+prompt_for_passphrase() {
+    if [ ! -t 0 ] && [ ! -t 1 ]; then
+        printf '%s' ""
+        return
+    fi
+    printf '%s: gpg: enter passphrase (input hidden): ' "$log_prefix" >&2
+    passphrase=""
+    has_stty=0
+    saved_stty=""
+    if command -v stty >/dev/null 2>&1; then
+        has_stty=1
+        saved_stty="$(stty -g 2>/dev/null || printf '')"
+        stty -echo 2>/dev/null || true
+        trap 'stty echo 2>/dev/null || true' INT TERM
+    fi
+    IFS= read -r passphrase || passphrase=""
+    printf '\n' >&2
+    if [ "$has_stty" -eq 1 ]; then
+        if [ -n "$saved_stty" ]; then
+            stty "$saved_stty" 2>/dev/null || true
+        else
+            stty echo 2>/dev/null || true
+        fi
+    fi
+    trap - INT TERM
+    printf '%s' "$passphrase"
+}
+
+detect_signing_key() {
+    key="$(git config --global user.signingkey 2>/dev/null || printf '')"
+    if [ -z "$key" ]; then
+        key="$(git config --system user.signingkey 2>/dev/null || printf '')"
+    fi
+    if [ -z "$key" ]; then
+        key="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^sec/ { print $5; exit }')"
+    fi
+    printf '%s' "$key"
+}
+
 prime_gpg_agent_if_requested() {
     if [ "${AIFO_GPG_REQUIRE_PRIME:-0}" != "1" ]; then
         return
     fi
-    if [ "${AIFO_CODER_NON_INTERACTIVE:-0}" = "1" ]; then
-        printf '%s: warning: gpg priming skipped in non-interactive mode\n' "$log_prefix" >&2
+    if [ ! -t 0 ] && [ ! -t 1 ]; then
+        printf '%s: warning: gpg priming skipped (no interactive terminal)\n' "$log_prefix" >&2
         return
     fi
     if ! command -v gpg >/dev/null 2>&1; then
@@ -66,12 +119,24 @@ prime_gpg_agent_if_requested() {
         printf '%s: warning: commit signing enabled but no secret key found in container.\n' "$log_prefix" >&2
         return
     fi
-    printf '%s: gpg: priming agent for signed commits...\n' "$log_prefix" >&2
-    if gpg --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
+    signing_key="$(detect_signing_key)"
+    if [ -z "$signing_key" ]; then
+        printf '%s: warning: unable to determine signing key; set git config user.signingkey.\n' "$log_prefix" >&2
+        return
+    fi
+    passphrase="$(prompt_for_passphrase)"
+    if [ -z "$passphrase" ]; then
+        printf '%s: warning: gpg priming cancelled; signed commits may prompt later.\n' "$log_prefix" >&2
+        return
+    fi
+    if printf '%s' "$passphrase" \
+        | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --local-user "$signing_key" --default-key "$signing_key" \
+            --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
         printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
     else
-        printf '%s: warning: gpg priming failed (maybe cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
+        printf '%s: warning: gpg priming failed (maybe incorrect passphrase). Signed commits may prompt later.\n' "$log_prefix" >&2
     fi
+    passphrase=""
 }
 
 runtime_home="$(resolve_home "$runtime_user")"
@@ -102,21 +167,10 @@ fi
 if [ -z "${GNUPGHOME:-}" ]; then
     export GNUPGHOME="$HOME/.gnupg"
 fi
-mkdir -p "$GNUPGHOME"
-chmod 0700 "$GNUPGHOME" 2>/dev/null || true
+safe_install_dir "$GNUPGHOME" 0700
+maybe_chmod 0700 "$GNUPGHOME"
 
-if [ -d "$HOME/.gnupg-host" ]; then
-    for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do
-        if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then
-            cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"
-        fi
-    done
-    for d in private-keys-v1.d openpgp-revocs.d; do
-        if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then
-            cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"
-        fi
-    done
-fi
+sync_host_gpg
 
 if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
     export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
