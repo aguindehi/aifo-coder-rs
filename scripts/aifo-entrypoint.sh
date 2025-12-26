@@ -253,6 +253,16 @@ maybe_chmod 0700 "$GNUPGHOME"
 
 sync_host_gpg
 
+# If a host gitconfig is mounted at ~/.gitconfig-host (read-only), clone it into
+# a writable ~/.gitconfig inside the container so git config --global can update
+# gpg.program without touching the host file.
+if [ -f "$HOME/.gitconfig-host" ]; then
+    if [ ! -f "$HOME/.gitconfig" ]; then
+        cp "$HOME/.gitconfig-host" "$HOME/.gitconfig" 2>/dev/null || true
+    fi
+    chmod 600 "$HOME/.gitconfig" 2>/dev/null || true
+fi
+
 cache_ttl="${AIFO_GPG_CACHE_TTL_SECONDS:-7200}"
 max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
 conf="$GNUPGHOME/gpg-agent.conf"
