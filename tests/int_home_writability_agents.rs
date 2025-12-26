@@ -118,11 +118,10 @@ mod int_home_writability_agents {
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
         // Mount the script into the container and run it via /bin/sh -lc.
-        cmd.arg("-v")
-            .arg(format!(
-                "{}:/tmp/aifo-writability.sh:ro",
-                script_path.display()
-            ));
+        cmd.arg("-v").arg(format!(
+            "{}:/tmp/aifo-writability.sh:ro",
+            script_path.display()
+        ));
         cmd.arg(image)
             .arg("sh")
             .arg("-lc")
