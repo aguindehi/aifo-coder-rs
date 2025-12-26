@@ -1,5 +1,6 @@
 #!/bin/sh
-set -euo pipefail
+# dash-compatible: avoid pipefail (not supported by /bin/sh here)
+set -eu
 
 # Wrapper to force loopback pinentry so Git signing works in non-interactive shells.
 # Optional env vars:
