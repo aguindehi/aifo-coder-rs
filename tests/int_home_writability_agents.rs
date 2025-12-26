@@ -146,7 +146,7 @@ mod int_home_writability_agents {
         let (ok, out) = run_writability_check(image);
         assert!(
             ok,
-            "HOME subtree writability failed for image: {}\n{}",
+            "HOME subtree writability failed for image: {}\n--- diagnostics ---\n{}",
             image, out
         );
     }
