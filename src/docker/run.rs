@@ -341,6 +341,19 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
         }
     }
 
+    // For fullscreen agents like opencode, pin gpg.program to the loopback wrapper for the
+    // duration of the container process so that all git signing goes through
+    // /usr/local/bin/aifo-gpg-wrapper (which forces --batch --pinentry-mode loopback).
+    if agent == "opencode" {
+        push_env_kv(&mut env_flags, "GIT_CONFIG_COUNT", "1");
+        push_env_kv(&mut env_flags, "GIT_CONFIG_KEY_0", "gpg.program");
+        push_env_kv(
+            &mut env_flags,
+            "GIT_CONFIG_VALUE_0",
+            "/usr/local/bin/aifo-gpg-wrapper",
+        );
+    }
+
     env_flags
 }
 
