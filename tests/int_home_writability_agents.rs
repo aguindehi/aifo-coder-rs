@@ -37,7 +37,7 @@ mod int_home_writability_agents {
         };
 
         #[cfg(unix)]
-        let uidgid = {
+        let _uidgid = {
             use nix::unistd::{getgid, getuid};
             Some((u32::from(getuid()), u32::from(getgid())))
         };
@@ -46,7 +46,7 @@ mod int_home_writability_agents {
 
         let script = aifo_coder::ShellFile::new()
             .extend([
-                "set -eu".to_string(),
+                "set -u".to_string(),
                 r#": "${HOME:=/home/coder}""#.to_string(),
                 r#"echo "probe: uid=$(id -u) gid=$(id -g) umask=$(umask)""#.to_string(),
                 "".to_string(),
