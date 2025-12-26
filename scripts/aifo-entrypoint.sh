@@ -316,6 +316,8 @@ configure_git_gpg_wrapper() {
     fi
 }
 
+maybe_copy_configs
+
 configure_git_gpg_wrapper
 prime_gpg_agent_if_requested
 
