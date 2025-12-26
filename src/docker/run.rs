@@ -812,12 +812,13 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     // Aider root-level config files: handled via config clone policy in entrypoint (Phase 1).
     // No direct bind-mount of original host files here.
 
-    // Git config
+    // Git config: mount host ~/.gitconfig as .gitconfig-host (read-only); entrypoint clones
+    // to a writable ~/.gitconfig inside the container.
     let gitconfig = host_home.join(".gitconfig");
     crate::ensure_file_exists(&gitconfig).ok();
     volume_flags.push(OsString::from("-v"));
     volume_flags.push(OsString::from(format!(
-        "{}:/home/coder/.gitconfig:ro",
+        "{}:/home/coder/.gitconfig-host:ro",
         gitconfig.display()
     )));
 
