@@ -68,7 +68,7 @@ mod int_home_writability_agents {
                 "".to_string(),
                 "check_mkdir() {".to_string(),
                 r#"  d="$1""#.to_string(),
-                r#"  if mkdir -p "$d/test.$$" >/dev/null 2>&1; then"#.to_string(),
+                r#"  if mkdir -p "$d/test.$$" >/dev/null; then"#.to_string(),
                 r#"    rmdir "$d/test.$$" >/dev/null 2>&1 || true"#.to_string(),
                 "    return 0".to_string(),
                 "  fi".to_string(),
@@ -78,7 +78,7 @@ mod int_home_writability_agents {
                 "check_touch() {".to_string(),
                 r#"  d="$1""#.to_string(),
                 r#"  f="$d/.writetest.$$""#.to_string(),
-                r#"  if : > "$f" >/dev/null 2>&1; then"#.to_string(),
+                r#"  if : > "$f" >/dev/null; then"#.to_string(),
                 r#"    rm -f "$f" >/dev/null 2>&1 || true"#.to_string(),
                 "    return 0".to_string(),
                 "  fi".to_string(),
@@ -159,12 +159,7 @@ mod int_home_writability_agents {
             return;
         }
         let (ok, out) = run_writability_check(image);
-        let diag_single_line = out.replace('\n', " | ");
-        assert!(
-            ok,
-            "HOME subtree writability failed for image: {} | diagnostics: {}",
-            image, diag_single_line
-        );
+        assert!(ok, "Write failed: {}\n{}\n", image, out);
     }
 
     #[test]
