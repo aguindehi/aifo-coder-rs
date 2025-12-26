@@ -1,5 +1,10 @@
 pub fn path_pair(host: &std::path::Path, container: &str) -> std::ffi::OsString {
-    std::ffi::OsString::from(format!("{}:{container}", host.display()))
+    // Special-case ~/.gitconfig: mount as .gitconfig-host so entrypoint can clone to writable ~/.gitconfig.
+    if container == "/home/coder/.gitconfig" {
+        std::ffi::OsString::from(format!("{}:/home/coder/.gitconfig-host", host.display()))
+    } else {
+        std::ffi::OsString::from(format!("{}:{container}", host.display()))
+    }
 }
 
 /// Ensure a file exists by creating parent directories as needed.
