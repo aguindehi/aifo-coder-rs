@@ -91,6 +91,9 @@ fn host_has_gpg_secret_key() -> bool {
 }
 
 fn configure_gpg_env(agent: &str, signing_enabled: bool, host_has_key: bool) {
+    if signing_enabled && !host_has_key {
+        eprintln!("aifo-coder: warning: commit signing is enabled but no host GPG secret key was found. Mount ~/.gnupg or disable signing.");
+    }
     if !signing_enabled || !host_has_key {
         std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
         std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");

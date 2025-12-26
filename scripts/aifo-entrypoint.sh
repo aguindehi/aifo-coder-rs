@@ -16,6 +16,13 @@ log_debug() {
     fi
 }
 
+is_fullscreen_agent() {
+    case "${AIFO_AGENT_NAME:-}" in
+        opencode) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 resolve_home() {
     home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
     if [ -z "$home_path" ]; then
@@ -38,6 +45,31 @@ maybe_chmod() {
     if [ "$IS_ROOT" = "1" ]; then
         chmod "$@" 2>/dev/null || true
     fi
+}
+
+ensure_gpg_tty() {
+    if [ -t 0 ] || [ -t 1 ]; then
+        tty_path="$(tty 2>/dev/null || printf '')"
+        case "$tty_path" in
+            ""|"not a tty") ;;
+            *)
+                export GPG_TTY="$tty_path"
+                return 0
+                ;;
+        esac
+    fi
+    if [ -n "${GPG_TTY:-}" ] && [ -c "$GPG_TTY" ]; then
+        return 0
+    fi
+    return 1
+}
+
+refresh_gpg_agent_tty() {
+    if ! command -v gpg-connect-agent >/dev/null 2>&1; then
+        return
+    fi
+    gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1 || true
+    gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
 }
 
 copy_with_mode() {
@@ -89,35 +121,99 @@ detect_signing_key() {
     printf '%s' "$key"
 }
 
+gpg_keygrip_for_signing() {
+    key_filter="$1"
+    if [ -n "$key_filter" ]; then
+        listing="$(gpg --list-secret-keys --with-colons --with-keygrip "$key_filter" 2>/dev/null || true)"
+    else
+        listing="$(gpg --list-secret-keys --with-colons --with-keygrip 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$listing" | awk -F: '/^grp/ { print $10; exit }'
+}
+
+maybe_preset_gpg_passphrase() {
+    signing_key="$1"
+    passphrase=""
+    if [ -n "${AIFO_GPG_PASSPHRASE_FILE:-}" ] && [ -r "$AIFO_GPG_PASSPHRASE_FILE" ]; then
+        passphrase="$(head -n1 "$AIFO_GPG_PASSPHRASE_FILE" 2>/dev/null | tr -d '\r\n')"
+    elif [ -n "${AIFO_GPG_PASSPHRASE:-}" ]; then
+        passphrase="$AIFO_GPG_PASSPHRASE"
+    else
+        return 1
+    fi
+    if [ -z "$passphrase" ]; then
+        return 1
+    fi
+    if ! command -v gpg-preset-passphrase >/dev/null 2>&1; then
+        return 1
+    fi
+    keygrip="$(gpg_keygrip_for_signing "$signing_key")"
+    if [ -z "$keygrip" ]; then
+        return 1
+    fi
+    if printf '%s' "$passphrase" | gpg-preset-passphrase --preset "$keygrip" >/dev/null 2>&1; then
+        printf '%s: gpg: passphrase cached via gpg-preset-passphrase.\n' "$log_prefix" >&2
+        unset passphrase
+        export AIFO_GPG_PRIMED=1
+        return 0
+    fi
+    status=$?
+    unset passphrase
+    printf '%s: warning: gpg-preset-passphrase failed (exit %s); falling back to pinentry.\n' "$log_prefix" "$status" >&2
+    return 1
+}
+
 prime_gpg_agent_if_requested() {
     if [ "${AIFO_GPG_REQUIRE_PRIME:-0}" != "1" ]; then
         return
     fi
-    if [ ! -t 0 ] && [ ! -t 1 ]; then
-        printf '%s: warning: gpg priming skipped (no interactive terminal)\n' "$log_prefix" >&2
+    if [ "${AIFO_GPG_PRIMED:-0}" = "1" ]; then
+        log_debug "gpg priming already completed; skipping"
         return
     fi
     if ! command -v gpg >/dev/null 2>&1; then
+        printf '%s: error: gpg priming requested but gpg is unavailable in the container.\n' "$log_prefix" >&2
+        exit 1
+    fi
+    if [ ! -t 0 ] && [ ! -t 1 ]; then
+        printf '%s: warning: gpg priming skipped (no interactive terminal). Signed commits may prompt later.\n' "$log_prefix" >&2
         return
     fi
-    if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
-        printf '%s: warning: commit signing enabled but no secret key found in container.\n' "$log_prefix" >&2
+    if ! ensure_gpg_tty; then
+        printf '%s: warning: gpg priming skipped (unable to determine controlling terminal). Signed commits may prompt later.\n' "$log_prefix" >&2
         return
+    fi
+    refresh_gpg_agent_tty
+    if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
+        printf '%s: error: commit signing enabled but no secret key was found inside the container. Mount ~/.gnupg and retry.\n' "$log_prefix" >&2
+        exit 1
     fi
     signing_key="$(detect_signing_key)"
-    if [ -n "$signing_key" ]; then
-        if gpg --yes --armor --sign --detach-sig --local-user "$signing_key" --default-key "$signing_key" /dev/null >/dev/null 2>&1; then
-            printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
-        else
-            printf '%s: warning: gpg priming failed (maybe user cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
-        fi
-    else
-        if gpg --yes --armor --sign --detach-sig /dev/null >/dev/null 2>&1; then
-            printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
-        else
-            printf '%s: warning: gpg priming failed (maybe user cancelled). Signed commits may prompt later.\n' "$log_prefix" >&2
-        fi
+    if maybe_preset_gpg_passphrase "$signing_key"; then
+        return
     fi
+    prime_cmd="gpg --armor --sign --detach-sig --output /dev/null"
+    set -- gpg --armor --sign --detach-sig --yes --output /dev/null
+    if [ -n "$signing_key" ]; then
+        set -- "$@" --local-user "$signing_key" --default-key "$signing_key"
+        prime_cmd="$prime_cmd --local-user \"$signing_key\" --default-key \"$signing_key\""
+    fi
+    set -- "$@" /dev/null
+    prime_cmd="$prime_cmd /dev/null"
+    printf '%s: gpg: requesting passphrase via pinentry-curses before launching the agent...\n' "$log_prefix" >&2
+    if "$@"; then
+        printf '%s: gpg: passphrase cached for this session.\n' "$log_prefix" >&2
+        export AIFO_GPG_PRIMED=1
+        return
+    else
+        status=$?
+    fi
+    if [ "$status" -eq 0 ]; then
+        status=1
+    fi
+    printf '%s: error: gpg priming failed (exit %s).\n' "$log_prefix" "$status" >&2
+    printf '%s: hint: rerun `%s` inside the container to inspect the failure.\n' "$log_prefix" "$prime_cmd" >&2
+    exit "$status"
 }
 
 runtime_home="$(resolve_home "$runtime_user")"
@@ -158,6 +254,7 @@ max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
 conf="$GNUPGHOME/gpg-agent.conf"
 ensure_conf_line "$conf" "pinentry-program " "pinentry-program /usr/bin/pinentry-curses"
 ensure_conf_line "$conf" "allow-loopback-pinentry" "allow-loopback-pinentry"
+ensure_conf_line "$conf" "allow-preset-passphrase" "allow-preset-passphrase"
 ensure_conf_line "$conf" "default-cache-ttl " "default-cache-ttl ${cache_ttl}"
 ensure_conf_line "$conf" "max-cache-ttl " "max-cache-ttl ${max_cache_ttl}"
 
@@ -177,16 +274,17 @@ ensure_local_tree() {
 ensure_local_tree
 
 # Bootstrap gnupg configs
-if [ -t 0 ] || [ -t 1 ]; then
-    export GPG_TTY="${GPG_TTY:-/dev/tty}"
-fi
+ensure_gpg_tty || unset GPG_TTY || true
 unset GPG_AGENT_INFO || true
-if command -v gpgconf >/dev/null 2>&1; then
-    gpgconf --kill gpg-agent >/dev/null 2>&1 || true
-    gpgconf --launch gpg-agent >/dev/null 2>&1 || true
-else
-    gpg-agent --daemon >/dev/null 2>&1 || true
+if [ "${AIFO_GPG_PRIMED:-0}" != "1" ]; then
+    if command -v gpgconf >/dev/null 2>&1; then
+        gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+        gpgconf --launch gpg-agent >/dev/null 2>&1 || true
+    else
+        gpg-agent --daemon >/dev/null 2>&1 || true
+    fi
 fi
+refresh_gpg_agent_tty
 
 configure_git_gpg_wrapper() {
     if [ "${AIFO_DISABLE_GPG_LOOPBACK:-0}" = "1" ]; then
