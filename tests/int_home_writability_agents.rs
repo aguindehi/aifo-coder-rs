@@ -106,11 +106,27 @@ mod int_home_writability_agents {
             .build()
             .expect("writability script");
 
+        // Persist the script to a temporary file and execute it from there to avoid
+        // hitting argument length limits when passing large scripts via -c.
+        let mut script_path = std::env::temp_dir();
+        script_path.push(format!(
+            "aifo-writability-{}.sh",
+            image.replace(':', "_").replace('/', "_")
+        ));
+        std::fs::write(&script_path, &script).expect("write writability script");
+
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
-        // Run as the image's default runtime user (e.g., 'coder') so that HOME subtree
-        // writability reflects the intended container execution environment.
-        cmd.arg(image).arg("sh").arg("-lc").arg(&script);
+        // Mount the script into the container and run it via /bin/sh -lc.
+        cmd.arg("-v")
+            .arg(format!(
+                "{}:/tmp/aifo-writability.sh:ro",
+                script_path.display()
+            ));
+        cmd.arg(image)
+            .arg("sh")
+            .arg("-lc")
+            .arg("sh /tmp/aifo-writability.sh");
 
         assert!(!script.contains('\0'), "script must not contain NUL");
 
