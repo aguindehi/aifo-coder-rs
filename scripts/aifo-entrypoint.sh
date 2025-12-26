@@ -304,6 +304,13 @@ configure_git_gpg_wrapper() {
     if [ ! -x /usr/local/bin/aifo-gpg-wrapper ]; then
         return
     fi
+    # For fullscreen agents (e.g., opencode), always force the loopback wrapper so that
+    # later non-interactive git signing uses gpg --batch --pinentry-mode loopback and can
+    # reuse the cached passphrase from gpg-agent without requiring a TTY.
+    if is_fullscreen_agent; then
+        git config --global gpg.program /usr/local/bin/aifo-gpg-wrapper >/dev/null 2>&1 || true
+        return
+    fi
     if [ "$current" != "/usr/local/bin/aifo-gpg-wrapper" ]; then
         git config --global gpg.program /usr/local/bin/aifo-gpg-wrapper >/dev/null 2>&1 || true
     fi
