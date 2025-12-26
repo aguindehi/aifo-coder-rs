@@ -58,7 +58,7 @@ fn apply_cli_globals(cli: &Cli) {
 const FULLSCREEN_GPG_AGENTS: &[&str] = &["opencode"];
 
 fn is_fullscreen_agent(agent: &str) -> bool {
-    FULLSCREEN_GPG_AGENTS.iter().any(|a| *a == agent)
+    FULLSCREEN_GPG_AGENTS.contains(&agent)
 }
 
 fn git_signing_enabled() -> bool {
