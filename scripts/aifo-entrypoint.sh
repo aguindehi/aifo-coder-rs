@@ -175,6 +175,20 @@ prime_gpg_agent_if_requested() {
         printf '%s: error: gpg priming requested but gpg is unavailable in the container.\n' "$log_prefix" >&2
         exit 1
     fi
+    # Always prefer presetting via env/file when available. This works for both fullscreen
+    # and non-fullscreen agents and avoids interactive prompts when a passphrase is provided.
+    if gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
+        signing_key="$(detect_signing_key)"
+        if maybe_preset_gpg_passphrase "$signing_key"; then
+            return
+        fi
+    else
+        printf '%s: error: commit signing enabled but no secret key was found inside the container. Mount ~/.gnupg and retry.\n' "$log_prefix" >&2
+        exit 1
+    fi
+    # No usable env/file passphrase or preset failed: fall back to a single interactive
+    # priming step via pinentry when a TTY is available. This may be the case for
+    # fullscreen agents like opencode at startup.
     if [ ! -t 0 ] && [ ! -t 1 ]; then
         printf '%s: warning: gpg priming skipped (no interactive terminal). Signed commits may prompt later.\n' "$log_prefix" >&2
         return
@@ -184,14 +198,7 @@ prime_gpg_agent_if_requested() {
         return
     fi
     refresh_gpg_agent_tty
-    if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
-        printf '%s: error: commit signing enabled but no secret key was found inside the container. Mount ~/.gnupg and retry.\n' "$log_prefix" >&2
-        exit 1
-    fi
     signing_key="$(detect_signing_key)"
-    if maybe_preset_gpg_passphrase "$signing_key"; then
-        return
-    fi
     prime_cmd="gpg --armor --sign --detach-sig --output /dev/null"
     set -- gpg --armor --sign --detach-sig --yes --output /dev/null
     if [ -n "$signing_key" ]; then
