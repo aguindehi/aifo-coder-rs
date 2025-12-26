@@ -175,20 +175,58 @@ prime_gpg_agent_if_requested() {
         printf '%s: error: gpg priming requested but gpg is unavailable in the container.\n' "$log_prefix" >&2
         exit 1
     fi
-    # Always prefer presetting via env/file when available. This works for both fullscreen
-    # and non-fullscreen agents and avoids interactive prompts when a passphrase is provided.
-    if gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
-        signing_key="$(detect_signing_key)"
-        if maybe_preset_gpg_passphrase "$signing_key"; then
-            return
-        fi
-    else
+    if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
         printf '%s: error: commit signing enabled but no secret key was found inside the container. Mount ~/.gnupg and retry.\n' "$log_prefix" >&2
         exit 1
     fi
-    # No usable env/file passphrase or preset failed: fall back to a single interactive
-    # priming step via pinentry when a TTY is available. This may be the case for
-    # fullscreen agents like opencode at startup.
+
+    signing_key="$(detect_signing_key)"
+
+    if is_fullscreen_agent; then
+        # Fullscreen agents (e.g., opencode) must never rely on pinentry during runtime.
+        # Obtain the passphrase from env/file or via a single interactive prompt here,
+        # then supply it via AIFO_GPG_PASSPHRASE so the aifo-gpg-wrapper can always
+        # use loopback mode without invoking pinentry.
+        if [ -z "${AIFO_GPG_PASSPHRASE:-}" ] && [ -n "${AIFO_GPG_PASSPHRASE_FILE:-}" ] && [ -r "$AIFO_GPG_PASSPHRASE_FILE" ]; then
+            AIFO_GPG_PASSPHRASE="$(head -n1 "$AIFO_GPG_PASSPHRASE_FILE" 2>/dev/null | tr -d '\r\n')"
+            export AIFO_GPG_PASSPHRASE
+        fi
+
+        if [ -z "${AIFO_GPG_PASSPHRASE:-}" ]; then
+            if [ ! -t 0 ] && [ ! -t 1 ]; then
+                printf '%s: error: fullscreen agent requires GPG passphrase via AIFO_GPG_PASSPHRASE or AIFO_GPG_PASSPHRASE_FILE; no TTY available for interactive prompt.\n' "$log_prefix" >&2
+                exit 1
+            fi
+            if ! ensure_gpg_tty; then
+                printf '%s: error: fullscreen agent requires GPG passphrase via env/file; unable to determine controlling terminal for interactive prompt.\n' "$log_prefix" >&2
+                exit 1
+            fi
+            # Read passphrase once interactively (no echo) and cache in env for wrapper use.
+            printf '%s: enter GPG passphrase for fullscreen agent (input will not be echoed): ' "$log_prefix" >&2
+            # shellcheck disable=SC2162
+            stty -echo 2>/dev/null || true
+            read pass 2>/dev/null || pass=""
+            stty echo 2>/dev/null || true
+            printf '\n' >&2
+            if [ -z "$pass" ]; then
+                printf '%s: error: empty GPG passphrase entered; aborting.\n' "$log_prefix" >&2
+                exit 1
+            fi
+            AIFO_GPG_PASSPHRASE="$pass"
+            unset pass
+            export AIFO_GPG_PASSPHRASE
+        fi
+
+        # Optional: preset into gpg-agent so loopback can reuse it without pinentry.
+        maybe_preset_gpg_passphrase "$signing_key" || true
+        export AIFO_GPG_PRIMED=1
+        return
+    fi
+
+    # Non-fullscreen agents: prefer preset via env/file, fall back to one interactive pinentry step.
+    if maybe_preset_gpg_passphrase "$signing_key"; then
+        return
+    fi
     if [ ! -t 0 ] && [ ! -t 1 ]; then
         printf '%s: warning: gpg priming skipped (no interactive terminal). Signed commits may prompt later.\n' "$log_prefix" >&2
         return
@@ -198,7 +236,6 @@ prime_gpg_agent_if_requested() {
         return
     fi
     refresh_gpg_agent_tty
-    signing_key="$(detect_signing_key)"
     prime_cmd="gpg --armor --sign --detach-sig --output /dev/null"
     set -- gpg --armor --sign --detach-sig --yes --output /dev/null
     if [ -n "$signing_key" ]; then
