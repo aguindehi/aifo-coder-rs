@@ -144,10 +144,12 @@ mod int_home_writability_agents {
             return;
         }
         let (ok, out) = run_writability_check(image);
+        let diag_single_line = out.replace('\n', " | ");
         assert!(
             ok,
-            "HOME subtree writability failed for image: {}\n--- diagnostics ---\n{}",
-            image, out
+            "HOME subtree writability failed for image: {} | diagnostics: {}",
+            image,
+            diag_single_line
         );
     }
 
