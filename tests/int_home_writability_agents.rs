@@ -148,8 +148,7 @@ mod int_home_writability_agents {
         assert!(
             ok,
             "HOME subtree writability failed for image: {} | diagnostics: {}",
-            image,
-            diag_single_line
+            image, diag_single_line
         );
     }
 
