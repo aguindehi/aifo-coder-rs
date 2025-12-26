@@ -63,7 +63,7 @@ mod int_home_writability_agents {
                 r#"  printf "  parent stat: ""#.to_string(),
                 r#"  stat -c '%u:%g %a' "$par" 2>/dev/null || echo 'N/A'"#.to_string(),
                 r#"  echo "  parent ls: $(ls -ld "$par" 2>&1 || echo 'N/A')""#.to_string(),
-                r#"  echo "  expected: $HOME mode 1777; subtrees 0777""#.to_string(),
+                r#"  echo "  expected: $HOME mode 1777; subtrees 0777; offending path: $p""#.to_string(),
                 "}".to_string(),
                 "".to_string(),
                 "check_mkdir() {".to_string(),
@@ -108,9 +108,8 @@ mod int_home_writability_agents {
 
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
-        if let Some((uid, gid)) = uidgid {
-            cmd.arg("-u").arg(format!("{uid}:{gid}"));
-        }
+        // Run as the image's default runtime user (e.g., 'coder') so that HOME subtree
+        // writability reflects the intended container execution environment.
         cmd.arg(image).arg("sh").arg("-lc").arg(&script);
 
         assert!(!script.contains('\0'), "script must not contain NUL");
