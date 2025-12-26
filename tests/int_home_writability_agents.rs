@@ -32,8 +32,14 @@ mod int_home_writability_agents {
 
     fn run_writability_check(image: &str) -> (bool, String) {
         let Some(runtime) = docker_runtime() else {
-            eprintln!("docker not available; skipping: {}", image);
-            return (true, String::new()); // treat as skipped
+            eprintln!("docker not available; cannot check {}", image);
+            return (
+                false,
+                format!(
+                    "failed to run docker: runtime not available (AIFO_CODER_TEST_DISABLE_DOCKER={})",
+                    std::env::var("AIFO_CODER_TEST_DISABLE_DOCKER").unwrap_or_else(|_| "0".to_string())
+                ),
+            );
         };
 
         #[cfg(unix)]
