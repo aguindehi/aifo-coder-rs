@@ -219,9 +219,9 @@ prime_gpg_agent_if_requested() {
 runtime_home="$(resolve_home "$runtime_user")"
 [ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
 
-if [ -z "${AIFO_DISABLE_GPG_LOOPBACK:-}" ] && is_fullscreen_agent; then
-    export AIFO_DISABLE_GPG_LOOPBACK=1
-fi
+# For fullscreen agents (e.g., opencode), keep loopback pinentry enabled so that
+# gpg operations from non-interactive environments (no TTY) can still use the
+# cached passphrase via gpg-agent and the aifo-gpg-wrapper.
 
 if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
     safe_install_dir "$runtime_home" 0750
