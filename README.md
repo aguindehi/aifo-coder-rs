@@ -831,6 +831,7 @@ Tip:
   (add `--local-user <key>` if you use a non-default key). The entrypoint prints the exact command to rerun whenever priming fails.
 - The entrypoint captures the actual controlling TTY path (for example `/dev/pts/0`) and updates `gpg-agent` before invoking pinentry. If you still hit `gpg: signing failed: No such device or address`, re-run `aifo-coder …` from a real terminal (no background `nohup`) and make sure `docker run` includes `-it` so pinentry can draw.
 - Deterministic priming: set `AIFO_GPG_PASSPHRASE_FILE=/path/to/file` (or `AIFO_GPG_PASSPHRASE`) before launching the agent. The entrypoint enables `allow-preset-passphrase` and, when `gpg-preset-passphrase` is available, presets the passphrase via the keygrip before falling back to pinentry-curses if needed.
+- Fullscreen agents (e.g., Opencode) automatically disable the loopback `aifo-gpg-wrapper` after priming so `git commit` reuses the cached `gpg-agent` session without requesting a second passphrase.
 - Manual `docker run -it … /bin/bash` sessions skip priming unless you explicitly set `AIFO_GPG_REQUIRE_PRIME=1`, so diagnostics shells work even when no TTY is available for pinentry.
  
  ### Host notifications command (notifications-cmd)

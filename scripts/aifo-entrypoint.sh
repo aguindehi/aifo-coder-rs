@@ -219,6 +219,10 @@ prime_gpg_agent_if_requested() {
 runtime_home="$(resolve_home "$runtime_user")"
 [ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
 
+if [ -z "${AIFO_DISABLE_GPG_LOOPBACK:-}" ] && is_fullscreen_agent; then
+    export AIFO_DISABLE_GPG_LOOPBACK=1
+fi
+
 if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
     safe_install_dir "$runtime_home" 0750
     chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
@@ -287,16 +291,19 @@ fi
 refresh_gpg_agent_tty
 
 configure_git_gpg_wrapper() {
-    if [ "${AIFO_DISABLE_GPG_LOOPBACK:-0}" = "1" ]; then
+    if ! command -v git >/dev/null 2>&1; then
         return
     fi
-    if ! command -v git >/dev/null 2>&1; then
+    current=$(git config --global --get gpg.program 2>/dev/null || true)
+    if [ "${AIFO_DISABLE_GPG_LOOPBACK:-0}" = "1" ]; then
+        if [ "$current" != "gpg" ]; then
+            git config --global gpg.program gpg >/dev/null 2>&1 || true
+        fi
         return
     fi
     if [ ! -x /usr/local/bin/aifo-gpg-wrapper ]; then
         return
     fi
-    current=$(git config --global --get gpg.program 2>/dev/null || true)
     if [ "$current" != "/usr/local/bin/aifo-gpg-wrapper" ]; then
         git config --global gpg.program /usr/local/bin/aifo-gpg-wrapper >/dev/null 2>&1 || true
     fi
