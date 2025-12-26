@@ -160,7 +160,12 @@ mod int_home_writability_agents {
             return;
         }
         let (ok, out) = run_writability_check(image);
-        assert!(ok, "Write failed: {}\n{}\n", image, out);
+        let where_line = out
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .unwrap_or("(no diagnostics)");
+        assert!(ok, "Write failed: {} | {}", image, where_line);
     }
 
     #[test]
