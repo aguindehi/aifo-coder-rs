@@ -2,6 +2,28 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
+fn propagate_proxy_env_for_child_tools() {
+    // Some MCP tools (e.g. Context7) run as child processes and rely on standard proxy vars.
+    // Propagate common proxy env vars from uppercase to lowercase for compatibility.
+    for (upper, lower) in [
+        ("HTTP_PROXY", "http_proxy"),
+        ("HTTPS_PROXY", "https_proxy"),
+        ("NO_PROXY", "no_proxy"),
+        ("ALL_PROXY", "all_proxy"),
+    ] {
+        if std::env::var_os(lower).is_none() {
+            if let Some(v) = std::env::var_os(upper) {
+                std::env::set_var(lower, v);
+            }
+        }
+        if std::env::var_os(upper).is_none() {
+            if let Some(v) = std::env::var_os(lower) {
+                std::env::set_var(upper, v);
+            }
+        }
+    }
+}
+
 // Internal modules
 mod agent_images;
 mod banner;
@@ -426,6 +448,9 @@ fn main() -> ExitCode {
     eprintln!();
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
+
+    // Ensure proxy env vars are available to any child processes/tools.
+    propagate_proxy_env_for_child_tools();
 
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
