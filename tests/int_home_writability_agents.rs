@@ -124,6 +124,7 @@ mod int_home_writability_agents {
 
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
+        cmd.arg("-e").arg("AIFO_ENTRYPOINT_TRACE=1");
         // Mount the script into the container and run it via /bin/sh -lc.
         cmd.arg("-v").arg(format!(
             "{}:/tmp/aifo-writability.sh:ro",

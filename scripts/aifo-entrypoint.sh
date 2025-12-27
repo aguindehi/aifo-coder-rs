@@ -10,6 +10,15 @@ if [ "$(id -u)" = "0" ]; then
     IS_ROOT=1
 fi
 
+log_fatal_exit() {
+    status="$1"
+    if [ "$status" -ne 0 ]; then
+        printf '%s: fatal: entrypoint aborted (status %s)\n' "$log_prefix" "$status" >&2
+    fi
+}
+
+trap 'log_fatal_exit "$?"' EXIT
+
 log_debug() {
     if [ "$log_verbose" = "1" ]; then
         printf '%s: %s\n' "$log_prefix" "$1" >&2
@@ -37,8 +46,21 @@ safe_install_dir() {
     if [ "$IS_ROOT" = "1" ]; then
         install -d -m "$mode" "$dir" 2>/dev/null || true
     else
-        mkdir -p "$dir" 2>/dev/null || true
+        install -d -m "$mode" "$dir" 2>/dev/null || mkdir -p "$dir" 2>/dev/null || true
     fi
+}
+
+force_dir_mode() {
+    dir="$1"
+    mode="$2"
+    if [ -z "$dir" ]; then
+        return 0
+    fi
+    if [ ! -d "$dir" ]; then
+        return 0
+    fi
+    chmod "$mode" "$dir" 2>/dev/null || true
+    return 0
 }
 
 maybe_chmod() {
@@ -268,7 +290,9 @@ runtime_home="$(resolve_home "$runtime_user")"
 # cached passphrase via gpg-agent and the aifo-gpg-wrapper.
 
 if [ "$IS_ROOT" = "1" ] && [ "${AIFO_ENTRYPOINT_REEXEC:-0}" != "1" ]; then
-    safe_install_dir "$runtime_home" 0750
+    safe_install_dir "$runtime_home" 1777
+    maybe_chmod 1777 "$runtime_home"
+    force_dir_mode "$runtime_home" 1777
     chown -R "$runtime_user:$runtime_user" "$runtime_home" 2>/dev/null || true
     export HOME="$runtime_home"
     if command -v gosu >/dev/null 2>&1; then
@@ -282,11 +306,13 @@ fi
 if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
     export HOME="$runtime_home"
 fi
+home_mode=1777
 if [ "$IS_ROOT" = "1" ]; then
-    safe_install_dir "$HOME" 0750
-    maybe_chmod 1777 "$HOME"
+    safe_install_dir "$HOME" "$home_mode"
+    maybe_chmod "$home_mode" "$HOME"
 else
-    mkdir -p "$HOME" 2>/dev/null || true
+    safe_install_dir "$HOME" "$home_mode"
+    force_dir_mode "$HOME" "$home_mode"
 fi
 
 if [ -z "${GNUPGHOME:-}" ]; then
@@ -323,13 +349,30 @@ mkdir -p "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg"
 chmod 0700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" 2>/dev/null || true
 
 ensure_local_tree() {
+    safe_install_dir "$HOME" 1777
+    force_dir_mode "$HOME" 1777
     for d in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
              "$HOME/.local/share/uv" "$HOME/.local/share/pnpm" "$HOME/.cache"; do
-        safe_install_dir "$d" 0755
+        safe_install_dir "$d" 0777
+        force_dir_mode "$d" 0777
+    done
+}
+
+trace_writability_paths() {
+    if [ "${AIFO_ENTRYPOINT_TRACE:-0}" != "1" ]; then
+        return
+    fi
+    printf '%s: trace: HOME=%s\n' "$log_prefix" "${HOME:-unset}" >&2
+    for p in "$HOME" "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
+             "$HOME/.local/share/uv" "$HOME/.local/share/pnpm" "$HOME/.cache"; do
+        if ! ls -ald "$p" 1>&2 2>/dev/null; then
+            printf '%s: trace: missing %s\n' "$log_prefix" "$p" >&2
+        fi
     done
 }
 
 ensure_local_tree
+trace_writability_paths
 
 # Bootstrap gnupg configs
 ensure_gpg_tty || unset GPG_TTY || true
@@ -572,4 +615,5 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     fi
 fi
 
+trap - EXIT
 exec "$@"
