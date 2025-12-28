@@ -157,9 +157,27 @@ mod int_home_writability_agents {
         format!("{prefix}-{agent}:{tag}")
     }
 
+    fn failure_line(out: &str) -> String {
+        out.lines()
+            .map(str::trim)
+            .find(|l| l.starts_with("FAIL "))
+            .map(|s| s.to_string())
+            .or_else(|| {
+                out.lines()
+                    .map(str::trim)
+                    .find(|l| !l.is_empty())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "(no diagnostics)".to_string())
+    }
+
     fn check_image(image: &str) {
         if skip_docker_tests() {
             eprintln!("AIFO_CODER_TEST_DISABLE_DOCKER=1; skipping {}", image);
+            return;
+        }
+        if docker_runtime().is_none() {
+            eprintln!("docker not available; skipping {}", image);
             return;
         }
         if !image_present(image) {
@@ -167,12 +185,10 @@ mod int_home_writability_agents {
             return;
         }
         let (ok, out) = run_writability_check(image);
-        let where_line = out
-            .lines()
-            .map(str::trim)
-            .find(|l| !l.is_empty())
-            .unwrap_or("(no diagnostics)");
-        assert!(ok, "Write failed: {} | {}", image, where_line);
+        if !ok {
+            eprintln!("Full output for {}:\n{}", image, out);
+        }
+        assert!(ok, "Failed (w): {} | {}", image, failure_line(&out));
     }
 
     #[test]

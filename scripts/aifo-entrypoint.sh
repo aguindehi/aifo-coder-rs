@@ -5,24 +5,70 @@ umask 077
 log_prefix="aifo-entrypoint"
 log_verbose="${AIFO_TOOLCHAIN_VERBOSE:-0}"
 runtime_user="${AIFO_RUNTIME_USER:-coder}"
+current_step="init"
 IS_ROOT=0
 if [ "$(id -u)" = "0" ]; then
     IS_ROOT=1
 fi
 
+mark_step() {
+    current_step="$1"
+}
+
 log_fatal_exit() {
     status="$1"
+    step="$2"
     if [ "$status" -ne 0 ]; then
-        printf '%s: fatal: entrypoint aborted (status %s)\n' "$log_prefix" "$status" >&2
+        set +e
+        printf '%s: fatal: entrypoint aborted (status %s, step=%s)\n' "$log_prefix" "$status" "$step" >&2
+        printf '%s: fatal: diag: uid=%s gid=%s umask=%s HOME=%s\n' "$log_prefix" "$(id -u)" "$(id -g)" "$(umask)" "${HOME:-unset}" >&2
+        diag_paths="$HOME $HOME/.local $HOME/.local/share $HOME/.local/state $HOME/.local/share/uv $HOME/.local/share/pnpm $HOME/.cache"
+        gpg_home="${GNUPGHOME:-$HOME/.gnupg}"
+        diag_paths="$diag_paths $gpg_home $gpg_home/gpg-agent.conf ${AIFO_CODER_CONFIG_DIR:-}"
+        for p in $diag_paths; do
+            [ -z "$p" ] && continue
+            if [ -e "$p" ]; then
+                diagnose_path "$p"
+            else
+                printf '%s: diag: missing %s\n' "$log_prefix" "$p" >&2
+            fi
+        done
+        set -e
     fi
 }
 
-trap 'log_fatal_exit "$?"' EXIT
+trap 'log_fatal_exit "$?" "$current_step"' EXIT
 
 log_debug() {
     if [ "$log_verbose" = "1" ]; then
         printf '%s: %s\n' "$log_prefix" "$1" >&2
     fi
+}
+
+diagnose_path() {
+    p="$1"
+    if [ -z "$p" ]; then
+        return
+    fi
+    stat_path="$(stat -c '%u:%g %a %F' "$p" 2>/dev/null || printf 'N/A')"
+    parent="$(dirname "$p" 2>/dev/null || printf '.')"
+    stat_parent="$(stat -c '%u:%g %a %F' "$parent" 2>/dev/null || printf 'N/A')"
+    printf '%s: diag: path=%s stat=%s\n' "$log_prefix" "$p" "$stat_path" >&2
+    printf '%s: diag: parent=%s stat=%s\n' "$log_prefix" "$parent" "$stat_parent" >&2
+}
+
+fail_write() {
+    op="$1"
+    target="$2"
+    detail="$3"
+    if [ -n "$detail" ]; then
+        printf '%s: error: %s failed for %s (%s)\n' "$log_prefix" "$op" "$target" "$detail" >&2
+    else
+        printf '%s: error: %s failed for %s\n' "$log_prefix" "$op" "$target" >&2
+    fi
+    printf '%s: diag: uid=%s gid=%s umask=%s\n' "$log_prefix" "$(id -u)" "$(id -g)" "$(umask)" >&2
+    diagnose_path "$target"
+    exit 1
 }
 
 is_fullscreen_agent() {
@@ -102,6 +148,7 @@ copy_with_mode() {
         install -m "$mode" "$src" "$dest" 2>/dev/null || cp "$src" "$dest" 2>/dev/null || true
     else
         cp "$src" "$dest" 2>/dev/null || true
+        chmod "$mode" "$dest" 2>/dev/null || true
     fi
 }
 
@@ -109,18 +156,25 @@ ensure_conf_line() {
     file="$1"
     prefix="$2"
     newline="$3"
-    tmp="$(mktemp "$file.tmp.XXXXXX" 2>/dev/null || mktemp)"
-    touch "$file"
+    tmp="$(mktemp "$file.tmp.XXXXXX" 2>/dev/null || mktemp 2>/dev/null)" || fail_write "mktemp" "$file" "ensure_conf_line temp"
+    [ -n "$tmp" ] || fail_write "mktemp" "$file" "empty temp path"
+    if ! touch "$file"; then
+        fail_write "touch" "$file" "ensure_conf_line target"
+    fi
     grep -v "^$prefix" "$file" 2>/dev/null > "$tmp" || true
     printf '%s
 ' "$newline" >> "$tmp"
-    mv "$tmp" "$file"
+    if ! mv "$tmp" "$file"; then
+        fail_write "mv" "$file" "ensure_conf_line src=$tmp"
+    fi
     maybe_chmod 0600 "$file"
 }
 
 sync_host_gpg() {
     host_dir="$HOME/.gnupg-host"
-    [ -d "$host_dir" ] || return
+    if [ ! -d "$host_dir" ]; then
+        return 0
+    fi
     safe_install_dir "$GNUPGHOME" 0700
     find "$GNUPGHOME" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
     if command -v rsync >/dev/null 2>&1; then
@@ -130,6 +184,7 @@ sync_host_gpg() {
         cp -a "$host_dir"/. "$GNUPGHOME"/ 2>/dev/null || true
     fi
     chmod 700 "$GNUPGHOME" 2>/dev/null || true
+    return 0
 }
 
 detect_signing_key() {
@@ -284,6 +339,7 @@ prime_gpg_agent_if_requested() {
 
 runtime_home="$(resolve_home "$runtime_user")"
 [ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
+mark_step "root-reexec"
 
 # For fullscreen agents (e.g., opencode), keep loopback pinentry enabled so that
 # gpg operations from non-interactive environments (no TTY) can still use the
@@ -307,6 +363,7 @@ if [ -z "${HOME:-}" ] || [ "$HOME" = "/" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME"
     export HOME="$runtime_home"
 fi
 home_mode=1777
+mark_step "ensure-home"
 if [ "$IS_ROOT" = "1" ]; then
     safe_install_dir "$HOME" "$home_mode"
     maybe_chmod "$home_mode" "$HOME"
@@ -318,9 +375,11 @@ fi
 if [ -z "${GNUPGHOME:-}" ]; then
     export GNUPGHOME="$HOME/.gnupg"
 fi
+mark_step "ensure-gnupg"
 safe_install_dir "$GNUPGHOME" 0700
 maybe_chmod 0700 "$GNUPGHOME"
 
+mark_step "sync-gpg"
 sync_host_gpg
 
 # If a host gitconfig is mounted at ~/.gitconfig-host (read-only), clone it into
@@ -336,6 +395,7 @@ fi
 cache_ttl="${AIFO_GPG_CACHE_TTL_SECONDS:-7200}"
 max_cache_ttl="${AIFO_GPG_CACHE_MAX_TTL_SECONDS:-86400}"
 conf="$GNUPGHOME/gpg-agent.conf"
+mark_step "gpg-conf"
 ensure_conf_line "$conf" "pinentry-program " "pinentry-program /usr/bin/pinentry-curses"
 ensure_conf_line "$conf" "allow-loopback-pinentry" "allow-loopback-pinentry"
 ensure_conf_line "$conf" "allow-preset-passphrase" "allow-preset-passphrase"
@@ -371,10 +431,12 @@ trace_writability_paths() {
     done
 }
 
+mark_step "ensure-local-tree"
 ensure_local_tree
 trace_writability_paths
 
 # Bootstrap gnupg configs
+mark_step "bootstrap-gpg"
 ensure_gpg_tty || unset GPG_TTY || true
 unset GPG_AGENT_INFO || true
 if [ "${AIFO_GPG_PRIMED:-0}" != "1" ]; then
@@ -387,6 +449,7 @@ if [ "${AIFO_GPG_PRIMED:-0}" != "1" ]; then
 fi
 refresh_gpg_agent_tty
 
+mark_step "git-gpg"
 configure_git_gpg_wrapper() {
     if ! command -v git >/dev/null 2>&1; then
         return
@@ -413,7 +476,9 @@ configure_git_gpg_wrapper() {
     fi
 }
 
+mark_step "configure-git-gpg"
 configure_git_gpg_wrapper
+mark_step "prime-gpg"
 prime_gpg_agent_if_requested
 
 sanitize_name() {
@@ -542,10 +607,14 @@ maybe_copy_configs() {
 
     export AIFO_CODER_CONFIG_DIR="$CFG_DST"
 
-    [ "$CFG_ENABLE" = "1" ] || return
-    [ -d "$CFG_HOST" ] || return
-
     safe_install_dir "$CFG_DST" 0700
+
+    if [ "$CFG_ENABLE" != "1" ]; then
+        return 0
+    fi
+    if [ ! -d "$CFG_HOST" ]; then
+        return 0
+    fi
 
     stamp="$CFG_DST/.copied"
     should_copy=1
@@ -573,17 +642,24 @@ maybe_copy_configs() {
             copy_tree_contents "$d" "$dest"
         done
         copy_agent_configs
+        # Normalize expected permissions for known files.
+        [ -f "$CFG_DST/global/config.toml" ] && chmod 0644 "$CFG_DST/global/config.toml" 2>/dev/null || true
+        [ -f "$CFG_DST/aider/creds.token" ] && chmod 0600 "$CFG_DST/aider/creds.token" 2>/dev/null || true
+        [ -f "$HOME/.aider.conf.yml" ] && chmod 0644 "$HOME/.aider.conf.yml" 2>/dev/null || true
         if [ "$IS_ROOT" = "1" ]; then
             install -m 0600 /dev/null "$stamp" 2>/dev/null || :
         else
             :
         fi
-        touch "$stamp"
+        if ! touch "$stamp"; then
+            fail_write "touch" "$stamp" "config stamp"
+        fi
     else
         log_debug "config: skip copy (up-to-date)"
     fi
 }
 
+mark_step "config-copy"
 maybe_copy_configs
 
 # Azure/OpenAI normalization for OpenHands
@@ -615,5 +691,6 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     fi
 fi
 
+mark_step "exec"
 trap - EXIT
 exec "$@"
