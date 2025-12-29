@@ -1,18 +1,19 @@
 
-# 🚀  Welcome to the AI Foundaton Coder  🚀
+# 🚀  Welcome to the AI Foundation Coder  🚀
 
 🔒 Security by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed for you
 
 ## ✨ Features:
 - Linux: Coding agents run securely inside Docker containers with AppArmor.
 - macOS: Transparent VM with Docker ensures isolated and secure agent execution.
+- macOS: Windows: Isolated in Docker Desktop VM; Windows Terminal/PowerShell/Git Bash.
 
 ## ⚙️  Secure Coding Agents
 - Environment with Secure Containerization Enabled
-- Platform with Adaptive Security for Linux & macOS
+- Platform with Adaptive Security for Linux, macOS & Windows
 
 ## 🔧 Building a safer future for coding automation...
-- Container isolation on Linux & macOS
+- Container isolation on Linux, macOS & Windows
 - Agents run inside a container, not on your host runtimes
 - AppArmor Support (via Docker or Colima)
 - No privileged Docker mode; no host Docker socket is mounted
@@ -833,7 +834,7 @@ Tip:
 - Deterministic priming: set `AIFO_GPG_PASSPHRASE_FILE=/path/to/file` (or `AIFO_GPG_PASSPHRASE`) before launching the agent. The entrypoint enables `allow-preset-passphrase` and, when `gpg-preset-passphrase` is available, presets the passphrase via the keygrip before falling back to pinentry-curses if needed.
 - Fullscreen agents (e.g., Opencode) automatically disable the loopback `aifo-gpg-wrapper` after priming so `git commit` reuses the cached `gpg-agent` session without requesting a second passphrase.
 - Manual `docker run -it … /bin/bash` sessions skip priming unless you explicitly set `AIFO_GPG_REQUIRE_PRIME=1`, so diagnostics shells work even when no TTY is available for pinentry.
- 
+
  ### Host notifications command (notifications-cmd)
 
 
