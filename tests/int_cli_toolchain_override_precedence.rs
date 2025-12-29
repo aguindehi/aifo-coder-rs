@@ -15,10 +15,8 @@ fn int_test_toolchain_image_override_takes_precedence_over_version_spec() {
         .args([
             "--verbose",
             "--dry-run",
-            "--toolchain-spec",
-            "rust@1.70",
-            "--toolchain-image",
-            "rust=rust:1.80-slim",
+            "--toolchain",
+            "rust@1.70=rust:1.80-slim",
             "aider",
             "--",
             "--version",
