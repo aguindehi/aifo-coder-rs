@@ -1,6 +1,6 @@
 use crate::agent_images::default_image_for;
 use crate::banner::print_startup_banner;
-use crate::cli::{Cli, ToolchainKind};
+use crate::cli::{Cli, ToolchainSpec};
 use crate::doctor::run_doctor;
 use crate::warnings::warn_if_tmp_workspace;
 
@@ -123,8 +123,7 @@ pub fn run_toolchain_cache_clear(cli: &Cli) -> std::process::ExitCode {
 
 pub fn run_toolchain(
     cli: &Cli,
-    kind: ToolchainKind,
-    image: Option<String>,
+    spec: ToolchainSpec,
     no_cache: bool,
     args: Vec<String>,
 ) -> std::process::ExitCode {
@@ -134,13 +133,14 @@ pub fn run_toolchain(
         aifo_coder::log_error_stderr(use_err, "aborted.");
         return std::process::ExitCode::from(1);
     }
+
+    let kind = spec.kind.as_str();
+    let image_override = spec.resolved_image_override();
+
     let use_err = aifo_coder::color_enabled_stderr();
     if cli.verbose {
-        aifo_coder::log_info_stderr(
-            use_err,
-            &format!("aifo-coder: toolchain kind: {}", kind.as_str()),
-        );
-        if let Some(img) = image.as_deref() {
+        aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: toolchain kind: {}", kind));
+        if let Some(img) = image_override.as_deref() {
             aifo_coder::log_info_stderr(
                 use_err,
                 &format!("aifo-coder: toolchain image override: {}", img),
@@ -153,15 +153,17 @@ pub fn run_toolchain(
             );
         }
     }
+
     if cli.dry_run {
         let _ =
-            aifo_coder::toolchain_run(kind.as_str(), &args, image.as_deref(), no_cache, true, true);
+            aifo_coder::toolchain_run(kind, &args, image_override.as_deref(), no_cache, true, true);
         return std::process::ExitCode::from(0);
     }
+
     let code = match aifo_coder::toolchain_run(
-        kind.as_str(),
+        kind,
         &args,
-        image.as_deref(),
+        image_override.as_deref(),
         no_cache,
         cli.verbose,
         false,

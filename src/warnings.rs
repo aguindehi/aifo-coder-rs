@@ -92,7 +92,7 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
     {
         return;
     }
-    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+    if !cli.toolchain.is_empty() {
         return;
     }
     let has_url = std::env::var("AIFO_TOOLEEXEC_URL")
@@ -146,7 +146,7 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "    --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12"
+            "    --toolchain rust@1.80 --toolchain node@22 --toolchain python@3.12"
         )
     );
     eprintln!("{}", aifo_coder::paint(use_err, "\x1b[33m", "  Options:"));
@@ -155,7 +155,7 @@ pub fn maybe_warn_missing_toolchain_agent(cli: &crate::cli::Cli, agent: &str) {
         aifo_coder::paint(
             use_err,
             "\x1b[33m",
-            "    --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
+            "    --toolchain kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
         )
     );
     eprintln!();
@@ -182,7 +182,7 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str)
         return true;
     }
     // No toolchain flags?
-    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+    if !cli.toolchain.is_empty() {
         return true;
     }
     // If proxy already configured, don't warn
@@ -202,8 +202,10 @@ pub fn maybe_warn_missing_toolchain_for_fork(cli: &crate::cli::Cli, agent: &str)
         "no language toolchain sidecars enabled (--toolchain).".to_string(),
         "without toolchains, PATH shims (cargo, rustc, node, npm, tsc, python, pip, gcc/clang, go, …) will not be proxied and builds may fail.".to_string(),
         "enable toolchains as needed, e.g.: aifo-coder --toolchain rust --toolchain node --toolchain python aider --".to_string(),
-        "pin versions: --toolchain-spec rust@1.80 --toolchain-spec node@22 --toolchain-spec python@3.12".to_string(),
-        "options: --toolchain-image kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket".to_string(),
+        "pin versions: --toolchain rust@1.80 --toolchain node@22 --toolchain python@3.12"
+            .to_string(),
+        "options: --toolchain kind=image, --no-toolchain-cache, and on Linux --toolchain-unix-socket"
+            .to_string(),
     ];
     let lines: Vec<&str> = msgs.iter().map(|m| m.as_str()).collect();
     aifo_coder::warn_prompt_continue_or_quit(&lines)

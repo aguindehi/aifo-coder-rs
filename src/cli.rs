@@ -14,32 +14,84 @@ pub(crate) enum Flavor {
     Slim,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
-pub(crate) enum ToolchainKind {
-    Rust,
-    #[value(alias = "bun")]
-    Node,
-    #[value(name = "typescript", alias = "ts")]
-    TypeScript,
-    Python,
-    #[value(alias = "ccpp")]
-    #[value(alias = "c")]
-    #[value(alias = "cpp")]
-    #[value(alias = "c_cpp")]
-    #[value(alias = "c++")]
-    CCpp,
-    Go,
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct ToolchainSpec {
+    /// Original CLI spec string (trimmed).
+    pub(crate) raw: String,
+    pub(crate) kind: String,
+    pub(crate) version: Option<String>,
+    pub(crate) image: Option<String>,
 }
 
-impl ToolchainKind {
-    pub(crate) fn as_str(&self) -> &'static str {
-        match self {
-            ToolchainKind::Rust => "rust",
-            ToolchainKind::Node | ToolchainKind::TypeScript => "node",
-            ToolchainKind::Python => "python",
-            ToolchainKind::CCpp => "c-cpp",
-            ToolchainKind::Go => "go",
+impl std::str::FromStr for ToolchainSpec {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let raw = s.trim();
+        if raw.is_empty() {
+            return Err("toolchain spec must not be empty".to_string());
         }
+
+        // Split on the first '=' first so the image may contain '@sha256:...' digests.
+        let (lhs, image_opt) = match raw.split_once('=') {
+            Some((l, r)) => (l.trim(), Some(r.trim())),
+            None => (raw, None),
+        };
+
+        let image = match image_opt {
+            Some("") => {
+                return Err("toolchain spec image must not be empty".to_string());
+            }
+            Some(v) => Some(v.to_string()),
+            None => None,
+        };
+
+        let (kind_raw, version_opt) = match lhs.split_once('@') {
+            Some((k, v)) => (k.trim(), Some(v.trim())),
+            None => (lhs, None),
+        };
+        if kind_raw.is_empty() {
+            return Err("toolchain kind must not be empty".to_string());
+        }
+
+        let version = match version_opt {
+            Some("") => {
+                return Err("toolchain spec version must not be empty".to_string());
+            }
+            Some(v) => Some(v.to_string()),
+            None => None,
+        };
+
+        let kind = aifo_coder::normalize_toolchain_kind(kind_raw);
+        let ok = matches!(kind.as_str(), "rust" | "node" | "python" | "c-cpp" | "go");
+        if !ok {
+            return Err(format!(
+                "unsupported toolchain kind '{kind_raw}'; supported: \
+rust, node, typescript/ts, bun, python, c/cpp/c-cpp, go"
+            ));
+        }
+
+        Ok(Self {
+            raw: raw.to_string(),
+            kind,
+            version,
+            image,
+        })
+    }
+}
+
+impl ToolchainSpec {
+    pub(crate) fn as_str(&self) -> &str {
+        self.raw.as_str()
+    }
+
+    pub(crate) fn resolved_image_override(&self) -> Option<String> {
+        if let Some(img) = self.image.as_ref() {
+            return Some(img.clone());
+        }
+        self.version
+            .as_deref()
+            .map(|v| aifo_coder::default_toolchain_image_for_version(&self.kind, v))
     }
 }
 
@@ -135,11 +187,9 @@ pub(crate) enum Agent {
 
     /// Toolchain sidecar: run a command inside a language toolchain sidecar
     Toolchain {
-        #[arg(value_enum)]
-        kind: ToolchainKind,
-        /// Override the toolchain image reference for this run
-        #[arg(long = "toolchain-image")]
-        image: Option<String>,
+        /// Toolchain spec: kind[@version][=image]
+        #[arg(value_name = "SPEC")]
+        spec: ToolchainSpec,
         /// Disable named cache volumes for the toolchain sidecar
         #[arg(long = "no-toolchain-cache")]
         no_cache: bool,
@@ -218,17 +268,16 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) image: Option<String>,
 
-    /// Attach language toolchains and inject PATH shims (repeatable)
-    #[arg(long = "toolchain", value_enum)]
-    pub(crate) toolchain: Vec<ToolchainKind>,
-
-    /// Attach toolchains with optional versions (repeatable), e.g. rust@1.80, node@20, python@3.12
-    #[arg(long = "toolchain-spec")]
-    pub(crate) toolchain_spec: Vec<String>,
-
-    /// Override image(s) for toolchains (repeatable, kind=image)
-    #[arg(long = "toolchain-image")]
-    pub(crate) toolchain_image: Vec<String>,
+    /// Attach language toolchains and inject PATH shims (repeatable).
+    ///
+    /// SPEC format: kind[@version][=image]
+    /// Examples:
+    ///   --toolchain rust
+    ///   --toolchain rust@1.80
+    ///   --toolchain rust=rust:1.80-bookworm
+    ///   --toolchain ts
+    #[arg(long = "toolchain", value_name = "SPEC")]
+    pub(crate) toolchain: Vec<ToolchainSpec>,
 
     /// Disable named cache volumes for toolchain sidecars
     #[arg(long = "no-toolchain-cache")]
