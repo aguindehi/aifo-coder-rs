@@ -1,5 +1,6 @@
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use rustc_version::version;
+use time::format_description::well_known::Iso8601;
+use time::OffsetDateTime;
 
 fn sanitize_env_value(raw: &str) -> Option<String> {
     let s = raw.trim();
@@ -12,19 +13,21 @@ fn sanitize_env_value(raw: &str) -> Option<String> {
     Some(s.to_string())
 }
 
-fn first_non_empty_line(s: &str) -> Option<&str> {
-    s.lines().map(|l| l.trim()).find(|l| !l.is_empty())
-}
-
 fn main() {
     // Re-run build script when this file changes
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=AIFO_OTEL_ENDPOINT_FILE");
+    println!("cargo:rerun-if-env-changed=AIFO_OTEL_ENDPOINT");
+    println!("cargo:rerun-if-env-changed=AIFO_OTEL_TRANSPORT");
+    println!("cargo:rerun-if-env-changed=TARGET");
+    println!("cargo:rerun-if-env-changed=PROFILE");
 
     // Optional: bake in a default OTLP endpoint and transport for telemetry from external configuration.
     // Priority (endpoint and transport):
     //   1) AIFO_OTEL_ENDPOINT_FILE: first non-empty line = endpoint, second non-empty line (optional) = transport
     //   2) AIFO_OTEL_ENDPOINT (env value) + optional AIFO_OTEL_TRANSPORT (env value)
     if let Ok(path) = std::env::var("AIFO_OTEL_ENDPOINT_FILE") {
+        println!("cargo:rerun-if-changed={path}");
         if let Ok(contents) = std::fs::read_to_string(&path) {
             let mut lines = contents.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
             if let Some(ep) = lines.next().and_then(sanitize_env_value) {
@@ -51,26 +54,11 @@ fn main() {
         }
     }
 
-    // Build date (UTC ISO-8601). Fallback to unix:<secs> if `date` is unavailable.
-    let build_date = Command::new("date")
-        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                first_non_empty_line(&String::from_utf8_lossy(&o.stdout))
-                    .and_then(sanitize_env_value)
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| {
-            let secs = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-                .as_secs();
-            format!("unix:{secs}")
-        });
+    // Build date (UTC ISO-8601).
+    let now = OffsetDateTime::now_utc();
+    let build_date = now
+        .format(&Iso8601::DEFAULT)
+        .unwrap_or_else(|_| format!("unix:{}", now.unix_timestamp()));
     if let Some(v) = sanitize_env_value(&build_date) {
         println!("cargo:rustc-env=AIFO_SHIM_BUILD_DATE={v}");
     }
@@ -87,19 +75,9 @@ fn main() {
     }
 
     // rustc version (best-effort)
-    let rustc_ver = Command::new("rustc")
-        .arg("--version")
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                first_non_empty_line(&String::from_utf8_lossy(&o.stdout))
-                    .and_then(sanitize_env_value)
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "unknown".to_string());
+    let rustc_ver = version()
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
     if let Some(v) = sanitize_env_value(&rustc_ver) {
         println!("cargo:rustc-env=AIFO_SHIM_BUILD_RUSTC={v}");
     }

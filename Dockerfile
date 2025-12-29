@@ -4,6 +4,9 @@
 # Default working directory at /workspace: the host project will be mounted there
 
 ARG REGISTRY_PREFIX
+ARG RUNTIME_USER=coder
+ARG RUNTIME_UID=1000
+ARG RUNTIME_GID=1000
 # CI builds use Kaniko --use-new-run; keep RUN --mount (secrets/cache); avoid COPY --link/--chmod.
 
 # --- Base layer: Rust image ---
@@ -164,206 +167,35 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
   for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python python3 pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
   for p in /usr/bin/python3.*; do b="$(basename "$p")"; [ -x "$p" ] && ln -sf aifo-shim "/opt/aifo/bin/$b" || true; done && \
-  install -d -m 0755 /usr/local/bin && \
-  cat >/usr/local/bin/aifo-entrypoint <<'SH'
-#!/bin/sh
-set -e
-if [ -z "$HOME" ] || [ "$HOME" = "/" ] || [ ! -w "$HOME" ]; then export HOME="/home/coder"; fi
-if [ ! -d "$HOME" ]; then mkdir -p "$HOME"; fi
-if [ -z "$GNUPGHOME" ]; then export GNUPGHOME="$HOME/.gnupg"; fi
-mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME" || true
-# Ensure a private runtime dir for gpg-agent sockets if system one is unavailable
-if [ -z "$XDG_RUNTIME_DIR" ]; then export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"; fi
-mkdir -p "$XDG_RUNTIME_DIR/gnupg"; chmod 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/gnupg" || true
-# Ensure writable HOME subtrees for arbitrary uid (uv/uvx, pnpm, etc.)
-for d in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/state" \
-         "$HOME/.local/share/uv" "$HOME/.local/share/pnpm"; do
-  install -d -m 0777 "$d" >/dev/null 2>&1 || true
-  chmod 0777 "$d" >/dev/null 2>&1 || true
-done
-# Copy keyrings from mounted host dir if present and not already in place
-if [ -d "$HOME/.gnupg-host" ]; then
-  for f in pubring.kbx trustdb.gpg gpg.conf gpg-agent.conf; do
-    if [ -f "$HOME/.gnupg-host/$f" ] && [ ! -f "$GNUPGHOME/$f" ]; then cp -a "$HOME/.gnupg-host/$f" "$GNUPGHOME/$f"; fi
-  done
-  for d in private-keys-v1.d openpgp-revocs.d; do
-    if [ -d "$HOME/.gnupg-host/$d" ] && [ ! -e "$GNUPGHOME/$d" ]; then cp -a "$HOME/.gnupg-host/$d" "$GNUPGHOME/$d"; fi
-  done
-fi
-# Configure pinentry if not set
-if [ ! -f "$GNUPGHOME/gpg-agent.conf" ] && command -v pinentry-curses >/dev/null 2>&1; then printf "pinentry-program /usr/bin/pinentry-curses\n" > "$GNUPGHOME/gpg-agent.conf"; fi
-grep -q "^allow-loopback-pinentry" "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
-grep -q "^default-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "default-cache-ttl 7200" >> "$GNUPGHOME/gpg-agent.conf"
-grep -q "^max-cache-ttl " "$GNUPGHOME/gpg-agent.conf" 2>/dev/null || echo "max-cache-ttl 86400" >> "$GNUPGHOME/gpg-agent.conf"
-# Prefer a TTY for pinentry
-if [ -t 0 ] || [ -t 1 ]; then export GPG_TTY="${GPG_TTY:-/dev/tty}"; fi
-unset GPG_AGENT_INFO
-# Launch gpg-agent
-if command -v gpgconf >/dev/null 2>&1; then gpgconf --kill gpg-agent >/dev/null 2>&1 || true; gpgconf --launch gpg-agent >/dev/null 2>&1 || true; else gpg-agent --daemon >/dev/null 2>&1 || true; fi
-CFG_HOST="${AIFO_CONFIG_HOST_DIR:-$HOME/.aifo-config-host}"
-CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"
-CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"
-CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"
-CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"
-CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"
-CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"
-export AIFO_CODER_CONFIG_DIR="$CFG_DST"
-if [ "$CFG_ENABLE" = "1" ]; then
-  install -d -m 0700 "$CFG_DST" || true
-  if [ -d "$CFG_HOST" ]; then
-    STAMP="$CFG_DST/.copied"
-    SHOULD=1
-    if [ "$CFG_COPY_ALWAYS" != "1" ] && [ -f "$STAMP" ]; then
-      max_src=0
-      for f in "$CFG_HOST"/* "$CFG_HOST"/global/* "$CFG_HOST"/*/*; do [ -e "$f" ] || continue; mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"; [ "$mt" -gt "$max_src" ] && max_src="$mt"; done
-      dst_mt="$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || echo 0)"
-      if [ "$max_src" -le "$dst_mt" ]; then SHOULD=0; fi
-    fi
-    if [ "$SHOULD" = "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: copying files from $CFG_HOST to $CFG_DST"; fi
-    if [ "$SHOULD" != "1" ] && [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ]; then echo "aifo-entrypoint: config: skip copy (up-to-date)"; fi
-    if [ "$SHOULD" = "1" ]; then
-    copy_one() {
-      src="$1"; base="$(basename "$src")";
-      case "$base" in
-        *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $base"; return ;;
-      esac;
-      ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")";
-      ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $base"; return; fi
-      [ -h "$src" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $base"; return; }; [ -f "$src" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $base"; return; }; sz="$(wc -c < "$src" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $base"; return; fi
-      mode=0644;
-      case "$ext_lc" in pem|key|token) mode=0600 ;; esac;
-      hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")";
-      IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS;
-      install -m "$mode" "$src" "$CFG_DST/global/$base" >/dev/null 2>&1 || true
-    }
-    if [ -d "$CFG_HOST/global" ]; then install -d -m 0700 "$CFG_DST/global" >/dev/null 2>&1 || true; for f in "$CFG_HOST"/global/.* "$CFG_HOST"/global/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; copy_one "$f"; done; fi
-    for d in "$CFG_HOST"/*; do [ -d "$d" ] || continue; name="$(basename "$d")"; [ "$name" = "global" ] && continue; install -d -m 0700 "$CFG_DST/$name" >/dev/null 2>&1 || true; for f in "$d"/.* "$d"/*; do [ -e "$f" ] || continue; b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue; [ -h "$f" ] && { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip symlink: $f"; continue; }; [ -f "$f" ] || { [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip non-regular: $f"; continue; }; base="$(basename "$f")"; case "$base" in *[!A-Za-z0-9._-]*|"") [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip invalid name: $name/$base"; continue ;; esac; ext="${base##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"; ok=0; IFS=,; for e in $CFG_EXT; do [ "$ext_lc" = "$(printf "%s" "$e" | tr "A-Z" "a-z")" ] && ok=1 && break; done; unset IFS; if [ "$ok" -ne 1 ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip disallowed extension: $name/$base"; continue; fi; sz="$(wc -c < "$f" 2>/dev/null || echo 0)"; if [ "$sz" -gt "$CFG_MAX" ]; then [ "${AIFO_TOOLCHAIN_VERBOSE:-0}" = "1" ] && echo "aifo-entrypoint: config: skip oversized (sz=$sz): $name/$base"; continue; fi; mode=0644; case "$ext_lc" in pem|key|token) mode=0600 ;; esac; hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$base" | tr "A-Z" "a-z")"; IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS; install -m "$mode" "$f" "$CFG_DST/$name/$base" >/dev/null 2>&1 || true; done; done
-    for bf in ".aider.conf.yml" ".aider.model.settings.yml" ".aider.model.metadata.json"; do
-      if [ -f "$CFG_DST/aider/$bf" ]; then install -m 0644 "$CFG_DST/aider/$bf" "$HOME/$bf" >/dev/null 2>&1 || true; fi
-    done
-    # Per-agent in-container install for other coding agents (crush, openhands, opencode, plandex)
-    if [ -d "$CFG_DST/crush" ]; then
-      install -d -m 0700 "$HOME/.crush" >/dev/null 2>&1 || true
-      for f in "$CFG_DST/crush"/.* "$CFG_DST/crush"/*; do
-        [ -e "$f" ] || continue
-        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
-        [ -h "$f" ] && continue
-        [ -f "$f" ] || continue
-        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
-        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
-        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
-        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
-        install -m "$mode" "$f" "$HOME/.crush/$b" >/dev/null 2>&1 || true
-      done
-    fi
-    if [ -d "$CFG_DST/openhands" ]; then
-      install -d -m 0700 "$HOME/.openhands" >/dev/null 2>&1 || true
-      for f in "$CFG_DST/openhands"/.* "$CFG_DST/openhands"/*; do
-        [ -e "$f" ] || continue
-        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
-        [ -h "$f" ] && continue
-        [ -f "$f" ] || continue
-        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
-        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
-        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
-        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
-        install -m "$mode" "$f" "$HOME/.openhands/$b" >/dev/null 2>&1 || true
-      done
-    fi
-    if [ -d "$CFG_DST/opencode" ]; then
-      install -d -m 0700 "$HOME/.config" >/dev/null 2>&1 || true
-      install -d -m 0700 "$HOME/.config/opencode" >/dev/null 2>&1 || true
-      for f in "$CFG_DST/opencode"/.* "$CFG_DST/opencode"/*; do
-        [ -e "$f" ] || continue
-        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
-        [ -h "$f" ] && continue
-        [ -f "$f" ] || continue
-        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
-        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
-        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
-        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
-        install -m "$mode" "$f" "$HOME/.config/opencode/$b" >/dev/null 2>&1 || true
-      done
-    fi
-    if [ -d "$CFG_DST/plandex" ]; then
-      install -d -m 0700 "$HOME/.plandex-home" >/dev/null 2>&1 || true
-      for f in "$CFG_DST/plandex"/.* "$CFG_DST/plandex"/*; do
-        [ -e "$f" ] || continue
-        b="$(basename "$f")"; [ "$b" = "." ] || [ "$b" = ".." ] && continue
-        [ -h "$f" ] && continue
-        [ -f "$f" ] || continue
-        mode=0644; ext="${b##*.}"; ext_lc="$(printf "%s" "$ext" | tr "A-Z" "a-z")"
-        case "$ext_lc" in pem|key|token) mode=0600 ;; esac
-        hn="$(printf "%s" "$CFG_HINTS" | tr "A-Z" "a-z")"; nm="$(printf "%s" "$b" | tr "A-Z" "a-z")"
-        IFS=,; for h in $hn; do case "$nm" in *"$h"*) mode=0600 ;; esac; done; unset IFS
-        install -m "$mode" "$f" "$HOME/.plandex-home/$b" >/dev/null 2>&1 || true
-      done
-    fi
-    touch "$CFG_DST/.copied" >/dev/null 2>&1 || true
-    fi
-  fi
-fi
-# Normalize OpenHands LLM settings from AIFO_* env for Azure
-if [ "${OPENAI_API_TYPE:-}" = "azure" ]; then
-  V="${AIFO_API_VERSION:-}"
-  B="${AIFO_API_BASE:-}"
-  K="${AIFO_API_KEY:-}"
-  if [ -n "$V" ]; then
-    export LITELLM_AZURE_API_VERSION="$V"
-    export AZURE_OPENAI_RESPONSES_API_VERSION="$V"
-  fi
-  SETTINGS="$HOME/.openhands/agent_settings.json"
-  if [ -f "$SETTINGS" ]; then
-    [ -n "$V" ] && sed -i -E "s|\"api_version\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_version\": \"$V\"|g" "$SETTINGS"
-    [ -n "$B" ] && sed -i -E "s|\"base_url\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"base_url\": \"$B\"|g" "$SETTINGS"
-    [ -n "$K" ] && sed -i -E "s|\"api_key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"api_key\": \"$K\"|g" "$SETTINGS"
-  fi
-fi
-# Claude config: link AIFO_CODER_CONFIG_DIR/claude/claude_desktop_config.json to the real Claude config
-if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
-  REAL="$HOME/.config/claude/claude_desktop_config.json"
-  LINK_DIR="$AIFO_CODER_CONFIG_DIR/claude"
-  LINK="$LINK_DIR/claude_desktop_config.json"
-  if [ -f "$REAL" ] || [ -L "$REAL" ]; then
-    if [ ! -e "$LINK" ]; then
-      install -d -m 0700 "$LINK_DIR" >/dev/null 2>&1 || true
-      ln -s "$REAL" "$LINK" >/dev/null 2>&1 || true
-    fi
-  fi
-fi
-# OpenCode storage sync via unison (host <-> container) when configured
-if [ "$AIFO_AGENT_NAME" = "opencode" ] && command -v unison >/dev/null 2>&1; then
-  HOST_STORE="${AIFO_OPENCODE_HOST_STORAGE:-}"
-  LOCAL_STORE="${AIFO_OPENCODE_STORAGE:-$HOME/.local/share/opencode}"
-  if [ -n "$HOST_STORE" ] && [ -d "$HOST_STORE" ]; then
-    # Ensure local storage dir and log dir exist
-    install -d -m 0700 "$LOCAL_STORE" >/dev/null 2>&1 || true
-    install -d -m 0700 "$HOME/.aifo-logs" >/dev/null 2>&1 || true
-    # Initial sync: prefer host contents into container-local storage (host -> container)
-    # -batch: non-interactive; -prefer HOST_STORE: resolve conflicts in favor of host
-    # -silent/-terse: avoid noisy logs on the TTY; log to a file instead.
-    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -prefer "$HOST_STORE" -silent -terse \
-      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
-    # Run the original command (typically opencode) in the foreground so it owns the TTY.
-    "$@"
-    code=$?
-    # After opencode exits, perform bi-directional sync (container <-> host)
-    unison "$HOST_STORE" "$LOCAL_STORE" -batch -ui text -auto -silent -terse \
-      >>"$HOME/.aifo-logs/opencode-unison.log" 2>&1 || true
-    exit "$code"
-  fi
-fi
-exec "$@"
-SH
+  install -d -m 0755 /usr/local/bin
 
-RUN chmod +x /usr/local/bin/aifo-entrypoint
+COPY scripts/aifo-entrypoint.sh /usr/local/bin/aifo-entrypoint
+COPY scripts/aifo-gpg-wrapper.sh /usr/local/bin/aifo-gpg-wrapper
+RUN chmod 0755 /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-gpg-wrapper
+
 
 # --- Base layer: Node image + common OS tools used by all agents ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base
+ARG RUNTIME_USER
+ARG RUNTIME_UID
+ARG RUNTIME_GID
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init gosu procps emacs-nox vim nano mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN set -eux; \
+    if ! getent group "${RUNTIME_USER}" >/dev/null 2>&1; then \
+        groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
+    fi; \
+    if ! id -u "${RUNTIME_USER}" >/dev/null 2>&1; then \
+        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
+        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
+    fi; \
+    chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN install -d -m 0777 /home/coder/.local /home/coder/.local/share /home/coder/.local/state /home/coder/.local/share/uv /home/coder/.local/share/pnpm /home/coder/.cache
+RUN set -eux; \
+    for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
+        install -d -m 1777 "/home/${RUNTIME_USER}/${d}"; \
+    done; \
+    chown -R "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -372,7 +204,9 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
-RUN install -d -m 1777 /home/coder
+COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
+ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
+RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
@@ -784,10 +618,26 @@ RUN sh -lc 'set -e; \
 
 # --- Slim base (minimal tools, no editors/ripgrep) ---
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim AS base-slim
+ARG RUNTIME_USER
+ARG RUNTIME_UID
+ARG RUNTIME_GID
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init gosu mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then rm -f /usr/local/share/ca-certificates/migros-root-ca.crt; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi'
+RUN set -eux; \
+    if ! getent group "${RUNTIME_USER}" >/dev/null 2>&1; then \
+        groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
+    fi; \
+    if ! id -u "${RUNTIME_USER}" >/dev/null 2>&1; then \
+        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
+        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
+    fi; \
+    chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN install -d -m 0777 /home/coder/.local /home/coder/.local/share /home/coder/.local/state /home/coder/.local/share/uv /home/coder/.local/share/pnpm /home/coder/.cache
+RUN set -eux; \
+    for d in ".local" ".local/share" ".local/state" ".local/share/uv" ".local/share/pnpm" ".cache"; do \
+        install -d -m 1777 "/home/${RUNTIME_USER}/${d}"; \
+    done; \
+    chown -R "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 WORKDIR /workspace
 
 # Copy shims and wrappers from shim-common
@@ -796,7 +646,9 @@ ENV PATH="/opt/aifo/bin:${PATH}"
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
-RUN install -d -m 1777 /home/coder
+COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
+ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
+RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
 
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]

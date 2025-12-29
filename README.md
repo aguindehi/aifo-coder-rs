@@ -819,8 +819,23 @@ Tip:
   - Ensures `$HOME` and `$GNUPGHOME` exist (0700), prepares `$XDG_RUNTIME_DIR`
   - Copies keys from `/home/coder/.gnupg-host` (read‑only mount) into `GNUPGHOME`
   - Configures pinentry to `pinentry-curses` and launches `gpg-agent`
+  - For fullscreen agents (currently `opencode`) it runs an interactive priming signature before the UI starts so pinentry-curses can cache your signing key passphrase. Cancelling the prompt aborts startup so you can fix the key and retry.
 
-### Host notifications command (notifications-cmd)
+#### GPG priming flow
+
+- `aifo-coder` only exports `AIFO_GPG_REQUIRE_PRIME=1` (and extended cache TTLs) when `commit.gpgsign` is `true` and a host secret key is detected. When signing is enabled but no key is mounted, the CLI prints a warning so you can fix `~/.gnupg`.
+- `aifo-entrypoint` requires an interactive TTY when priming. If you reproduce issues manually, run:
+  ```bash
+  gpg --armor --sign --detach-sig --output /dev/null /dev/null
+  ```
+  (add `--local-user <key>` if you use a non-default key). The entrypoint prints the exact command to rerun whenever priming fails.
+- The entrypoint captures the actual controlling TTY path (for example `/dev/pts/0`) and updates `gpg-agent` before invoking pinentry. If you still hit `gpg: signing failed: No such device or address`, re-run `aifo-coder …` from a real terminal (no background `nohup`) and make sure `docker run` includes `-it` so pinentry can draw.
+- Deterministic priming: set `AIFO_GPG_PASSPHRASE_FILE=/path/to/file` (or `AIFO_GPG_PASSPHRASE`) before launching the agent. The entrypoint enables `allow-preset-passphrase` and, when `gpg-preset-passphrase` is available, presets the passphrase via the keygrip before falling back to pinentry-curses if needed.
+- Fullscreen agents (e.g., Opencode) automatically disable the loopback `aifo-gpg-wrapper` after priming so `git commit` reuses the cached `gpg-agent` session without requesting a second passphrase.
+- Manual `docker run -it … /bin/bash` sessions skip priming unless you explicitly set `AIFO_GPG_REQUIRE_PRIME=1`, so diagnostics shells work even when no TTY is available for pinentry.
+ 
+ ### Host notifications command (notifications-cmd)
+
 
 - Available inside agent containers as notifications-cmd.
 - When invoked, it asks the host listener to run say with the provided arguments, but only if the full command equals the notifications-command configured in ~/.aider.conf.yml.

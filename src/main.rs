@@ -1,6 +1,28 @@
 use clap::Parser;
 use std::path::PathBuf;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
+
+fn propagate_proxy_env_for_child_tools() {
+    // Some MCP tools (e.g. Context7) run as child processes and rely on standard proxy vars.
+    // Propagate common proxy env vars from uppercase to lowercase for compatibility.
+    for (upper, lower) in [
+        ("HTTP_PROXY", "http_proxy"),
+        ("HTTPS_PROXY", "https_proxy"),
+        ("NO_PROXY", "no_proxy"),
+        ("ALL_PROXY", "all_proxy"),
+    ] {
+        if std::env::var_os(lower).is_none() {
+            if let Some(v) = std::env::var_os(upper) {
+                std::env::set_var(lower, v);
+            }
+        }
+        if std::env::var_os(upper).is_none() {
+            if let Some(v) = std::env::var_os(lower) {
+                std::env::set_var(upper, v);
+            }
+        }
+    }
+}
 
 // Internal modules
 mod agent_images;
@@ -52,6 +74,62 @@ fn apply_cli_globals(cli: &Cli) {
     // Propagate verbosity to runtime so image pulls can stream progress/output.
     if cli.verbose {
         std::env::set_var("AIFO_CODER_VERBOSE", "1");
+    }
+}
+
+const FULLSCREEN_GPG_AGENTS: &[&str] = &["opencode"];
+
+fn is_fullscreen_agent(agent: &str) -> bool {
+    FULLSCREEN_GPG_AGENTS.contains(&agent)
+}
+
+fn git_signing_enabled() -> bool {
+    if let Ok(output) = Command::new("git")
+        .args(["config", "--bool", "commit.gpgsign"])
+        .output()
+    {
+        if output.status.success() {
+            let val = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .to_ascii_lowercase();
+            return matches!(val.as_str(), "true");
+        }
+    }
+    false
+}
+
+fn host_has_gpg_secret_key() -> bool {
+    if let Ok(output) = Command::new("gpg")
+        .args(["--list-secret-keys", "--with-colons"])
+        .output()
+    {
+        if output.status.success() {
+            return String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .any(|line| line.starts_with("sec"));
+        }
+    }
+    false
+}
+
+fn configure_gpg_env(agent: &str, signing_enabled: bool, host_has_key: bool) {
+    if signing_enabled && !host_has_key {
+        eprintln!("aifo-coder: warning: commit signing is enabled but no host GPG secret key was found. Mount ~/.gnupg or disable signing.");
+    }
+    if !signing_enabled || !host_has_key {
+        std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
+        std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");
+        std::env::remove_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS");
+        return;
+    }
+    if is_fullscreen_agent(agent) {
+        std::env::set_var("AIFO_GPG_REQUIRE_PRIME", "1");
+        std::env::set_var("AIFO_GPG_CACHE_TTL_SECONDS", "43200");
+        std::env::set_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS", "172800");
+    } else {
+        std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
+        std::env::remove_var("AIFO_GPG_CACHE_TTL_SECONDS");
+        std::env::remove_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS");
     }
 }
 
@@ -371,6 +449,9 @@ fn main() -> ExitCode {
     // Load environment variables from .env if present (no error if missing)
     dotenvy::dotenv().ok();
 
+    // Ensure proxy env vars are available to any child processes/tools.
+    propagate_proxy_env_for_child_tools();
+
     // Parse command-line arguments into structured CLI options
     let cli = Cli::parse();
 
@@ -497,6 +578,16 @@ fn main() -> ExitCode {
 
         return ExitCode::from(1);
     }
+
+    let signing_enabled = git_signing_enabled();
+    let host_has_key = host_has_gpg_secret_key();
+    if signing_enabled && !host_has_key {
+        aifo_coder::log_warn_stderr(
+            use_err,
+            "aifo-coder: warning: commit.gpgsign is enabled but no secret key was found; mount your ~/.gnupg or disable signing.",
+        );
+    }
+    configure_gpg_env(agent, signing_enabled, host_has_key);
 
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;

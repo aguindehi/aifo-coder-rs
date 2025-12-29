@@ -20,6 +20,9 @@ pub(crate) static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         // GPG signing controls
         "AIFO_CODER_GIT_SIGN",
         "GIT_SIGNING_KEY",
+        "AIFO_GPG_REQUIRE_PRIME",
+        "AIFO_GPG_CACHE_TTL_SECONDS",
+        "AIFO_GPG_CACHE_MAX_TTL_SECONDS",
         // Timezone
         "TZ",
         // Editor preferences

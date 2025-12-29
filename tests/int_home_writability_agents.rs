@@ -32,12 +32,18 @@ mod int_home_writability_agents {
 
     fn run_writability_check(image: &str) -> (bool, String) {
         let Some(runtime) = docker_runtime() else {
-            eprintln!("docker not available; skipping: {}", image);
-            return (true, String::new()); // treat as skipped
+            eprintln!("docker not available; cannot check {}", image);
+            return (
+                false,
+                format!(
+                    "failed to run docker: runtime not available (AIFO_CODER_TEST_DISABLE_DOCKER={})",
+                    std::env::var("AIFO_CODER_TEST_DISABLE_DOCKER").unwrap_or_else(|_| "0".to_string())
+                ),
+            );
         };
 
         #[cfg(unix)]
-        let uidgid = {
+        let _uidgid = {
             use nix::unistd::{getgid, getuid};
             Some((u32::from(getuid()), u32::from(getgid())))
         };
@@ -46,7 +52,8 @@ mod int_home_writability_agents {
 
         let script = aifo_coder::ShellFile::new()
             .extend([
-                "set -eu".to_string(),
+                "set -e".to_string(),
+                r#"echo "HOME writability check starting: HOME=${HOME:-unset}""#.to_string(),
                 r#": "${HOME:=/home/coder}""#.to_string(),
                 r#"echo "probe: uid=$(id -u) gid=$(id -g) umask=$(umask)""#.to_string(),
                 "".to_string(),
@@ -63,12 +70,12 @@ mod int_home_writability_agents {
                 r#"  printf "  parent stat: ""#.to_string(),
                 r#"  stat -c '%u:%g %a' "$par" 2>/dev/null || echo 'N/A'"#.to_string(),
                 r#"  echo "  parent ls: $(ls -ld "$par" 2>&1 || echo 'N/A')""#.to_string(),
-                r#"  echo "  expected: $HOME mode 1777; subtrees 0777""#.to_string(),
+                r#"  echo "  expected: $HOME mode 1777; subtrees 0777; offending path: $p""#.to_string(),
                 "}".to_string(),
                 "".to_string(),
                 "check_mkdir() {".to_string(),
                 r#"  d="$1""#.to_string(),
-                r#"  if mkdir -p "$d/test.$$" >/dev/null 2>&1; then"#.to_string(),
+                r#"  if mkdir -p "$d/test.$$" >/dev/null; then"#.to_string(),
                 r#"    rmdir "$d/test.$$" >/dev/null 2>&1 || true"#.to_string(),
                 "    return 0".to_string(),
                 "  fi".to_string(),
@@ -78,7 +85,7 @@ mod int_home_writability_agents {
                 "check_touch() {".to_string(),
                 r#"  d="$1""#.to_string(),
                 r#"  f="$d/.writetest.$$""#.to_string(),
-                r#"  if : > "$f" >/dev/null 2>&1; then"#.to_string(),
+                r#"  if : > "$f" >/dev/null; then"#.to_string(),
                 r#"    rm -f "$f" >/dev/null 2>&1 || true"#.to_string(),
                 "    return 0".to_string(),
                 "  fi".to_string(),
@@ -106,12 +113,27 @@ mod int_home_writability_agents {
             .build()
             .expect("writability script");
 
+        // Persist the script to a temporary file and execute it from there to avoid
+        // hitting argument length limits when passing large scripts via -c.
+        let mut script_path = std::env::temp_dir();
+        script_path.push(format!(
+            "aifo-writability-{}.sh",
+            image.replace(':', "_").replace('/', "_")
+        ));
+        std::fs::write(&script_path, &script).expect("write writability script");
+
         let mut cmd = Command::new(runtime);
         cmd.arg("run").arg("--rm");
-        if let Some((uid, gid)) = uidgid {
-            cmd.arg("-u").arg(format!("{uid}:{gid}"));
-        }
-        cmd.arg(image).arg("sh").arg("-lc").arg(&script);
+        cmd.arg("-e").arg("AIFO_ENTRYPOINT_TRACE=1");
+        // Mount the script into the container and run it via /bin/sh -lc.
+        cmd.arg("-v").arg(format!(
+            "{}:/tmp/aifo-writability.sh:ro",
+            script_path.display()
+        ));
+        cmd.arg(image)
+            .arg("sh")
+            .arg("-lc")
+            .arg("sh /tmp/aifo-writability.sh");
 
         assert!(!script.contains('\0'), "script must not contain NUL");
 
@@ -135,9 +157,27 @@ mod int_home_writability_agents {
         format!("{prefix}-{agent}:{tag}")
     }
 
+    fn failure_line(out: &str) -> String {
+        out.lines()
+            .map(str::trim)
+            .find(|l| l.starts_with("FAIL "))
+            .map(|s| s.to_string())
+            .or_else(|| {
+                out.lines()
+                    .map(str::trim)
+                    .find(|l| !l.is_empty())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "(no diagnostics)".to_string())
+    }
+
     fn check_image(image: &str) {
         if skip_docker_tests() {
             eprintln!("AIFO_CODER_TEST_DISABLE_DOCKER=1; skipping {}", image);
+            return;
+        }
+        if docker_runtime().is_none() {
+            eprintln!("docker not available; skipping {}", image);
             return;
         }
         if !image_present(image) {
@@ -145,11 +185,10 @@ mod int_home_writability_agents {
             return;
         }
         let (ok, out) = run_writability_check(image);
-        assert!(
-            ok,
-            "HOME subtree writability failed for image: {}\n{}",
-            image, out
-        );
+        if !ok {
+            eprintln!("Full output for {}:\n{}", image, out);
+        }
+        assert!(ok, "Failed (w): {} | {}", image, failure_line(&out));
     }
 
     #[test]
