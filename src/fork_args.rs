@@ -22,14 +22,6 @@ pub(crate) fn fork_build_child_args(cli: &crate::cli::Cli) -> Vec<String> {
         args.push("--toolchain".to_string());
         args.push(k.as_str().to_string());
     }
-    for s in &cli.toolchain_spec {
-        args.push("--toolchain-spec".to_string());
-        args.push(s.clone());
-    }
-    for ti in &cli.toolchain_image {
-        args.push("--toolchain-image".to_string());
-        args.push(ti.clone());
-    }
     if cli.no_toolchain_cache {
         args.push("--no-toolchain-cache".to_string());
     }
@@ -92,11 +84,13 @@ mod args_tests {
         crate::cli::Cli {
             image: Some("example.com/org/agent:tag".to_string()),
             toolchain: vec![
-                crate::cli::ToolchainKind::Rust,
-                crate::cli::ToolchainKind::Node,
+                "rust".parse().expect("valid toolchain spec"),
+                "node".parse().expect("valid toolchain spec"),
+                "python@3.12".parse().expect("valid toolchain spec"),
+                "go=golang:1.22-bookworm".parse().expect("valid toolchain spec"),
             ],
-            toolchain_spec: vec!["python@3.12".to_string()],
-            toolchain_image: vec!["go=golang:1.22-bookworm".to_string()],
+            toolchain_spec: Vec::new(),
+            toolchain_image: Vec::new(),
             no_toolchain_cache: true,
             toolchain_unix_socket: false,
             toolchain_bootstrap: vec!["typescript=global".to_string()],
@@ -141,18 +135,21 @@ mod args_tests {
             joined
         );
         assert!(
-            joined.contains("--toolchain rust") && joined.contains("--toolchain node"),
-            "expected --toolchain flags in child args: {}",
+            joined.contains("--toolchain rust")
+                && joined.contains("--toolchain node")
+                && joined.contains("--toolchain python@3.12")
+                && joined.contains("--toolchain go=golang:1.22-bookworm"),
+            "expected --toolchain specs in child args: {}",
             joined
         );
         assert!(
-            joined.contains("--toolchain-spec python@3.12"),
-            "expected --toolchain-spec in child args: {}",
+            !joined.contains("--toolchain-spec"),
+            "unexpected legacy flag --toolchain-spec in child args: {}",
             joined
         );
         assert!(
-            joined.contains("--toolchain-image go=golang:1.22-bookworm"),
-            "expected --toolchain-image in child args: {}",
+            !joined.contains("--toolchain-image"),
+            "unexpected legacy flag --toolchain-image in child args: {}",
             joined
         );
         assert!(
