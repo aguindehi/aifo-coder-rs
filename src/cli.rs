@@ -16,6 +16,8 @@ pub(crate) enum Flavor {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct ToolchainSpec {
+    /// Original CLI spec string (trimmed).
+    pub(crate) raw: String,
     pub(crate) kind: String,
     pub(crate) version: Option<String>,
     pub(crate) image: Option<String>,
@@ -70,6 +72,7 @@ rust, node, typescript/ts, bun, python, c/cpp/c-cpp, go"
         }
 
         Ok(Self {
+            raw: raw.to_string(),
             kind,
             version,
             image,
@@ -78,6 +81,10 @@ rust, node, typescript/ts, bun, python, c/cpp/c-cpp, go"
 }
 
 impl ToolchainSpec {
+    pub(crate) fn as_str(&self) -> &str {
+        self.raw.as_str()
+    }
+
     pub(crate) fn resolved_image_override(&self) -> Option<String> {
         if let Some(img) = self.image.as_ref() {
             return Some(img.clone());
@@ -271,6 +278,12 @@ pub(crate) struct Cli {
     ///   --toolchain ts
     #[arg(long = "toolchain", value_name = "SPEC")]
     pub(crate) toolchain: Vec<ToolchainSpec>,
+
+    #[arg(skip)]
+    pub(crate) toolchain_spec: Vec<String>,
+
+    #[arg(skip)]
+    pub(crate) toolchain_image: Vec<String>,
 
     /// Disable named cache volumes for toolchain sidecars
     #[arg(long = "no-toolchain-cache")]
