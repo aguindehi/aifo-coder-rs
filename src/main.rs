@@ -348,14 +348,12 @@ fn handle_misc_subcommands(cli: &Cli) -> Option<ExitCode> {
         Agent::CacheClear => Some(crate::commands::run_cache_clear(cli)),
         Agent::ToolchainCacheClear => Some(crate::commands::run_toolchain_cache_clear(cli)),
         Agent::Toolchain {
-            kind,
-            image,
+            spec,
             no_cache,
             args,
         } => Some(crate::commands::run_toolchain(
             cli,
-            *kind,
-            image.clone(),
+            spec.clone(),
             *no_cache,
             args.clone(),
         )),
@@ -541,13 +539,12 @@ fn main() -> ExitCode {
     let run_start = std::time::Instant::now();
 
     #[cfg(feature = "otel")]
-    let toolchains_for_run: Vec<String> =
-        if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
-            let (kinds, _overrides) = crate::toolchain_session::plan_from_cli(&cli);
-            kinds.iter().map(|k| k.as_str().to_string()).collect()
-        } else {
-            Vec::new()
-        };
+    let toolchains_for_run: Vec<String> = if !cli.toolchain.is_empty() {
+        let (kinds, _overrides) = crate::toolchain_session::plan_from_cli(&cli);
+        kinds.iter().map(|k| k.as_str().to_string()).collect()
+    } else {
+        Vec::new()
+    };
 
     #[cfg(feature = "otel")]
     aifo_coder::record_run_start(agent, &toolchains_for_run);
@@ -592,7 +589,7 @@ fn main() -> ExitCode {
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
-    if !cli.toolchain.is_empty() || !cli.toolchain_spec.is_empty() {
+    if !cli.toolchain.is_empty() {
         let (kinds, overrides) = crate::toolchain_session::plan_from_cli(&cli);
 
         if cli.dry_run {

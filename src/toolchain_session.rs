@@ -17,60 +17,45 @@ use tracing::instrument;
 use crate::cli::Cli;
 
 pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
-    // Normalize requested kinds
-    let mut kinds: Vec<String> = cli
-        .toolchain
-        .iter()
-        .map(|k| k.as_str().to_string())
-        .collect();
+    use std::collections::{BTreeMap, BTreeSet};
 
-    fn parse_spec(s: &str) -> (String, Option<String>) {
-        let t = s.trim();
-        if let Some((k, v)) = t.split_once('@') {
-            (k.trim().to_string(), Some(v.trim().to_string()))
+    // Keep first-seen order of kinds, while letting later specs override earlier settings.
+    let mut kinds: Vec<String> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut override_by_kind: BTreeMap<String, String> = BTreeMap::new();
+
+    for spec in &cli.toolchain {
+        let kind = aifo_coder::normalize_toolchain_kind(&spec.kind);
+        if seen.insert(kind.clone()) {
+            kinds.push(kind.clone());
+        }
+
+        // Last spec wins per kind:
+        // - explicit image beats version
+        // - version becomes an image override
+        // - if neither is present, clear any prior override for this kind
+        let resolved_override = if let Some(img) = spec.image.as_ref() {
+            Some(img.clone())
+        } else if let Some(ver) = spec.version.as_ref() {
+            Some(aifo_coder::default_toolchain_image_for_version(&kind, ver))
         } else {
-            (t.to_string(), None)
-        }
-    }
+            None
+        };
 
-    let mut spec_versions: Vec<(String, String)> = Vec::new();
-    for s in &cli.toolchain_spec {
-        let (k, v) = parse_spec(s);
-        if !k.is_empty() {
-            kinds.push(k.clone());
-            if let Some(ver) = v {
-                spec_versions.push((k, ver));
+        match resolved_override {
+            Some(img) => {
+                override_by_kind.insert(kind.clone(), img);
+            }
+            None => {
+                override_by_kind.remove(&kind);
             }
         }
     }
-    use std::collections::BTreeSet;
-    let mut set = BTreeSet::new();
-    let mut kinds_norm: Vec<String> = Vec::new();
-    for k in kinds {
-        let norm = aifo_coder::normalize_toolchain_kind(&k);
-        if set.insert(norm.clone()) {
-            kinds_norm.push(norm);
-        }
-    }
-    let kinds = kinds_norm;
 
-    // Compute overrides (kind=image), with version-derived defaults
     let mut overrides: Vec<(String, String)> = Vec::new();
-    for s in &cli.toolchain_image {
-        if let Some((k, v)) = s.split_once('=') {
-            if !k.trim().is_empty() && !v.trim().is_empty() {
-                overrides.push((
-                    aifo_coder::normalize_toolchain_kind(k),
-                    v.trim().to_string(),
-                ));
-            }
-        }
-    }
-    for (k, ver) in spec_versions {
-        let kind = aifo_coder::normalize_toolchain_kind(&k);
-        if !overrides.iter().any(|(kk, _)| kk == &kind) {
-            let img = aifo_coder::default_toolchain_image_for_version(&kind, &ver);
-            overrides.push((kind, img));
+    for k in &kinds {
+        if let Some(img) = override_by_kind.get(k) {
+            overrides.push((k.clone(), img.clone()));
         }
     }
 
@@ -79,25 +64,7 @@ pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
 
 /// Return true if a node-family toolchain is requested via --toolchain/--toolchain-spec.
 pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
-    // Direct toolchain flag (matches ToolchainKind::Node)
-    if cli.toolchain.iter().any(|k| k.as_str() == "node") {
-        return true;
-    }
-
-    // Specs: node@XX, ts@YY, bun@ZZ (ToolchainKind::Node has aliases)
-    for s in &cli.toolchain_spec {
-        let t = s.trim();
-        let kind = if let Some((k, _v)) = t.split_once('@') {
-            k.trim()
-        } else {
-            t
-        };
-        let lower = kind.to_ascii_lowercase();
-        if lower == "node" || lower == "ts" || lower == "bun" {
-            return true;
-        }
-    }
-    false
+    cli.toolchain.iter().any(|s| s.kind == "node")
 }
 
 // One-shot npm/yarn → pnpm migration helper integrated into node toolchain startup.
@@ -373,7 +340,6 @@ impl ToolchainSession {
             skip(cli),
             fields(
                 aifo_coder_toolchain_count = cli.toolchain.len(),
-                aifo_coder_spec_count = cli.toolchain_spec.len(),
                 aifo_coder_no_cache = %cli.no_toolchain_cache,
                 aifo_coder_dry_run = %cli.dry_run,
                 aifo_coder_verbose = %cli.verbose
@@ -381,7 +347,7 @@ impl ToolchainSession {
         )
     )]
     pub fn start_if_requested(cli: &Cli) -> Result<Option<Self>, io::Error> {
-        if cli.toolchain.is_empty() && cli.toolchain_spec.is_empty() {
+        if cli.toolchain.is_empty() {
             return Ok(None);
         }
         if cli.dry_run {
