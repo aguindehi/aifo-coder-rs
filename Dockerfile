@@ -186,8 +186,8 @@ RUN set -eux; \
         groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
     fi; \
     if ! id -u "${RUNTIME_USER}" >/dev/null 2>&1; then \
-        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
-        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
+        useradd -l -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
+        useradd -l -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
     fi; \
     chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -628,8 +628,8 @@ RUN set -eux; \
         groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
     fi; \
     if ! id -u "${RUNTIME_USER}" >/dev/null 2>&1; then \
-        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
-        useradd -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
+        useradd -l -m -d "/home/${RUNTIME_USER}" -s /bin/bash -u "${RUNTIME_UID}" -g "${RUNTIME_USER}" "${RUNTIME_USER}" || \
+        useradd -l -m -d "/home/${RUNTIME_USER}" -s /bin/bash -g "${RUNTIME_USER}" "${RUNTIME_USER}"; \
     fi; \
     chmod 1777 "/home/${RUNTIME_USER}" || true
 RUN corepack enable && corepack prepare pnpm@latest --activate
