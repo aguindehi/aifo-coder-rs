@@ -11,6 +11,7 @@ ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}rust:${RUST_TAG}
 
 ARG KEEP_APT=0
+ARG HADOLINT_VERSION=2.12.0
 ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -168,6 +169,20 @@ RUN set -eux; \
     fi; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
+
+# Install hadolint (multi-arch binary)
+RUN set -eux; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture 2>/dev/null || uname -m)}"; \
+    case "$arch" in \
+      amd64 | x86_64) hl_arch="x86_64" ;; \
+      arm64 | aarch64) hl_arch="arm64" ;; \
+      *) echo "unsupported architecture for hadolint: $arch" >&2; exit 1 ;; \
+    esac; \
+    url="https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${hl_arch}"; \
+    curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /usr/local/bin/hadolint; \
+    chmod 0755 /usr/local/bin/hadolint; \
+    strip /usr/local/bin/hadolint 2>/dev/null || true; \
+    /usr/local/bin/hadolint --version >/dev/null
 
 # Optionally drop procps/apt and fold final CMake verification into same layer
 RUN set -eux; \

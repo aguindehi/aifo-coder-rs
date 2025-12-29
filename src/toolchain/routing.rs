@@ -27,6 +27,7 @@ const DEV_TOOLS: &[&str] = &[
     "clang++",
     "cc",
     "c++",
+    "hadolint",
 ];
 
 const ALLOW_RUST: &[&str] = &[
@@ -42,6 +43,7 @@ const ALLOW_RUST: &[&str] = &[
     "clang++",
     "cc",
     "c++",
+    "hadolint",
 ];
 
 const ALLOW_NODE: &[&str] = &[
@@ -64,6 +66,7 @@ const ALLOW_NODE: &[&str] = &[
     "clang++",
     "cc",
     "c++",
+    "hadolint",
 ];
 
 const ALLOW_PYTHON: &[&str] = &[
@@ -83,6 +86,7 @@ const ALLOW_PYTHON: &[&str] = &[
     "clang++",
     "cc",
     "c++",
+    "hadolint",
 ];
 
 const ALLOW_CCPP: &[&str] = &[
@@ -96,6 +100,7 @@ const ALLOW_CCPP: &[&str] = &[
     "cmake",
     "ninja",
     "pkg-config",
+    "hadolint",
 ];
 
 const ALLOW_GO: &[&str] = &[
@@ -111,6 +116,7 @@ const ALLOW_GO: &[&str] = &[
     "clang++",
     "cc",
     "c++",
+    "hadolint",
 ];
 
 pub fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
@@ -136,6 +142,8 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
         "python" | "python3" | "pip" | "pip3" | "uv" | "uvx" => "python",
         // c/c++
         "gcc" | "g++" | "clang" | "clang++" | "make" | "cmake" | "ninja" | "pkg-config" => "c-cpp",
+        // dockerfile linting
+        "hadolint" => "c-cpp",
         // go
         "go" | "gofmt" => "go",
         _ => "node",

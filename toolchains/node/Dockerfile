@@ -8,6 +8,8 @@ ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}node:22-bookworm-slim
 
 ARG KEEP_APT=0
+ARG HADOLINT_VERSION=2.12.0
+ARG TARGETARCH
 ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -108,6 +110,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi'
 
 # Consolidated into the previous RUN (corepack + yarn/pnpm + deno + CA cleanup)
+
+# Install hadolint (multi-arch binary)
+RUN set -eux; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture 2>/dev/null || uname -m)}"; \
+    case "$arch" in \
+      amd64 | x86_64) hl_arch="x86_64" ;; \
+      arm64 | aarch64) hl_arch="arm64" ;; \
+      *) echo "unsupported architecture for hadolint: $arch" >&2; exit 1 ;; \
+    esac; \
+    url="https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${hl_arch}"; \
+    curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /usr/local/bin/hadolint; \
+    chmod 0755 /usr/local/bin/hadolint; \
+    strip /usr/local/bin/hadolint 2>/dev/null || true; \
+    /usr/local/bin/hadolint --version >/dev/null
 
 # Default workdir mirrors sidecar runtime
 WORKDIR /workspace

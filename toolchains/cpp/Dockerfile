@@ -5,6 +5,8 @@ ARG REGISTRY_PREFIX
 FROM ${REGISTRY_PREFIX}debian:bookworm-slim
 
 ARG KEEP_APT=0
+ARG HADOLINT_VERSION=2.12.0
+ARG TARGETARCH
 ENV KEEP_APT=${KEEP_APT}
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -22,8 +24,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     mkdir -p /var/cache/apt/archives /var/cache/apt/archives/partial; \
     rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock-frontend || true; \
     apt-get update -o Acquire::Retries=3; \
-    apt-get -o Acquire::Retries=3 -o Dpkg::Use-Pty=0 -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config ccache procps ca-certificates git; \
-    apt-mark manual cmake cmake-data ninja-build build-essential clang pkg-config ccache git ca-certificates >/dev/null 2>&1 || true; \
+    apt-get -o Acquire::Retries=3 -o Dpkg::Use-Pty=0 -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config ccache procps ca-certificates curl git; \
+    apt-mark manual cmake cmake-data ninja-build build-essential clang pkg-config ccache git ca-certificates curl >/dev/null 2>&1 || true; \
     apt-mark hold cmake cmake-data >/dev/null 2>&1 || true; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
     if [ -f /usr/local/share/ca-certificates/migros-root-ca.crt ]; then \
@@ -32,6 +34,20 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     fi; \
     /usr/bin/cmake --version >/dev/null'
 # Enterprise CA is injected via BuildKit secret only during RUN steps; not persisted in the final image
+
+# Install hadolint (multi-arch binary)
+RUN set -eux; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture 2>/dev/null || uname -m)}"; \
+    case "$arch" in \
+      amd64 | x86_64) hl_arch="x86_64" ;; \
+      arm64 | aarch64) hl_arch="arm64" ;; \
+      *) echo "unsupported architecture for hadolint: $arch" >&2; exit 1 ;; \
+    esac; \
+    url="https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${hl_arch}"; \
+    curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /usr/local/bin/hadolint; \
+    chmod 0755 /usr/local/bin/hadolint; \
+    strip /usr/local/bin/hadolint 2>/dev/null || true; \
+    /usr/local/bin/hadolint --version >/dev/null
 
 # Consolidated: create cc/c++ hardlinks, add /usr/local/bin symlinks, and prepare HOME/ccache in one layer
 RUN set -eux; \

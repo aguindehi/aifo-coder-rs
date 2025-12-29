@@ -29,4 +29,5 @@ pub(crate) const SHIM_TOOLS: &[&str] = &[
     "say",
     "uv",
     "uvx",
+    "hadolint",
 ];

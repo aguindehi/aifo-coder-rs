@@ -27,6 +27,7 @@ fn unit_route_tool_to_sidecar_mapping() {
     assert_eq!(aifo_coder::route_tool_to_sidecar("cmake"), "c-cpp");
     assert_eq!(aifo_coder::route_tool_to_sidecar("ninja"), "c-cpp");
     assert_eq!(aifo_coder::route_tool_to_sidecar("pkg-config"), "c-cpp");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("hadolint"), "c-cpp");
 
     assert_eq!(aifo_coder::route_tool_to_sidecar("go"), "go");
     assert_eq!(aifo_coder::route_tool_to_sidecar("gofmt"), "go");
