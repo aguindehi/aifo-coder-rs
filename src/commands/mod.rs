@@ -155,14 +155,8 @@ pub fn run_toolchain(
     }
 
     if cli.dry_run {
-        let _ = aifo_coder::toolchain_run(
-            kind,
-            &args,
-            image_override.as_deref(),
-            no_cache,
-            true,
-            true,
-        );
+        let _ =
+            aifo_coder::toolchain_run(kind, &args, image_override.as_deref(), no_cache, true, true);
         return std::process::ExitCode::from(0);
     }
 
