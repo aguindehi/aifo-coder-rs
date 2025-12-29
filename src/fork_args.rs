@@ -91,8 +91,6 @@ mod args_tests {
                     .parse()
                     .expect("valid toolchain spec"),
             ],
-            toolchain_spec: Vec::new(),
-            toolchain_image: Vec::new(),
             no_toolchain_cache: true,
             toolchain_unix_socket: false,
             toolchain_bootstrap: vec!["typescript=global".to_string()],

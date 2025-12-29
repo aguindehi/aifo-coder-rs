@@ -279,12 +279,6 @@ pub(crate) struct Cli {
     #[arg(long = "toolchain", value_name = "SPEC")]
     pub(crate) toolchain: Vec<ToolchainSpec>,
 
-    #[arg(skip)]
-    pub(crate) toolchain_spec: Vec<String>,
-
-    #[arg(skip)]
-    pub(crate) toolchain_image: Vec<String>,
-
     /// Disable named cache volumes for toolchain sidecars
     #[arg(long = "no-toolchain-cache")]
     pub(crate) no_toolchain_cache: bool,
