@@ -157,6 +157,7 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
     // The list can be overridden via AIFO_NOTIFICATIONS_SAFE_DIRS, but only when
     // AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST=1 is set.
     let defaults = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+    let mut raw_dirs: Vec<PathBuf> = Vec::new();
     let allow_override = std::env::var("AIFO_NOTIFICATIONS_UNSAFE_ALLOWLIST")
         .ok()
         .as_deref()
@@ -170,7 +171,9 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
                 if p.is_empty() {
                     continue;
                 }
-                out.push(PathBuf::from(p));
+                let pb = PathBuf::from(p);
+                raw_dirs.push(pb.clone());
+                out.push(pb);
                 if out.len() >= 16 {
                     break;
                 }
@@ -221,6 +224,18 @@ fn notifications_exec_in_safe_dir(exec_abs: &Path) -> bool {
             let parent_canon = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
             if dirs.contains(&parent_canon) {
                 return true;
+            }
+        }
+        // As a final fallback, check raw override entries without canonicalization to handle
+        // paths like /tmp vs /private/tmp on macOS where canonical forms may diverge.
+        for raw in &raw_dirs {
+            if exec_abs.starts_with(raw) {
+                return true;
+            }
+            if let Some(parent) = exec_abs.parent() {
+                if parent == raw {
+                    return true;
+                }
             }
         }
     }

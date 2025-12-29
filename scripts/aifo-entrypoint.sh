@@ -73,7 +73,7 @@ fail_write() {
 
 is_fullscreen_agent() {
     case "${AIFO_AGENT_NAME:-}" in
-        opencode) return 0 ;;
+        opencode|opencode-slim|codex|codex-slim|crush|crush-slim) return 0 ;;
         *) return 1 ;;
     esac
 }
