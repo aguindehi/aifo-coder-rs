@@ -34,13 +34,11 @@ pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
         // - explicit image beats version
         // - version becomes an image override
         // - if neither is present, clear any prior override for this kind
-        let resolved_override = if let Some(img) = spec.image.as_ref() {
-            Some(img.clone())
-        } else if let Some(ver) = spec.version.as_ref() {
-            Some(aifo_coder::default_toolchain_image_for_version(&kind, ver))
-        } else {
-            None
-        };
+        let resolved_override = spec.image.as_ref().cloned().or_else(|| {
+            spec.version
+                .as_ref()
+                .map(|ver| aifo_coder::default_toolchain_image_for_version(&kind, ver))
+        });
 
         match resolved_override {
             Some(img) => {

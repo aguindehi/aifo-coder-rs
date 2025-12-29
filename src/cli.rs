@@ -39,7 +39,7 @@ impl std::str::FromStr for ToolchainSpec {
         };
 
         let image = match image_opt {
-            Some(v) if v.is_empty() => {
+            Some("") => {
                 return Err("toolchain spec image must not be empty".to_string());
             }
             Some(v) => Some(v.to_string()),
@@ -55,7 +55,7 @@ impl std::str::FromStr for ToolchainSpec {
         }
 
         let version = match version_opt {
-            Some(v) if v.is_empty() => {
+            Some("") => {
                 return Err("toolchain spec version must not be empty".to_string());
             }
             Some(v) => Some(v.to_string()),
