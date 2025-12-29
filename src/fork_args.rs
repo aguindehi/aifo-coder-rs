@@ -87,7 +87,9 @@ mod args_tests {
                 "rust".parse().expect("valid toolchain spec"),
                 "node".parse().expect("valid toolchain spec"),
                 "python@3.12".parse().expect("valid toolchain spec"),
-                "go=golang:1.22-bookworm".parse().expect("valid toolchain spec"),
+                "go=golang:1.22-bookworm"
+                    .parse()
+                    .expect("valid toolchain spec"),
             ],
             toolchain_spec: Vec::new(),
             toolchain_image: Vec::new(),
