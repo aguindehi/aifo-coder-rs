@@ -344,9 +344,10 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
     let rel_tag = format!("release-{}", env!("CARGO_PKG_VERSION"));
     let internal = crate::preferred_internal_registry_prefix_quiet();
 
-    // Prefer local images in this order:
+    // Prefer local images in this order unless CLI requested ignoring local images:
     // 1) unqualified :latest, 2) unqualified :release-<pkg>,
     // 3) internal-qualified :latest, 4) internal-qualified :release-<pkg>.
+    let ignore_local = crate::cli_ignore_local_images();
     if let Some(rt) = runtime.as_ref() {
         let candidates = [
             format!("{tail_repo}:latest"),
@@ -362,7 +363,11 @@ pub fn compute_effective_agent_image_for_run(image: &str) -> io::Result<String> 
                 format!("{internal}{tail_repo}:{rel_tag}")
             },
         ];
-        for c in candidates.iter().filter(|s| !s.is_empty()) {
+        for c in candidates
+            .iter()
+            .filter(|s| !s.is_empty())
+            .filter(|_| !ignore_local)
+        {
             if image_exists(rt.as_path(), c) {
                 return Ok(c.to_string());
             }

@@ -55,9 +55,11 @@ pub(crate) fn default_image_for(agent: &str) -> String {
         return image;
     }
 
-    // Prefer a local image if present and no explicit internal registry env is set.
+    // Prefer a local image if present and no explicit internal registry env is set, unless
+    // caller requested to ignore local images.
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
-    if !explicit_ir {
+    let ignore_local = aifo_coder::cli_ignore_local_images();
+    if !explicit_ir && !ignore_local {
         let runtime = aifo_coder::container_runtime_path().ok();
         if runtime
             .as_ref()
@@ -109,7 +111,8 @@ pub(crate) fn default_image_for_quiet(agent: &str) -> String {
 
     // Same local-first and qualification policy as default_image_for()
     let explicit_ir = aifo_coder::preferred_internal_registry_source() == "env";
-    if !explicit_ir {
+    let ignore_local = aifo_coder::cli_ignore_local_images();
+    if !explicit_ir && !ignore_local {
         let runtime = aifo_coder::container_runtime_path().ok();
         if runtime
             .as_ref()

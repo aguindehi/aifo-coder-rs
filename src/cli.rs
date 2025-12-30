@@ -307,6 +307,10 @@ pub(crate) struct Cli {
     #[arg(long, value_enum)]
     pub(crate) flavor: Option<Flavor>,
 
+    /// Ignore locally cached images and always pull (agents and toolchains)
+    #[arg(long = "ignore-local-images")]
+    pub(crate) ignore_local_images: bool,
+
     /// Invalidate on-disk registry cache before probing
     #[arg(long)]
     pub(crate) invalidate_registry_cache: bool,
