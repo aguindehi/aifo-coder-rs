@@ -51,3 +51,42 @@ pub(crate) fn push_env_kv_if_set(args: &mut Vec<OsString>, key: &str) {
         }
     }
 }
+
+// Allow users to opt-in arbitrary environment variables via the AIFO_ENV_<NAME>=<VALUE> pattern.
+// Example: AIFO_ENV_MY_KEY=foo -> container receives MY_KEY=foo.
+//
+// Safeguards:
+// - Skip empty values
+// - Skip empty suffixes after the prefix
+// - Only allow ASCII alnum/underscore names to avoid surprising behavior
+// - Skip a small set of reserved keys to prevent breaking core runtime assumptions
+pub(crate) fn push_prefixed_env_vars(args: &mut Vec<OsString>) {
+    // Keep ordering stable for deterministic test assertions
+    let mut pairs: Vec<(String, String)> = env::vars()
+        .filter_map(|(k, v)| {
+            let stripped = k.strip_prefix("AIFO_ENV_")?;
+            if stripped.is_empty() || v.is_empty() {
+                return None;
+            }
+            let valid = stripped
+                .bytes()
+                .all(|b| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'));
+            if !valid {
+                return None;
+            }
+            Some((stripped.to_string(), v))
+        })
+        .collect();
+
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Minimal reserved list to avoid clobbering critical runtime env
+    const RESERVED: &[&str] = &["HOME", "USER", "SHELL", "PATH", "TERM", "PWD"];
+
+    for (k, v) in pairs {
+        if RESERVED.iter().any(|r| r == &k) {
+            continue;
+        }
+        push_env_kv(args, &k, &v);
+    }
+}

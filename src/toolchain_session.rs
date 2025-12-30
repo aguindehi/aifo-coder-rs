@@ -98,6 +98,15 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     let has_package_lock = cwd.join("package-lock.json").is_file();
     let has_yarn_lock = cwd.join("yarn.lock").is_file();
     let has_package_json = cwd.join("package.json").is_file();
+    let has_node_modules = cwd.join("node_modules").is_dir();
+    let import_target = if has_package_lock {
+        Some("package-lock.json")
+    } else if has_yarn_lock {
+        Some("yarn.lock")
+    } else {
+        None
+    };
+    let needs_import = !has_pnpm_lock && import_target.is_some();
 
     // Mode A: pnpm-first repo with legacy npm/yarn lockfiles to clean up
     if has_pnpm_lock {
@@ -107,8 +116,8 @@ fn maybe_migrate_node_to_pnpm_interactive() {
             return;
         }
     } else {
-        // Mode B: clearly npm-based repo (package.json + package-lock.json, no pnpm lock yet)
-        if !(has_package_json && has_package_lock && !has_pnpm_lock) {
+        // Mode B: clearly npm/yarn-based repo (package.json + legacy lockfile, no pnpm lock yet)
+        if !(has_package_json && !has_pnpm_lock && (has_package_lock || has_yarn_lock)) {
             // Neither pnpm-first-with-legacy-locks nor npm-only with package-lock.json:
             // do not offer migration.
             return;
@@ -116,10 +125,13 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     }
 
     let use_err = aifo_coder::color_enabled_stderr();
+    let auto_yes = std::env::var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES")
+        .ok()
+        .as_deref()
+        == Some("1");
     let mut out = io::stderr();
 
     // Explain what will happen (mirrors Makefile semantics), but report actual artifacts found.
-    let has_node_modules = cwd.join("node_modules").is_dir();
     let mut artifacts: Vec<&str> = Vec::new();
     if has_node_modules {
         artifacts.push("node_modules/");
@@ -142,19 +154,30 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     let msg = format!(
         "{detected}aifo-coder: this repository is pnpm-first.\n\
 aifo-coder: we can migrate your project to pnpm by:\n\
+{import_step}\
   - Removing node_modules/\n\
   - Removing package-lock.json and yarn.lock (if present)\n\
   - Creating .pnpm-store/ with group-writable permissions\n\
   - Running 'pnpm install --frozen-lockfile'\n\n\
 Do you want to perform this one-shot migration now? [y/N] ",
-        detected = detected_line
+        detected = detected_line,
+        import_step = if needs_import {
+            format!(
+                "  - Running 'pnpm import {}' to generate pnpm-lock.yaml\n",
+                import_target.unwrap_or("package-lock.json or yarn.lock")
+            )
+        } else {
+            String::new()
+        }
     );
     let painted = aifo_coder::paint(use_err, "\x1b[33m", &msg);
     let _ = write!(out, "{}", painted);
     let _ = out.flush();
 
     let mut answer = String::new();
-    if io::stdin().read_line(&mut answer).is_err() {
+    if auto_yes {
+        answer.push('y');
+    } else if io::stdin().read_line(&mut answer).is_err() {
         return;
     }
     let ans = answer.trim();
@@ -183,6 +206,101 @@ Do you want to perform this one-shot migration now? [y/N] ",
         )
     );
     let _ = out.flush();
+
+    let pnpm_store = cwd.join(".pnpm-store");
+    if !pnpm_store.is_dir() {
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(
+                use_err,
+                "\x1b[33m",
+                "aifo-coder: creating .pnpm-store with group-writable permissions ..."
+            )
+        );
+        let _ = out.flush();
+        if let Err(e) = std::fs::create_dir_all(&pnpm_store) {
+            let _ = writeln!(
+                out,
+                "{}",
+                aifo_coder::paint(
+                    use_err,
+                    "\x1b[31m",
+                    &format!(
+                        "aifo-coder: warning: failed to create .pnpm-store directory: {}",
+                        e
+                    )
+                )
+            );
+            let _ = out.flush();
+            return;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&pnpm_store, std::fs::Permissions::from_mode(0o775));
+        }
+    }
+
+    let store_path = pnpm_store
+        .as_path()
+        .to_str()
+        .unwrap_or(".pnpm-store")
+        .to_string();
+
+    if needs_import {
+        let target = import_target.unwrap_or("package-lock.json");
+        let msg_import = format!(
+            "aifo-coder: running 'pnpm import {}' to generate pnpm-lock.yaml ...",
+            target
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            aifo_coder::paint(use_err, "\x1b[32m", &msg_import)
+        );
+        let _ = out.flush();
+
+        let status = std::process::Command::new("pnpm")
+            .arg("import")
+            .arg(target)
+            .env("PNPM_STORE_PATH", &store_path)
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                let _ = writeln!(
+                    out,
+                    "{}",
+                    aifo_coder::paint(
+                        use_err,
+                        "\x1b[33m",
+                        &format!(
+                            "aifo-coder: warning: pnpm import exited with status {:?}; \
+skipping migration.",
+                            s.code()
+                        )
+                    )
+                );
+                let _ = out.flush();
+                return;
+            }
+            Err(e) => {
+                let _ = writeln!(
+                    out,
+                    "{}",
+                    aifo_coder::paint(
+                        use_err,
+                        "\x1b[31m",
+                        &format!("aifo-coder: warning: failed to run pnpm import: {}", e)
+                    )
+                );
+                let _ = out.flush();
+                return;
+            }
+        }
+    }
 
     // Perform migration (mirrors Makefile node-migrate-to-pnpm)
     if has_node_modules {
@@ -221,50 +339,9 @@ Do you want to perform this one-shot migration now? [y/N] ",
         let _ = std::fs::remove_file(cwd.join("yarn.lock"));
     }
 
-    let pnpm_store = cwd.join(".pnpm-store");
-    if !pnpm_store.is_dir() {
-        let _ = writeln!(
-            out,
-            "{}",
-            aifo_coder::paint(
-                use_err,
-                "\x1b[33m",
-                "aifo-coder: creating .pnpm-store with group-writable permissions ..."
-            )
-        );
-        let _ = out.flush();
-        if let Err(e) = std::fs::create_dir_all(&pnpm_store) {
-            let _ = writeln!(
-                out,
-                "{}",
-                aifo_coder::paint(
-                    use_err,
-                    "\x1b[31m",
-                    &format!(
-                        "aifo-coder: warning: failed to create .pnpm-store directory: {}",
-                        e
-                    )
-                )
-            );
-            let _ = out.flush();
-            return;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&pnpm_store, std::fs::Permissions::from_mode(0o775));
-        }
-    }
-
     let msg_run = "aifo-coder: running 'pnpm install --frozen-lockfile' using .pnpm-store/ ...";
     let _ = writeln!(out, "{}", aifo_coder::paint(use_err, "\x1b[32m", msg_run));
     let _ = out.flush();
-
-    let store_path = pnpm_store
-        .as_path()
-        .to_str()
-        .unwrap_or(".pnpm-store")
-        .to_string();
 
     let status = std::process::Command::new("pnpm")
         .arg("install")
@@ -519,6 +596,138 @@ impl ToolchainSession {
         if !in_fork_pane {
             aifo_coder::toolchain_cleanup_session(&self.sid, verbose);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::maybe_migrate_node_to_pnpm_interactive;
+    use std::env;
+    use std::ffi::OsString;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use tempfile::tempdir;
+
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
+    #[cfg(unix)]
+    struct TestEnvGuard {
+        dir: PathBuf,
+        path: Option<OsString>,
+        auto: Option<String>,
+    }
+
+    #[cfg(unix)]
+    impl TestEnvGuard {
+        fn new(dir: PathBuf, path: Option<OsString>, auto: Option<String>) -> Self {
+            Self { dir, path, auto }
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for TestEnvGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.dir);
+            match self.path.clone() {
+                Some(p) => env::set_var("PATH", p),
+                None => env::remove_var("PATH"),
+            }
+            match self.auto.clone() {
+                Some(v) => env::set_var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES", v),
+                None => env::remove_var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES"),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pnpm_migration_imports_legacy_lock_and_cleans_up() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let old_dir = env::current_dir()?;
+        let old_path = env::var_os("PATH");
+        let old_auto = env::var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES").ok();
+        let _guard = TestEnvGuard::new(old_dir, old_path.clone(), old_auto);
+
+        let tmp = tempdir()?;
+        env::set_current_dir(tmp.path())?;
+
+        fs::write(
+            tmp.path().join("package.json"),
+            r#"{"name":"demo","version":"1.0.0"}"#,
+        )?;
+        fs::write(tmp.path().join("package-lock.json"), "{}")?;
+        fs::create_dir(tmp.path().join("node_modules"))?;
+
+        let pnpm_path = tmp.path().join("pnpm");
+        let log_path = tmp.path().join("pnpm-log.txt");
+        let lock_path = tmp.path().join("pnpm-lock.yaml");
+
+        let mut script = String::new();
+        script.push_str("#!/bin/sh\n");
+        script.push_str("cmd=\"$1\"\n");
+        script.push_str("shift\n");
+        script.push_str(&format!("log_file=\"{}\"\n", log_path.display()));
+        script.push_str(&format!("lock_file=\"{}\"\n", lock_path.display()));
+        script.push_str("case \"$cmd\" in\n");
+        script.push_str("  --version)\n");
+        script.push_str("    exit 0\n");
+        script.push_str("    ;;\n");
+        script.push_str("  import)\n");
+        script.push_str("    echo \"import $1\" > \"$log_file\"\n");
+        script.push_str("    echo \"store=$PNPM_STORE_PATH\" >> \"$log_file\"\n");
+        script.push_str("    echo \"generated\" > \"$lock_file\"\n");
+        script.push_str("    exit 0\n");
+        script.push_str("    ;;\n");
+        script.push_str("  install)\n");
+        script.push_str("    echo \"install store=$PNPM_STORE_PATH\" >> \"$log_file\"\n");
+        script.push_str("    exit 0\n");
+        script.push_str("    ;;\n");
+        script.push_str("  *)\n");
+        script.push_str("    exit 1\n");
+        script.push_str("    ;;\n");
+        script.push_str("esac\n");
+
+        fs::write(&pnpm_path, script)?;
+        fs::set_permissions(&pnpm_path, fs::Permissions::from_mode(0o755))?;
+
+        let mut paths = Vec::new();
+        paths.push(pnpm_path.parent().unwrap_or(Path::new(".")).to_path_buf());
+        if let Some(old) = old_path {
+            paths.extend(env::split_paths(&old));
+        }
+        env::set_var("PATH", env::join_paths(paths)?);
+        env::set_var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES", "1");
+
+        maybe_migrate_node_to_pnpm_interactive();
+
+        let pnpm_lock = tmp.path().join("pnpm-lock.yaml");
+        assert!(pnpm_lock.is_file());
+        assert!(!tmp.path().join("package-lock.json").exists());
+        assert!(!tmp.path().join("yarn.lock").exists());
+        assert!(!tmp.path().join("node_modules").exists());
+        assert!(tmp.path().join(".pnpm-store").is_dir());
+
+        let log = fs::read_to_string(&log_path)?;
+        let expected_store = tmp.path().join(".pnpm-store");
+        let store_str = expected_store.display().to_string();
+        assert!(
+            log.contains("import package-lock.json"),
+            "log did not record import: {}",
+            log
+        );
+        assert!(
+            log.contains("install store="),
+            "log did not record install: {}",
+            log
+        );
+        assert!(
+            log.contains(&store_str),
+            "PNPM_STORE_PATH not passed through: {}",
+            log
+        );
+
+        Ok(())
     }
 }
 
