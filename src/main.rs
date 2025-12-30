@@ -71,6 +71,10 @@ fn apply_cli_globals(cli: &Cli) {
             Flavor::Slim => std::env::set_var("AIFO_CODER_IMAGE_FLAVOR", "slim"),
         }
     }
+    if cli.ignore_local_images {
+        std::env::set_var("AIFO_CODER_IGNORE_LOCAL_IMAGES", "1");
+        aifo_coder::set_ignore_local_images(true);
+    }
     // Propagate verbosity to runtime so image pulls can stream progress/output.
     if cli.verbose {
         std::env::set_var("AIFO_CODER_VERBOSE", "1");

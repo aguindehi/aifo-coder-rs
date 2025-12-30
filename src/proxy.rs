@@ -11,6 +11,7 @@ pub(crate) const PROXY_ENV_VARS: &[&str] =
 static FORCE_DIRECT_PROXY: AtomicBool = AtomicBool::new(false);
 static RECORDED_PROXY_VARS: Lazy<Mutex<Vec<String>>> =
     Lazy::new(|| Mutex::new(Vec::with_capacity(4)));
+static IGNORE_LOCAL_IMAGES: AtomicBool = AtomicBool::new(false);
 
 fn force_direct_allowed() -> bool {
     env::var("AIFO_PROXY_FORCE_PROXY").ok().as_deref() != Some("1")
@@ -62,7 +63,21 @@ pub(crate) fn proxy_clear_envs() -> &'static [&'static str] {
 
 pub fn reset_proxy_state_for_tests() {
     FORCE_DIRECT_PROXY.store(false, Ordering::Relaxed);
+    IGNORE_LOCAL_IMAGES.store(false, Ordering::Relaxed);
     if let Ok(mut guard) = RECORDED_PROXY_VARS.lock() {
         guard.clear();
     }
+}
+
+/// Mark CLI preference to ignore local images (set via flag or env).
+pub fn set_ignore_local_images(val: bool) {
+    IGNORE_LOCAL_IMAGES.store(val, Ordering::Relaxed);
+}
+
+/// Whether CLI requested to ignore local images.
+pub fn cli_ignore_local_images() -> bool {
+    if env::var("AIFO_CODER_IGNORE_LOCAL_IMAGES").ok().as_deref() == Some("1") {
+        return true;
+    }
+    IGNORE_LOCAL_IMAGES.load(Ordering::Relaxed)
 }

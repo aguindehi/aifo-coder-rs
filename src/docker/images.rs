@@ -6,6 +6,9 @@ use std::process::{Command, Stdio};
 
 /// Return true if a docker image exists locally (without pulling).
 pub fn image_exists(runtime: &Path, image: &str) -> bool {
+    if crate::cli_ignore_local_images() {
+        return false;
+    }
     Command::new(runtime)
         .arg("image")
         .arg("inspect")

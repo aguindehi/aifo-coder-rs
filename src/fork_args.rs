@@ -97,6 +97,7 @@ mod args_tests {
             verbose: true,
             debug_otel_otlp: false,
             quiet: false,
+            ignore_local_images: false,
             non_interactive: false,
             flavor: Some(crate::cli::Flavor::Slim),
             invalidate_registry_cache: false,
