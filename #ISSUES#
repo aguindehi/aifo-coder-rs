@@ -1,0 +1,421 @@
+PW:
+
+  Apple App PW: chvu-lwij-ueqz-hmoc
+
+Implement for all:
+
+    let verbose = env::var("AIFO_TOOLCHAIN_VERBOSE").ok().as_deref() == Some("1");
+    if verbose {
+        eprintln!(
+            "aifo-shim: build={} target={} profile={} rust={} ver={}",
+            env!("AIFO_SHIM_BUILD_DATE"),
+            env!("AIFO_SHIM_BUILD_TARGET"),
+            env!("AIFO_SHIM_BUILD_PROFILE"),
+            env!("AIFO_SHIM_BUILD_RUSTC"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+FIX:
+
+==> check: fmt + clippy
+make[1]: Entering directory '/workspace'
+
+Running cargo fmt --check (sidecar) ...
+Running cargo clippy (sidecar) ...
+   Compiling proc-macro2 v1.0.103
+   Compiling unicode-ident v1.0.22
+   Compiling quote v1.0.42
+
+---
+
+ • make check
+ • make rebuild-rust-builder
+ • make rebuild-toolchain
+ • make rebuild
+ • make check-all
+
+AIFO-CODER ISSUES
+=================
+
+- IDEA: Build raport tool, orchestrating aifo-coder to regularly analyse a list of git repositories. Must be smart enough
+        to know which files to add and which files to ignore to minimalize context usage. Could automatically send
+        emails with the raport to a list of addresses.
+
+- MCP: context7 key: ctx7sk-3907ee7d-3671-4c29-bdbb-ba4f03fadd1a
+
+- fix: AppArmor on MacOSX -> AppArmor startup falling back to default profile. Loading via Colima should work
+- fix: AppArmor on Linux  -> AppArmor startup falling back to default profile. Should load aifo-coder profile on Linux
+
+- fix: preinstall /opt/venv/bin/python -m pip install --upgrade --upgrade-strategy only-if-needed 'aider-chat[help]' \
+                                      --extra-index-url https://download.pytorch.org/whl/cpu
+
+- fix: following:
+  #18 3.286 warning: unused import: `UnixStream`
+  #18 3.286   --> src/lib.rs:11:40
+  #18 3.286    |
+  #18 3.286 11 | use std::os::unix::net::{UnixListener, UnixStream};
+  #18 3.286    |                                        ^^^^^^^^^^
+  #18 3.286    |
+  #18 3.286    = note: `#[warn(unused_imports)]` on by default
+  #18 3.286
+  #18 3.678 warning: `aifo-coder` (lib) generated 1 warning (run `cargo fix --lib -p aifo-coder` to apply 1 suggestion)
+  #18 4.858     Finished `release` profile [optimized] target(s) in 4.73s
+
+- fix: following:
+  Running cargo clippy (sidecar) ...
+      Updating crates.io index
+  warning: spurious network error (3 tries remaining):
+    [28] Timeout was reached (Connection timed out after 30011 milliseconds)
+  error: failed to get `atty` as a dependency of package `aifo-coder v0.6.4 (/workspace)`
+  Caused by:
+    download of config.json failed
+  Caused by:
+    failed to download from `https://index.crates.io/config.json`
+  Caused by:
+    [28] Timeout was reached (Connection timed out after 30006 milliseconds)
+
+- fix: following:
+  https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-otlp/examples/basic-otlp-http/README.md
+  Add URL to the chat? (Y)es/(N)o/(D)on't ask again [Yes]:
+  Scraping https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-otlp/examples/basic-otlp-http/README.md...
+    Unable to install pandoc: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:992)>
+
+- fix: *_TOOLEEXEC_* -> *_TOOLEXEC_*
+
+- fix: cleanup ~/.aifo-coder/state/ after having used it. investigate why the files are left over
+- fix: cleanup ~/.aifo-shim-accept-68166 after usage. investigate why the files are left over
+- fix: /ask How do we currently do locking? per folder? per git folder? per user home? elaborate.
+
+- fix: improve tmux configuration
+- fix: rename X-Aifo-Proto to AIFO-Coder-Proto
+- fix: improve error message when image can not be pulled:
+       aifo-coder: failed to start toolchain sidecars: failed to start one or more sidecars
+- fix: eliminate NICENESS_CARGO_NEXTEST
+- fix: Change Makefile to put scripts into script/ and shrink the Makefile
+
+~ FIX: split Dockerfile into multiple smaller ones?
+
+- FIX: as app?: build a dmg containing an app which starts aifo-coder
+- FIX: as pkg?: build a pkg which starts aifo-coder
+- FIX: find best way to express scripts in Rust (!include_str)
+- FIX: rename AIFO_TOOLEEXEC_URL/AIFO_TOOLEEXEC_TOKEN to AIFO_TOOLEXEC_URL/AIFO_TOOLEXEC_TOKEN
+- FIX: CI release should check for all the modells built by publish-release, making sure we do not release without images
+
+- FIX: pressing ctrl-c when no output happens does not immediately interrupt, but waits for output and then interrupts
+- FIX: aifo-coder-macos-cross-rust-builder:latest is 5.5GB - optimize, something is wrong
+- FIX: try CI_JOB_TOKEN	instead of my own token
+- FIX: do we really need to build-toolchain in CI merge request commit? we have no docker
+- FIX: find out how to start plandex
+- FIX: implement a java toolchain
+
++ FIX: toolchain & agent should output something like this too:
+       aifo-coder: proxy build=2025-12-07T17:03:29Z profile=release rust=rustc 1.89.0 (29483883e 2025-08-04) ver=0.6.6
+- implement: --fork-now to start another coding agent in the same folder where one is already running
+
+- update: update tests from rust:1.80-slim to rust:1-slim-bookworm
+
+- fix: enable colors for /run make check
+- fix: in `aifo-coder images` remove duplicates and add toolchain images
+
+- docs: add to README colima disk:+200 memory:+2 cpu:4
+- implement: Makefile check for at least 300GB disk and 4G ram with 4 cpus in ~/.colima/default/colima.yaml
+
+- implement: 'fork attach <session>' to restart coding agents in the branches of a fork session visible by fork list
+
+- implement: mac: write a script generating a Brew git repository (init/update) containing the latest release given a tag
+- implement: write a sensible docker network policy
+
+- implement: generate a AGENT.md with GPT-5 for GPT-5
+- implement: voice support (see docs), will need to pass needed devices for 'portaudio' into the container
+
+- implement: cli flags for all env variables
+- container: I have no name!@fbb0e6c5bbc5:/workspace$
+
+
+DONE:
+
++ FIX: implement --ignore-local-images
++ fix: nothing reachable because of proxy settings by trying without proxy if proxy fails:
+  Checking reachability of https://repository.migros.net ...
+  repository.migros.net not reachable via HTTPS; using Docker Hub (no prefix).
+  Error: Neither repository.migros.net nor Docker Hub is reachable via HTTPS; cannot build images.
+  make: *** [build-codex-slim] Error 1
++ implement: AIFO_ENV_* variables mapped into the coders
++ FIX: build smart shims to resolve tool calls and local calls
++ FIX: use pnpm import for migration
+x fix: path policy and use /usr/local/bin/lnode to access local node start node apps
++ mac: sign application with a real Apple Certificate (needs Apple Developer Membership for $99/year)
++ publish: how to publish:
+  - Publish slim (strip procps):
+    # make publish-toolchain-node KEEP_APT=0 PLATFORMS=linux/amd64,linux/arm64 PUSH=1 REGISTRY=…
+    # Same for rust/cpp.
+    make publish PLATFORMS=linux/amd64,linux/arm64 PUSH=1 REGISTRY=registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/ TAG=preview-0.6.4 RUST_TOOLCHAIN_TAG=preview-0.6.4 NODE_TOOLCHAIN_TAG=preview-0.6.4 KEEP_APT=0/
++ idea: aifo-coder telementry -> OpenTelemetry -> see spec
++ implement: install hadolint in all toolchains and include shim
++ implement: consolidate --toolchain and --toolchain-spec to --toolchain with optional version
++ FIX: node coding agents: rename local node to 'lnode' (differentiate from shim 'node'). then call exmplictely.
+       like: /usr/local/bin/lnode <app>, overriding the shebang in the script.
++ FIX: coding agents need pnpm, uvx
++ FIX: sign the aifo-coder binary
++ implement: switch to HEAD of aider Gitlab repository
++ implement: add bun.sh to node toolchain
++ ADD: images to repo (Techday banner, nano banana pics)
++ FIX: Make sure, that the release does not pull :latest from the repository
++ FIX: something zeros ~/.aider.conf.yml on the host under unknown conditions regularly
++ FIX: support matrix: run all 3 modes
++ FIX: openhands: pass model & api key correctly
++ FIX: make check-all should lint too.
++ FIX: regression: aifo-coder support fails execpt for crush (combo mode)
++ FIX: regression: aifo-coder support fails for typescript (deep mode)
++ FIX: update openhands to > 1.0.0
++ FIX: fix image pulling
++ FIX: fetching images needs a message that it starts fetching and it needs a connectivity check
++ FIX: publish-build job (built-toolchain fails atm)
++ FIX: make lint-ultra needs fixing!
++ FIX: spec: all cargo nextest calls need to use ARGS_NEXTEST. consolidate all calls to use same
++ FIX: spec: eliminiate more docker layer bloat
++ FIX: make sure Rust there's only one toolchain in /usr/local/rustup/toolchains:
++ implement: MacOSX launcher cross compiling in Linux containers locally and CI
++ FIX: reimplement KEEP_APT=0 with rm `which apt` `which ps`
++ FIX: /ask Is there more Docker layer bloat we can eliminate?
++ fix: If you want rust-builder not to carry your project sources, build aifo-shim in a throwaway stage and keep
+       rust-builder generic; right now rust-builder includes Cargo.toml/src (small, but present).
++ FIX: signals for shims. we need to be able to press ctrl-c
++ FIX: something kills ~/.aider.conf.yml which ends up being of size 0
++ FIX: pull from repository.migros.net (Nexus Mirror), push to registry.intern.migros.net (Gitlab Registry)
++ fix: building rust-builder image behind zScaler (enterprise certificate injection everywhere, rustup issue)
++ FIX: Makefile duplicate target:
+       Makefile:1359: warning: overriding recipe for target 'coverage-html'
+       Makefile:1280: warning: ignoring old recipe for target 'coverage-html'
++ FIX: rename all tests according to a naming convention grouping unit, integration and end-to-end tests
++ FIX: we need a make check-e2e on MR und merge commit
++ FIX: rename aifo-rust-toolchain to aifo-toolchain-rust
++ implement: add coding agents: OpenHands, OpenCode, Plandex
++ dropped: idea: alpine instead of node. so much smaller
+  node                22-bookworm-slim   955b467cb9a2   3 weeks ago    224MB
+  alpine              latest             9234e8fb04c4   5 weeks ago    8.31MB
+  phusion/baseimage   noble-1.0.2        690168a9a40f   4 months ago   243MB
++ fix: AGENT.md should mention that we need to touch SCORE.md after moving the content to SCORE-before.md
++ implement: make sure we have all needed tests
++ fix: The toolchain container for node should mount the user's ~/.npm into the toolchain container, to give npm everything it needs.
++ fix: `make test` should support local cargo and cargo via rust-builder image at the same time.
++ fix: under Rancher we get this error: ERROR: failed to build: Cache export is not supported for the docker driver.
+  -> add to README:
+     how to switch from “docker” driver to the “docker-container” driver for Rancher:
+     This happens because your current Buildx builder uses the “docker” driver (Rancher Desktop default in some setups), which does not support cache export (--cache-to). Docker Desktop on macOS typically uses the “docker-container” driver, which does.
+     Fix (recommended): create/use a docker-container builder
+     Check current driver:
+     docker buildx ls
+     Create and use a new builder that supports cache export:
+     docker buildx create --name rdbuilder --driver docker-container --use
+     docker buildx inspect --bootstrap
+     Now your --cache-to/--cache-from flags will work.
++ fix: refactor docker.rs
++ fix: refactor registry.rs
++ fix: refactor warnings.rs
++ fix: refactor lock.rs
++ fix: refactor apparmor.rs
++ fix: refactor utils.rs
++ fix: refactor aifo-shim.rs
++ fix: nextest must not use progress and should only print summary -> token count (--hide-progress-bar --cargo-quiet)
++ fix: `make test` inside of aider
++ implement: signal handling for shims and gracefull disconnects
++ implement: proxy call & debug log
++ implement: refactor the code more
++ implement: make aifo-coder script behave sensibly if called from an outside git repo somwhere else
++ fix: say works but logs the text below. The command returns immediately and does not wait for the proxy result.
+  aifo-coder: proxy notify parsed cmd=say argv='Master, my task is complete' cwd=/workspace
+  Failed to run notifications command: aifo-shim: variant=rust transport=native
+  aifo-shim: notify cmd=say argv=Master, my task is complete
+  aifo-shim: preparing request to http://host.docker.internal:52955/exec (proto=2)
+  Readonly: AGENT.md CONVENTIONS.md
+  Editable: Cargo.toml Dockerfile Makefile toolchains/rust/Dockerfile
+  >
+  aifo-coder: proxy result tool=say kind=notify code=0 dur_ms=2696
++ fix: automatically run 'cargo fmt' after a failed 'cargo fmt --check'
++ fix: Makefile needs target lint-ultra and cargo fmt built in
++ fix: notification support using notifications-cmd shim and say on macOS
++ implement: "Failed to run notifications command: /bin/sh: 1: say: not found"
+  Use a notification shim to implement 'say' and more running on the host
++ fix: m0565460@cnm10888 ~/test (main #) $ ~/git/intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/aifo-coder -h
+       Building aifo-coder (release)...
+       error: could not find `Cargo.toml` in `/Users/m0565460/tmp.local/test` or any parent directory
++ fix: codex:
+       docker exec -u 247492943:1089816039 -w /workspace -e HOME=/home/coder -e GNUPGHOME=/home/coder/.gnupg
+       aifo-tc-node-kksbext node /usr/local/bin/codex
+       aifo-coder: proxy result tool=node kind=node code=1 dur_ms=9
+       Error response from daemon: No such container: aifo-tc-node-kksbext
++ FIX: proxy timeout result: compile hangs, restart fails. We need to eliminate the timeout and instead support signals
+  > /run make check ARGS="--no-fail-fast"
+  Running cargo fmt --check and cargo clippy (rustup stable) ...
+   Downloading crates ...
+    Downloaded linux-raw-sys v0.11.0
+     Compiling libc v0.2.175
+     Compiling proc-macro2 v1.0.101
+     Compiling unicode-ident v1.0.19
+      Checking bitflags v2.9.4
+  aifo-coder proxy timeout
++ fix: refactor fork.rs
++ fix: "AzureException BadRequestError - Input tokens exceed the configured limit of 272000 tokens." -> settings adjusted
++ implement: lint-ultra target:
+  cargo clippy --workspace --all-targets --all-features -- -D warnings -D unsafe_code -D clippy::all -D clippy::pedantic -D clippy::nursery -D clippy::cargo -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic -D clippy::dbg_macro -D clippy::print_stdout -D clippy::print_stderr -D clippy::await_holding_lock -D clippy::indexing_slicing
++ fix: refactor main.rs
++ fix: refactor lib.rs
++ crates: check if some are unneededly pinned
++ fix: `cargo nextest run --no-fail-fast` inside of aider -> install cargo-nextest in Rust container?
++ fix: `cargo test --no-fail-fast` inside of aider
+       -> error: failed to create directory `/usr/local/cargo/registry/cache/index.crates.io-6f17d22bba15001f`
++ fix: `cargo clippy --all-targets --all-features -- -D warnings` -> To install, run `rustup component add clippy`
+       -> error: 'cargo-clippy' is not installed for the toolchain '1.80.1-aarch64-unknown-linux-gnu'.
++ specify: improve Rust toolchain to contain more needed stuff: cargo nextest/clippy...
++ implement: improve Rust toolchain to contain more needed stuff
++ specify: 'fork attach <session>' to restart coding agents in the branches of a fork session visible by fork list
++ implement: integrate into make test: cargo clippy --all-targets --all-features -- -D warnings
++ implement: refactor the code to more files
++ fix: show a warning, when started without --toolchain
++ fix: add fork merge to 'To inspect and merge changes'.
++ fix: find out what creates the .venv/bin/python and make it use uv venv
++ fix: add fork merge to the help
++ fix: change default to --fork-merging-strategy octopus and --fork-merge-autoclean.
++ fix: rename --fork-merge-autoclean to --fork-merge-no-autoclean and negate function.
++ fix: rename --fork-merging-strategy to --fork-merge-strategy
++ fix: output a newline after 'Press Enter to continue, or 'q' to abort:'
++ implement: pause after warning on startup (wait for keypress or q to bail out)
++ implement: merging strategy for --fork N like --merging-strategy [none|fetch|octopus]
++ fix: change to "Copyright by MGB, Written by Autor Amir Guindehi"
++ fix: aifo-coder banner: must be updated
++ 🔒 Secure by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed by AIFO]
++ test: aifo-coder --fork 4
++ implement: fork clone phase 5
++ implement: fork clone phase 6
++ implement: fork clone phase 7
++ fix: `make test` should support ARGS='xxx'
++ implement: aifo-coder --fork 4, which duplicates the repo 4 time and uses tmux to have 4 windows on terminal
++ implement: make build-debug as `BUILDKIT_PROGRESS=plain make rebuild` or docker `buildx build --progress=plain`
++ implement: extend make loc to differentiate between rust app and tests source code files
++ implement: use cargo-nextest for an aggregated, clean summary and CI-friendly reports
++ implement: assess test coverage and implement enough of the missing tests -> Grade: A-
++ implement: notification support by adding a host-cmd shim to execute a command on the host with a whitelist
++ implement: support playwright
++ implement: /opt/venv/bin/python -m pip install --upgrade --upgrade-strategy only-if-needed aider-chat[playwright]
++ implement: /opt/venv/bin/python -m playwright install --with-deps chromium
++ implement: sidecar containers containing build chains for building inside of container with coding agent
++ implement: remove npm, npx, node, yarn, yarnpkg, apt
++ implement: env variable checking in doctor, it should inform if all needed env vars are set
++ implement: 1 set of env variables, then clone them to the needed ones.
++ fix: automatically use sudo for make install
++ fix: Makefile target clean should also untag repository.migros.net/aifo-coder*
++ fix: Remove targets build-app build-dmg
++ Implement conditional notarization flow on macOS.
++ fix: switch from docker build to docker buildx
++ Expand CI to include aider/codex help checks and shared caches for faster runs?
++ Extend doctor to confirm the active AppArmor profile from inside the container?
++ Enhance doctor’s verbose output with clearer security options and remediation tips.
++ fix: code singing fails with "error: The specified item could not be found in the keychain."
++ mac: sign application (needs Apple Developer Membership for $99/year)
++ fix: add make install info to INSTALL.md
++ fix: rename build-dmg and build-app to release-dmg and release-app
++ implement: Automate macOS DMG signing/notarization and add a branded background?
++ fix: gpg-agent for aider so that pw gets cached - gpg-agent works for gpg when entering the container
++ implement: doctor should show available editors in images
++ implement: images should show available/installed images
++ implement: make loc
++ implement: aifo-coder -v show more information on console during startup
++ implement: startup messages on the config file found and mounted
++ docker: rmi cross-rs
++ docker: remove disable apparmor option
++ implement: make install
++ implement: a man page
++ score the code in SCORE.md
++ iterate on SCORE.md
++ release: make sure we release for Mac and Linux at the same time
+           rename release -> release-for-mac
+           create release-for-linux specifying RELEASE_TARGETS=x86_64-unknown-linux-gnu make release
+           create release -> calling release-for-linux & release-for-mac
++ create a MacOSX app and a dmg
+
++ test: build-app & build-dmg targets
++ add Apache license and the neccessary files
++ ask: can we remove cross from the project?- write a sensible docker network policy
++ apparmor: switch on by default
++ use more tabular data in README.md to documents variables, choices and lists.
++ update Makefile help
++ podman: remove as not able to run apparmor
++ update README.md
++ emacs in Aider: Error (initialization): User coder has no home directory Disable showing Disable logging
++ Emacs is not available in the container
++ cat /etc/passwd | gpg -se -r Amir > /tmp/passwd.enc
+  -> gpg: signing failed: Inappropriate ioctl for device
+     gpg: [stdin]: sign+encrypt failed: Inappropriate ioctl for device
++ gpg: [stdin]: sign+encrypt failed: No such device or address
++ gpg: [stdin]: sign+encrypt failed: No pinentry
++ The commit author is wrong, fix it: Author: Your Name <you@example.com>
++ The date/time in the container is wrong.
+
+
+CROSS:
+
+brew install rustup
+rustup target add aarch64-unknown-linux-gnu
+rustup target add x86_64-unknown-linux-gnu
+unnneeded? brew install SergioBenitez/osxct/x86_64-unknown-linux-gnu
+cargo install cross
+
+cat >> .cargo/config.toml
+[target.x86_64-unknown-linux-gnu]
+linker = "x86_64-unknown-linux-gnu-gcc"
+
+
+TMUX SLAVE:
+
+#!/bin/bash
+
+# Define the command to run
+COMMAND="codex"  # Replace this with the path to the codex CLI if it's not in your PATH
+
+# Define the input files
+#INPUT_FILES=("1.txt")
+INPUT_FILES=("706" "953" "798" "814")
+
+# Check if all input files exist
+for file in "${INPUT_FILES[@]}"; do
+    if [[ ! -f "$file.txt" ]]; then
+        echo "Error: Input file '$file' does not exist."
+        exit 1
+    fi
+done
+
+# Start a new tmux session
+SESSION_NAME="codex_parallel"
+tmux new-session -d -s $SESSION_NAME
+
+# Create panes and run commands
+for i in "${!INPUT_FILES[@]}"; do
+    if [ $i -ne 0 ]; then
+        tmux split-window -t $SESSION_NAME
+        tmux select-layout -t $SESSION_NAME tiled
+    fi
+
+    # Read the first line of the input file as the directory path
+    DIR_PATH=${INPUT_FILES[i]}
+    # if [[ ! -d "$DIR_PATH" ]]; then
+    #     echo "Error: Directory '$DIR_PATH' specified in '${INPUT_FILES[i]}' does not exist."
+    #     exit 1
+    # fi
+
+    # Run the codex command in the specified directory
+    tmux send-keys -t $SESSION_NAME "git clone git@git.intern.migros.net:ai-foundation/containers/migros-ai-chat.git $DIR_PATH && cd $DIR_PATH && $COMMAND \"\$(cat ../${INPUT_FILES[i]}.txt)\"" C-m
+done
+
+# Attach to the tmux session
+tmux attach-session -t $SESSION_NAME
+
+
+MACOSX CROSS COMPILING UNDER LINUX
+
+- macOS:
+curl -LO https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
+echo "518e35eae6039b3f64e8025f4525c1c43786cc5cf39459d609852faf091e34be MacOSX13.3.sdk.tar.xz" | sha256sum -c
+# This should echo "MacOSX13.3.sdk.tar.xz: OK"
+base64 -i MacOSX13.3.sdk.tar.xz > MacOSX13.3.sdk.tar.xz.b64

@@ -444,6 +444,11 @@ impl ToolchainSession {
         }
 
         let (kinds, overrides) = plan_from_cli(cli);
+        let runtime_for_meta = if cli.verbose {
+            crate::container_runtime_path().ok()
+        } else {
+            None
+        };
         // Verbose: print chosen toolchain images per kind
         if cli.verbose {
             let use_err = aifo_coder::color_enabled_stderr();
@@ -457,6 +462,20 @@ impl ToolchainSession {
                     use_err,
                     &format!("aifo-coder: toolchain image [{}]: {}", k, img),
                 );
+                if let Some(rt) = runtime_for_meta.as_ref() {
+                    if let Some(meta) = crate::image_metadata(rt.as_path(), &img) {
+                        let summary = crate::format_image_metadata(&meta);
+                        if !summary.is_empty() {
+                            aifo_coder::log_info_stderr(
+                                use_err,
+                                &format!(
+                                    "aifo-coder: toolchain image meta [{}]: {}",
+                                    k, summary
+                                ),
+                            );
+                        }
+                    }
+                }
             }
         } else {
             // Non-verbose: print a short notice if a toolchain image will be pulled (not present locally).
