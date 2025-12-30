@@ -65,3 +65,46 @@ exit 0
     }
     aifo_coder::set_ignore_local_images(false);
 }
+
+#[test]
+fn unit_image_metadata_formats_core_fields() {
+    let td = tempfile::tempdir().expect("tmpdir");
+    let runtime = make_stub(
+        td.path(),
+        r#"#!/bin/sh
+cat <<'EOF'
+[{
+  "Created": "2025-01-02T03:04:05Z",
+  "Id": "sha256:abcdef1234567890fedcba",
+  "RepoTags": ["example:tag"],
+  "RepoDigests": ["example@sha256:deadbeefcafebabe"],
+  "ContainerConfig": {
+    "Labels": {
+      "org.opencontainers.image.version": "1.2.3",
+      "org.opencontainers.image.revision": "deadbeefcafebabe",
+      "org.opencontainers.image.title": "example-image"
+    }
+  }
+}]
+EOF
+"#,
+    );
+
+    let meta = aifo_coder::image_metadata(&runtime, "example:tag")
+        .expect("metadata should parse");
+    let summary = aifo_coder::format_image_metadata(&meta);
+    for needle in [
+        "build=2025-01-02T03:04:05Z",
+        "version=1.2.3",
+        "rev=deadbeefcafebabe",
+        "id=abcdef123456",
+        "tag=example:tag",
+        "digest=example@sha256:deadbeefcafebabe",
+        "title=example-image",
+    ] {
+        assert!(
+            summary.contains(needle),
+            "summary should include {needle}: {summary}"
+        );
+    }
+}

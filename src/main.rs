@@ -439,6 +439,19 @@ fn print_verbose_run_info(
             use_err,
             &format!("aifo-coder: agent image [{}]: {}", agent, image_display),
         );
+        if !dry_run {
+            if let Ok(rt) = aifo_coder::container_runtime_path() {
+                if let Some(meta) = aifo_coder::image_metadata(rt.as_path(), image_display) {
+                    let summary = aifo_coder::format_image_metadata(&meta);
+                    if !summary.is_empty() {
+                        aifo_coder::log_info_stderr(
+                            use_err,
+                            &format!("aifo-coder: agent image meta [{}]: {}", agent, summary),
+                        );
+                    }
+                }
+            }
+        }
     }
     if cli_verbose || dry_run {
         aifo_coder::log_info_stderr(use_err, &format!("aifo-coder: docker: {}", preview));
