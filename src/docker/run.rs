@@ -17,7 +17,8 @@ use nix::unistd::{getgid, getuid};
 use tracing::instrument;
 
 use crate::docker_mod::docker::env::{
-    push_env_if_set, push_env_kv, push_env_kv_if_set, push_prefixed_env_vars, PASS_ENV_VARS,
+    push_env_if_set, push_env_kv, push_env_kv_if_set, push_prefixed_env_vars, push_proxy_policy,
+    PASS_ENV_VARS,
 };
 use crate::docker_mod::docker::images::image_exists;
 use crate::docker_mod::docker::mounts::{
@@ -356,6 +357,8 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
 
     // User-provided variables via AIFO_ENV_* (strip prefix before passing into agent containers)
     push_prefixed_env_vars(&mut env_flags);
+    // If proxy fallback marked proxies as unreachable, force direct connection inside agents
+    push_proxy_policy(&mut env_flags);
 
     env_flags
 }

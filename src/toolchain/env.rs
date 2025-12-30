@@ -35,9 +35,14 @@ pub(crate) fn push_env(args: &mut Vec<String>, k: &str, v: &str) {
 
 /// Pass through selected environment variables from host into docker args.
 pub(crate) fn apply_passthrough_envs(args: &mut Vec<String>, keys: &[&str]) {
+    let force_direct = crate::proxy::should_force_direct_proxy();
     for name in keys {
         // Do not forward host rustup/cargo environment into sidecars
         if PROHIBITED_PASSTHROUGH_ENV.contains(name) {
+            continue;
+        }
+        if force_direct && crate::proxy::PROXY_ENV_VARS.contains(name) {
+            push_env(args, name, "");
             continue;
         }
         if let Ok(val) = env::var(name) {

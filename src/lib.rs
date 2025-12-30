@@ -38,6 +38,7 @@ mod fork_strategy;
 #[path = "fork/windows/helpers.rs"]
 mod fork_windows_helpers;
 mod lock;
+pub mod proxy;
 mod registry;
 #[cfg(feature = "otel")]
 mod telemetry;
@@ -69,6 +70,7 @@ pub use fork_windows_helpers::{
     wt_build_split_args, wt_orient_for_layout,
 };
 pub use lock::*;
+pub use proxy::*;
 pub use registry::*;
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
