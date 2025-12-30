@@ -2714,7 +2714,8 @@ node-guard:
 	fi
 
 # One-shot npm/yarn → pnpm migration helper.
-# - Removes node_modules, package-lock.json, yarn.lock (if present)
+# - Uses `pnpm import` to convert package-lock.json/yarn.lock to pnpm-lock.yaml when needed
+# - Removes node_modules and legacy lockfiles
 # - Ensures .pnpm-store exists with safe permissions
 # - Runs pnpm install --frozen-lockfile using the shared store
 .PHONY: node-migrate-to-pnpm
@@ -2726,16 +2727,25 @@ node-migrate-to-pnpm:
 	  exit 1; \
 	fi; \
 	found_any=0; \
-	if [ -f package-lock.json ]; then echo "found: package-lock.json"; found_any=1; fi; \
-	if [ -f yarn.lock ]; then echo "found: yarn.lock"; found_any=1; fi; \
+	has_pnpm_lock=0; \
+	has_legacy_lock=0; \
+	import_from=""; \
+	if [ -f pnpm-lock.yaml ]; then has_pnpm_lock=1; fi; \
+	if [ -f package-lock.json ]; then echo "found: package-lock.json"; found_any=1; has_legacy_lock=1; import_from="package-lock.json"; fi; \
+	if [ -z "$$import_from" ] && [ -f yarn.lock ]; then import_from="yarn.lock"; fi; \
+	if [ -f yarn.lock ]; then echo "found: yarn.lock"; found_any=1; has_legacy_lock=1; fi; \
 	if [ -d node_modules ]; then echo "found: node_modules/"; found_any=1; fi; \
 	if [ "$$found_any" -eq 0 ]; then \
 	  echo "No npm/yarn artifacts detected (node_modules, package-lock.json, yarn.lock)."; \
 	  echo "Nothing to migrate."; \
 	  exit 0; \
 	fi; \
+	needs_import=0; \
+	if [ "$$has_pnpm_lock" -eq 0 ] && [ "$$has_legacy_lock" -eq 1 ]; then needs_import=1; fi; \
 	if [ -z "$$CI" ]; then \
-	  printf "This will REMOVE node_modules/, package-lock.json and yarn.lock (if present), then run pnpm install.\n"; \
+	  printf "This will "; \
+	  if [ "$$needs_import" -eq 1 ]; then printf "run 'pnpm import %s', " "$$import_from"; else printf "reuse pnpm-lock.yaml, "; fi; \
+	  printf "REMOVE node_modules/, package-lock.json and yarn.lock (if present), then run pnpm install.\n"; \
 	  printf "Continue? [y/N] "; \
 	  read ans || ans=""; \
 	  case "$$ans" in \
@@ -2744,6 +2754,15 @@ node-migrate-to-pnpm:
 	  esac; \
 	else \
 	  echo "CI mode: migrating to pnpm without interactive prompt."; \
+	fi; \
+	if [ ! -d ".pnpm-store" ]; then \
+	  echo "Creating .pnpm-store with group-writable permissions ..."; \
+	  mkdir -p .pnpm-store; \
+	  chmod 775 .pnpm-store || true; \
+	fi; \
+	if [ "$$needs_import" -eq 1 ]; then \
+	  echo "Running pnpm import $$import_from ..."; \
+	  PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm import "$$import_from"; \
 	fi; \
 	if [ -d node_modules ]; then \
 	  echo "Removing node_modules/ ..."; \
@@ -2756,11 +2775,6 @@ node-migrate-to-pnpm:
 	if [ -f yarn.lock ]; then \
 	  echo "Removing yarn.lock ..."; \
 	  rm -f yarn.lock; \
-	fi; \
-	if [ ! -d ".pnpm-store" ]; then \
-	  echo "Creating .pnpm-store with group-writable permissions ..."; \
-	  mkdir -p .pnpm-store; \
-	  chmod 775 .pnpm-store || true; \
 	fi; \
 	echo "Running pnpm install --frozen-lockfile ..."; \
 	PNPM_STORE_PATH="$$PWD/.pnpm-store" pnpm install --frozen-lockfile; \

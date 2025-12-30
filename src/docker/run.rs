@@ -17,7 +17,7 @@ use nix::unistd::{getgid, getuid};
 use tracing::instrument;
 
 use crate::docker_mod::docker::env::{
-    push_env_if_set, push_env_kv, push_env_kv_if_set, PASS_ENV_VARS,
+    push_env_if_set, push_env_kv, push_env_kv_if_set, push_prefixed_env_vars, PASS_ENV_VARS,
 };
 use crate::docker_mod::docker::images::image_exists;
 use crate::docker_mod::docker::mounts::{
@@ -353,6 +353,9 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
             "/usr/local/bin/aifo-gpg-wrapper",
         );
     }
+
+    // User-provided variables via AIFO_ENV_* (strip prefix before passing into agent containers)
+    push_prefixed_env_vars(&mut env_flags);
 
     env_flags
 }

@@ -80,3 +80,43 @@ fn unit_launcher_sets_smart_toggles_per_agent() {
         expect_no_env_kv(&args, "AIFO_SHIM_SMART_PYTHON", "1");
     }
 }
+
+#[test]
+fn unit_launcher_forwards_aifo_env_prefix_and_skips_reserved() {
+    use std::env;
+
+    const FORWARD_KEY: &str = "AIFO_ENV_MY_KEY";
+    const RESERVED_KEY: &str = "AIFO_ENV_HOME";
+
+    let prev_forward = env::var(FORWARD_KEY).ok();
+    let prev_reserved = env::var(RESERVED_KEY).ok();
+    env::set_var(FORWARD_KEY, "secret");
+    env::set_var(RESERVED_KEY, "/should/not/override");
+
+    let args = build_args("codex");
+
+    // Forwarded without prefix
+    expect_env_kv(&args, "MY_KEY", "secret");
+    // Reserved keys are ignored to avoid breaking runtime assumptions
+    let mut i = 0usize;
+    while i + 1 < args.len() {
+        if args[i] == "-e" && args[i + 1].starts_with("HOME=") {
+            // HOME is set by launcher, but should not be overridden by AIFO_ENV_HOME
+            assert_eq!(args[i + 1], "HOME=/home/coder");
+        }
+        if args[i] == "-e" && args[i + 1] == "HOME=/should/not/override" {
+            panic!("AIFO_ENV_HOME should not override HOME");
+        }
+        i += 1;
+    }
+
+    // Restore env
+    match prev_forward {
+        Some(v) => env::set_var(FORWARD_KEY, v),
+        None => env::remove_var(FORWARD_KEY),
+    }
+    match prev_reserved {
+        Some(v) => env::set_var(RESERVED_KEY, v),
+        None => env::remove_var(RESERVED_KEY),
+    }
+}

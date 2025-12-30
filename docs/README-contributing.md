@@ -47,9 +47,8 @@ Node + pnpm migration notes
   - `pnpm-lock.yaml` is the canonical lockfile.
   - `npm install` / `yarn install` are discouraged; use `pnpm install` or `make node-install`.
 - Migrating an existing project:
-  - Remove any existing `node_modules` and legacy lockfiles:
-    - `rm -rf node_modules package-lock.json yarn.lock`
-  - Run `pnpm install` once to generate `pnpm-lock.yaml`.
+  - Run `pnpm import` to convert `package-lock.json` or `yarn.lock` into `pnpm-lock.yaml`.
+  - Remove legacy lockfiles and `node_modules`, then run `pnpm install --frozen-lockfile`.
   - Commit `pnpm-lock.yaml` and ensure `.pnpm-store/` is in .gitignore (already configured here).
 - Host workflow:
   - Run `make node-install` to:
