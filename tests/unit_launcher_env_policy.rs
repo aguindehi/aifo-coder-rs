@@ -82,6 +82,39 @@ fn unit_launcher_sets_smart_toggles_per_agent() {
 }
 
 #[test]
+fn unit_launcher_clears_proxy_env_when_force_direct() {
+    use std::env;
+
+    let prev_proxy = env::var("http_proxy").ok();
+    env::set_var("http_proxy", "http://bad-proxy");
+    aifo_coder::proxy::reset_proxy_state_for_tests();
+
+    // Simulate probe failure then success without proxies to trigger force-direct
+    let _ =
+        aifo_coder::test_probe_with_proxy_fallback(
+            |clear| {
+                if clear {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
+            },
+        );
+
+    let args = build_args("codex");
+    expect_env_kv(&args, "http_proxy", "");
+    expect_env_kv(&args, "https_proxy", "");
+    expect_env_kv(&args, "HTTP_PROXY", "");
+    expect_env_kv(&args, "HTTPS_PROXY", "");
+
+    match prev_proxy {
+        Some(v) => env::set_var("http_proxy", v),
+        None => env::remove_var("http_proxy"),
+    }
+    aifo_coder::proxy::reset_proxy_state_for_tests();
+}
+
+#[test]
 fn unit_launcher_forwards_aifo_env_prefix_and_skips_reserved() {
     use std::env;
 

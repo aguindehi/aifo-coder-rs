@@ -25,21 +25,29 @@ static INTERNAL_REGISTRY_SOURCE: OnceCell<String> = OnceCell::new();
 static REGISTRY_EXEC: Lazy<ExecService> = Lazy::new(|| ExecService::new(Duration::from_secs(3)));
 
 fn curl_head(url: &str) -> Option<bool> {
-    if which("curl").is_err() {
-        return None;
-    }
-    let args = ["--connect-timeout", "1", "--max-time", "2", "-sSI", url]
-        .into_iter()
-        .map(OsString::from);
-    let request = ExecRequest::new("curl")
-        .args(args)
-        .inherit_env(true)
-        .timeout(Duration::from_secs(3))
-        .capture_output(true);
-    match REGISTRY_EXEC.run(request) {
-        Ok(output) => Some(output.status.success()),
-        Err(_) => None,
-    }
+    run_probe_with_proxy_fallback(|clear_proxies| {
+        if which("curl").is_err() {
+            return None;
+        }
+        let args = ["--connect-timeout", "1", "--max-time", "2", "-sSI", url]
+            .into_iter()
+            .map(OsString::from);
+        let mut request = ExecRequest::new("curl")
+            .args(args)
+            .inherit_env(true)
+            .timeout(Duration::from_secs(3))
+            .capture_output(true);
+        if clear_proxies {
+            for k in crate::proxy::proxy_clear_envs() {
+                request = request.env(k, "");
+            }
+        }
+        match REGISTRY_EXEC.run(request) {
+            Ok(output) => Some(output.status.success()),
+            Err(_) => None,
+        }
+    })
+    .map(|(ok, _)| ok)
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +65,36 @@ static REGISTRY_PROBE_OVERRIDE: Lazy<std::sync::Mutex<Option<RegistryProbeTestMo
 pub fn registry_probe_set_override_for_tests(mode: Option<RegistryProbeTestMode>) {
     let mut guard = REGISTRY_PROBE_OVERRIDE.lock().expect("probe override lock");
     *guard = mode;
+}
+
+fn run_probe_with_proxy_fallback<F>(mut probe: F) -> Option<(bool, bool)>
+where
+    F: FnMut(bool) -> Option<bool>,
+{
+    let proxies = crate::proxy::proxy_env_vars_set();
+    let initial = probe(false)?;
+    if initial {
+        return Some((true, false));
+    }
+    if proxies.is_empty() || !crate::proxy::proxy_fallback_enabled() {
+        return Some((initial, false));
+    }
+    let retry = probe(true);
+    match retry {
+        Some(true) => {
+            crate::proxy::mark_proxy_unreachable(&proxies);
+            Some((true, true))
+        }
+        Some(false) => Some((false, false)),
+        None => None,
+    }
+}
+
+pub fn test_probe_with_proxy_fallback<F>(probe: F) -> Option<(bool, bool)>
+where
+    F: FnMut(bool) -> Option<bool>,
+{
+    run_probe_with_proxy_fallback(probe)
 }
 
 fn is_host_port_reachable(host: &str, port: u16, timeout_ms: u64) -> bool {

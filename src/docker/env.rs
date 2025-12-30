@@ -5,6 +5,8 @@ use once_cell::sync::Lazy;
 use std::env;
 use std::ffi::OsString;
 
+use crate::proxy;
+
 // Pass-through environment variables to the containerized agent
 pub(crate) static PASS_ENV_VARS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
@@ -88,5 +90,13 @@ pub(crate) fn push_prefixed_env_vars(args: &mut Vec<OsString>) {
             continue;
         }
         push_env_kv(args, &k, &v);
+    }
+}
+
+pub(crate) fn push_proxy_policy(args: &mut Vec<OsString>) {
+    if proxy::should_force_direct_proxy() {
+        for k in proxy::proxy_clear_envs() {
+            push_env_kv(args, k, "");
+        }
     }
 }
