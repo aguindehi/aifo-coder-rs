@@ -79,7 +79,7 @@ pub fn acquire_lock() -> io::Result<RepoLock> {
                     }
                     return Err(io::Error::other(crate::display_for_fork_error(
                         &crate::ForkError::Message(
-                            "Another coding agent is already running (lock held). Please try again later.".to_string(),
+                            "Another coding agent is already running (lock held). Start with --fork to work in parallel, or try again later.".to_string(),
                         ),
                     )));
                 }
@@ -160,7 +160,7 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
                     }
                     Err(io::Error::other(crate::display_for_fork_error(
                     &crate::ForkError::Message(
-                        "Another coding agent is already running (lock held). Please try again later."
+                        "Another coding agent is already running (lock held). Start with --fork to work in parallel, or try again later."
                             .to_string(),
                     ),
                 )))
