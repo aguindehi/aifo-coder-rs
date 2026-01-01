@@ -3,6 +3,8 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
@@ -170,6 +172,30 @@ pub fn acquire_lock_at(p: &Path) -> io::Result<RepoLock> {
     }
 }
 
+/// Acquire a lock with bounded retries to allow brief serialization for operations like merges.
+pub fn acquire_lock_blocking_at(
+    p: &Path,
+    attempts: usize,
+    delay: Duration,
+) -> io::Result<RepoLock> {
+    if attempts == 0 {
+        return acquire_lock_at(p);
+    }
+    let mut last_err: Option<io::Error> = None;
+    for _ in 0..attempts {
+        match acquire_lock_at(p) {
+            Ok(lock) => return Ok(lock),
+            Err(e) => {
+                last_err = Some(e);
+                thread::sleep(delay);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        io::Error::other("failed to acquire lock after retries (acquire_lock_blocking_at)")
+    }))
+}
+
 /// Return true if the launcher should acquire a repository/user lock for this process.
 /// Honor AIFO_CODER_SKIP_LOCK=1 to skip acquiring any lock (used by fork child panes).
 pub fn should_acquire_lock() -> bool {
@@ -326,5 +352,36 @@ mod tests {
             "should not acquire lock when AIFO_CODER_SKIP_LOCK=1"
         );
         std::env::remove_var("AIFO_CODER_SKIP_LOCK");
+    }
+
+    #[test]
+    fn acquire_lock_at_is_exclusive() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let lock_path = td.path().join("test.lock");
+        let _first = acquire_lock_at(&lock_path).expect("first lock should succeed");
+        let second = acquire_lock_at(&lock_path);
+        assert!(
+            second.is_err(),
+            "second acquisition should fail while first lock is held"
+        );
+    }
+
+    #[test]
+    fn acquire_lock_blocking_at_waits_until_release() {
+        let td = tempfile::tempdir().expect("tmpdir");
+        let lock_path = td.path().join("test.blocking.lock");
+        let first = acquire_lock_at(&lock_path).expect("first lock should succeed");
+
+        let lock_path_cl = lock_path.clone();
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            drop(first);
+        });
+
+        // Should succeed after the first lock is dropped, within retries.
+        let second =
+            acquire_lock_blocking_at(&lock_path_cl, 20, std::time::Duration::from_millis(20));
+        assert!(second.is_ok(), "blocking lock should eventually succeed");
+        handle.join().expect("join");
     }
 }

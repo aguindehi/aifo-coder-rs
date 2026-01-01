@@ -516,9 +516,7 @@ fn main() -> ExitCode {
 
     // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
-        if n >= 2 {
-            return crate::fork::runner::fork_run(&cli, n);
-        }
+        return crate::fork::runner::fork_run(&cli, n);
     }
     // Optional auto-clean of stale fork sessions and stale session notice
     // Suppress stale notice here when running 'doctor' (doctor prints its own notice).

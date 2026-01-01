@@ -445,7 +445,7 @@ impl ToolchainSession {
 
         let (kinds, overrides) = plan_from_cli(cli);
         let runtime_for_meta = if cli.verbose {
-            crate::container_runtime_path().ok()
+            container_runtime_path().ok()
         } else {
             None
         };
@@ -463,15 +463,12 @@ impl ToolchainSession {
                     &format!("aifo-coder: toolchain image [{}]: {}", k, img),
                 );
                 if let Some(rt) = runtime_for_meta.as_ref() {
-                    if let Some(meta) = crate::image_metadata(rt.as_path(), &img) {
-                        let summary = crate::format_image_metadata(&meta);
+                    if let Some(meta) = image_metadata(rt.as_path(), &img) {
+                        let summary = format_image_metadata(&meta);
                         if !summary.is_empty() {
                             aifo_coder::log_info_stderr(
                                 use_err,
-                                &format!(
-                                    "aifo-coder: toolchain image meta [{}]: {}",
-                                    k, summary
-                                ),
+                                &format!("aifo-coder: toolchain image meta [{}]: {}", k, summary),
                             );
                         }
                     }
@@ -791,3 +788,4 @@ mod bootstrap_session_tests {
         std::env::remove_var("AIFO_RUST_TOOLCHAIN_USE_OFFICIAL");
     }
 }
+use aifo_coder::{container_runtime_path, format_image_metadata, image_metadata};

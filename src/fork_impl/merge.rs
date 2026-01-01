@@ -8,14 +8,29 @@ Internal merge helpers extracted from fork.rs.
 - fork_merge_branches_by_session_impl: convenience wrapper to read session metadata and merge.
 */
 
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+use std::{env, hash::Hasher};
 
 use crate::ForkError;
 use crate::{json_escape, shell_join};
+
+fn merge_lock_path_for_repo(repo_root: &Path) -> PathBuf {
+    // Prefer runtime dir to avoid dirtying the working tree; fallback to temp dir.
+    let base = env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let mut hasher = DefaultHasher::new();
+    hasher.write(repo_root.display().to_string().as_bytes());
+    let h = hasher.finish();
+    base.join(format!("aifo-coder.merge.{h:x}.lock"))
+}
 
 pub(crate) fn collect_pane_branches_impl(
     panes: &[(PathBuf, String)],
@@ -489,6 +504,17 @@ pub(crate) fn fork_merge_branches_by_session_impl(
             ))),
         ));
     }
+    // Serialize merges into the same repo to avoid clobbering concurrent fork sessions.
+    let merge_lock_path = merge_lock_path_for_repo(repo_root);
+    let _merge_lock =
+        crate::acquire_lock_blocking_at(&merge_lock_path, 50, Duration::from_millis(100)).map_err(
+            |e| {
+                io::Error::other(crate::display_for_fork_error(&ForkError::Message(format!(
+            "failed to acquire merge lock for fork session {}; another merge may be running: {}",
+            sid, e
+        ))))
+            },
+        )?;
 
     // Gather pane dirs
     let panes_dirs = super::fork_impl_scan::pane_dirs_for_session(&session_dir);

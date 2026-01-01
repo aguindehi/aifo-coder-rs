@@ -8,6 +8,17 @@ fn validate_layout(s: &str) -> Result<String, String> {
     }
 }
 
+fn validate_fork_panes(s: &str) -> Result<usize, String> {
+    let v: usize = s
+        .parse()
+        .map_err(|_| "fork value must be a positive integer".to_string())?;
+    if v == 0 {
+        Err("fork value must be >=1".to_string())
+    } else {
+        Ok(v)
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, clap::ValueEnum)]
 pub(crate) enum Flavor {
     Full,
@@ -327,8 +338,14 @@ pub(crate) struct Cli {
     #[arg(long = "color", value_enum)]
     pub(crate) color: Option<aifo_coder::ColorMode>,
 
-    /// Fork mode: create N panes (N>=2) in tmux/Windows Terminal with cloned workspaces
-    #[arg(long)]
+    /// Fork mode: create N panes (N>=1) in tmux/Windows Terminal with cloned workspaces
+    #[arg(
+        long,
+        value_parser = validate_fork_panes,
+        num_args = 0..=1,
+        default_missing_value = "1",
+        require_equals = true
+    )]
     pub(crate) fork: Option<usize>,
 
     /// Include uncommitted changes via snapshot commit (temporary index + commit-tree; no hooks/signing)
@@ -361,4 +378,29 @@ pub(crate) struct Cli {
 
     #[command(subcommand)]
     pub(crate) command: Agent,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Agent, Cli};
+    use clap::Parser;
+
+    #[test]
+    fn fork_flag_defaults_to_one_when_missing_value() {
+        let cli = Cli::parse_from(["aifo-coder", "--fork", "aider"]);
+        assert_eq!(cli.fork, Some(1));
+        assert!(matches!(cli.command, Agent::Aider { .. }));
+    }
+
+    #[test]
+    fn fork_flag_accepts_explicit_value() {
+        let cli = Cli::parse_from(["aifo-coder", "--fork=3", "aider"]);
+        assert_eq!(cli.fork, Some(3));
+    }
+
+    #[test]
+    fn fork_flag_rejects_zero() {
+        let res = Cli::try_parse_from(["aifo-coder", "--fork=0", "aider"]);
+        assert!(res.is_err(), "fork value 0 should be rejected");
+    }
 }

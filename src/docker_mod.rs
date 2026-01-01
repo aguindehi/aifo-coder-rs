@@ -14,7 +14,7 @@
 #[path = "docker/docker.rs"]
 pub(crate) mod docker;
 
-pub use docker::images::image_exists;
+pub use docker::images::{format_image_metadata, image_exists, image_metadata};
 pub use docker::run::{
     build_docker_cmd, build_docker_preview_args_only, build_docker_preview_only,
 };
