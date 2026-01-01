@@ -386,9 +386,7 @@ sync_host_gpg
 # a writable ~/.gitconfig inside the container so git config --global can update
 # gpg.program without touching the host file.
 if [ -f "$HOME/.gitconfig-host" ]; then
-    if [ ! -f "$HOME/.gitconfig" ]; then
-        cp "$HOME/.gitconfig-host" "$HOME/.gitconfig" 2>/dev/null || true
-    fi
+    cp "$HOME/.gitconfig-host" "$HOME/.gitconfig" 2>/dev/null || true
     chmod 600 "$HOME/.gitconfig" 2>/dev/null || true
 fi
 

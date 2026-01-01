@@ -21,7 +21,8 @@ pub fn fork_ps_inner_string(
     for (k, v) in kv {
         assigns.push(format!("$env:{}={}", k, ps_quote_inner(&v)));
     }
-    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    let cmd = std::env::var("AIFO_CODER_BIN").unwrap_or_else(|_| "aifo-coder".to_string());
+    let mut words: Vec<String> = vec![cmd];
     words.extend(child_args.iter().cloned());
     let cmd = words
         .iter()
@@ -49,7 +50,8 @@ pub fn fork_bash_inner_string(
     for (k, v) in kv {
         exports.push(format!("export {}={}", k, crate::shell_escape(&v)));
     }
-    let mut words: Vec<String> = vec!["aifo-coder".to_string()];
+    let cmd_bin = std::env::var("AIFO_CODER_BIN").unwrap_or_else(|_| "aifo-coder".to_string());
+    let mut words: Vec<String> = vec![cmd_bin];
     words.extend(child_args.iter().cloned());
     let cmd = crate::shell_join(&words);
     let cddir = crate::shell_escape(&pane_dir.display().to_string());

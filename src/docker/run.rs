@@ -834,12 +834,13 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     // Git config: mount host ~/.gitconfig as .gitconfig-host (read-only); entrypoint clones
     // to a writable ~/.gitconfig inside the container.
     let gitconfig = host_home.join(".gitconfig");
-    crate::ensure_file_exists(&gitconfig).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(OsString::from(format!(
-        "{}:/home/coder/.gitconfig-host:ro",
-        gitconfig.display()
-    )));
+    if gitconfig.exists() {
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(OsString::from(format!(
+            "{}:/home/coder/.gitconfig-host:ro",
+            gitconfig.display()
+        )));
+    }
 
     // Timezone files (optional)
     for (host_path, container_path) in [
