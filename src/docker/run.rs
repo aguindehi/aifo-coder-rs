@@ -841,6 +841,14 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
             gitconfig.display()
         )));
     }
+    let xdg_gitconfig = host_home.join(".config").join("git").join("config");
+    if xdg_gitconfig.exists() {
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(OsString::from(format!(
+            "{}:/home/coder/.config/git/config-host:ro",
+            xdg_gitconfig.display()
+        )));
+    }
 
     // Timezone files (optional)
     for (host_path, container_path) in [

@@ -226,6 +226,37 @@ pub(crate) fn fork_merge_branches_impl(
 
     let pane_branches = collect_pane_branches_impl(panes)?;
 
+    // Record the original branch and base commit so we can restore when merge is a no-op.
+    let orig_branch = {
+        let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+        cmd.arg("rev-parse").arg("--abbrev-ref").arg("HEAD");
+        cmd.output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "HEAD".to_string())
+    };
+    let _base_commit_sha = {
+        let mut cmd = super::fork_impl_git::git_cmd(Some(repo_root));
+        cmd.arg("rev-parse").arg("--verify").arg(base_ref_or_sha);
+        cmd.output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default()
+    };
+
     // 1) Fetch each pane branch back into the original repo as a local branch with the same name
     for (pdir, br) in &pane_branches {
         let pdir_str = pdir.display().to_string();
@@ -410,6 +441,22 @@ pub(crate) fn fork_merge_branches_impl(
                         .to_string(),
                 ),
             )));
+        } else if orig_branch != target {
+            // Restore original branch after a successful merge.
+            let mut cmd_restore = super::fork_impl_git::git_cmd(Some(repo_root));
+            cmd_restore.arg("checkout").arg(&orig_branch);
+            let _ = cmd_restore.status();
+            // Optionally delete merge/<sid> if autoclean is requested.
+            if matches!(strategy, crate::MergingStrategy::Octopus)
+                && std::env::var("AIFO_FORK_MERGE_NO_AUTOCLEAN")
+                    .ok()
+                    .map(|v| v != "1")
+                    .unwrap_or(true)
+            {
+                let mut cmd_del = super::fork_impl_git::git_cmd(Some(repo_root));
+                cmd_del.arg("branch").arg("-D").arg(&target);
+                let _ = cmd_del.status();
+            }
         }
     }
 
