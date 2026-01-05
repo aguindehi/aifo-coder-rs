@@ -427,8 +427,114 @@ fn build_container_sh_cmd(path_value: &str, agent_joined: &str) -> io::Result<St
     sh.build()
 }
 
+fn prepare_gitconfig_mount(host_home: &Path) -> Option<PathBuf> {
+    let candidates = [
+        host_home.join(".gitconfig"),
+        host_home.join(".config").join("git").join("config"),
+    ];
+    let mut contents: Vec<u8> = Vec::new();
+    let mut used_host = false;
+    for path in &candidates {
+        if path.is_file() {
+            if let Ok(data) = std::fs::read(path) {
+                contents = data;
+                used_host = true;
+                break;
+            }
+        }
+    }
+    // Prefer a fork-scoped destination when AIFO_CODER_FORK_STATE_DIR is set so the bind mount
+    // target exists and is stable across panes; fall back to /tmp otherwise.
+    let dest = if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
+        let sd = state_dir.trim();
+        if !sd.is_empty() {
+            let p = PathBuf::from(sd).join(".gitconfig-host.gitconfig");
+            if let Some(parent) = p.parent() {
+                let _ = fs::create_dir_all(parent);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+                }
+            }
+            p
+        } else {
+            std::env::temp_dir().join(format!("aifo-gitconfig-{}.tmp", crate::create_session_id()))
+        }
+    } else {
+        std::env::temp_dir().join(format!("aifo-gitconfig-{}.tmp", crate::create_session_id()))
+    };
+    if std::fs::write(&dest, contents).is_ok() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o600));
+        }
+        if !used_host && env::var("AIFO_DOCKER_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!(
+                "aifo-coder: warning: host gitconfig not found/readable; using empty config inside container"
+            );
+        }
+        Some(dest)
+    } else {
+        None
+    }
+}
+
+fn stage_gitconfig_for_config_clone(host_home: &Path) {
+    // Do not mutate explicit config overrides; only stage into the default config root.
+    if env::var("AIFO_CONFIG_HOST_DIR").is_ok() || env::var("AIFO_CODER_CONFIG_HOST_DIR").is_ok() {
+        return;
+    }
+
+    let candidates = [
+        host_home.join(".gitconfig"),
+        host_home.join(".config").join("git").join("config"),
+    ];
+    let src = candidates.iter().find(|p| p.is_file());
+    if src.is_none() {
+        return;
+    }
+    let src = src.unwrap();
+
+    let max_sz = env::var("AIFO_CONFIG_MAX_SIZE")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(262_144);
+    if let Ok(md) = fs::metadata(src) {
+        if md.len() > max_sz {
+            return;
+        }
+    }
+
+    let dst_dir = host_home.join(".config").join("aifo-coder").join("global");
+    let _ = fs::create_dir_all(&dst_dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dst_dir, fs::Permissions::from_mode(0o700));
+    }
+    let dst = dst_dir.join(".gitconfig");
+    let _ = fs::copy(src, &dst);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dst, fs::Permissions::from_mode(0o600));
+    }
+}
+
 pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) -> Vec<OsString> {
     let mut volume_flags: Vec<OsString> = Vec::new();
+
+    // Prepare gitconfig mount by copying host config to a temp file (works even when the source
+    // file is unreadable inside Docker). Prefer ~/.gitconfig, else ~/.config/git/config.
+    if let Some(gc) = prepare_gitconfig_mount(host_home) {
+        volume_flags.push(OsString::from("-v"));
+        volume_flags.push(OsString::from(format!(
+            "{}:/home/coder/.gitconfig-host.gitconfig:ro",
+            gc.display()
+        )));
+    }
 
     // Transparent host-side auto-migration of legacy Aider and other agent config files into
     // standardized config dirs under ~/.config/aifo-coder/<agent>-PID so aifo-entrypoint can
@@ -514,7 +620,9 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
         let exts_env = env::var("AIFO_CONFIG_ALLOW_EXT")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "json,toml,yaml,yml,ini,conf,crt,pem,key,token".to_string());
+            .unwrap_or_else(|| {
+                "json,toml,yaml,yml,ini,conf,crt,pem,key,token,gitconfig".to_string()
+            });
         let allowed_exts: Vec<String> = exts_env
             .split(',')
             .map(|s| s.trim().to_ascii_lowercase())
@@ -680,10 +788,12 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
 
     // Fork-state mounts (when enabled) or HOME-based mounts.
     // When AIFO_CODER_FORK_STATE_DIR is non-empty, use repo-scoped fork state roots exclusively.
-    // Otherwise, always fall back to HOME-based mounts regardless of config staging.
+    // Otherwise, fall back to HOME-based mounts regardless of config staging.
+    let mut fork_state_active = false;
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
         let sd = state_dir.trim();
         if !sd.is_empty() {
+            fork_state_active = true;
             let base = PathBuf::from(sd);
             let mut pairs: Vec<(PathBuf, &str)> = vec![
                 (base.join(".aider"), "/home/coder/.aider"),
@@ -728,12 +838,10 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                     volume_flags.push(crate::path_pair(src, dst));
                 }
             }
-            // When using fork state, skip HOME-based mounts entirely.
-            return volume_flags;
         }
     }
 
-    {
+    if !fork_state_active {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
         let opencode_dirs = if agent == "opencode" {
@@ -831,16 +939,6 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     // Aider root-level config files: handled via config clone policy in entrypoint (Phase 1).
     // No direct bind-mount of original host files here.
 
-    // Git config: mount host ~/.gitconfig as .gitconfig-host (read-only); entrypoint clones
-    // to a writable ~/.gitconfig inside the container.
-    let gitconfig = host_home.join(".gitconfig");
-    crate::ensure_file_exists(&gitconfig).ok();
-    volume_flags.push(OsString::from("-v"));
-    volume_flags.push(OsString::from(format!(
-        "{}:/home/coder/.gitconfig-host:ro",
-        gitconfig.display()
-    )));
-
     // Timezone files (optional)
     for (host_path, container_path) in [
         ("/etc/localtime", "/etc/localtime"),
@@ -916,6 +1014,9 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
     // - If an explicit env override is provided and points to an existing directory: always mount.
     // - If using auto-resolved defaults: mount only when the directory contains at least one file
     //   under "global/" or the agent-specific subdir (e.g., "aider/") to avoid empty mounts in pristine setups.
+    // Stage host gitconfig into the default config root so entrypoint can clone it even when
+    // direct bind mounts are unavailable.
+    stage_gitconfig_for_config_clone(host_home);
     let (cfg_host_dir, cfg_is_override) = {
         if let Ok(v) = env::var("AIFO_CONFIG_HOST_DIR") {
             (validate_mount_source_dir(&v, "AIFO_CONFIG_HOST_DIR"), true)

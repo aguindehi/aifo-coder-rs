@@ -22,8 +22,9 @@ impl Orchestrator for Tmux {
     ) -> Result<(), String> {
         let tmux = which::which("tmux").map_err(|_| "tmux not found".to_string())?;
 
-        // Build child command string: aifo-coder plus child args
-        let mut words = vec!["aifo-coder".to_string()];
+        // Build child command string: aifo-coder (from env if provided) plus child args
+        let cmd = std::env::var("AIFO_CODER_BIN").unwrap_or_else(|_| "aifo-coder".to_string());
+        let mut words = vec![cmd];
         words.extend(child_args.iter().cloned());
         let child_joined = aifo_coder::shell_join(&words);
 

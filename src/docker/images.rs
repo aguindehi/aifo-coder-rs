@@ -34,26 +34,26 @@ pub struct ImageMetadata {
     pub revision: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 struct InspectConfig {
-    #[serde(default)]
-    Labels: HashMap<String, String>,
+    #[serde(default, rename = "Labels")]
+    labels: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
 struct InspectImage {
-    #[serde(default)]
-    ContainerConfig: InspectConfig,
-    #[serde(default)]
-    Config: InspectConfig,
-    #[serde(default)]
-    Created: Option<String>,
-    #[serde(default)]
-    Id: Option<String>,
-    #[serde(default)]
-    RepoDigests: Option<Vec<String>>,
-    #[serde(default)]
-    RepoTags: Option<Vec<String>>,
+    #[serde(default, rename = "ContainerConfig")]
+    container_config: InspectConfig,
+    #[serde(default, rename = "Config")]
+    config: InspectConfig,
+    #[serde(default, rename = "Created")]
+    created: Option<String>,
+    #[serde(default, rename = "Id")]
+    id: Option<String>,
+    #[serde(default, rename = "RepoDigests")]
+    repo_digests: Option<Vec<String>>,
+    #[serde(default, rename = "RepoTags")]
+    repo_tags: Option<Vec<String>>,
 }
 
 /// Inspect a docker image and return key metadata (labels, creation time, id).
@@ -71,34 +71,28 @@ pub fn image_metadata(runtime: &Path, image: &str) -> Option<ImageMetadata> {
     }
     let mut items: Vec<InspectImage> = serde_json::from_slice(&output.stdout).ok()?;
     let first = items.pop()?;
-    let labels = if !first.ContainerConfig.Labels.is_empty() {
-        first.ContainerConfig.Labels
+    let labels = if !first.container_config.labels.is_empty() {
+        first.container_config.labels
     } else {
-        first.Config.Labels
+        first.config.labels
     };
     let id = first
-        .Id
+        .id
         .map(|s| s.trim_start_matches("sha256:").to_string());
-    let version = labels
-        .get("org.opencontainers.image.version")
-        .cloned();
-    let revision = labels
-        .get("org.opencontainers.image.revision")
-        .cloned();
-    let title = labels
-        .get("org.opencontainers.image.title")
-        .cloned();
+    let version = labels.get("org.opencontainers.image.version").cloned();
+    let revision = labels.get("org.opencontainers.image.revision").cloned();
+    let title = labels.get("org.opencontainers.image.title").cloned();
     let digest = first
-        .RepoDigests
-        .and_then(|mut v| v.into_iter().next())
+        .repo_digests
+        .and_then(|v| v.into_iter().next())
         .map(|d| d.trim().to_string());
     let tag = first
-        .RepoTags
-        .and_then(|mut v| v.into_iter().next())
+        .repo_tags
+        .and_then(|v| v.into_iter().next())
         .map(|t| t.trim().to_string());
 
     Some(ImageMetadata {
-        created: first.Created,
+        created: first.created,
         id,
         digest,
         tag,

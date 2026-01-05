@@ -103,7 +103,7 @@ fn int_test_cli_fork_merge_octopus_autoclean_disposes_session() {
         String::from_utf8_lossy(&out_cli.stderr)
     );
 
-    // Verify we are on merge/<sid>
+    // Verify we returned to original branch
     let out2 = Command::new("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(repo)
@@ -111,9 +111,8 @@ fn int_test_cli_fork_merge_octopus_autoclean_disposes_session() {
         .unwrap();
     let head_branch = String::from_utf8_lossy(&out2.stdout).trim().to_string();
     assert_eq!(
-        head_branch,
-        format!("merge/{}", sid),
-        "expected HEAD to be merge/<sid>"
+        head_branch, cur_branch,
+        "expected HEAD to return to base branch"
     );
 
     // Verify session directory is removed

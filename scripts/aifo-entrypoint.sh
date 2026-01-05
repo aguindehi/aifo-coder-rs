@@ -382,13 +382,18 @@ maybe_chmod 0700 "$GNUPGHOME"
 mark_step "sync-gpg"
 sync_host_gpg
 
-# If a host gitconfig is mounted at ~/.gitconfig-host (read-only), clone it into
-# a writable ~/.gitconfig inside the container so git config --global can update
-# gpg.program without touching the host file.
-if [ -f "$HOME/.gitconfig-host" ]; then
-    if [ ! -f "$HOME/.gitconfig" ]; then
-        cp "$HOME/.gitconfig-host" "$HOME/.gitconfig" 2>/dev/null || true
-    fi
+# If host gitconfig is mounted, clone it into writable ~/.gitconfig so git config --global
+# can append without touching the host file. We mount it at .gitconfig-host.gitconfig inside the container.
+if [ -f "$HOME/.gitconfig-host.gitconfig" ]; then
+    cp "$HOME/.gitconfig-host.gitconfig" "$HOME/.gitconfig" 2>/dev/null || true
+    chmod 600 "$HOME/.gitconfig" 2>/dev/null || true
+elif [ -f "$HOME/.gitconfig-host" ]; then
+    # Fallback if older images mounted to .gitconfig-host.
+    cp "$HOME/.gitconfig-host" "$HOME/.gitconfig" 2>/dev/null || true
+    chmod 600 "$HOME/.gitconfig" 2>/dev/null || true
+elif [ -f "$HOME/.aifo-config-host/global/.gitconfig" ]; then
+    # Staged gitconfig from host config directory (read-only mount).
+    cp "$HOME/.aifo-config-host/global/.gitconfig" "$HOME/.gitconfig" 2>/dev/null || true
     chmod 600 "$HOME/.gitconfig" 2>/dev/null || true
 fi
 
@@ -601,7 +606,7 @@ maybe_copy_configs() {
     CFG_DST="${AIFO_CONFIG_DST_DIR:-$HOME/.aifo-config}"
     CFG_ENABLE="${AIFO_CONFIG_ENABLE:-1}"
     CFG_MAX="${AIFO_CONFIG_MAX_SIZE:-262144}"
-    CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token}"
+    CFG_EXT="${AIFO_CONFIG_ALLOW_EXT:-json,toml,yaml,yml,ini,conf,crt,pem,key,token,gitconfig}"
     CFG_HINTS="${AIFO_CONFIG_SECRET_HINTS:-token,secret,key,pem}"
     CFG_COPY_ALWAYS="${AIFO_CONFIG_COPY_ALWAYS:-0}"
 

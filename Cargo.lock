@@ -39,6 +39,7 @@ dependencies = [
  "opentelemetry_sdk",
  "reqwest",
  "rustc_version",
+ "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",

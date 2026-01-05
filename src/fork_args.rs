@@ -66,6 +66,22 @@ pub(crate) fn fork_build_child_args(cli: &crate::cli::Cli) -> Vec<String> {
             args.push("aider".to_string());
             args.extend(a.clone());
         }
+        Agent::OpenHands { args: a } => {
+            args.push("openhands".to_string());
+            args.extend(a.clone());
+        }
+        Agent::OpenCode { args: a } => {
+            args.push("opencode".to_string());
+            args.extend(a.clone());
+        }
+        Agent::Plandex { args: a } => {
+            args.push("plandex".to_string());
+            args.extend(a.clone());
+        }
+        Agent::Letta { args: a } => {
+            args.push("letta".to_string());
+            args.extend(a.clone());
+        }
         // For non-agent subcommands, default to aider to avoid starting doctor/images in panes.
         _ => {
             args.push("aider".to_string());

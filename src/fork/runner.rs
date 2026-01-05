@@ -15,7 +15,7 @@
 
 use std::env;
 use std::path::PathBuf;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 
 use crate::cli::{Agent, Cli};
 use crate::fork::orchestrators::Orchestrator;
@@ -166,6 +166,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         Agent::Codex { .. } => "codex",
         Agent::Crush { .. } => "crush",
         Agent::Aider { .. } => "aider",
+        Agent::OpenHands { .. } => "openhands",
+        Agent::OpenCode { .. } => "opencode",
+        Agent::Plandex { .. } => "plandex",
+        Agent::Letta { .. } => "letta",
         _ => "aider",
     };
     let state_base = env::var("AIFO_CODER_FORK_STATE_BASE")
@@ -294,14 +298,41 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
     } else {
         "tmux"
     };
+    let mut inline_exit: Option<i32> = None;
+    let force_tmux_single = env::var("AIFO_CODER_FORK_FORCE_TMUX").ok().as_deref() == Some("1");
+    let inline_single = !cfg!(windows) && panes == 1 && !force_tmux_single;
 
-    #[cfg(not(windows))]
-    {
-        match selected {
-            crate::fork::orchestrators::Selected::Tmux { .. } => {
-                let orch = crate::fork::orchestrators::tmux::Tmux;
-                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
+    if inline_single {
+        if let Some(pane) = panes_vec.first() {
+            if cli.verbose {
+                aifo_coder::log_info_stderr(
+                    use_err_color,
+                    "aifo-coder: single-pane fork: running inline without tmux (set AIFO_CODER_FORK_FORCE_TMUX=1 to force tmux)",
+                );
+            }
+            let bin = env::var("AIFO_CODER_BIN").unwrap_or_else(|_| "aifo-coder".to_string());
+            let mut cmd = Command::new(&bin);
+            cmd.current_dir(&pane.dir);
+            for (k, v) in crate::fork::env::fork_env_for_pane(
+                &sid,
+                pane.index,
+                &pane.container_name,
+                &pane.state_dir,
+            ) {
+                cmd.env(k, v);
+            }
+            cmd.args(&child_args);
+            let _ = std::fs::create_dir_all(&pane.state_dir);
+            match cmd.status() {
+                Ok(status) => {
+                    inline_exit = Some(status.code().unwrap_or(1));
+                    launched_in = "inline";
+                }
+                Err(e) => {
+                    aifo_coder::log_error_stderr(
+                        use_err_color,
+                        &format!("aifo-coder: failed to start agent: {}", e),
+                    );
                     crate::fork::cleanup::cleanup_and_update_meta(
                         &repo_root,
                         &sid,
@@ -314,75 +345,104 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
                     );
                     return ExitCode::from(1);
                 }
-                launched_in = "tmux";
-                let _ = orch.supports_post_merge();
+            }
+        } else {
+            aifo_coder::log_error_stderr(
+                use_err_color,
+                "aifo-coder: error: no pane available for single-pane fork run.",
+            );
+            return ExitCode::from(1);
+        }
+    } else {
+        #[cfg(not(windows))]
+        {
+            match selected {
+                crate::fork::orchestrators::Selected::Tmux { .. } => {
+                    let orch = crate::fork::orchestrators::tmux::Tmux;
+                    if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                        aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
+                        crate::fork::cleanup::cleanup_and_update_meta(
+                            &repo_root,
+                            &sid,
+                            &clones,
+                            cli.fork_keep_on_failure,
+                            &session_dir,
+                            snapshot_sha.as_deref(),
+                            &layout,
+                            false,
+                        );
+                        return ExitCode::from(1);
+                    }
+                    launched_in = "tmux";
+                    let _ = orch.supports_post_merge();
+                }
             }
         }
-    }
 
-    #[cfg(windows)]
-    {
-        match selected {
-            crate::fork::orchestrators::Selected::WindowsTerminal { .. } => {
-                let orch = crate::fork::orchestrators::windows_terminal::WindowsTerminal;
-                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
-                    crate::fork::cleanup::cleanup_and_update_meta(
-                        &repo_root,
-                        &sid,
-                        &clones,
-                        cli.fork_keep_on_failure,
-                        &session_dir,
-                        snapshot_sha.as_deref(),
-                        &layout,
-                        false,
-                    );
-                    return ExitCode::from(1);
+        #[cfg(windows)]
+        {
+            match selected {
+                crate::fork::orchestrators::Selected::WindowsTerminal { .. } => {
+                    let orch = crate::fork::orchestrators::windows_terminal::WindowsTerminal;
+                    if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                        aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
+                        crate::fork::cleanup::cleanup_and_update_meta(
+                            &repo_root,
+                            &sid,
+                            &clones,
+                            cli.fork_keep_on_failure,
+                            &session_dir,
+                            snapshot_sha.as_deref(),
+                            &layout,
+                            false,
+                        );
+                        return ExitCode::from(1);
+                    }
+                    launched_in = "Windows Terminal";
+                    let _ = orch.supports_post_merge();
                 }
-                launched_in = "Windows Terminal";
-                let _ = orch.supports_post_merge();
-            }
-            crate::fork::orchestrators::Selected::PowerShell { .. } => {
-                let orch = crate::fork::orchestrators::powershell::PowerShell {
-                    wait: merge_requested,
-                };
-                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
-                    crate::fork::cleanup::cleanup_and_update_meta(
-                        &repo_root,
-                        &sid,
-                        &clones,
-                        cli.fork_keep_on_failure,
-                        &session_dir,
-                        snapshot_sha.as_deref(),
-                        &layout,
-                        false,
-                    );
-                    return ExitCode::from(1);
+                crate::fork::orchestrators::Selected::PowerShell { .. } => {
+                    let orch = crate::fork::orchestrators::powershell::PowerShell {
+                        wait: merge_requested,
+                    };
+                    if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                        aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
+                        crate::fork::cleanup::cleanup_and_update_meta(
+                            &repo_root,
+                            &sid,
+                            &clones,
+                            cli.fork_keep_on_failure,
+                            &session_dir,
+                            snapshot_sha.as_deref(),
+                            &layout,
+                            false,
+                        );
+                        return ExitCode::from(1);
+                    }
+                    launched_in = "PowerShell windows";
+                    let _ = orch.supports_post_merge();
                 }
-                launched_in = "PowerShell windows";
-                let _ = orch.supports_post_merge();
-            }
-            crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
-                let orch = crate::fork::orchestrators::gitbash_mintty::GitBashMintty {
-                    exec_shell_tail: !merge_requested,
-                };
-                if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
-                    aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
-                    crate::fork::cleanup::cleanup_and_update_meta(
-                        &repo_root,
-                        &sid,
-                        &clones,
-                        cli.fork_keep_on_failure,
-                        &session_dir,
-                        snapshot_sha.as_deref(),
-                        &layout,
-                        false,
-                    );
-                    return ExitCode::from(1);
+                crate::fork::orchestrators::Selected::GitBashMintty { .. } => {
+                    let orch = crate::fork::orchestrators::gitbash_mintty::GitBashMintty {
+                        exec_shell_tail: !merge_requested,
+                    };
+                    if let Err(e) = orch.launch(&session, &panes_vec, &child_args) {
+                        aifo_coder::log_error_stderr(use_err_color, &format!("aifo-coder: {}", e));
+                        crate::fork::cleanup::cleanup_and_update_meta(
+                            &repo_root,
+                            &sid,
+                            &clones,
+                            cli.fork_keep_on_failure,
+                            &session_dir,
+                            snapshot_sha.as_deref(),
+                            &layout,
+                            false,
+                        );
+                        return ExitCode::from(1);
+                    }
+                    launched_in = "Git Bash";
+                    let _ = orch.supports_post_merge();
                 }
-                launched_in = "Git Bash";
-                let _ = orch.supports_post_merge();
             }
         }
     }
@@ -454,12 +514,16 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
 
     println!();
     match launched_in {
-        "tmux" => {
+        "tmux" | "inline" => {
+            let inline_note = launched_in == "inline";
             if use_color_out {
                 println!(
-                    "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m completed.",
-                    sid
+                    "\x1b[36;1maifo-coder:\x1b[0m fork session \x1b[32;1m{}\x1b[0m completed{}.",
+                    sid,
+                    if inline_note { " inline" } else { "" }
                 );
+            } else if inline_note {
+                println!("aifo-coder: fork session {} completed inline.", sid);
             } else {
                 println!("aifo-coder: fork session {} completed.", sid);
             }
@@ -496,5 +560,6 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             );
         }
     }
-    return ExitCode::from(0);
+    let exit_code = inline_exit.unwrap_or(0);
+    return ExitCode::from((exit_code & 0xff) as u8);
 }

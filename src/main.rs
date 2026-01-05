@@ -474,6 +474,12 @@ fn main() -> ExitCode {
     if cli.verbose {
         std::env::set_var("AIFO_CODER_OTEL_VERBOSE", "1");
     }
+    // Persist current executable path so fork panes can re-invoke the same binary even when not on PATH.
+    if let Ok(exe) = std::env::current_exe() {
+        if std::env::var("AIFO_CODER_BIN").is_err() {
+            std::env::set_var("AIFO_CODER_BIN", exe.display().to_string());
+        }
+    }
     // If requested, force metrics debug exporter (stderr/file) before telemetry_init.
     if cli.debug_otel_otlp {
         std::env::set_var("AIFO_CODER_OTEL_DEBUG_OTLP", "1");
@@ -516,9 +522,7 @@ fn main() -> ExitCode {
 
     // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
-        if n >= 2 {
-            return crate::fork::runner::fork_run(&cli, n);
-        }
+        return crate::fork::runner::fork_run(&cli, n);
     }
     // Optional auto-clean of stale fork sessions and stale session notice
     // Suppress stale notice here when running 'doctor' (doctor prints its own notice).

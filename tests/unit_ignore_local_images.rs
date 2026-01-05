@@ -90,8 +90,7 @@ EOF
 "#,
     );
 
-    let meta = aifo_coder::image_metadata(&runtime, "example:tag")
-        .expect("metadata should parse");
+    let meta = aifo_coder::image_metadata(&runtime, "example:tag").expect("metadata should parse");
     let summary = aifo_coder::format_image_metadata(&meta);
     for needle in [
         "build=2025-01-02T03:04:05Z",
