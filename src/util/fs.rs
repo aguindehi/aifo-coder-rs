@@ -1,7 +1,10 @@
 pub fn path_pair(host: &std::path::Path, container: &str) -> std::ffi::OsString {
-    // Special-case ~/.gitconfig: mount as .gitconfig-host so entrypoint can clone to writable ~/.gitconfig.
+    // Special-case ~/.gitconfig: mount as .gitconfig-host.gitconfig so entrypoint can clone to writable ~/.gitconfig.
     if container == "/home/coder/.gitconfig" {
-        std::ffi::OsString::from(format!("{}:/home/coder/.gitconfig-host", host.display()))
+        std::ffi::OsString::from(format!(
+            "{}:/home/coder/.gitconfig-host.gitconfig",
+            host.display()
+        ))
     } else {
         std::ffi::OsString::from(format!("{}:{container}", host.display()))
     }
