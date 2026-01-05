@@ -644,7 +644,8 @@ help: banner
 	@echo ""
 	$(call title,Utilities:)
 	@echo ""
-	@echo "  clean ....................... Remove built and base images (ignores errors if not present)"
+	@echo "  clean ....................... Remove build artifacts, caches, buildx cache, and cargo target"
+	@echo "  clean-images ................ Remove built and base images (ignores errors if not present)"
 	@echo "  toolchain-cache-clear ....... Purge all toolchain cache Docker volumes (rust/node/npm/pip/ccache/go)"
 	@echo "  loc ......................... Count lines of source code (Rust, Shell, Dockerfiles, Makefiles, YAML/TOML/JSON, Markdown)"
 	@echo "                                Use CONTAINER=name to choose a specific container; default picks first matching prefix."
@@ -2965,22 +2966,13 @@ rebuild-existing-nocache:
 	  $(DOCKER_BUILD) --no-cache --target "$$agent" -t "$$img" .; \
 	done
 
-.PHONY: clean
+.PHONY: clean clean-images
 clean:
 	@set -e; \
-	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) $(TC_IMAGE_RUST) $(TC_IMAGE_NODE) $(TC_IMAGE_CPP) 2>/dev/null || true; \
-	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
-	REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
-	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
-	RP="repository.migros.net/"; \
-	if [ -n "$$REG" ]; then \
-	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}$(TC_IMAGE_RUST)" "$${REG}$(TC_IMAGE_NODE)" "$${REG}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
-	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
-	fi; \
-	if [ "$$RP" != "$$REG" ]; then \
-	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}$(TC_IMAGE_RUST)" "$${RP}$(TC_IMAGE_NODE)" "$${RP}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
-	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
-	fi; \
+	rm -rf build dist; \
+	if [ -n "$(CACHE_DIR)" ] && [ "$(CACHE_DIR)" != "/" ]; then rm -rf "$(CACHE_DIR)"; fi; \
+	if [ -d target ]; then rm -rf target; fi; \
+	if [ -n "$${CARGO_TARGET_DIR:-}" ] && [ "$${CARGO_TARGET_DIR}" != "/" ]; then rm -rf "$${CARGO_TARGET_DIR}"; fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
 	DOCKER_PLATFORM_ARGS=""; \
@@ -3018,6 +3010,23 @@ clean:
 	  else \
 	    echo "Neither cargo nor docker is available; skipping cargo clean." >&2; \
 	  fi; \
+	fi
+
+.PHONY: clean-images
+clean-images:
+	@set -e; \
+	docker rmi $(CODEX_IMAGE) $(CRUSH_IMAGE) $(AIDER_IMAGE) $(OPENHANDS_IMAGE) $(OPENCODE_IMAGE) $(PLANDEX_IMAGE) $(CODEX_IMAGE_SLIM) $(CRUSH_IMAGE_SLIM) $(AIDER_IMAGE_SLIM) $(OPENHANDS_IMAGE_SLIM) $(OPENCODE_IMAGE_SLIM) $(PLANDEX_IMAGE_SLIM) $(RUST_BUILDER_IMAGE) $(TC_IMAGE_RUST) $(TC_IMAGE_NODE) $(TC_IMAGE_CPP) 2>/dev/null || true; \
+	docker rmi node:$(NODE_BASE_TAG) rust:$(RUST_BASE_TAG) 2>/dev/null || true; \
+	REG="$${REGISTRY:-$${AIFO_CODER_INTERNAL_REGISTRY_PREFIX}}"; \
+	if [ -n "$$REG" ]; then case "$$REG" in */) ;; *) REG="$$REG/";; esac; fi; \
+	RP="repository.migros.net/"; \
+	if [ -n "$$REG" ]; then \
+	  docker rmi "$${REG}$(CODEX_IMAGE)" "$${REG}$(CRUSH_IMAGE)" "$${REG}$(AIDER_IMAGE)" "$${REG}$(OPENHANDS_IMAGE)" "$${REG}$(OPENCODE_IMAGE)" "$${REG}$(PLANDEX_IMAGE)" "$${REG}$(CODEX_IMAGE_SLIM)" "$${REG}$(CRUSH_IMAGE_SLIM)" "$${REG}$(AIDER_IMAGE_SLIM)" "$${REG}$(OPENHANDS_IMAGE_SLIM)" "$${REG}$(OPENCODE_IMAGE_SLIM)" "$${REG}$(PLANDEX_IMAGE_SLIM)" "$${REG}$(RUST_BUILDER_IMAGE)" "$${REG}$(TC_IMAGE_RUST)" "$${REG}$(TC_IMAGE_NODE)" "$${REG}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
+	  docker rmi "$${REG}node:$(NODE_BASE_TAG)" "$${REG}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
+	fi; \
+	if [ "$$RP" != "$$REG" ]; then \
+	  docker rmi "$${RP}$(CODEX_IMAGE)" "$${RP}$(CRUSH_IMAGE)" "$${RP}$(AIDER_IMAGE)" "$${RP}$(OPENHANDS_IMAGE)" "$${RP}$(OPENCODE_IMAGE)" "$${RP}$(PLANDEX_IMAGE)" "$${RP}$(CODEX_IMAGE_SLIM)" "$${RP}$(CRUSH_IMAGE_SLIM)" "$${RP}$(AIDER_IMAGE_SLIM)" "$${RP}$(OPENHANDS_IMAGE_SLIM)" "$${RP}$(OPENCODE_IMAGE_SLIM)" "$${RP}$(PLANDEX_IMAGE_SLIM)" "$${RP}$(RUST_BUILDER_IMAGE)" "$${RP}$(TC_IMAGE_RUST)" "$${RP}$(TC_IMAGE_NODE)" "$${RP}$(TC_IMAGE_CPP)" 2>/dev/null || true; \
+	  docker rmi "$${RP}node:$(NODE_BASE_TAG)" "$${RP}rust:$(RUST_BASE_TAG)" 2>/dev/null || true; \
 	fi
 
 # AppArmor profile generation (for Docker containers)
