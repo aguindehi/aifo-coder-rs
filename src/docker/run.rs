@@ -443,20 +443,39 @@ fn prepare_gitconfig_mount(host_home: &Path) -> Option<PathBuf> {
             }
         }
     }
-    let tmp =
-        std::env::temp_dir().join(format!("aifo-gitconfig-{}.tmp", crate::create_session_id()));
-    if std::fs::write(&tmp, contents).is_ok() {
+    // Prefer a fork-scoped destination when AIFO_CODER_FORK_STATE_DIR is set so the bind mount
+    // target exists and is stable across panes; fall back to /tmp otherwise.
+    let dest = if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
+        let sd = state_dir.trim();
+        if !sd.is_empty() {
+            let p = PathBuf::from(sd).join(".gitconfig-host.gitconfig");
+            if let Some(parent) = p.parent() {
+                let _ = fs::create_dir_all(parent);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+                }
+            }
+            p
+        } else {
+            std::env::temp_dir().join(format!("aifo-gitconfig-{}.tmp", crate::create_session_id()))
+        }
+    } else {
+        std::env::temp_dir().join(format!("aifo-gitconfig-{}.tmp", crate::create_session_id()))
+    };
+    if std::fs::write(&dest, contents).is_ok() {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+            let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o600));
         }
         if !used_host && env::var("AIFO_DOCKER_VERBOSE").ok().as_deref() == Some("1") {
             eprintln!(
                 "aifo-coder: warning: host gitconfig not found/readable; using empty config inside container"
             );
         }
-        Some(tmp)
+        Some(dest)
     } else {
         None
     }
@@ -769,10 +788,12 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
 
     // Fork-state mounts (when enabled) or HOME-based mounts.
     // When AIFO_CODER_FORK_STATE_DIR is non-empty, use repo-scoped fork state roots exclusively.
-    // Otherwise, always fall back to HOME-based mounts regardless of config staging.
+    // Otherwise, fall back to HOME-based mounts regardless of config staging.
+    let mut fork_state_active = false;
     if let Ok(state_dir) = env::var("AIFO_CODER_FORK_STATE_DIR") {
         let sd = state_dir.trim();
         if !sd.is_empty() {
+            fork_state_active = true;
             let base = PathBuf::from(sd);
             let mut pairs: Vec<(PathBuf, &str)> = vec![
                 (base.join(".aider"), "/home/coder/.aider"),
@@ -817,12 +838,10 @@ pub(crate) fn collect_volume_flags(agent: &str, host_home: &Path, pwd: &Path) ->
                     volume_flags.push(crate::path_pair(src, dst));
                 }
             }
-            // When using fork state, skip HOME-based mounts entirely.
-            return volume_flags;
         }
     }
 
-    {
+    if !fork_state_active {
         // HOME-based mounts
         let crush_dir = host_home.join(".local").join("share").join("crush");
         let opencode_dirs = if agent == "opencode" {
