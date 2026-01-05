@@ -17,4 +17,4 @@ ISSUES
 target/**
 node_modules/**
 ci/osx/*.tar.xz
-otel-otlp.url
+otel-otlp.url*
