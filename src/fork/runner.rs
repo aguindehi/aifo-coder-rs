@@ -166,6 +166,10 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         Agent::Codex { .. } => "codex",
         Agent::Crush { .. } => "crush",
         Agent::Aider { .. } => "aider",
+        Agent::OpenHands { .. } => "openhands",
+        Agent::OpenCode { .. } => "opencode",
+        Agent::Plandex { .. } => "plandex",
+        Agent::Letta { .. } => "letta",
         _ => "aider",
     };
     let state_base = env::var("AIFO_CODER_FORK_STATE_BASE")
@@ -295,10 +299,7 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
         "tmux"
     };
     let mut inline_exit: Option<i32> = None;
-    let force_tmux_single = env::var("AIFO_CODER_FORK_FORCE_TMUX")
-        .ok()
-        .as_deref()
-        == Some("1");
+    let force_tmux_single = env::var("AIFO_CODER_FORK_FORCE_TMUX").ok().as_deref() == Some("1");
     let inline_single = !cfg!(windows) && panes == 1 && !force_tmux_single;
 
     if inline_single {
@@ -353,7 +354,6 @@ pub fn fork_run(cli: &Cli, panes: usize) -> ExitCode {
             return ExitCode::from(1);
         }
     } else {
-
         #[cfg(not(windows))]
         {
             match selected {
