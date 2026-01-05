@@ -48,7 +48,31 @@ fn unit_python_script_under_workspace_goes_proxy() {
 
 #[test]
 fn unit_pip_and_uv_are_always_proxy_by_policy() {
-    for tool in ["pip", "pip3", "uv", "uvx"] {
+    for tool in ["pip", "pip3", "uv"] {
         assert!(aifo_coder::shim::tool_is_always_proxy(tool));
     }
+    assert!(!aifo_coder::shim::tool_is_always_proxy("uvx"));
+}
+
+#[test]
+fn unit_uvx_from_flag_is_detected() {
+    let argv = os_vec(&[
+        "uvx",
+        "--from",
+        "git+https://github.com/example/tool",
+        "tool",
+    ]);
+    assert!(aifo_coder::shim::uvx_has_from_flag(&argv));
+}
+
+#[test]
+fn unit_uvx_from_equals_flag_is_detected() {
+    let argv = os_vec(&["uvx", "--from=git+https://github.com/example/tool", "tool"]);
+    assert!(aifo_coder::shim::uvx_has_from_flag(&argv));
+}
+
+#[test]
+fn unit_uvx_from_flag_ignored_after_separator() {
+    let argv = os_vec(&["uvx", "tool", "--", "--from", "git+https://ignored"]);
+    assert!(!aifo_coder::shim::uvx_has_from_flag(&argv));
 }

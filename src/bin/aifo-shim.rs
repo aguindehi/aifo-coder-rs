@@ -1390,6 +1390,25 @@ fn main() {
         }
     }
 
+    let uvx_from_local =
+        effective_tool == "uvx" && aifo_coder::shim::uvx_has_from_flag(&effective_argv_os);
+    if uvx_from_local {
+        if let Some(local) = which_sanitized("uvx").or_else(|| which_sanitized("uv")) {
+            let local_s = local.to_string_lossy().to_string();
+            log_smart_line("uvx", "from-flag", None, Some(local_s.as_str()));
+            let mut cmd = Command::new(local);
+            cmd.env("PATH", base_sanitized_path());
+            if effective_argv_os.len() > 1 {
+                cmd.args(&effective_argv_os[1..]);
+            }
+            let st = cmd.status().unwrap_or_else(|e| {
+                eprintln!("aifo-shim: failed to exec local uvx: {e}");
+                process::exit(1);
+            });
+            process::exit(st.code().unwrap_or(1));
+        }
+    }
+
     // No proxy env: try to exec local tool via PATH lookup with a sanitized PATH that
     // cannot recurse back into /opt/aifo/bin (env shebangs, etc.).
     if !proxy_configured {

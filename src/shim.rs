@@ -155,6 +155,24 @@ pub fn python_is_module_mode(argv: &[OsString]) -> bool {
     false
 }
 
+pub fn uvx_has_from_flag(argv: &[OsString]) -> bool {
+    let mut i = 1usize;
+    while i < argv.len() {
+        let a = argv[i].to_string_lossy();
+        if a == "--" {
+            break;
+        }
+        if a == "--from" {
+            return true;
+        }
+        if a.starts_with("--from=") && a.len() > "--from=".len() {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
 pub fn tool_is_always_proxy(tool: &str) -> bool {
-    matches!(tool, "pip" | "pip3" | "uv" | "uvx")
+    matches!(tool, "pip" | "pip3" | "uv")
 }
