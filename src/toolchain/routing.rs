@@ -33,6 +33,7 @@ const DEV_TOOLS: &[&str] = &[
 const ALLOW_RUST: &[&str] = &[
     "cargo",
     "rustc",
+    "rust-analyzer",
     "make",
     "cmake",
     "ninja",
@@ -135,7 +136,7 @@ pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
     let t = tool.to_ascii_lowercase();
     match t.as_str() {
         // rust
-        "cargo" | "rustc" => "rust",
+        "cargo" | "rustc" | "rust-analyzer" => "rust",
         // node/typescript and related managers
         "node" | "npm" | "npx" | "yarn" | "pnpm" | "deno" | "bun" | "tsc" | "ts-node" => "node",
         // python and uv/uvx tools

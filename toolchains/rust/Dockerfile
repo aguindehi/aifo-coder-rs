@@ -87,7 +87,7 @@ RUN set -eux; \
     cargo --version; \
     rustup toolchain install stable --profile minimal; \
     rustup default stable; \
-    rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview; \
+    rustup component add --toolchain stable rustfmt clippy rust-src llvm-tools-preview rust-analyzer; \
     CROSS=0; \
     if [ -n "${BUILDPLATFORM:-}" ] && [ -n "${TARGETPLATFORM:-}" ] && [ "${BUILDPLATFORM}" != "${TARGETPLATFORM}" ]; then \
       CROSS=1; \
@@ -169,6 +169,16 @@ RUN set -eux; \
     fi; \
     strip /usr/local/cargo/bin/cargo-nextest /usr/local/cargo/bin/grcov 2>/dev/null || true; \
     rm -rf /usr/local/cargo/registry /usr/local/cargo/git /usr/local/rustup/downloads /usr/local/rustup/tmp
+
+# Provide rust-analyzer wrapper on PATH so consumers (e.g. MCP Serena) can use the toolchain version directly
+RUN set -eux; \
+    RA_BIN="$(ls /usr/local/rustup/toolchains/stable*/bin/rust-analyzer | head -n 1 || true)"; \
+    if [ -z "$RA_BIN" ] || [ ! -x "$RA_BIN" ]; then \
+      echo "error: rust-analyzer binary not found in rustup toolchain" >&2; \
+      exit 1; \
+    fi; \
+    install -m 0755 "$RA_BIN" /usr/local/bin/rust-analyzer; \
+    strip /usr/local/bin/rust-analyzer 2>/dev/null || true
 
 # Install hadolint (multi-arch binary)
 RUN set -eux; \
