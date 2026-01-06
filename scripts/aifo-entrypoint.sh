@@ -696,6 +696,28 @@ if [ -n "${AIFO_CODER_CONFIG_DIR:-}" ]; then
     fi
 fi
 
+run_prewarm_cmds() {
+    if [ -z "${AIFO_PREWARM_CMDS:-}" ]; then
+        return
+    fi
+    log_debug "prewarm: running user-provided commands"
+    PREWARM_LOG="${HOME}/.aifo-prewarm.log"
+    safe_install_dir "$(dirname "$PREWARM_LOG")" 0700
+    printf '%s: prewarm start (%s)\n' "$log_prefix" "$(date -Is)" >>"$PREWARM_LOG" 2>/dev/null || true
+    echo "${AIFO_PREWARM_CMDS}" | while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 90s sh -c "$line" >>"$PREWARM_LOG" 2>&1 || true
+        else
+            sh -c "$line" >>"$PREWARM_LOG" 2>&1 || true
+        fi
+    done
+    printf '%s: prewarm end (%s)\n' "$log_prefix" "$(date -Is)" >>"$PREWARM_LOG" 2>/dev/null || true
+}
+
+mark_step "prewarm"
+run_prewarm_cmds
+
 mark_step "exec"
 trap - EXIT
 exec "$@"
