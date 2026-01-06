@@ -43,7 +43,7 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     /usr/local/cargo/bin/rustup set profile minimal; \
     /usr/local/cargo/bin/rustup component add llvm-tools-preview; \
-    /usr/local/cargo/bin/rustup component add clippy rustfmt; \
+    /usr/local/cargo/bin/rustup component add clippy rustfmt rust-analyzer; \
     rm -rf /usr/local/rustup/downloads /usr/local/rustup/tmp;'
 
 # Pre-install cargo-nextest to speed up tests inside this container
@@ -153,7 +153,7 @@ RUN chmod 0755 /opt/aifo/bin/aifo-shim && \
   > /opt/aifo/bin/sh && chmod 0755 /opt/aifo/bin/sh && \
   sed 's#/bin/sh#/bin/bash#g' /opt/aifo/bin/sh > /opt/aifo/bin/bash && chmod 0755 /opt/aifo/bin/bash && \
   sed 's#/bin/sh#/bin/dash#g' /opt/aifo/bin/sh > /opt/aifo/bin/dash && chmod 0755 /opt/aifo/bin/dash && \
-  for t in cargo rustc node npm npx yarn pnpm deno bun tsc ts-node python python3 pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx hadolint; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
+  for t in cargo rustc rust-analyzer node npm npx yarn pnpm deno bun tsc ts-node python python3 pip pip3 gcc g++ cc c++ clang clang++ make cmake ninja pkg-config go gofmt say uv uvx hadolint; do ln -sf aifo-shim "/opt/aifo/bin/$t"; done && \
   for p in /usr/bin/python3.*; do b="$(basename "$p")"; [ -x "$p" ] && ln -sf aifo-shim "/opt/aifo/bin/$b" || true; done && \
   install -d -m 0755 /usr/local/bin
 
@@ -194,13 +194,13 @@ WORKDIR /workspace
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
 ENV PATH="/opt/aifo/bin:${PATH}"
+RUN ln -sf /opt/aifo/bin/rust-analyzer /usr/local/bin/rust-analyzer
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
 COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
 RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
-
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
 CMD ["bash"]
@@ -613,13 +613,13 @@ WORKDIR /workspace
 # Copy shims and wrappers from shim-common
 COPY --from=shim-common /opt/aifo/bin /opt/aifo/bin
 ENV PATH="/opt/aifo/bin:${PATH}"
+RUN ln -sf /opt/aifo/bin/rust-analyzer /usr/local/bin/rust-analyzer
 
 # Copy entrypoint from shim-common and ensure HOME exists
 COPY --from=shim-common /usr/local/bin/aifo-entrypoint /usr/local/bin/aifo-entrypoint
 COPY --from=shim-common /usr/local/bin/aifo-gpg-wrapper /usr/local/bin/aifo-gpg-wrapper
 ENV AIFO_RUNTIME_USER=${RUNTIME_USER}
 RUN set -eux; install -d -m 1777 "/home/${RUNTIME_USER}" && chown "${RUNTIME_USER}:${RUNTIME_USER}" "/home/${RUNTIME_USER}"
-
 # Common process entry point
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/aifo-entrypoint"]
 CMD ["bash"]
