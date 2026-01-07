@@ -272,7 +272,7 @@ pub(crate) enum Agent {
     about = "Run Codex, Crush, Aider, Opencode, Openhands or Plandex inside Docker with current directory mounted.",
     override_usage = "aifo-coder [OPTIONS] <COMMAND> [-- [AGENT-OPTIONS]]",
     after_long_help = "Examples:\n  aifo-coder --fork 2 aider -- --help\n  aifo-coder --fork 3 --fork-include-dirty --fork-session-name aifo-work aider --\n  aifo-coder fork list --json\n  aifo-coder fork clean --older-than 14 --yes\n\n",
-    after_help = "\n"
+    after_help = "\nEnv:\n  AIFO_SESSION_NETWORK  Network to join when --docker-network is not provided (default: bridge)\n"
 )]
 pub(crate) struct Cli {
     /// Override Docker image (full ref). If unset, use per-agent default: {prefix}-{agent}:{tag}
@@ -290,11 +290,11 @@ pub(crate) struct Cli {
     #[arg(long = "toolchain", value_name = "SPEC")]
     pub(crate) toolchain: Vec<ToolchainSpec>,
 
-    /// Docker network to join (default: bridge). Combine with --docker-network-isolate to append the session id.
+    /// Docker network to join (default: bridge). Overrides AIFO_SESSION_NETWORK.
     #[arg(long = "docker-network", value_name = "NAME")]
     pub(crate) docker_network: Option<String>,
 
-    /// Append the session id to --docker-network for per-session isolation.
+    /// Append the session id to --docker-network for per-session isolation. Combine with --docker-network.
     #[arg(long = "docker-network-isolate")]
     pub(crate) docker_network_isolate: bool,
 
