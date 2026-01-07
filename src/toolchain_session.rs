@@ -15,6 +15,7 @@ use std::sync::{
 use tracing::instrument;
 
 use crate::cli::Cli;
+use aifo_coder::{session_network_from_env, set_session_network_env};
 
 pub(crate) fn plan_from_cli(cli: &Cli) -> (Vec<String>, Vec<(String, String)>) {
     use std::collections::{BTreeMap, BTreeSet};
@@ -535,8 +536,13 @@ impl ToolchainSession {
         };
 
         // Export network for agent to join
-        let net = format!("aifo-net-{}", sid);
-        std::env::set_var("AIFO_SESSION_NETWORK", &net);
+        let _net = match session_network_from_env() {
+            Some(n) => n.name,
+            None => {
+                set_session_network_env("bridge", false, false, "default");
+                "bridge".to_string()
+            }
+        };
         #[cfg(target_os = "linux")]
         {
             if !cli.toolchain_unix_socket {

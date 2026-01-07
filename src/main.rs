@@ -137,6 +137,49 @@ fn configure_gpg_env(agent: &str, signing_enabled: bool, host_has_key: bool) {
     }
 }
 
+fn configure_network_env(cli: &Cli) {
+    // Ensure a stable session id for naming and network isolation; reuse if already set.
+    let session_id = std::env::var("AIFO_CODER_FORK_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(aifo_coder::create_session_id);
+    std::env::set_var("AIFO_CODER_FORK_SESSION", &session_id);
+
+    let cli_net = cli
+        .docker_network
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    let env_net = std::env::var("AIFO_SESSION_NETWORK")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+
+    // CLI flags win; otherwise respect pre-set env; else default to bridge.
+    if cli_net.is_none() && !cli.docker_network_isolate {
+        if env_net.is_none() {
+            aifo_coder::set_session_network_env("bridge", false, false, "default");
+        }
+        return;
+    }
+
+    let base = cli_net.or(env_net).unwrap_or_else(|| "bridge".to_string());
+    let final_net = if cli.docker_network_isolate {
+        format!("{}-{}", base, session_id)
+    } else {
+        base
+    };
+    let is_bridge = final_net == "bridge";
+    let managed = cli.docker_network_isolate && !is_bridge;
+    let create = !is_bridge;
+    let source = if cli.docker_network_isolate {
+        "cli-isolate"
+    } else {
+        "cli"
+    };
+    aifo_coder::set_session_network_env(&final_net, managed, create, source);
+}
+
 fn require_repo_root() -> Result<PathBuf, ExitCode> {
     match aifo_coder::repo_root() {
         Some(p) => Ok(p),
@@ -607,6 +650,8 @@ fn main() -> ExitCode {
     }
     configure_gpg_env(agent, signing_enabled, host_has_key);
 
+    configure_network_env(&cli);
+
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
 
@@ -649,7 +694,7 @@ fn main() -> ExitCode {
                     use_err,
                     concat!(
                         "aifo-coder: would prepare and mount /opt/aifo/bin shims; set ",
-                        "AIFO_TOOLEEXEC_URL/TOKEN; join aifo-net-<id>"
+                        "AIFO_TOOLEEXEC_URL/TOKEN; join Docker network (default: bridge; configurable via --docker-network)"
                     ),
                 );
             }

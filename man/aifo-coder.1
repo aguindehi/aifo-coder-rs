@@ -159,8 +159,15 @@ Internal: bearer token used by shims to authenticate to the proxy. Set
 automatically when \-\-toolchain is used.
 .TP
 .B AIFO_SESSION_NETWORK
-Internal: ephemeral Docker network name that the agent joins to communicate
-with toolchain sidecars (created automatically per session).
+Internal: Docker network name that the agent joins to communicate with toolchain
+sidecars. Default is
+.B bridge
+(no new network is created). The
+.B --docker-network
+flag overrides this value; combine with
+.B --docker-network-isolate
+to append the session id and auto-create/remove isolated networks. Setting this
+environment variable manually is respected as an override.
 .TP
 .B AIFO_TOOLEEXEC_TIMEOUT_SECS
 Per-request timeout in seconds for the toolexec proxy (default: 60). Increase on slow CI,

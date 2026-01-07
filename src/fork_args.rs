@@ -107,6 +107,8 @@ mod args_tests {
                     .parse()
                     .expect("valid toolchain spec"),
             ],
+            docker_network: Some("bridge".to_string()),
+            docker_network_isolate: false,
             no_toolchain_cache: true,
             toolchain_unix_socket: false,
             toolchain_bootstrap: vec!["typescript=global".to_string()],

@@ -31,7 +31,7 @@ mod notifications;
 
 pub(crate) mod shim;
 
-mod sidecar;
+pub mod sidecar;
 pub use sidecar::{
     build_sidecar_exec_preview, build_sidecar_run_preview,
     build_sidecar_run_preview_with_overrides, toolchain_bootstrap_typescript_global,
