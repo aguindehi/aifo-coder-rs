@@ -290,6 +290,14 @@ pub(crate) struct Cli {
     #[arg(long = "toolchain", value_name = "SPEC")]
     pub(crate) toolchain: Vec<ToolchainSpec>,
 
+    /// Docker network to join (default: bridge). Combine with --docker-network-isolate to append the session id.
+    #[arg(long = "docker-network", value_name = "NAME")]
+    pub(crate) docker_network: Option<String>,
+
+    /// Append the session id to --docker-network for per-session isolation.
+    #[arg(long = "docker-network-isolate")]
+    pub(crate) docker_network_isolate: bool,
+
     /// Disable named cache volumes for toolchain sidecars
     #[arg(long = "no-toolchain-cache")]
     pub(crate) no_toolchain_cache: bool,

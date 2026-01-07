@@ -44,6 +44,8 @@ pub struct SessionNetwork {
     pub name: String,
     /// true when the launcher created and should clean up the network
     pub managed: bool,
+    /// true when the launcher should create the network if missing
+    pub create_if_missing: bool,
 }
 
 pub fn session_network_from_env() -> Option<SessionNetwork> {
@@ -52,10 +54,19 @@ pub fn session_network_from_env() -> Option<SessionNetwork> {
         if trimmed.is_empty() {
             return None;
         }
-        let managed = matches!(
-            std_env::var("AIFO_SESSION_NETWORK_SOURCE").ok().as_deref(),
-            Some("generated")
-        );
+        let managed = std_env::var("AIFO_SESSION_NETWORK_MANAGED")
+            .ok()
+            .map(|v| v == "1")
+            .unwrap_or_else(|| {
+                matches!(
+                    std_env::var("AIFO_SESSION_NETWORK_SOURCE").ok().as_deref(),
+                    Some("generated")
+                )
+            });
+        let create_if_missing = std_env::var("AIFO_SESSION_NETWORK_CREATE")
+            .ok()
+            .map(|v| v == "1")
+            .unwrap_or(false);
         if !managed && std_env::var("AIFO_SESSION_NETWORK_SOURCE").is_err() {
             // Record provenance so cleanup skips user-supplied networks.
             std_env::set_var("AIFO_SESSION_NETWORK_SOURCE", "user");
@@ -63,14 +74,27 @@ pub fn session_network_from_env() -> Option<SessionNetwork> {
         return Some(SessionNetwork {
             name: trimmed.to_string(),
             managed,
+            create_if_missing,
         });
     }
     None
 }
 
 pub fn set_generated_session_network_env(name: &str) {
+    set_session_network_env(name, true, true, "generated");
+}
+
+pub fn set_session_network_env(name: &str, managed: bool, create: bool, source: &str) {
     std_env::set_var("AIFO_SESSION_NETWORK", name);
-    std_env::set_var("AIFO_SESSION_NETWORK_SOURCE", "generated");
+    std_env::set_var("AIFO_SESSION_NETWORK_SOURCE", source);
+    std_env::set_var(
+        "AIFO_SESSION_NETWORK_MANAGED",
+        if managed { "1" } else { "0" },
+    );
+    std_env::set_var(
+        "AIFO_SESSION_NETWORK_CREATE",
+        if create { "1" } else { "0" },
+    );
 }
 
 #[cfg_attr(
@@ -833,6 +857,8 @@ pub(crate) fn choose_session_network(
     skip_creation: bool,
 ) -> Option<SessionNetwork> {
     let use_err = crate::color_enabled_stderr();
+    // Keep parameter usage explicit for future per-session naming without warnings.
+    let _ = session_id;
     // Honor preset network as an override (do not create or remove it).
     if let Some(net) = session_network_from_env() {
         if skip_creation {
@@ -850,13 +876,13 @@ pub(crate) fn choose_session_network(
         if exists {
             return Some(net);
         }
-        if net.managed {
-            // Managed but missing: attempt creation.
+        if net.create_if_missing {
             if ensure_network_exists(runtime, &net.name, verbose) {
-                set_generated_session_network_env(&net.name);
+                set_session_network_env(&net.name, net.managed, net.create_if_missing, "generated");
                 return Some(SessionNetwork {
                     name: net.name,
-                    managed: true,
+                    managed: net.managed,
+                    create_if_missing: net.create_if_missing,
                 });
             }
         } else if verbose {
@@ -869,43 +895,24 @@ pub(crate) fn choose_session_network(
             );
         }
         // Fall back to default bridge to keep agent/sidecars aligned.
-        std_env::set_var("AIFO_SESSION_NETWORK", "bridge");
-        std_env::set_var("AIFO_SESSION_NETWORK_SOURCE", "fallback");
+        set_session_network_env("bridge", false, false, "fallback");
         return Some(SessionNetwork {
             name: "bridge".to_string(),
             managed: false,
+            create_if_missing: false,
         });
     }
 
-    let net_name = sidecar_network_name(session_id);
+    // Default: bridge (no creation/removal) unless overridden elsewhere.
     let net = SessionNetwork {
-        name: net_name,
-        managed: true,
+        name: "bridge".to_string(),
+        managed: false,
+        create_if_missing: false,
     };
     if skip_creation {
-        set_generated_session_network_env(&net.name);
         return Some(net);
     }
-    if ensure_network_exists(runtime, &net.name, verbose) {
-        set_generated_session_network_env(&net.name);
-        Some(net)
-    } else {
-        if verbose {
-            crate::log_warn_stderr(
-                use_err,
-                &format!(
-                    "aifo-coder: warning: failed to create session network {}; falling back to default 'bridge' network",
-                    net.name
-                ),
-            );
-        }
-        std_env::set_var("AIFO_SESSION_NETWORK", "bridge");
-        std_env::set_var("AIFO_SESSION_NETWORK_SOURCE", "fallback");
-        Some(SessionNetwork {
-            name: "bridge".to_string(),
-            managed: false,
-        })
-    }
+    Some(net)
 }
 
 /// Mark/unmark the bootstrap env for official rust images.
@@ -973,15 +980,23 @@ mod session_network_tests {
     fn session_network_respects_user_env() {
         std_env::set_var("AIFO_SESSION_NETWORK", "bridge");
         std_env::remove_var("AIFO_SESSION_NETWORK_SOURCE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_CREATE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_MANAGED");
         let net = session_network_from_env().expect("net from env");
         assert_eq!(net.name, "bridge");
         assert!(!net.managed, "user-provided networks are not managed");
+        assert!(
+            !net.create_if_missing,
+            "user-provided networks default to no-create"
+        );
         assert_eq!(
             std_env::var("AIFO_SESSION_NETWORK_SOURCE").ok().as_deref(),
             Some("user")
         );
         std_env::remove_var("AIFO_SESSION_NETWORK");
         std_env::remove_var("AIFO_SESSION_NETWORK_SOURCE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_CREATE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_MANAGED");
     }
 
     #[test]
@@ -990,12 +1005,15 @@ mod session_network_tests {
         let net = session_network_from_env().expect("net from generated env");
         assert_eq!(net.name, "aifo-net-test");
         assert!(net.managed);
+        assert!(net.create_if_missing);
         assert_eq!(
             std_env::var("AIFO_SESSION_NETWORK_SOURCE").ok().as_deref(),
             Some("generated")
         );
         std_env::remove_var("AIFO_SESSION_NETWORK");
         std_env::remove_var("AIFO_SESSION_NETWORK_SOURCE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_CREATE");
+        std_env::remove_var("AIFO_SESSION_NETWORK_MANAGED");
     }
 }
 
@@ -1053,6 +1071,7 @@ pub fn toolchain_run(
         Some(SessionNetwork {
             name: sidecar_network_name(&session_id),
             managed: true,
+            create_if_missing: true,
         })
     } else {
         choose_session_network(&runtime, &session_id, verbose, false)

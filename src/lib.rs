@@ -14,8 +14,8 @@
 //!
 //! Environment invariants (documented for contributors)
 //! - AIFO_TOOLEEXEC_URL/TOKEN: exported by proxy start; injected into agent env; respected by shims.
-//! - AIFO_SESSION_NETWORK: session network to join (override when preset); generated aifo-net-<id>
-//!   networks are removed on cleanup when created by the launcher.
+//! - AIFO_SESSION_NETWORK: session network to join (default bridge; CLI/env override). Networks
+//!   created by the launcher (e.g., via --docker-network-isolate) are removed on cleanup.
 //! - AIFO_TOOLEEXEC_ADD_HOST (Linux): when "1", add host-gateway entry; used for troubleshooting.
 //! - AIFO_CODER_CONTAINER_NAME/HOSTNAME: stable container name/hostname per pane/session.
 //! - AIFO_CODER_FORK_*: pane/session metadata exported to orchestrated shells/sessions.
@@ -73,7 +73,9 @@ pub use fork_windows_helpers::{
 pub use lock::*;
 pub use proxy::*;
 pub use registry::*;
-pub use toolchain::sidecar::{session_network_from_env, set_generated_session_network_env};
+pub use toolchain::sidecar::{
+    session_network_from_env, set_generated_session_network_env, set_session_network_env,
+};
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
 pub use util::docker_security::{docker_security_options_parse, DockerSecurityOptions};

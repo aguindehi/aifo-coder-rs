@@ -23,6 +23,11 @@ fn int_toolchain_cleanup_removes_containers_and_network() {
     }
     let overrides: Vec<(String, String)> = vec![("rust".to_string(), image.clone())];
 
+    // Force a deterministic session id + network to exercise creation/removal.
+    let sid = "net-cleanup-test";
+    std::env::set_var("AIFO_CODER_FORK_SESSION", sid);
+    aifo_coder::set_session_network_env(&format!("aifo-net-{}", sid), true, true, "test");
+
     let sid = aifo_coder::toolchain_start_session(&kinds, &overrides, true, true)
         .expect("failed to start sidecar session");
     let net = format!("aifo-net-{}", sid);
@@ -69,4 +74,11 @@ fn int_toolchain_cleanup_removes_containers_and_network() {
         "network {} still exists after cleanup",
         net
     );
+
+    // Clean env for other tests
+    std::env::remove_var("AIFO_CODER_FORK_SESSION");
+    std::env::remove_var("AIFO_SESSION_NETWORK");
+    std::env::remove_var("AIFO_SESSION_NETWORK_SOURCE");
+    std::env::remove_var("AIFO_SESSION_NETWORK_MANAGED");
+    std::env::remove_var("AIFO_SESSION_NETWORK_CREATE");
 }

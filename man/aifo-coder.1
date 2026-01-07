@@ -160,13 +160,14 @@ automatically when \-\-toolchain is used.
 .TP
 .B AIFO_SESSION_NETWORK
 Internal: Docker network name that the agent joins to communicate with toolchain
-sidecars. If unset, aifo-coder creates an ephemeral per-session network
-(aifo-net-<id>) and removes it on cleanup. If set, the value is honored as an
-override (no creation/removal); set to
+sidecars. Default is
 .B bridge
-to use the default Docker bridge without creating a new
-.B br-*
-interface.
+(no new network is created). The
+.B --docker-network
+flag overrides this value; combine with
+.B --docker-network-isolate
+to append the session id and auto-create/remove isolated networks. Setting this
+environment variable manually is respected as an override.
 .TP
 .B AIFO_TOOLEEXEC_TIMEOUT_SECS
 Per-request timeout in seconds for the toolexec proxy (default: 60). Increase on slow CI,
