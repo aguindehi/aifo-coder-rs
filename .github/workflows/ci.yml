@@ -87,6 +87,9 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # Exclude AppArmor-asserting test on runners without loaded profiles.
+      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +111,10 @@ jobs:
             ~/.cache/sccache
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Run tests
@@ -120,6 +127,8 @@ jobs:
     timeout-minutes: 90
     env:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
+      # Exclude AppArmor-asserting test on runners without loaded profiles.
+      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,6 +150,14 @@ jobs:
             ~/.cache/sccache
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Build rust toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-rust:ci toolchains/rust
+          echo "AIFO_CODER_TEST_RUST_IMAGE=aifo-coder-toolchain-rust:ci" >> "$GITHUB_ENV"
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Run integration tests
