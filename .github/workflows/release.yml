@@ -25,10 +25,13 @@ jobs:
   require-apple-sdk:
     name: Ensure Apple SDK secrets exist
     runs-on: ubuntu-latest
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
     steps:
       - name: Check Apple SDK inputs
         run: |
-          if [ -z "${{ secrets.APPLE_SDK_URL }}" ] && [ -z "${{ secrets.APPLE_SDK_BASE64 }}" ]; then
+          if [ -z "${APPLE_SDK_URL:-}" ] && [ -z "${APPLE_SDK_BASE64:-}" ]; then
             echo "APPLE_SDK_URL or APPLE_SDK_BASE64 must be set for tagged releases." >&2
             exit 1
           fi
@@ -38,9 +41,9 @@ jobs:
     needs: require-apple-sdk
     runs-on: ubuntu-latest
     env:
-      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
-      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
-      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 }}
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 || vars.APPLE_SDK_SHA256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

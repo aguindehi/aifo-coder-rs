@@ -193,15 +193,28 @@ jobs:
     name: Prepare Apple SDK artifact
     needs: meta
     runs-on: ubuntu-latest
-    if: ${{ needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '') }}
+    if: ${{ needs.meta.outputs.push == 'true' }}
+    outputs:
+      available: ${{ steps.sdk.outputs.available }}
     env:
-      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
-      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
-      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 }}
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 || vars.APPLE_SDK_SHA256 }}
     steps:
+      - name: Check Apple SDK secrets
+        id: sdk
+        run: |
+          if [ -n "${APPLE_SDK_URL:-}" ] || [ -n "${APPLE_SDK_BASE64:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Apple SDK secrets missing; skipping SDK artifact."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Checkout
+        if: steps.sdk.outputs.available == 'true'
         uses: actions/checkout@v4
       - name: Decode Apple SDK
+        if: steps.sdk.outputs.available == 'true'
         run: |
           set -euo pipefail
           mkdir -p ci/osx
@@ -217,6 +230,7 @@ jobs:
           fi
           ls -lh ci/osx/MacOSX.sdk.tar.xz
       - name: Upload SDK artifact
+        if: steps.sdk.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: apple-sdk
@@ -227,7 +241,7 @@ jobs:
     name: Build macOS cross rust builder
     needs: [meta, prepare-apple-sdk]
     runs-on: ubuntu-latest
-    if: ${{ needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '') }}
+    if: ${{ needs.meta.outputs.push == 'true' && needs.prepare-apple-sdk.outputs.available == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
