@@ -118,6 +118,8 @@ jobs:
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Run tests
+        env:
+          CI: ""
         run: make test
 
   test-e2e:
