@@ -1,0 +1,262 @@
+name: Container Images
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["*"]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+  IMAGE_PREFIX: aifo-coder
+  REGISTRY_PREFIX: ${{ vars.REGISTRY_PREFIX || '' }}
+  DOCKER_BUILDKIT: 1
+  PLATFORMS: linux/amd64,linux/arm64
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  meta:
+    name: Derive image tags
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      refslug: ${{ steps.vars.outputs.refslug }}
+      push: ${{ steps.vars.outputs.push }}
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      PR_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork || false }}
+      REF_TYPE: ${{ github.ref_type }}
+      REF_NAME: ${{ github.ref_name }}
+      SHA: ${{ github.sha }}
+    steps:
+      - id: vars
+        run: |
+          ref="${REF_NAME}"
+          case "${REF_TYPE}" in
+            tag) tag="${ref}" ;;
+            branch)
+              if [ "${ref}" = "main" ] || [ "${ref}" = "master" ]; then
+                tag="ci"
+              else
+                tag="${SHA}"
+              fi
+              ;;
+            *) tag="${SHA}" ;;
+          esac
+
+          push="true"
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${PR_FORK}" = "true" ]; then
+            push="false"
+          fi
+
+          refslug="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "refslug=${refslug}" >> "$GITHUB_OUTPUT"
+          echo "push=${push}" >> "$GITHUB_OUTPUT"
+
+  build-rust-builder:
+    name: Build rust builder
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        if: needs.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build rust-builder image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: rust-builder
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ needs.meta.outputs.push }}
+          load: ${{ needs.meta.outputs.push != 'true' }}
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}/aifo-coder-rust-builder:${{ needs.meta.outputs.tag }}
+            ${{ env.REGISTRY_IMAGE }}/aifo-coder-rust-builder/${{ needs.meta.outputs.refslug }}:${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=rust-builder
+          cache-to: type=gha,mode=max,scope=rust-builder
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+
+  build-toolchains:
+    name: Build toolchain images
+    needs: [meta, build-rust-builder]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [rust, node, cpp]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        if: needs.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build toolchain ${{ matrix.folder }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./toolchains/${{ matrix.folder }}/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ needs.meta.outputs.push }}
+          load: ${{ needs.meta.outputs.push != 'true' }}
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}/aifo-coder-toolchain-${{ matrix.folder }}:${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=toolchain-${{ matrix.folder }}
+          cache-to: type=gha,mode=max,scope=toolchain-${{ matrix.folder }}
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+
+  build-images:
+    name: Build agent images
+    needs: [meta, build-rust-builder]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          [
+            "codex",
+            "crush",
+            "aider",
+            "openhands",
+            "opencode",
+            "plandex",
+            "codex-slim",
+            "crush-slim",
+            "aider-slim",
+            "openhands-slim",
+            "opencode-slim",
+            "plandex-slim",
+          ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        if: needs.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build ${{ matrix.target }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ needs.meta.outputs.push }}
+          load: ${{ needs.meta.outputs.push != 'true' }}
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}/aifo-coder-${{ matrix.target }}:${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+
+  prepare-apple-sdk:
+    name: Prepare Apple SDK artifact
+    needs: meta
+    runs-on: ubuntu-latest
+    if: needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Decode Apple SDK
+        run: |
+          set -euo pipefail
+          mkdir -p ci/osx
+          if [ -n "${APPLE_SDK_URL:-}" ]; then
+            echo "Downloading Apple SDK from APPLE_SDK_URL..."
+            curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o ci/osx/MacOSX.sdk.tar.xz
+          else
+            echo "Decoding APPLE_SDK_BASE64..."
+            /bin/sh ci/bin/decode-apple-sdk.sh
+          fi
+          if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+            echo "${APPLE_SDK_SHA256}  ci/osx/MacOSX.sdk.tar.xz" | sha256sum -c -
+          fi
+          ls -lh ci/osx/MacOSX.sdk.tar.xz
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-sdk
+          path: ci/osx/MacOSX.sdk.tar.xz
+          if-no-files-found: error
+
+  build-macos-cross-rust-builder:
+    name: Build macOS cross rust builder
+    needs: [meta, prepare-apple-sdk]
+    runs-on: ubuntu-latest
+    if: needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: apple-sdk
+          path: ci/osx
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build macOS cross rust builder
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: builders/macos-cross/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}/aifo-coder-macos-cross-rust-builder:${{ needs.meta.outputs.tag }}
+          cache-from: type=gha,scope=macos-cross-rust-builder
+          cache-to: type=gha,mode=max,scope=macos-cross-rust-builder
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            OSX_SDK_FILENAME=MacOSX.sdk.tar.xz

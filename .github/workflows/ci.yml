@@ -2,26 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
   pull_request:
-    branches: [ "**" ]
+    branches: ["**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  AIFO_CODER_TEST_DISABLE_DOCKER: 1
+  ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci"
+  CARGO_FLAGS: "--features otel-otlp"
 
 jobs:
-  build-and-package:
-    name: Build and package
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, macos-latest ]
-
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
-
+        with:
+          components: clippy,rustfmt
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -30,51 +42,185 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Cache cargo build target
+      - name: Cache cargo target
         uses: actions/cache@v4
         with:
-          path: target
+          path: |
+            target
+            ~/.cache/sccache
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
+      - name: Run lint
+        run: make lint
 
-      - name: Install clippy
-        run: rustup component add clippy
-      - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - name: Run tests
-        run: cargo test --all-targets
-
-      - name: Build and package
-        run: |
-          case "${{ runner.os }}" in
-            Linux) make release-for-linux ;;
-            macOS) make release-for-mac ;;
-          esac
-
-      - name: Upload dist artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ runner.os }}
-          path: dist
-          if-no-files-found: warn
-
-  test-windows:
-    name: Test on Windows
-    runs-on: windows-latest
+  otel-golden:
+    name: OTel golden stdout
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Run OTel golden/smoke
+        run: sh ci/otel-golden-stdout.sh
 
-      - name: Install clippy
-        run: rustup component add clippy
-
-      - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
+  tests:
+    name: Nextest suite
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
       - name: Run tests
-        run: cargo test --all-targets
+        run: make test
+
+  test-e2e:
+    name: Integration + E2E
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AIFO_CODER_TEST_DISABLE_DOCKER: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+      - name: Run integration tests
+        run: make test-integration-suite
+      - name: Run acceptance tests
+        run: make test-acceptance-suite
+
+  lint-dockerfiles:
+    name: Lint Dockerfiles
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Lint Dockerfiles with hadolint
+        run: |
+          set -euo pipefail
+          files=()
+          for f in Dockerfile toolchains/rust/Dockerfile toolchains/node/Dockerfile toolchains/cpp/Dockerfile builders/macos-cross/Dockerfile; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Dockerfiles to lint."
+            exit 0
+          fi
+          docker run --rm -v "$PWD:/workspace" -w /workspace hadolint/hadolint:2.12.0-debian hadolint --format sarif "${files[@]}" > hadolint.sarif || true
+      - name: Upload hadolint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadolint
+          path: hadolint.sarif
+          if-no-files-found: ignore
+
+  test-macos-cross:
+    name: macOS cross e2e (osxcross)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 }}
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare Apple SDK
+        run: |
+          set -euo pipefail
+          mkdir -p ci/osx
+          if [ -n "${APPLE_SDK_URL:-}" ]; then
+            echo "Downloading Apple SDK from URL..."
+            curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o ci/osx/MacOSX.sdk.tar.xz
+          else
+            echo "Decoding Apple SDK from APPLE_SDK_BASE64..."
+            /bin/sh ci/bin/decode-apple-sdk.sh
+          fi
+          if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+            echo "${APPLE_SDK_SHA256}  ci/osx/MacOSX.sdk.tar.xz" | sha256sum -c -
+          fi
+          ls -lh ci/osx/MacOSX.sdk.tar.xz
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build macOS cross builder image (local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: builders/macos-cross/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-macos-cross-rust-builder:ci
+          build-args: |
+            REGISTRY_PREFIX=
+            OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
+      - name: Run macOS cross nextest suite
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace aifo-coder-macos-cross-rust-builder:ci \
+            /usr/local/cargo/bin/cargo nextest run --color always --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
