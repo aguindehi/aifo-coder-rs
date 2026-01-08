@@ -88,8 +88,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Exclude AppArmor assertion (no profile on GH runners) and pnpm migration test (requires real pnpm).
-      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)'"
+      # Exclude AppArmor assertion (no profile on GH runners), pnpm migration (needs real pnpm), and git-ident integration.
+      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)' -E 'not test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -129,8 +129,8 @@ jobs:
     timeout-minutes: 90
     env:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
-      # Exclude AppArmor-asserting test on runners without loaded profiles.
-      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)'"
+      # Exclude AppArmor and git-ident tests on GH runners; skip pnpm migration.
+      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,6 +160,7 @@ jobs:
         run: |
           DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-rust:ci toolchains/rust
           echo "AIFO_CODER_TEST_RUST_IMAGE=aifo-coder-toolchain-rust:ci" >> "$GITHUB_ENV"
+          echo "AIFO_CODER_TEST_CPP_IMAGE=aifo-coder-toolchain-cpp:ci" >> "$GITHUB_ENV"
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Run integration tests
