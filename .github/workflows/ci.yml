@@ -185,7 +185,7 @@ jobs:
       APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
       APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
       APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 }}
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

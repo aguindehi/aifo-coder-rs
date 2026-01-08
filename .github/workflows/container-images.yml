@@ -193,7 +193,7 @@ jobs:
     name: Prepare Apple SDK artifact
     needs: meta
     runs-on: ubuntu-latest
-    if: needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    if: ${{ needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '') }}
     env:
       APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL }}
       APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 }}
@@ -227,7 +227,7 @@ jobs:
     name: Build macOS cross rust builder
     needs: [meta, prepare-apple-sdk]
     runs-on: ubuntu-latest
-    if: needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '')
+    if: ${{ needs.meta.outputs.push == 'true' && (secrets.APPLE_SDK_URL != '' || secrets.APPLE_SDK_BASE64 != '') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

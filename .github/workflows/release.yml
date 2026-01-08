@@ -108,7 +108,7 @@ jobs:
     name: Build macOS binaries (cross)
     needs: prepare-apple-sdk
     runs-on: ubuntu-latest
-    if: needs.prepare-apple-sdk.result == 'success'
+    if: ${{ needs.prepare-apple-sdk.result == 'success' }}
     env:
       AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
       AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
@@ -188,11 +188,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(python - <<'PY'
-import tomllib
-with open("Cargo.toml", "rb") as f:
-    print(tomllib.load(f)["package"]["version"])
-PY
-)"
+          import tomllib
+          with open("Cargo.toml", "rb") as f:
+              print(tomllib.load(f)["package"]["version"])
+          PY
+          )"
           echo "Version: ${VERSION}"
           for f in README.md NOTICE LICENSE; do
             [ -f "$f" ] || (echo "missing $f" >&2; exit 1)
@@ -251,7 +251,7 @@ PY
     name: Attach signed macOS zips (optional)
     needs: package-release
     runs-on: ubuntu-latest
-    if: (vars.SIGNED_MACOS_ARM64_URL != '' || vars.SIGNED_MACOS_X86_64_URL != '')
+    if: ${{ vars.SIGNED_MACOS_ARM64_URL != '' || vars.SIGNED_MACOS_X86_64_URL != '' }}
     steps:
       - name: Download signed macOS zips
         run: |
