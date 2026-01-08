@@ -89,7 +89,11 @@ jobs:
     timeout-minutes: 45
     env:
       # Exclude AppArmor assertion (no profile on GH runners), pnpm migration (needs real pnpm), and git-ident integration.
-      ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)' -E 'not test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/)'"
+      ARGS_NEXTEST: >-
+        --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci
+        --expression !test('^int_test_agent_preview_includes_apparmor_flag_when_supported$')
+        && !test('^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$')
+        && !test('^int_test_fork_merge_lock_serializes_concurrent_merges$')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -130,7 +134,11 @@ jobs:
     env:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
       # Exclude AppArmor and git-ident tests on GH runners; skip pnpm migration.
-      ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)'"
+      ARGS_NEXTEST: >-
+        --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci
+        --expression !test('^int_test_agent_preview_includes_apparmor_flag_when_supported$')
+        && !test('^int_test_fork_merge_lock_serializes_concurrent_merges$')
+        && !test('^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
