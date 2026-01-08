@@ -88,8 +88,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Exclude AppArmor-asserting test on runners without loaded profiles.
-      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)'"
+      # Exclude AppArmor assertion (no profile on GH runners) and pnpm migration test (requires real pnpm).
+      ARGS_NEXTEST: "${ARGS_NEXTEST} -E 'not test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/)' -E 'not test(/^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
