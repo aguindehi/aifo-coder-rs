@@ -88,12 +88,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Exclude AppArmor assertion (no profile on GH runners), pnpm migration (needs real pnpm), and git-ident integration.
-      ARGS_NEXTEST: >-
-        --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci
-        --expression "!test('^int_test_agent_preview_includes_apparmor_flag_when_supported$')
-        && !test('^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$')
-        && !test('^int_test_fork_merge_lock_serializes_concurrent_merges$')"
+      # Use ci-gh profile (skip env-sensitive tests) on GitHub.
+      ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci-gh"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -135,13 +131,7 @@ jobs:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
       AIFO_CODER_TEST_RUST_IMAGE: aifo-coder-toolchain-rust:ci
       AIFO_CODER_TEST_CPP_IMAGE: aifo-coder-toolchain-cpp:ci
-      # Exclude AppArmor and git-ident tests on GH runners; skip pnpm migration.
-      ARGS_NEXTEST: >-
-        --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci
-        --expression "!test('^int_test_agent_preview_includes_apparmor_flag_when_supported$')
-        && !test('^int_test_fork_merge_lock_serializes_concurrent_merges$')
-        && !test('^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$')
-        && !test('^int_error_semantics_tcp_v1_and_v2$')"
+      ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci-gh"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -179,12 +169,7 @@ jobs:
         run: cargo install cargo-nextest --locked
       - name: Run integration tests
         env:
-          ARGS_NEXTEST: >-
-            --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci
-            --expression "!test('^int_test_agent_preview_includes_apparmor_flag_when_supported$')
-            && !test('^int_test_fork_merge_lock_serializes_concurrent_merges$')
-            && !test('^toolchain_session::tests::pnpm_migration_imports_legacy_lock_and_cleans_up$')
-            && !test('^int_error_semantics_tcp_v1_and_v2$')"
+          ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci-gh"
           AIFO_CODER_TEST_RUST_IMAGE: aifo-coder-toolchain-rust:ci
           AIFO_CODER_TEST_CPP_IMAGE: aifo-coder-toolchain-cpp:ci
           GIT_AUTHOR_NAME: CI

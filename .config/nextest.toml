@@ -2,6 +2,14 @@
 # Write JUnit report to target/nextest/ci/junit.xml
 path = "junit.xml"
 
+[profile.ci-gh]
+inherits = "ci"
+skip-tests = [
+  "int_test_agent_preview_includes_apparmor_flag_when_supported",
+  "int_test_fork_merge_lock_serializes_concurrent_merges",
+  "int_error_semantics_tcp_v1_and_v2",
+]
+
 # Defaults (documented for clarity):
 # store-success-output = false
 # store-failure-output = true
