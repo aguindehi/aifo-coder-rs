@@ -130,10 +130,10 @@ jobs:
     timeout-minutes: 90
     env:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
-      AIFO_CODER_TEST_RUST_IMAGE: aifo-coder-toolchain-rust:ci
-      AIFO_CODER_TEST_CPP_IMAGE: aifo-coder-toolchain-cpp:ci
+      AIFO_CODER_TEST_RUST_IMAGE: "aifo-coder-toolchain-rust:ci"
+      AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
       ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
-      AIFO_SKIP_EXPR: "!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/) & !test(/^int_error_semantics_tcp_v1_and_v2$/)"
+      AIFO_SKIP_EXPR: "'!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/) & !test(/^int_error_semantics_tcp_v1_and_v2$/)'"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,9 +172,9 @@ jobs:
       - name: Run integration tests
         env:
           ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
-          AIFO_SKIP_EXPR: "!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/) & !test(/^int_error_semantics_tcp_v1_and_v2$/)"
-          AIFO_CODER_TEST_RUST_IMAGE: aifo-coder-toolchain-rust:ci
-          AIFO_CODER_TEST_CPP_IMAGE: aifo-coder-toolchain-cpp:ci
+          AIFO_SKIP_EXPR: "'!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/) & !test(/^int_error_semantics_tcp_v1_and_v2$/)'"
+          AIFO_CODER_TEST_RUST_IMAGE: "aifo-coder-toolchain-rust:ci"
+          AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
           GIT_AUTHOR_NAME: CI
           GIT_AUTHOR_EMAIL: ci@example.com
           GIT_COMMITTER_NAME: CI
