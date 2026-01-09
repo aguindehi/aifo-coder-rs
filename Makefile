@@ -2526,6 +2526,9 @@ test-integration-suite:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
+	if [ -n "$$AIFO_SKIP_EXPR" ]; then \
+	  EXPR="($$EXPR) & ($$AIFO_SKIP_EXPR)"; \
+	fi; \
 	if ! command -v cargo >/dev/null 2>&1; then \
 	  echo "Error: cargo not found; cannot run integration tests." >&2; \
 	  exit 1; \
