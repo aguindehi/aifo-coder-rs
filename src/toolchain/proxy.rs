@@ -621,7 +621,8 @@ pub fn toolexec_start_proxy(
             }
 
             let host_dir = host_dir.ok_or_else(|| {
-                last_err.unwrap_or_else(|| io::Error::other("failed to prepare unix socket directory"))
+                last_err
+                    .unwrap_or_else(|| io::Error::other("failed to prepare unix socket directory"))
             })?;
             let sock_path = host_dir.join("toolexec.sock");
             let _ = fs::remove_file(&sock_path);

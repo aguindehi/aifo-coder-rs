@@ -8,7 +8,7 @@ use std::time::{Instant, SystemTime};
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
 #[cfg(feature = "otel-otlp")]
-use opentelemetry::logs::LoggerProvider;
+use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
