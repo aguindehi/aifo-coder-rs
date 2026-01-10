@@ -53,4 +53,4 @@ jobs:
         run: ./target/release/aifo-coder crush --help
 
       - name: Run Crush --version via launcher
-        run: ./target/release/aifo-coder crush --version
+        run: ./target/release/aifo-coder crush -- --version

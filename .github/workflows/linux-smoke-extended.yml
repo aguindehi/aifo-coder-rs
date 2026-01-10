@@ -56,7 +56,7 @@ jobs:
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder codex --version; else ./aifo-coder codex --version; fi
 
       - name: Run crush --version via launcher - ${{ matrix.flavor }}
-        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder crush --version; else ./aifo-coder crush --version; fi
+        run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder crush -- --version; else ./aifo-coder crush -- --version; fi
 
       - name: Run aider --version via launcher - ${{ matrix.flavor }}
         run: if [ "${{ matrix.flavor }}" = "slim" ]; then AIFO_CODER_IMAGE_FLAVOR=slim ./aifo-coder aider --version; else ./aifo-coder aider --version; fi
