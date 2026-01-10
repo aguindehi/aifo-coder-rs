@@ -161,7 +161,7 @@ A future PR that wants to implement actual logs export should:
 Test & CI Considerations
 ========================
 
-- The existing golden stdout tests (`ci/otel-golden-stdout.sh`) and unit tests remain unchanged.
+- The existing golden stdout tests (`ci/telemetry-smoke.sh`) and unit tests remain unchanged.
 - When logs export is eventually added:
   - Ensure that enabling OTEL logs does not change CLI stdout or exit codes.
   - Any failures in log export must be best-effort and must not fail commands.

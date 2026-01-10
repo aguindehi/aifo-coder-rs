@@ -1171,7 +1171,7 @@ cargo run --features otel -- --help
   - `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` control sampling (e.g., `parentbased_traceidratio`).
   - `OTEL_EXPORTER_OTLP_TIMEOUT` controls exporter timeouts (default 5s). BSP envs (`OTEL_BSP_*`) are respected.
 - CI invariant:
-  - Golden stdout: enabling/disabling telemetry must not change CLI stdout. See ci/otel-golden-stdout.sh.
+  - Golden stdout: enabling/disabling telemetry must not change CLI stdout. See ci/telemetry-smoke.sh.
 - Safety/idempotence:
   - `telemetry_init()` is idempotent; if a subscriber exists, init is skipped with a concise stderr message.
   - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
@@ -1180,7 +1180,7 @@ For more details (endpoint precedence, HTTP transport, CI checks), see `docs/REA
 
 Telemetry tests:
 - Run unit/integration tests (no Docker): make test
-- Golden stdout and smoke (no Docker): ci/otel-golden-stdout.sh
+- Golden stdout and smoke (no Docker): ci/telemetry-smoke.sh
 
 ---
 

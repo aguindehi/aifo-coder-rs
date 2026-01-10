@@ -1,4 +1,4 @@
-name: build
+name: ci-build
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}
+  group: ci-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -24,7 +24,7 @@ env:
 
 jobs:
   lint:
-    name: Lint
+    name: Lint (fmt + clippy)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -53,8 +53,8 @@ jobs:
       - name: Run lint
         run: make lint
 
-  otel-golden:
-    name: OTel golden stdout
+  telemetry-smoke:
+    name: Telemetry smoke (OTel stdout)
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -79,8 +79,8 @@ jobs:
             ~/.cache/sccache
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
-      - name: Run OTel golden/smoke
-        run: sh ci/otel-golden-stdout.sh
+      - name: Run telemetry smoke
+        run: sh ci/telemetry-smoke.sh
 
   lint-dockerfiles:
     name: Lint Dockerfiles
