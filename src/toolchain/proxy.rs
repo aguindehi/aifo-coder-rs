@@ -588,8 +588,7 @@ pub fn toolexec_start_proxy(
 
             // Try /run/aifo first (spec), fall back to /tmp/aifo when /run is not writable
             // on unprivileged hosts (e.g., GitHub runners).
-            let mut base_candidates =
-                vec!["/run/aifo".to_string(), "/tmp/aifo".to_string()];
+            let mut base_candidates = vec!["/run/aifo".to_string(), "/tmp/aifo".to_string()];
             if let Ok(env_base) = std_env::var("AIFO_TOOLEEXEC_UNIX_BASE") {
                 if !env_base.trim().is_empty() {
                     base_candidates.insert(0, env_base.trim().to_string());
@@ -622,12 +621,7 @@ pub fn toolexec_start_proxy(
             }
 
             let host_dir = host_dir.ok_or_else(|| {
-                last_err.unwrap_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        "failed to prepare unix socket directory",
-                    )
-                })
+                last_err.unwrap_or_else(|| io::Error::other("failed to prepare unix socket directory"))
             })?;
             let sock_path = host_dir.join("toolexec.sock");
             let _ = fs::remove_file(&sock_path);
@@ -722,10 +716,7 @@ pub fn toolexec_start_proxy(
                     eprintln!("aifo-coder: toolexec proxy stopped");
                 }
             });
-            let url = format!(
-                "unix://{}/toolexec.sock",
-                host_dir.to_string_lossy()
-            );
+            let url = format!("unix://{}/toolexec.sock", host_dir.to_string_lossy());
             return Ok((url, token, running, handle));
         }
     }
