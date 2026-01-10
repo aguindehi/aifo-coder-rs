@@ -2526,6 +2526,12 @@ test-integration-suite:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
+	if [ "$${CI_PLATFORM:-}" = "github" ]; then \
+	  EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/))"; \
+	  : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	  : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	  git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
+	fi; \
 	if [ -n "$$AIFO_SKIP_EXPR" ]; then \
 	  EXPR="($$EXPR) & ($$AIFO_SKIP_EXPR)"; \
 	fi; \

@@ -134,6 +134,7 @@ jobs:
       AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
       ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
       AIFO_SKIP_EXPR: "'!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$/) & !test(/^int_error_semantics_tcp_v1_and_v2$/)'"
+      CI_PLATFORM: github
     steps:
       - name: Checkout
         uses: actions/checkout@v4
