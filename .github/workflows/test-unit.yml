@@ -1,0 +1,57 @@
+name: test-unit
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: unit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  AIFO_CODER_TEST_DISABLE_DOCKER: 1
+  ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
+  CARGO_FLAGS: "--features otel-otlp"
+
+jobs:
+  unit:
+    name: Unit tests (nextest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+      - name: Run unit tests
+        env:
+          AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS: 5
+          AIFO_CODER_NOTIFICATIONS_TIMEOUT: 5
+        run: cargo nextest run $ARGS_NEXTEST -E 'test(/^unit_/)'

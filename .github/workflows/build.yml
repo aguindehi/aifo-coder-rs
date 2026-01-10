@@ -1,0 +1,111 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  AIFO_CODER_TEST_DISABLE_DOCKER: 1
+  ARGS_NEXTEST: "--no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --profile ci"
+  CARGO_FLAGS: "--features otel-otlp"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Run lint
+        run: make lint
+
+  otel-golden:
+    name: OTel golden stdout
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Run OTel golden/smoke
+        run: sh ci/otel-golden-stdout.sh
+
+  lint-dockerfiles:
+    name: Lint Dockerfiles
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Lint Dockerfiles with hadolint
+        run: |
+          set -euo pipefail
+          files=()
+          for f in Dockerfile toolchains/rust/Dockerfile toolchains/node/Dockerfile toolchains/cpp/Dockerfile builders/macos-cross/Dockerfile; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Dockerfiles to lint."
+            exit 0
+          fi
+          docker run --rm -v "$PWD:/workspace" -w /workspace hadolint/hadolint:2.12.0-debian hadolint --format sarif "${files[@]}" > hadolint.sarif || true
+      - name: Upload hadolint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadolint
+          path: hadolint.sarif
+          if-no-files-found: ignore

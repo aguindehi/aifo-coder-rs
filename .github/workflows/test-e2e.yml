@@ -1,0 +1,150 @@
+name: test-e2e
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  AIFO_CODER_TEST_DISABLE_DOCKER: 0
+  ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
+  CARGO_FLAGS: "--features otel-otlp"
+  CI_PLATFORM: github
+  AIFO_CODER_TEST_RUST_IMAGE: "aifo-coder-toolchain-rust:ci"
+  AIFO_RUST_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-rust:ci"
+  AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
+  AIFO_CPP_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-cpp:ci"
+  AIFO_CODER_TEST_NODE_IMAGE: "aifo-coder-toolchain-node:ci"
+  AIFO_NODE_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-node:ci"
+
+jobs:
+  e2e:
+    name: Acceptance / e2e suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Build rust toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-rust:ci toolchains/rust
+          echo "AIFO_CODER_TEST_RUST_IMAGE=aifo-coder-toolchain-rust:ci" >> "$GITHUB_ENV"
+      - name: Build cpp toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-cpp:ci toolchains/cpp
+          echo "AIFO_CODER_TEST_CPP_IMAGE=aifo-coder-toolchain-cpp:ci" >> "$GITHUB_ENV"
+      - name: Build node toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-node:ci toolchains/node
+          echo "AIFO_CODER_TEST_NODE_IMAGE=aifo-coder-toolchain-node:ci" >> "$GITHUB_ENV"
+      - name: Prime node toolchain volumes (ownership)
+        run: |
+          docker run --rm -v aifo-node-modules:/workspace/node_modules -v aifo-node-cache:/home/coder/.cache alpine:3.20 \
+            sh -c "chown -R 1001:1001 /workspace/node_modules /home/coder/.cache || true"
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+      - name: Run acceptance tests
+        env:
+          GIT_AUTHOR_NAME: CI
+          GIT_AUTHOR_EMAIL: ci@example.com
+          GIT_COMMITTER_NAME: CI
+          GIT_COMMITTER_EMAIL: ci@example.com
+        run: make test-acceptance-suite
+
+  macos-cross:
+    name: macOS cross e2e (osxcross)
+    needs: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 || vars.APPLE_SDK_SHA256 }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    steps:
+      - name: Check Apple SDK secrets
+        id: sdk
+        run: |
+          if [ -n "${APPLE_SDK_URL:-}" ] || [ -n "${APPLE_SDK_BASE64:-}" ]; then
+            echo "have_sdk=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Apple SDK secrets missing; skipping macOS cross job."
+            echo "have_sdk=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout
+        if: steps.sdk.outputs.have_sdk == 'true'
+        uses: actions/checkout@v4
+      - name: Prepare Apple SDK
+        if: steps.sdk.outputs.have_sdk == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ci/osx
+          if [ -n "${APPLE_SDK_URL:-}" ]; then
+            echo "Downloading Apple SDK from URL..."
+            curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o ci/osx/MacOSX.sdk.tar.xz
+          else
+            echo "Decoding Apple SDK from APPLE_SDK_BASE64..."
+            /bin/sh ci/bin/decode-apple-sdk.sh
+          fi
+          if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+            echo "${APPLE_SDK_SHA256}  ci/osx/MacOSX.sdk.tar.xz" | sha256sum -c -
+          fi
+          ls -lh ci/osx/MacOSX.sdk.tar.xz
+      - name: Set up QEMU
+        if: steps.sdk.outputs.have_sdk == 'true'
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        if: steps.sdk.outputs.have_sdk == 'true'
+        uses: docker/setup-buildx-action@v3
+      - name: Build macOS cross builder image (local)
+        if: steps.sdk.outputs.have_sdk == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: builders/macos-cross/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-macos-cross-rust-builder:ci
+          build-args: |
+            REGISTRY_PREFIX=
+            OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
+      - name: Run macOS cross nextest suite
+        if: steps.sdk.outputs.have_sdk == 'true'
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace aifo-coder-macos-cross-rust-builder:ci \
+            /usr/local/cargo/bin/cargo nextest run --color always --run-ignored ignored-only --profile ci --no-fail-fast --status-level=fail --hide-progress-bar -E 'test(/^e2e_macos_cross_/)'
