@@ -80,7 +80,7 @@ jobs:
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
       - name: Run telemetry smoke
-        run: sh ci/telemetry-smoke.sh
+        run: bash ci/telemetry-smoke.sh
 
   lint-dockerfiles:
     name: Lint Dockerfiles
