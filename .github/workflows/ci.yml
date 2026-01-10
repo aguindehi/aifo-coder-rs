@@ -132,6 +132,7 @@ jobs:
       AIFO_CODER_TEST_DISABLE_DOCKER: 0
       AIFO_CODER_TEST_RUST_IMAGE: "aifo-coder-toolchain-rust:ci"
       AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
+      AIFO_CODER_TEST_NODE_IMAGE: "aifo-coder-toolchain-node:ci"
       ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
       CI_PLATFORM: github
     steps:
@@ -167,6 +168,11 @@ jobs:
       - name: Build cpp toolchain image for sidecars
         run: |
           DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-cpp:ci toolchains/cpp
+          echo "AIFO_CODER_TEST_CPP_IMAGE=aifo-coder-toolchain-cpp:ci" >> "$GITHUB_ENV"
+      - name: Build node toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-node:ci toolchains/node
+          echo "AIFO_CODER_TEST_NODE_IMAGE=aifo-coder-toolchain-node:ci" >> "$GITHUB_ENV"
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
       - name: Run integration tests
