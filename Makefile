@@ -2503,6 +2503,18 @@ test-acceptance-suite:
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
+	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
+	  gitlab) : ;; \
+	  *) EXPR="($$EXPR) & (!test(/^e2e_toolchain_rust_acceptance_full_suite$$/) & !test(/^e2e_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust$$/) & !test(/^e2e_native_http_tcp_exec_rust_version$$/) & !test(/^e2e_proxy_streaming_slow_consumer_disconnect$$/) & !test(/^e2e_proxy_stream_large_output_node$$/) & !test(/^e2e_stream_cargo_help_v2$$/) & !test(/^e2e_toolchain_live_node_npx_ok$$/) & !test(/^e2e_toolchain_live_rust_version_ok$$/) & !test(/^e2e_test_tsc_local_resolution_tcp_v2$$/) & !test(/^e2e_proxy_client_disconnect_triggers_proxy_log$$/) & !test(/^e2e_proxy_logs_golden_verbose_substrings$$/) & !test(/^e2e_test_proxy_unauthorized_and_unknown_tool$$/) & !test(/^e2e_test_proxy_shim_route_rust_and_node$$/))"; \
+	     : $${AIFO_RUST_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	     : $${AIFO_CPP_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	     : $${AIFO_NODE_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-node:ci}; \
+	     : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	     : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	     : $${AIFO_CODER_TEST_NODE_IMAGE:=aifo-coder-toolchain-node:ci}; \
+	     git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
+	     ;; \
+	esac; \
 	if ! command -v cargo >/dev/null 2>&1; then \
 	  echo "Error: cargo not found; cannot run acceptance tests." >&2; \
 	  exit 1; \
