@@ -77,6 +77,13 @@ jobs:
             sh -c "chown -R 1001:1001 /workspace/node_modules /home/coder/.cache || true"
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --locked
+      - name: Smoke python/go toolchains
+        run: |
+          # python/go are not built locally; just validate version output if images are present
+          docker pull python:3.12-slim || true
+          docker pull golang:1.22-bookworm || true
+          docker run --rm python:3.12-slim python --version || true
+          docker run --rm golang:1.22-bookworm go version || true
       - name: Run acceptance tests
         env:
           GIT_AUTHOR_NAME: CI

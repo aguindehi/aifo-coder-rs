@@ -249,6 +249,57 @@ jobs:
         run: docker run --rm aifo-coder-crush:ci crush --help
       - name: Check aider --help
         run: docker run --rm aifo-coder-aider:ci aider --help
+      - name: Build openhands (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: openhands
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-openhands:ci
+          cache-from: type=gha,scope=aifo-coder-openhands-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-openhands-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Build opencode (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: opencode
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-opencode:ci
+          cache-from: type=gha,scope=aifo-coder-opencode-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-opencode-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Build plandex (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: plandex
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-plandex:ci
+          cache-from: type=gha,scope=aifo-coder-plandex-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-plandex-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Check openhands --help
+        run: docker run --rm aifo-coder-openhands:ci openhands --help
+      - name: Check opencode --help
+        run: docker run --rm aifo-coder-opencode:ci opencode --help
+      - name: Check plandex --help
+        run: docker run --rm aifo-coder-plandex:ci plandex --help
 
   prepare-apple-sdk:
     name: Prepare Apple SDK artifact
