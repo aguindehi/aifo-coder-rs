@@ -189,6 +189,67 @@ jobs:
             REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
             KEEP_APT=0
 
+  help-check:
+    name: Build codex/crush/aider and run --help
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build codex (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: codex
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-codex:ci
+          cache-from: type=gha,scope=aifo-coder-codex-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-codex-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Build crush (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: crush
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-crush:ci
+          cache-from: type=gha,scope=aifo-coder-crush-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-crush-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Build aider (local, amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: aider
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-aider:ci
+          cache-from: type=gha,scope=aifo-coder-aider-help
+          cache-to: type=gha,mode=max,scope=aifo-coder-aider-help
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            KEEP_APT=0
+      - name: Check codex --help
+        run: docker run --rm aifo-coder-codex:ci codex --help
+      - name: Check crush --help
+        run: docker run --rm aifo-coder-crush:ci crush --help
+      - name: Check aider --help
+        run: docker run --rm aifo-coder-aider:ci aider --help
+
   prepare-apple-sdk:
     name: Prepare Apple SDK artifact
     needs: meta
