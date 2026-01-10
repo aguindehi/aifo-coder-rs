@@ -487,7 +487,7 @@ help: banner
 	@echo "  DMG_NAME .................... DMG filename base (default: $${APP_NAME}-$${VERSION})"
 	@echo "  SIGN_IDENTITY ............... macOS code signing identity (default: Migros AI Foundation Code Signer)"
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
-	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
+	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-coder-architecture-4k.jpg)"
 	@echo ""
 	$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
@@ -3227,7 +3227,7 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
-DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
+DMG_BG ?= images/aifo-coder-architecture-4k.jpg
 
 # Install locations (override as needed)
 PREFIX ?= /usr/local
