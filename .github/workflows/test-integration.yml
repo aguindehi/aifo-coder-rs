@@ -1,0 +1,86 @@
+name: test-integration
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: int-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  AIFO_CODER_TEST_DISABLE_DOCKER: 0
+  ARGS_NEXTEST: "--profile ci --no-fail-fast --status-level=fail --hide-progress-bar --cargo-quiet --color=always"
+  CARGO_FLAGS: "--features otel-otlp"
+  CI_PLATFORM: github
+  AIFO_CODER_TEST_RUST_IMAGE: "aifo-coder-toolchain-rust:ci"
+  AIFO_RUST_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-rust:ci"
+  AIFO_CODER_TEST_CPP_IMAGE: "aifo-coder-toolchain-cpp:ci"
+  AIFO_CPP_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-cpp:ci"
+  AIFO_CODER_TEST_NODE_IMAGE: "aifo-coder-toolchain-node:ci"
+  AIFO_NODE_TOOLCHAIN_IMAGE: "aifo-coder-toolchain-node:ci"
+
+jobs:
+  integration:
+    name: Integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Build rust toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-rust:ci toolchains/rust
+          echo "AIFO_CODER_TEST_RUST_IMAGE=aifo-coder-toolchain-rust:ci" >> "$GITHUB_ENV"
+      - name: Build cpp toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-cpp:ci toolchains/cpp
+          echo "AIFO_CODER_TEST_CPP_IMAGE=aifo-coder-toolchain-cpp:ci" >> "$GITHUB_ENV"
+      - name: Build node toolchain image for sidecars
+        run: |
+          DOCKER_BUILDKIT=1 docker build -t aifo-coder-toolchain-node:ci toolchains/node
+          echo "AIFO_CODER_TEST_NODE_IMAGE=aifo-coder-toolchain-node:ci" >> "$GITHUB_ENV"
+      - name: Prime node toolchain volumes (ownership)
+        run: |
+          docker run --rm -v aifo-node-modules:/workspace/node_modules -v aifo-node-cache:/home/coder/.cache alpine:3.20 \
+            sh -c "chown -R 1001:1001 /workspace/node_modules /home/coder/.cache || true"
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+      - name: Run integration tests
+        env:
+          GIT_AUTHOR_NAME: CI
+          GIT_AUTHOR_EMAIL: ci@example.com
+          GIT_COMMITTER_NAME: CI
+          GIT_COMMITTER_EMAIL: ci@example.com
+        run: make test-integration-suite

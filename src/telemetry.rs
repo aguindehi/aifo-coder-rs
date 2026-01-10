@@ -7,17 +7,21 @@ use std::time::{Instant, SystemTime};
 
 use once_cell::sync::OnceCell;
 use opentelemetry::global;
+#[cfg(feature = "otel-otlp")]
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::error::OTelSdkResult;
+#[cfg(feature = "otel-otlp")]
 use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::metrics::{data::ResourceMetrics, SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace as sdktrace;
 use opentelemetry_sdk::Resource;
+#[cfg(feature = "otel-otlp")]
 use serde_json::{Map, Value};
+#[cfg(feature = "otel-otlp")]
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 

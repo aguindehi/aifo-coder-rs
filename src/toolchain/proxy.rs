@@ -584,16 +584,47 @@ pub fn toolexec_start_proxy(
     if use_unix {
         #[cfg(target_os = "linux")]
         {
-            let base = "/run/aifo";
-            let _ = fs::create_dir_all(base);
-            let host_dir = format!("{}/aifo-{}", base, session);
-            let _ = fs::create_dir_all(&host_dir);
-            #[cfg(target_os = "linux")]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = fs::set_permissions(&host_dir, fs::Permissions::from_mode(0o700));
+            use std::path::PathBuf;
+
+            // Try /run/aifo first (spec), fall back to /tmp/aifo when /run is not writable
+            // on unprivileged hosts (e.g., GitHub runners).
+            let mut base_candidates = vec!["/run/aifo".to_string(), "/tmp/aifo".to_string()];
+            if let Ok(env_base) = std_env::var("AIFO_TOOLEEXEC_UNIX_BASE") {
+                if !env_base.trim().is_empty() {
+                    base_candidates.insert(0, env_base.trim().to_string());
+                }
             }
-            let sock_path = format!("{}/toolexec.sock", host_dir);
+
+            let mut host_dir: Option<PathBuf> = None;
+            let mut last_err: Option<io::Error> = None;
+            for base in base_candidates {
+                let base_path = PathBuf::from(&base);
+                match fs::create_dir_all(&base_path) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        last_err = Some(e);
+                        continue;
+                    }
+                }
+                let dir = base_path.join(format!("aifo-{}", session));
+                if let Err(e) = fs::create_dir_all(&dir) {
+                    last_err = Some(e);
+                    continue;
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+                }
+                host_dir = Some(dir);
+                break;
+            }
+
+            let host_dir = host_dir.ok_or_else(|| {
+                last_err
+                    .unwrap_or_else(|| io::Error::other("failed to prepare unix socket directory"))
+            })?;
+            let sock_path = host_dir.join("toolexec.sock");
             let _ = fs::remove_file(&sock_path);
             let listener = UnixListener::bind(&sock_path).map_err(|e| {
                 io::Error::new(
@@ -604,7 +635,10 @@ pub fn toolexec_start_proxy(
                 )
             })?;
             let _ = listener.set_nonblocking(true);
-            std_env::set_var("AIFO_TOOLEEXEC_UNIX_DIR", &host_dir);
+            std_env::set_var(
+                "AIFO_TOOLEEXEC_UNIX_DIR",
+                host_dir.to_string_lossy().to_string(),
+            );
             let running_cl2 = running.clone();
             let token_for_thread2 = token_for_thread.clone();
             let host_dir_cl = host_dir.clone();
@@ -683,7 +717,7 @@ pub fn toolexec_start_proxy(
                     eprintln!("aifo-coder: toolexec proxy stopped");
                 }
             });
-            let url = format!("unix://{}/toolexec.sock", host_dir);
+            let url = format!("unix://{}/toolexec.sock", host_dir.to_string_lossy());
             return Ok((url, token, running, handle));
         }
     }

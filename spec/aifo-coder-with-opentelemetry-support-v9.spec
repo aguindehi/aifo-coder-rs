@@ -438,7 +438,7 @@ Phase 3: Wrapper and Makefile cleanup
   - Keep `CARGO_FLAGS` pointing at telemetry features if needed for compatibility (but runtime no longer depends on them).
 
 Phase 4: Tests and CI
-- Update `ci/otel-golden-stdout.sh`:
+- Update `ci/telemetry-smoke.sh`:
   - Remove assumptions that telemetry is off until `AIFO_CODER_OTEL=1` is set.
   - Instead, test invariants:
     - stdout identical for runs with different env telemetry settings.

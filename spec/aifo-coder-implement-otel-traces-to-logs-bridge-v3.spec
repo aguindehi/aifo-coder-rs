@@ -525,6 +525,6 @@ After implementation, validate:
   - `AIFO_CODER_OTEL=1 AIFO_CODER_OTEL_LOGS=1 AIFO_CODER_OTEL_VERBOSE=1 cargo run --features otel-otlp -- --help`
     - On exporter failure, a concise warning appears on stderr but stdout remains identical to the non-otel run.
 
-The existing golden stdout test (`ci/otel-golden-stdout.sh`) must continue to pass after this change.
+The existing golden stdout test (`ci/telemetry-smoke.sh`) must continue to pass after this change.
 
 End of spec.

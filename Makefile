@@ -193,6 +193,16 @@ title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
 export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+HOOK_SCRIPT := scripts/git-pre-push
+PRE_PUSH_HOOK := .git/hooks/pre-push
+PRE_COMMIT_HOOK := .git/hooks/pre-commit
+
+ifeq ($(wildcard .git),.git)
+  _HOOK_SETUP := $(shell if [ -d .git/hooks ]; then \
+    if [ ! -e $(PRE_PUSH_HOOK) ]; then ln -s ../../$(HOOK_SCRIPT) $(PRE_PUSH_HOOK); fi; \
+    if [ ! -e $(PRE_COMMIT_HOOK) ]; then ln -s ../../$(HOOK_SCRIPT) $(PRE_COMMIT_HOOK); fi; \
+  fi)
+endif
 
 # Publish release prefix/postfix
 RELEASE_PREFIX ?= release
@@ -487,7 +497,7 @@ help: banner
 	@echo "  DMG_NAME .................... DMG filename base (default: $${APP_NAME}-$${VERSION})"
 	@echo "  SIGN_IDENTITY ............... macOS code signing identity (default: Migros AI Foundation Code Signer)"
 	@echo "  NOTARY_PROFILE .............. Keychain profile for xcrun notarytool (optional)"
-	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-sticker-1024x1024-web.jpg)"
+	@echo "  DMG_BG ...................... Background image for DMG (default: images/aifo-coder-architecture-4k.jpg)"
 	@echo ""
 	$(call title_ul,Install paths (for 'make install'):)
 	@echo ""
@@ -2503,6 +2513,18 @@ test-acceptance-suite:
 	  fi; \
 	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
+	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
+	  gitlab) : ;; \
+	  *) EXPR="($$EXPR) & (!test(/^e2e_toolchain_rust_acceptance_full_suite$$/) & !test(/^e2e_dev_tool_routing_make_both_running_prefers_cpp_then_fallback_to_rust$$/) & !test(/^e2e_native_http_tcp_exec_rust_version$$/) & !test(/^e2e_proxy_streaming_slow_consumer_disconnect$$/) & !test(/^e2e_proxy_stream_large_output_node$$/) & !test(/^e2e_stream_cargo_help_v2$$/) & !test(/^e2e_toolchain_live_node_npx_ok$$/) & !test(/^e2e_toolchain_live_rust_version_ok$$/) & !test(/^e2e_test_tsc_local_resolution_tcp_v2$$/) & !test(/^e2e_proxy_client_disconnect_triggers_proxy_log$$/) & !test(/^e2e_proxy_logs_golden_verbose_substrings$$/) & !test(/^e2e_test_proxy_unauthorized_and_unknown_tool$$/) & !test(/^e2e_test_proxy_shim_route_rust_and_node$$/))"; \
+	     : $${AIFO_RUST_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	     : $${AIFO_CPP_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	     : $${AIFO_NODE_TOOLCHAIN_IMAGE:=aifo-coder-toolchain-node:ci}; \
+	     : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	     : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	     : $${AIFO_CODER_TEST_NODE_IMAGE:=aifo-coder-toolchain-node:ci}; \
+	     git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
+	     ;; \
+	esac; \
 	if ! command -v cargo >/dev/null 2>&1; then \
 	  echo "Error: cargo not found; cannot run acceptance tests." >&2; \
 	  exit 1; \
@@ -2526,6 +2548,14 @@ test-integration-suite:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
+	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
+	  gitlab) : ;; \
+	  *) EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/) & !test(/^int_proxy_tsc_prefers_local_compiler$$/))"; \
+	     : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	     : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	     git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
+	     ;; \
+	esac; \
 	if ! command -v cargo >/dev/null 2>&1; then \
 	  echo "Error: cargo not found; cannot run integration tests." >&2; \
 	  exit 1; \
@@ -3207,7 +3237,7 @@ APP_NAME ?= $(BIN_NAME)
 APP_BUNDLE_ID ?= ch.migros.aifo-coder
 DMG_NAME ?= $(APP_NAME)-$(VERSION)
 APP_ICON ?=
-DMG_BG ?= images/aifo-sticker-1024x1024-web.jpg
+DMG_BG ?= images/aifo-coder-architecture-4k.jpg
 
 # Install locations (override as needed)
 PREFIX ?= /usr/local

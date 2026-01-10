@@ -1,0 +1,290 @@
+name: Release
+
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  AIFO_SUPPORT_ANIMATE: 0
+  AIFO_SUPPORT_SKIP_GREEN: 1
+  CARGO_FLAGS: "--features otel-otlp"
+  REGISTRY_PREFIX: ${{ vars.REGISTRY_PREFIX || '' }}
+
+jobs:
+  require-apple-sdk:
+    name: Ensure Apple SDK secrets exist
+    runs-on: ubuntu-latest
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
+    steps:
+      - name: Check Apple SDK inputs
+        run: |
+          if [ -z "${APPLE_SDK_URL:-}" ] && [ -z "${APPLE_SDK_BASE64:-}" ]; then
+            echo "APPLE_SDK_URL or APPLE_SDK_BASE64 must be set for tagged releases." >&2
+            exit 1
+          fi
+
+  prepare-apple-sdk:
+    name: Prepare Apple SDK artifact
+    needs: require-apple-sdk
+    runs-on: ubuntu-latest
+    env:
+      APPLE_SDK_URL: ${{ secrets.APPLE_SDK_URL || vars.APPLE_SDK_URL }}
+      APPLE_SDK_BASE64: ${{ secrets.APPLE_SDK_BASE64 || vars.APPLE_SDK_BASE64 }}
+      APPLE_SDK_SHA256: ${{ secrets.APPLE_SDK_SHA256 || vars.APPLE_SDK_SHA256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Decode Apple SDK
+        run: |
+          set -euo pipefail
+          mkdir -p ci/osx
+          if [ -n "${APPLE_SDK_URL:-}" ]; then
+            echo "Downloading Apple SDK from APPLE_SDK_URL..."
+            curl -fL --retry 3 --connect-timeout 10 --max-time 600 "$APPLE_SDK_URL" -o ci/osx/MacOSX.sdk.tar.xz
+          else
+            echo "Decoding APPLE_SDK_BASE64..."
+            /bin/sh ci/bin/decode-apple-sdk.sh
+          fi
+          if [ -n "${APPLE_SDK_SHA256:-}" ]; then
+            echo "${APPLE_SDK_SHA256}  ci/osx/MacOSX.sdk.tar.xz" | sha256sum -c -
+          fi
+          ls -lh ci/osx/MacOSX.sdk.tar.xz
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-sdk
+          path: ci/osx/MacOSX.sdk.tar.xz
+          if-no-files-found: error
+
+  build-linux-binary:
+    name: Build Linux binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Build release binary (Linux)
+        run: cargo build --release
+      - name: Stage Linux artifact
+        run: |
+          mkdir -p dist
+          cp target/release/aifo-coder dist/aifo-coder-linux-x86_64
+          file dist/aifo-coder-linux-x86_64 || true
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/aifo-coder-linux-x86_64
+          if-no-files-found: error
+
+  build-macos-binaries:
+    name: Build macOS binaries (cross)
+    needs: prepare-apple-sdk
+    runs-on: ubuntu-latest
+    if: ${{ needs.prepare-apple-sdk.result == 'success' }}
+    env:
+      AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
+      AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: apple-sdk
+          path: ci/osx
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build macOS cross builder (local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: builders/macos-cross/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: aifo-coder-macos-cross-rust-builder:release
+          cache-from: type=gha,scope=macos-cross-release
+          cache-to: type=gha,mode=max,scope=macos-cross-release
+          build-args: |
+            REGISTRY_PREFIX=${{ env.REGISTRY_PREFIX }}
+            OSX_SDK_FILENAME=MacOSX.sdk.tar.xz
+      - name: Build macOS arm64 binary
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT \
+            aifo-coder-macos-cross-rust-builder:release \
+            bash -lc 'rustup target add aarch64-apple-darwin || true; cargo build --release --target aarch64-apple-darwin'
+          mkdir -p dist
+          cp target/aarch64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-arm64
+          file dist/aifo-coder-macos-arm64 || true
+      - name: Build macOS x86_64 binary
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT \
+            aifo-coder-macos-cross-rust-builder:release \
+            bash -lc 'rustup target add x86_64-apple-darwin || true; cargo build --release --target x86_64-apple-darwin'
+          mkdir -p dist
+          cp target/x86_64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-x86_64
+          file dist/aifo-coder-macos-x86_64 || true
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: |
+            dist/aifo-coder-macos-arm64
+            dist/aifo-coder-macos-x86_64
+          if-no-files-found: error
+
+  package-release:
+    name: Package release assets
+    needs:
+      - build-linux-binary
+      - build-macos-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: dist
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist
+      - name: Package archives
+        run: |
+          set -euo pipefail
+          VERSION="$(python - <<'PY'
+          import tomllib
+          with open("Cargo.toml", "rb") as f:
+              print(tomllib.load(f)["package"]["version"])
+          PY
+          )"
+          echo "Version: ${VERSION}"
+          for f in README.md NOTICE LICENSE; do
+            [ -f "$f" ] || (echo "missing $f" >&2; exit 1)
+          done
+          if [ ! -d docs ]; then
+            echo "docs/ not found; creating empty docs directory for archive layout." >&2
+            mkdir -p docs
+          fi
+          stage="$(mktemp -d)"
+          install -m 0755 dist/aifo-coder-linux-x86_64 "${stage}/aifo-coder"
+          install -m 0644 README.md NOTICE LICENSE "${stage}/"
+          cp -a docs "${stage}/"
+          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-linux-x86_64.zip" .)
+          rm -rf "${stage}"
+
+          stage="$(mktemp -d)"
+          install -m 0755 dist/aifo-coder-macos-arm64 "${stage}/aifo-coder"
+          install -m 0644 README.md NOTICE LICENSE "${stage}/"
+          cp -a docs "${stage}/"
+          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-arm64.zip" .)
+          rm -rf "${stage}"
+
+          stage="$(mktemp -d)"
+          install -m 0755 dist/aifo-coder-macos-x86_64 "${stage}/aifo-coder"
+          install -m 0644 README.md NOTICE LICENSE "${stage}/"
+          cp -a docs "${stage}/"
+          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-x86_64.zip" .)
+          rm -rf "${stage}"
+
+          ls -lh aifo-coder-${VERSION}-linux-x86_64.zip \
+                 aifo-coder-${VERSION}-macos-arm64.zip \
+                 aifo-coder-${VERSION}-macos-x86_64.zip
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        id: package
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zips
+          path: |
+            aifo-coder-${{ steps.package.outputs.version }}-linux-x86_64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
+          if-no-files-found: error
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            aifo-coder-${{ steps.package.outputs.version }}-linux-x86_64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  attach-signed-macos:
+    name: Attach signed macOS zips (optional)
+    needs: package-release
+    runs-on: ubuntu-latest
+    if: ${{ vars.SIGNED_MACOS_ARM64_URL != '' || vars.SIGNED_MACOS_X86_64_URL != '' }}
+    steps:
+      - name: Download signed macOS zips
+        run: |
+          set -euo pipefail
+          mkdir -p signed
+          found=0
+          if [ -n "${{ vars.SIGNED_MACOS_ARM64_URL }}" ]; then
+            if curl -fL --retry 2 "${{ vars.SIGNED_MACOS_ARM64_URL }}" -o signed/signed-macos-arm64.zip; then
+              found=1
+            else
+              echo "WARN: could not fetch arm64 signed zip from SIGNED_MACOS_ARM64_URL" >&2
+            fi
+          fi
+          if [ -n "${{ vars.SIGNED_MACOS_X86_64_URL }}" ]; then
+            if curl -fL --retry 2 "${{ vars.SIGNED_MACOS_X86_64_URL }}" -o signed/signed-macos-x86_64.zip; then
+              found=1
+            else
+              echo "WARN: could not fetch x86_64 signed zip from SIGNED_MACOS_X86_64_URL" >&2
+            fi
+          fi
+          if [ "${found}" = "0" ]; then
+            echo "No signed macOS zips downloaded; skipping upload."
+            exit 0
+          fi
+          ls -lh signed || true
+      - name: Upload signed zips to release
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          files: signed/*.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,13 +4,21 @@
 🔒 Security by Design | 🌍 Cross-Platform | 🦀 Powered by Rust | 🧠 Developed for you
 
 ## ✨ Features:
-- Linux: Coding agents run securely inside Docker containers with AppArmor.
-- macOS: Transparent VM with Docker ensures isolated and secure agent execution.
-- macOS: Windows: Isolated in Docker Desktop VM; Windows Terminal/PowerShell/Git Bash.
+- **Linux**: Coding agents run securely inside Docker containers with AppArmor.
+- **macOS**: Transparent VM with Docker ensures isolated and secure agent execution.
+- **Windows**: Isolated in Docker Desktop VM; Windows Terminal/PowerShell/Git Bash.
 
 ## ⚙️  Secure Coding Agents
-- Environment with Secure Containerization Enabled
-- Platform with Adaptive Security for Linux, macOS & Windows
+- Environment with **Secure Containerization Enabled**
+- Platform with **Adaptive Security** for **Linux**, **macOS** & **Windows**
+
+- Supported Coding Agents:
+  - **OpenAI Codex CLI**: https://github.com/openai/codex
+  - **Charmbracelet Crush**: https://github.com/charmbracelet/crush
+  - **Aider**: https://github.com/Aider-AI/aider
+  - **OpenHands**: https://github.com/All-Hands-AI/OpenHands
+  - **OpenCode**: https://github.com/opencode-ai/opencode
+  - **Plandex**: https://github.com/plandex-ai/plandex
 
 ## 🔧 Building a safer future for coding automation...
 - Container isolation on Linux, macOS & Windows
@@ -22,6 +30,10 @@
 - Nothing else from your home directory is exposed by default
 - Principle of least privilege
 - No additional host devices, sockets or secrets are mounted
+
+## Architecture
+
+![AI Foundation Coder architecture](images/aifo-coder-architecture-4k.jpg)
 
 ## Prerequisites and installation
 
@@ -46,109 +58,19 @@ make build-launcher
 ./scripts/build-images.sh
 ```
 
-## macOS notarized CLI DMG (recommended for distribution)
-
-This repo can produce per-arch **signed + notarized + stapled** CLI DMGs to minimize Gatekeeper warnings.
-
-### One-time setup (stores credentials in your macOS keychain)
-
-Run:
-
-```bash
-make macos-notary-setup
-```
-
-This will prompt for:
-- `NOTARY_PROFILE` (default: `aifo-notary-profile`)
-- Apple ID (email)
-- App-specific password (input hidden)
-
-#### Create an Apple app-specific password
-
-1. Go to https://appleid.apple.com
-2. Sign in
-3. Go to **Sign-In and Security**
-4. Under **App-Specific Passwords**, select **Generate an app-specific password**
-5. Name it something like `aifo-coder-notarytool` and copy the generated password
-
-You can also provide values non-interactively via env vars:
-- `NOTARY_PROFILE` (or `AIFO_NOTARY_PROFILE`)
-- `APPLE_ID` (or `AIFO_APPLE_ID`)
-- `APPLE_APP_PASSWORD` (or `AIFO_APPLE_APP_PASSWORD` / `NOTARYTOOL_PASSWORD`)
-
-### Build + sign + notarize + staple + verify (Darwin-only)
-
-```bash
-make release-macos-dmg-signed
-```
-
-Outputs:
-- `dist/aifo-coder-<version>-macos-arm64.dmg`
-- `dist/aifo-coder-<version>-macos-x86_64.dmg`
-
-### Publish to GitLab Release (Darwin-only)
-
-```bash
-make publish-release-macos-dmg-signed
-```
-
-Notes:
-- By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
-- The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
-
-## macOS cross-build (osxcross)
-
-You can build the macOS launcher on Linux CI using osxcross with an Apple SDK injected via masked CI
-secrets. This produces macOS artifacts without requiring a macOS host.
-
-- Overview:
-  - Cross image stage: macos-cross-rust-builder (Dockerfile).
-  - CI jobs: build-macos-cross-rust-builder (Kaniko), build-launcher-macos (arm64), optional build-launcher-macos-x86_64.
-  - Artifacts: dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64 (optional).
-  - Security: SDK is never committed or artifacted; it’s decoded from APPLE_SDK_BASE64 (masked + protected) only in CI.
-
-- Documentation:
-  - Prerequisites: docs/ci/macos-cross-prereqs.md
-  - Validation: docs/ci/macos-cross-validation.md
-
-- Local cross-build (developer convenience; Linux host):
-  - Place the Apple SDK tarball under ci/osx/MacOSX13.3.sdk.tar.xz (do not commit it).
-  - Build the cross image:
-    make build-macos-cross-rust-builder
-  - Build both macOS launchers:
-    make build-launcher-macos-cross
-  - Or only arm64:
-    make build-launcher-macos-cross-arm64
-  - Validate with file(1):
-    make validate-macos-artifact
-  - Optional x86_64:
-    make build-launcher-macos-cross-x86_64
-    make validate-macos-artifact-x86_64
-
-- CI summary:
-  - build-macos-cross-rust-builder:
-    - Runs on tags; allowed on default-branch manual runs and schedules; tags image as :$CI_COMMIT_TAG or :ci.
-  - build-launcher-macos:
-    - Runs on tags; builds aarch64-apple-darwin and validates with file(1); best-effort otool -hv check.
-  - build-launcher-macos-x86_64 (optional):
-    - Runs on tags; builds x86_64-apple-darwin and validates with file(1); best-effort otool -hv check.
-  - publish-release:
-    - Attaches Linux and macOS artifacts; exposes links aifo-coder, aifo-coder-macos-arm64, aifo-coder-macos-x86_64.
-
-- Pinning osxcross (optional stability):
-  - Dockerfile supports build-arg OSXCROSS_REF to pin osxcross to a specific commit:
-    docker build --target macos-cross-rust-builder --build-arg OSXCROSS_REF=<commit> .
-
 ## CLI usage and arguments
 
 Synopsis:
+
 ```bash
-./aifo-coder {codex|crush|aider|openhands|opencode|plandex|toolchain|toolchain-cache-clear|doctor|images|cache-clear|fork} [global-flags] [-- [AGENT-OPTIONS]]
+./aifo-coder {codex|crush|aider|openhands|opencode|plandex|doctor|images||fork} 
+             [global-flags] [-- [AGENT-OPTIONS]]
 ```
 
 > For Powershell you can use `./aifo-coder.ps1`
 
 Global flags:
+
 - --image <ref>                   Override full image reference for all agents
 - --flavor <full|slim>            Select image flavor; default is full
 - --verbose                       Increase logging verbosity
@@ -168,6 +90,7 @@ Global flags:
 > root. For CI or local preflight, you can run `make node-guard` to check for accidental npm/yarn use.
 
 Subcommands:
+
 - codex [args...]                Run OpenAI Codex CLI inside container
 - crush [args...]                Run Charmbracelet Crush inside container
 - aider [args...]                Run Aider inside container
@@ -183,12 +106,14 @@ Subcommands:
 - fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]  Clean fork sessions safely
 
 Tips:
+
 - Two registries: mirror registry (MR) is used only for Dockerfile base pulls (build-time) via REGISTRY_PREFIX; internal registry (IR) is used for tagging/push and runtime image prefixing via AIFO_CODER_INTERNAL_REGISTRY_PREFIX or REGISTRY in Makefile/scripts. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
 - To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
 - Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR. For runtime registry prefixing of our images, use AIFO_CODER_INTERNAL_REGISTRY_PREFIX.
 - Fallback: if images are not yet published, use --image to provide an explicit image ref.
 
 Examples (dry-run previews):
+
 ```bash
 ./aifo-coder --dry-run openhands -- --help
 ./aifo-coder --dry-run opencode  -- --help
@@ -199,83 +124,6 @@ PATH policy:
 - openhands, opencode, plandex: shims-first (/opt/aifo/bin first)
 - codex, crush: node-first
 - aider: adds /opt/venv/bin before system paths
-
-## Telemetry (OpenTelemetry) (optional)
-
-aifo-coder includes optional OpenTelemetry-based tracing and metrics behind Cargo features and
-environment variables. Telemetry is enabled by default in feature-enabled builds and never required
-for normal use (disable via `AIFO_CODER_OTEL=0|false|no|off`).
-
-- Build-time features:
-  - `otel`: enables tracing and installs the OpenTelemetry layer (no fmt logs by default).
-  - `otel-otlp`: extends `otel` with OTLP HTTP exporter support (no gRPC).
-- Runtime enablement (when built with `otel`):
-  - Default: telemetry enabled; disable with `AIFO_CODER_OTEL=0|false|no|off`.
-  - `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty) selects the OTLP endpoint (HTTP/HTTPS, e.g., `https://localhost:4318`).
-  - `AIFO_CODER_TRACING_FMT=1` opts into a fmt logging layer on stderr (honors `RUST_LOG`,
-    default filter `warn`).
-  - `AIFO_CODER_OTEL_METRICS` controls metrics instruments/exporter (default enabled).
-  - CLI `--verbose` sets `AIFO_CODER_OTEL_VERBOSE=1` to print concise initialization info.
-- Privacy:
-  - By default, sensitive values (paths/args) are recorded as counts and salted hashes.
-  - Setting `AIFO_CODER_OTEL_PII=1` allows raw values for debugging; do not use this in production.
-
-Examples:
-
-```bash
-# Build the launcher with telemetry features (uses CARGO_FLAGS, default: --features otel-otlp)
-make build-launcher
-
-# Disable telemetry (baseline)
-AIFO_CODER_OTEL=0 ./aifo-coder --help
-
-# Build with a baked-in default OTLP endpoint (local build; CI uses protected variables)
-AIFO_OTEL_ENDPOINT=https://localhost:4318 \
-AIFO_OTEL_TRANSPORT=http \
-make build-launcher
-
-# At runtime, override baked-in defaults with OTEL_EXPORTER_OTLP_ENDPOINT
-OTEL_EXPORTER_OTLP_ENDPOINT=https://other-collector:4318 \
-./aifo-coder --help
-
-# Traces with fmt logging and RUST_LOG control
-AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
-  ./aifo-coder --help
-
-# Send metrics/traces via OTLP HTTP (launcher built with otel-otlp features)
-OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
-  ./aifo-coder --help
-```
-
-For crate-level development without the Makefile or launcher, you can still use:
-
-```bash
-cargo build --features otel
-cargo build --features otel-otlp
-cargo run --features otel -- --help
-```
-
-- Exporters and sinks:
-  - Transport: OTLP over HTTP/HTTPS (no gRPC).
-  - Traces: provider installed; without an endpoint, no external export occurs (use the fmt layer for local visibility).
-  - Metrics: with an endpoint, exports via OTLP; in debug mode (`--debug-otel-otlp` sets `AIFO_CODER_OTEL_DEBUG_OTLP=1`), exports to a development sink (stderr/file).
-- Propagation:
-  - The shim forwards W3C traceparent (from TRACEPARENT env) to the proxy over HTTP/Unix.
-  - The proxy extracts context and creates child spans; it also injects TRACEPARENT into sidecar execs.
-- Sampling and timeouts:
-  - `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` control sampling (e.g., `parentbased_traceidratio`).
-  - `OTEL_EXPORTER_OTLP_TIMEOUT` controls exporter timeouts (default 5s). BSP envs (`OTEL_BSP_*`) are respected.
-- CI invariant:
-  - Golden stdout: enabling/disabling telemetry must not change CLI stdout. See ci/otel-golden-stdout.sh.
-- Safety/idempotence:
-  - `telemetry_init()` is idempotent; if a subscriber exists, init is skipped with a concise stderr message.
-  - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
-
-For more details (endpoint precedence, HTTP transport, CI checks), see `docs/README-opentelemetry.md`.
-
-Telemetry tests:
-- Run unit/integration tests (no Docker): make test
-- Golden stdout and smoke (no Docker): ci/otel-golden-stdout.sh
 
 # The aifo-coder
 
@@ -321,6 +169,7 @@ Typical use cases:
 ## Security, isolation & privacy by design
 
 aifo‑coder takes a “contain what matters, nothing more” approach:
+
 - Container isolation
   - Agents run inside a container, not on your host runtimes.
   - No privileged Docker mode; no host Docker socket is mounted.
@@ -339,12 +188,16 @@ aifo‑coder takes a “contain what matters, nothing more” approach:
 
 ### AppArmor on macOS (Colima) and Docker Desktop
 
+aifo-coder supports Linux, macOS and Windows: 
+
 - macOS (Colima):
   - Build the profile from the template: make apparmor
   - Load it into the Colima VM:
-```bash
-colima ssh -- sudo apparmor_parser -r -W "$PWD/build/apparmor/aifo-coder"
-```
+  
+		```bash
+		colima ssh -- sudo apparmor_parser -r -W "$PWD/build/apparmor/aifo-coder"
+		```
+		
   - If the custom profile is not available, the launcher will fall back to docker-default automatically.
 - Docker Desktop (macOS/Windows):
   - Docker runs inside a VM; AppArmor support and profiles are managed by the VM. The launcher defaults to docker-default on these platforms.
@@ -352,14 +205,18 @@ colima ssh -- sudo apparmor_parser -r -W "$PWD/build/apparmor/aifo-coder"
   - If the aifo-coder profile is loaded on the host, it will be used; otherwise docker-default is used when available, or no explicit profile.
 
 Troubleshooting:
+
 - Check Docker AppArmor support:
-```bash
-docker info --format '{{json .SecurityOptions}}'
-```
+
+    ```bash
+    docker info --format '{{json .SecurityOptions}}'
+    ```
+	
 - List loaded profiles (Linux):
-```bash
-cat /sys/kernel/security/apparmor/profiles | grep -E 'aifo-coder|docker-default' || true
-```
+
+    ```bash
+    cat /sys/kernel/security/apparmor/profiles | grep -E 'aifo-coder|docker-default' || true
+    ```
 
 ---
 
@@ -370,10 +227,12 @@ cat /sys/kernel/security/apparmor/profiles | grep -E 'aifo-coder|docker-default'
 - Optional: Rust stable toolchain (only needed if you build the CLI locally via Makefile)
 
 If you need to access a private base image:
+
 - Base image used: `repository.migros.net/node:22-bookworm-slim`
 - If you cannot access this, replace the `FROM` line in the Dockerfile with an accessible equivalent.
 
 No Rust or Make installed on your host? Use the Docker-based dev helper:
+
 - Make the script executable once:
   chmod +x scripts/dev.sh
 - Run tests via Docker:
@@ -386,66 +245,77 @@ No Rust or Make installed on your host? Use the Docker-based dev helper:
 ## Quick start
 
 - Build both slim and fat images:
-```bash
-make build
-```
+
+    ```bash
+    make build
+    ```
 
 - If make is not installed on your host, use the Docker-only helper script:
-```bash
-./scripts/build-images.sh
-```
+
+    ```bash
+    ./scripts/build-images.sh
+    ```
 
 - Build only slim variants (smaller images, fewer tools):
-```bash
-make build-slim
-```
+
+    ```bash
+    make build-slim
+    ```
 
 - Build only fat (full) variants:
-```bash
-make build-fat
-```
+
+    ```bash
+    make build-fat
+    ```
 
 - Build the Rust launcher locally (optional if you already have the binary):
-```bash
-make build-launcher
-```
+
+    ```bash
+    make build-launcher
+    ```
 
 - Run the launcher:
-```bash
-./aifo-coder --help
-```
+
+    ```bash
+    ./aifo-coder --help
+    ```
 
 - Launch an agent:
-```bash
-./aifo-coder codex --profile o3 --sandbox read-only --ask-for-approval on-failure
-```
 
-> For Powershell you can use `./aifo-coder.ps1`
+    ```bash
+    ./aifo-coder codex -- --profile o3 --sandbox read-only --ask-for-approval on-failure
+    ```
 
+    > For Powershell you can use `./aifo-coder.ps1`
 
-All trailing arguments after the agent subcommand are passed through to the agent unchanged.
+    All trailing arguments after the agent subcommand are passed through to the agent unchanged.
 
 ### Toolchains (Phases 2–4)
 
 For transparent PATH shims, the toolexec proxy (TCP and Linux unix sockets), per-language caches, the C/C++ sidecar image, and optional smokes, see:
+
 - docs/TOOLCHAINS.md
 
 Dev‑tool routing:
+
 - For make, cmake, ninja, pkg-config, gcc, g++, clang, clang++, cc, c++, the proxy selects the first running sidecar that provides the tool, in this order: c-cpp, rust, go, node, python. This avoids starting unnecessary sidecars when a tool is already available in another running sidecar (for example, make inside rust).
 
 Linux note:
+
 - On Linux you can use a unix:/// transport for the tool‑exec proxy to reduce TCP surface and simplify networking. See INSTALL.md for unix sockets and the TCP host‑gateway note.
 
 ## Fork mode
 
 Run multiple containerized agent panes side by side on cloned workspaces to explore different approaches in parallel, then merge back when done.
 
-When to use:
+**When to use**:
+
 - Compare alternative fixes/implementations safely without touching your base working tree.
 - Split tasks across panes while keeping isolation and reproducibility.
 - Preserve clones for later inspection or merging even if orchestration fails (default).
 
-Usage and flags:
+**Usage and flags**:
+
 - Basic:
   - aifo-coder --fork 2 aider --
   - aifo-coder --fork 3 --fork-session-name aifo-exp aider --
@@ -458,16 +328,19 @@ Usage and flags:
 - Keep clones on orchestration failure (default: keep; can disable):
   - aifo-coder --fork 2 --fork-keep-on-failure=false aider --
 
-Paths and naming:
+**Paths and naming**:
+
 - Clones live under: <repo-root>/.aifo-coder/forks/<sid>/pane-1..N
 - Branch names: fork/<base|detached>/<sid>-<i> (i starts at 1)
 
-Per-pane state:
+**Per-pane state**:
+
 - Each pane mounts its own state directory to avoid concurrent writes:
   - Default base: ~/.aifo-coder/state/<sid>/pane-<i>/{.aider,.codex,.crush}
   - Override base with AIFO_CODER_FORK_STATE_BASE
 
-Post-session merging guidance:
+**Post-session merging guidance**:
+
 - Fetch/merge from a pane:
   - git -C "<root>" remote add "fork-<sid>-1" "<pane-1-dir>"
   - git -C "<root>" fetch "fork-<sid>-1" "fork/<base>/<sid>-1"
@@ -482,14 +355,19 @@ Post-session merging guidance:
   - git -C "<root>" am "<out-dir>/*.patch"
 - Push a branch to a remote and open PR/MR.
 
-Performance notes:
+**Performance notes**:
+
 - N>8 panes will stress I/O and memory; consider fewer panes or --fork-dissociate to avoid shared object GC interactions.
 
-Orchestrators:
+**Orchestrators**:
+
 - Linux/macOS/WSL: tmux session with N panes (required).
 - Windows: Windows Terminal (wt.exe) preferred; falls back to PowerShell windows or Git Bash/mintty.
 
-Tip: Maintenance commands help manage sessions:
+**Maintenance commands** 
+
+These help manage sessions:
+
 - aifo-coder fork list [--json] [--all-repos]
 - aifo-coder fork clean [--session <sid> | --older-than <days> | --all] [--dry-run] [--yes] [--keep-dirty | --force] [--json]
 
@@ -570,7 +448,7 @@ A quick reference of all Makefile targets.
 | gpg-unset-signing                   | GPG        | Unset repo signing configuration                                                              |
 | git-show-signatures                 | GPG        | Show commit signature status (git log %h %G? %s)                                              |
 | git-commit-no-sign                  | GPG        | Make a commit without signing                                                                 |
-| git-amend-no-sign                   | GPG        | Amend the last commit without signing                                                          |
+| git-amend-no-sign                   | GPG        | Amend the last commit without signing                                                         |
 | git-commit-no-sign-all              | GPG        | Commit all staged changes without signing                                                     |
 | scrub-coauthors                     | History    | Remove a specific “Co‑authored‑by” line from all commit messages (uses git‑filter‑repo)       |
 | apparmor                            | AppArmor   | Generate build/apparmor/${APPARMOR_PROFILE_NAME} from template (used by Docker)               |
@@ -610,6 +488,7 @@ Variables used by these targets:
 This repository uses native rustup toolchains for host builds. Linux→macOS cross builds are supported via an osxcross-based Docker stage and CI. No cross-rs containers or Cross.toml are used.
 
 Recommended approach:
+
 - Use release-for-target to build and package binaries for the current host or selected targets:
   - make release-for-target
 - Build Linux artifacts from macOS quickly:
@@ -622,12 +501,14 @@ Recommended approach:
   - rustup target add <triple> for each target you build
 
 Notes about linkers:
+
 - For host builds, no special setup is needed.
 - For non-host Linux targets on macOS, you may need a linker toolchain. One option is to install osxct toolchains (by SergioBenitez) via Homebrew; another is to use a system-provided gcc. You can also point cargo to a linker via .cargo/config.toml:
   [target.x86_64-unknown-linux-gnu]
   linker = "x86_64-unknown-linux-gnu-gcc"
 
 Summary:
+
 - Prefer make release-for-target with rustup-installed targets.
 - Use make build-launcher for a quick host-only build.
 
@@ -638,6 +519,7 @@ There are two common paths to sign macOS artifacts:
 #### CI behavior (unchanged)
 
 CI builds and publishes macOS artifacts, but it does not perform signing or notarization:
+
 - CI MUST NOT run `codesign`, `notarytool`, or `stapler`.
 - CI MUST NOT depend on `SIGN_IDENTITY` or `NOTARY_PROFILE`.
 - CI MAY still produce and publish unsigned macOS binaries (e.g. from osxcross) and/or copy them into `dist/` as:
@@ -652,6 +534,7 @@ macOS (see below).
 Two supported local workflows:
 
 1) Self-signed / non-Apple identity (internal use)
+
 - Configure a local signing identity (login keychain), e.g.:
   - `export SIGN_IDENTITY="AI Foundation Code Signer"`
   - `unset NOTARY_PROFILE`
@@ -663,6 +546,7 @@ Two supported local workflows:
   - Notarization is skipped automatically for non-Apple identities.
 
 2) Apple Developer ID (public distribution)
+
 - Configure:
   - `export SIGN_IDENTITY="Developer ID Application: <Org Name> (<TEAMID>)"`
   - `export NOTARY_PROFILE="<notarytool-profile>"`
@@ -672,6 +556,7 @@ Two supported local workflows:
   - Per-arch `.zip` assets are signed and submitted for notarization; stapling is attempted best-effort.
 
 Existing DMG workflow:
+
 - The DMG pipeline remains independent and continues to use:
   - `make release-app`
   - `make release-dmg`
@@ -694,6 +579,7 @@ After producing artifacts, the recommended release assets are:
   - Signed DMG via `make release-dmg-sign` (recommended for drag-and-drop install)
 
 Notes:
+
 - CI macOS artifacts are unsigned; Gatekeeper prompts may appear on end-user machines.
 - Signed/notarized macOS artifacts are produced locally on macOS.
 
@@ -736,21 +622,25 @@ Notes:
 - CI never signs/notarizes. It only attaches links if the uploaded zips exist.
 
 Verification (recommended):
+
 - `make verify-macos-signed`
 
 These targets do not invoke Cargo builds directly (except `release-macos-binary-signed`, which calls
 `make build-launcher` first).
 
 1) Apple Developer identity (Apple Distribution / Developer ID Application):
+
 - Produces artifacts eligible for notarization.
 - The Makefile target release-dmg-sign will detect an Apple identity and use hardened runtime flags and timestamps automatically.
 - Notarization requires Xcode CLT and a stored notary profile.
 
 2) Self‑signed Code Signing certificate (no Apple account):
+
 - Useful for internal testing or distribution within a trusted environment.
 - Not notarizable; Gatekeeper prompts may appear on other machines unless the certificate is trusted on those hosts.
 
 Self‑signed certificate via Keychain Access (login keychain):
+
 - Open Keychain Access.
 - Ensure “login” is the active keychain.
 - Menu: Keychain Access → Certificate Assistant → Create a Certificate…
@@ -763,12 +653,14 @@ Self‑signed certificate via Keychain Access (login keychain):
 - Optional: In the certificate’s Trust settings, set Code Signing to “Always Trust” for smoother codesign usage.
 
 Build and sign with your chosen identity name:
+
 ```bash
 make release-app
 make release-dmg-sign SIGN_IDENTITY="AI Foundation Code Signer"
 ```
 
 Notes for self‑signed usage:
+
 - The release-dmg-sign target will:
   - Clear extended attributes on the app if needed.
   - Sign the inner executable and the .app bundle with basic flags for non‑Apple identities.
@@ -776,15 +668,19 @@ Notes for self‑signed usage:
   - Skip notarization automatically if the identity is not an Apple Developer identity.
 - If prompted for key access, allow codesign to use the private key.
 - If your login keychain is locked, you may need to unlock it first:
-```bash
-security unlock-keychain -p "<your-password>" login.keychain-db
-```
+
+    ```bash
+    security unlock-keychain -p "<your-password>" login.keychain-db
+    ```
+    
 - If you previously signed artifacts or see quarantine issues:
-```bash
-xattr -cr "dist/aifo-coder.app" "dist/aifo-coder.dmg"
-```
+
+    ```bash
+    xattr -cr "dist/aifo-coder.app" "dist/aifo-coder.dmg"
+    ```
 
 Apple notarization workflow (requires Apple Developer identity and profile):
+
 ```bash
 # Store credentials once (example)
 xcrun notarytool store-credentials AC_NOTARY --apple-id "<apple-id>" --team-id "<team-id>" --password "<app-specific-password>"
@@ -798,6 +694,7 @@ xcrun stapler staple "dist/aifo-coder.app"
 ```
 
 Tip:
+
 - The DMG includes an /Applications symlink for drag‑and‑drop install; you can further customize a background image.
 
 ---
@@ -837,12 +734,12 @@ Tip:
 
  ### Host notifications command (notifications-cmd)
 
-
 - Available inside agent containers as notifications-cmd.
 - When invoked, it asks the host listener to run say with the provided arguments, but only if the full command equals the notifications-command configured in ~/.aider.conf.yml.
 - If the configured command is missing or does not match, execution is rejected with a clear reason. This feature requires toolchains to be enabled so the internal proxy is running.
 
 Windows note:
+
 - The notifications-command parser requires the first token (the executable) to be an absolute
   Unix-style path that starts with "/". Pure Windows paths like "C:\Program Files\..." are rejected.
   This strictness is by design for v2.
@@ -867,15 +764,18 @@ For smaller footprints, use the -slim variants of each image:
 - aifo-coder-plandex-slim:TAG
 
 Differences from the full images:
+
 - Based on the same Debian Bookworm base
 - Heavy editors (emacs-nox, vim, nano) and ripgrep are omitted; lightweight editors mg and nvi are included
 - Otherwise identical behavior and entrypoint
 
 Editors installed:
+
 - Full images: emacs-nox, vim, nano, mg, nvi
 - Slim images: mg, nvi
 
 How to use:
+
 - Build slim only: make build-slim
 - Build fat only: make build-fat
 - Build both: make build
@@ -889,6 +789,7 @@ How to use:
 ### Version pins
 
 By default, agent versions are installed at latest. To pin reproducible releases, set these variables when building or publishing:
+
 - CODEX_VERSION: npm @openai/codex (default: latest)
 - CRUSH_VERSION: npm @charmland/crush (default: latest)
 - AIDER_VERSION: pip aider-chat (default: latest)
@@ -897,6 +798,7 @@ By default, agent versions are installed at latest. To pin reproducible releases
 - PLANDEX_GIT_REF: git ref for Plandex CLI (default: main)
 
 Examples:
+
 - make publish-openhands PUSH=1 REGISTRY=... OPENHANDS_VERSION=0.3.1
 - make publish-opencode PUSH=1 REGISTRY=... OPENCODE_VERSION=0.6.0
 - make publish-aider PUSH=1 REGISTRY=... AIDER_VERSION=0.52.0 WITH_PLAYWRIGHT=1
@@ -905,11 +807,13 @@ Examples:
 - make publish-plandex PUSH=1 REGISTRY=... PLANDEX_GIT_REF=v0.9.0
 
 Notes:
+
 - Crush fallback to GitHub binary is only attempted when CRUSH_VERSION is pinned to a concrete version; with the default latest, we rely on npm.
 
 During image builds, the final runtime stages drop apt and procps by default to minimize attack surface. You can opt out by setting KEEP_APT=1.
 
 Default removal sequence (applied when KEEP_APT=0):
+
 ```bash
 # Remove apt and clean up
 apt-get remove --purge -y apt apt-get
@@ -917,9 +821,11 @@ apt-get autoremove -y
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 ```
+
 Additionally, procps is removed when present.
 
 How to keep apt/procps:
+
 ```bash
 make KEEP_APT=1 build
 make KEEP_APT=1 build-slim
@@ -947,16 +853,19 @@ Examples:
 ```
 
 - Run Crush with debug:
+
 ```bash
 ./aifo-coder crush --debug
 ```
 
 - Run Aider with a specific model:
+
 ```bash
 ./aifo-coder aider --model o3-mini --yes
 ```
 
 Override the image used by the launcher (use a specific per‑agent image):
+
 ```bash
 ./aifo-coder --image myrepo/aifo-coder-codex:dev codex --version
 ```
@@ -1087,9 +996,199 @@ Crush example config:
 
 ---
 
+## macOS notarized CLI DMG
+
+This repo can produce per-arch **signed + notarized + stapled CLI DMGs** to minimize Gatekeeper warnings.
+
+### One-time setup (stores credentials in your macOS keychain)
+
+Run:
+
+```bash
+make macos-notary-setup
+```
+
+This will prompt for:
+
+- `NOTARY_PROFILE` (default: `aifo-notary-profile`)
+- Apple ID (email)
+- App-specific password (input hidden)
+
+#### Create an Apple app-specific password
+
+1. Go to https://appleid.apple.com
+2. Sign in
+3. Go to **Sign-In and Security**
+4. Under **App-Specific Passwords**, select **Generate an app-specific password**
+5. Name it something like `aifo-coder-notarytool` and copy the generated password
+
+You can also provide values non-interactively via env vars:
+
+- `NOTARY_PROFILE` (or `AIFO_NOTARY_PROFILE`)
+- `APPLE_ID` (or `AIFO_APPLE_ID`)
+- `APPLE_APP_PASSWORD` (or `AIFO_APPLE_APP_PASSWORD` / `NOTARYTOOL_PASSWORD`)
+
+### Build + sign + notarize + staple + verify (Darwin-only)
+
+```bash
+make release-macos-dmg-signed
+```
+
+Outputs:
+
+- `dist/aifo-coder-<version>-macos-arm64.dmg`
+- `dist/aifo-coder-<version>-macos-x86_64.dmg`
+
+### Publish to GitLab Release (Darwin-only)
+
+```bash
+make publish-release-macos-dmg-signed
+```
+
+Notes:
+- By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
+- The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
+
+---
+
+## macOS cross-build (osxcross)
+
+You can build the macOS launcher on Linux CI using osxcross with an Apple SDK injected via masked CI
+secrets. This produces macOS artifacts without requiring a macOS host.
+
+### Overview
+
+- Cross image stage: macos-cross-rust-builder (Dockerfile).
+- CI jobs: build-macos-cross-rust-builder (Kaniko), build-launcher-macos (arm64), optional build-launcher-macos-x86_64.
+- Artifacts: dist/aifo-coder-macos-arm64 and dist/aifo-coder-macos-x86_64 (optional).
+- Security: SDK is never committed or artifacted; it’s decoded from APPLE_SDK_BASE64 (masked + protected) only in CI.
+
+### Documentation
+
+- Prerequisites: docs/ci/macos-cross-prereqs.md
+- Validation: docs/ci/macos-cross-validation.md
+
+### Local cross-build
+
+- Place the Apple SDK tarball under ci/osx/MacOSX13.3.sdk.tar.xz (do not commit it).
+- Build the cross image:
+  make build-macos-cross-rust-builder
+- Build both macOS launchers:
+  make build-launcher-macos-cross
+- Or only arm64:
+  make build-launcher-macos-cross-arm64
+- Validate with file(1):
+  make validate-macos-artifact
+- Optional x86_64:
+  make build-launcher-macos-cross-x86_64
+  make validate-macos-artifact-x86_64
+
+### CI summary
+
+- build-macos-cross-rust-builder:
+  - Runs on tags; allowed on default-branch manual runs and schedules; tags image as :$CI_COMMIT_TAG or :ci.
+- build-launcher-macos:
+  - Runs on tags; builds aarch64-apple-darwin and validates with file(1); best-effort otool -hv check.
+- build-launcher-macos-x86_64 (optional):
+  - Runs on tags; builds x86_64-apple-darwin and validates with file(1); best-effort otool -hv check.
+- publish-release:
+  - Attaches Linux and macOS artifacts; exposes links aifo-coder, aifo-coder-macos-arm64, aifo-coder-macos-x86_64.
+
+- Pinning osxcross (optional stability):
+  - Dockerfile supports build-arg OSXCROSS_REF to pin osxcross to a specific commit:
+    docker build --target macos-cross-rust-builder --build-arg OSXCROSS_REF=<commit> .
+
+---
+
+## Telemetry (OpenTelemetry) (optional)
+
+aifo-coder includes optional OpenTelemetry-based tracing and metrics behind Cargo features and
+environment variables. Telemetry is enabled by default in feature-enabled builds and never required
+for normal use (disable via `AIFO_CODER_OTEL=0|false|no|off`).
+
+### Build-time features
+
+  - `otel`: enables tracing and installs the OpenTelemetry layer (no fmt logs by default).
+  - `otel-otlp`: extends `otel` with OTLP HTTP exporter support (no gRPC).
+
+### Runtime enablement (when built with `otel`)
+
+  - Default: telemetry enabled; disable with `AIFO_CODER_OTEL=0|false|no|off`.
+  - `OTEL_EXPORTER_OTLP_ENDPOINT` (non-empty) selects the OTLP endpoint (HTTP/HTTPS, e.g., `https://localhost:4318`).
+  - `AIFO_CODER_TRACING_FMT=1` opts into a fmt logging layer on stderr (honors `RUST_LOG`,
+    default filter `warn`).
+  - `AIFO_CODER_OTEL_METRICS` controls metrics instruments/exporter (default enabled).
+  - CLI `--verbose` sets `AIFO_CODER_OTEL_VERBOSE=1` to print concise initialization info.
+
+### Privacy
+
+  - By default, sensitive values (paths/args) are recorded as counts and salted hashes.
+  - Setting `AIFO_CODER_OTEL_PII=1` allows raw values for debugging; do not use this in production.
+
+### Examples
+
+```bash
+# Build the launcher with telemetry features (uses CARGO_FLAGS, default: --features otel-otlp)
+make build-launcher
+
+# Disable telemetry (baseline)
+AIFO_CODER_OTEL=0 ./aifo-coder --help
+
+# Build with a baked-in default OTLP endpoint (local build; CI uses protected variables)
+AIFO_OTEL_ENDPOINT=https://localhost:4318 \
+AIFO_OTEL_TRANSPORT=http \
+make build-launcher
+
+# At runtime, override baked-in defaults with OTEL_EXPORTER_OTLP_ENDPOINT
+OTEL_EXPORTER_OTLP_ENDPOINT=https://other-collector:4318 \
+./aifo-coder --help
+
+# Traces with fmt logging and RUST_LOG control
+AIFO_CODER_TRACING_FMT=1 RUST_LOG=aifo_coder=info \
+  ./aifo-coder --help
+
+# Send metrics/traces via OTLP HTTP (launcher built with otel-otlp features)
+OTEL_EXPORTER_OTLP_ENDPOINT=https://localhost:4318 \
+  ./aifo-coder --help
+```
+
+For crate-level development without the Makefile or launcher, you can still use:
+
+```bash
+cargo build --features otel
+cargo build --features otel-otlp
+cargo run --features otel -- --help
+```
+
+- Exporters and sinks:
+  - Transport: OTLP over HTTP/HTTPS (no gRPC).
+  - Traces: provider installed; without an endpoint, no external export occurs (use the fmt layer for local visibility).
+  - Metrics: with an endpoint, exports via OTLP; in debug mode (`--debug-otel-otlp` sets `AIFO_CODER_OTEL_DEBUG_OTLP=1`), exports to a development sink (stderr/file).
+- Propagation:
+  - The shim forwards W3C traceparent (from TRACEPARENT env) to the proxy over HTTP/Unix.
+  - The proxy extracts context and creates child spans; it also injects TRACEPARENT into sidecar execs.
+- Sampling and timeouts:
+  - `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` control sampling (e.g., `parentbased_traceidratio`).
+  - `OTEL_EXPORTER_OTLP_TIMEOUT` controls exporter timeouts (default 5s). BSP envs (`OTEL_BSP_*`) are respected.
+- CI invariant:
+  - Golden stdout: enabling/disabling telemetry must not change CLI stdout. See ci/telemetry-smoke.sh.
+- Safety/idempotence:
+  - `telemetry_init()` is idempotent; if a subscriber exists, init is skipped with a concise stderr message.
+  - No stdout changes or exit code changes due to telemetry; TraceContext propagator only (no Baggage).
+
+For more details (endpoint precedence, HTTP transport, CI checks), see `docs/README-opentelemetry.md`.
+
+Telemetry tests:
+- Run unit/integration tests (no Docker): make test
+- Golden stdout and smoke (no Docker): ci/telemetry-smoke.sh
+
+---
+
 ## Rust implementation notes
 
-- CLI parsing is powered by Clap; subcommands are `codex`, `crush`, `aider`, `openhands`, `opencode`, `plandex`. Trailing arguments are passed through to the agent unchanged.
+- CLI parsing is powered by Clap
+- Subcommands are `codex`, `crush`, `aider`, `openhands`, `opencode`, `plandex`. 
+- Trailing arguments are passed through to the agent unchanged.
 - TTY detection uses `atty` to select `-it` vs `-i` for interactive runs.
 - The launcher uses Docker; ensure it is installed and available in PATH.
 - The default image selection can be overridden via `AIFO_CODER_IMAGE`, or computed from `AIFO_CODER_IMAGE_PREFIX` and `AIFO_CODER_IMAGE_TAG`.
@@ -1106,9 +1205,9 @@ See LICENSE
 
 ## Acknowledgements
 
-- OpenAI Codex CLI: https://github.com/openai/codex
-- Charmbracelet Crush: https://github.com/charmbracelet/crush
-- Aider: https://github.com/Aider-AI/aider
-- OpenHands: https://github.com/All-Hands-AI/OpenHands
-- OpenCode: https://github.com/opencode-ai/opencode
-- Plandex: https://github.com/plandex-ai/plandex
+- **OpenAI Codex CLI:** https://github.com/openai/codex
+- **Charmbracelet Crush**: https://github.com/charmbracelet/crush
+- **Aider**: https://github.com/Aider-AI/aider
+- **OpenHands**: https://github.com/All-Hands-AI/OpenHands
+- **OpenCode**: https://github.com/opencode-ai/opencode
+- **Plandex**: https://github.com/plandex-ai/plandex

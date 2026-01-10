@@ -322,12 +322,10 @@ All span instrumentation and metrics behavior from v8/v9 is unchanged:
     - to build the Rust launcher with CARGO_FLAGS if the local binary is out of date,
     - to exec the binary with the caller’s environment.
 
-- CI (`ci/otel-golden-stdout.sh`):
-  - Already updated for v9/v10 semantics:
-    - Builds with `--features otel`.
-    - Compares stdout with telemetry default ON vs AIFO_CODER_OTEL=0.
-    - Smoke runs with AIFO_CODER_OTEL_METRICS=1.
-  - No changes beyond acknowledging the new default endpoint layering.
+- CI (`ci/telemetry-smoke.sh`):
+  - Builds with `--features otel`.
+  - Compares stdout with telemetry default ON vs AIFO_CODER_OTEL=0.
+  - Smoke runs with AIFO_CODER_OTEL_METRICS=1.
 
 8) Performance and safety (unchanged)
 

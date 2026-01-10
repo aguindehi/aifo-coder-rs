@@ -208,7 +208,7 @@ Implementation details:
 
 The repository provides a small CI helper script:
 
-- `ci/otel-golden-stdout.sh`
+- `ci/telemetry-smoke.sh`
 
 It performs:
 
@@ -226,7 +226,7 @@ Example CI job snippet (pseudo YAML):
 otel-golden:
   stage: test
   script:
-    - ci/otel-golden-stdout.sh
+    - ci/telemetry-smoke.sh
 ```
 
 This job ensures:
@@ -273,7 +273,7 @@ otel-otlp-smoke:
   - For dev metrics, inspect the JSONL file under
     `${AIFO_CODER_OTEL_METRICS_FILE}` or the default runtime path.
 
-This document, together with `ci/otel-golden-stdout.sh`, completes Phase 6 by providing a
+This document, together with `ci/telemetry-smoke.sh`, completes Phase 6 by providing a
 repeatable CI check for otel builds and a clear reference for enabling, tuning and troubleshooting
 OpenTelemetry in `aifo-coder`.
 
@@ -310,7 +310,7 @@ Focus:
 - Smoke run with metrics enabled but without OTLP endpoint (dev exporters or no-ops).
 
 Implementation details:
-- Script ci/otel-golden-stdout.sh (kept source-controlled):
+- Script ci/telemetry-smoke.sh (kept source-controlled):
   - cargo build --features otel
   - Compare stdout of: “cargo run --features otel -- --help” vs “AIFO_CODER_OTEL=0 cargo run --features otel -- --help”
     and fail on diff.
@@ -335,7 +335,7 @@ Notes:
   - make test
   - or: cargo nextest run
 - Golden stdout and smoke (no Docker required):
-  - ci/otel-golden-stdout.sh
+  - ci/telemetry-smoke.sh
 
 ### 8.5 Consistency and gap analysis
 
