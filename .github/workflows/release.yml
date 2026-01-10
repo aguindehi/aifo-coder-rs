@@ -191,10 +191,10 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(python - <<'PY'
-import tomllib
-with open("Cargo.toml", "rb") as f:
-    print(tomllib.load(f)["package"]["version"])
-PY
+          import tomllib
+          with open("Cargo.toml", "rb") as f:
+              print(tomllib.load(f)["package"]["version"])
+          PY
           )"
           echo "Version: ${VERSION}"
           for f in README.md NOTICE LICENSE; do
