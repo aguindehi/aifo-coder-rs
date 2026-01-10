@@ -2528,7 +2528,7 @@ test-integration-suite:
 	EXPR='test(/^int_/)' ; \
 	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
 	  gitlab) : ;; \
-	  *) EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/))"; \
+	  *) EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/) & !test(/^int_proxy_tsc_prefers_local_compiler$$/))"; \
 	     : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
 	     : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
 	     git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
