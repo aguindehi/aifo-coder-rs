@@ -193,6 +193,16 @@ title_ul = @printf '%b\n' "$(C_TITLE_UL)$(1)$(C_RESET)"
 export IMAGE_PREFIX TAG RUST_TOOLCHAIN_TAG NODE_TOOLCHAIN_TAG
 export CPP_TOOLCHAIN_TAG RELEASE_PREFIX RELEASE_POSTFIX
 export DOCKER_BUILDKIT ?= 1
+HOOK_SCRIPT := scripts/git-pre-push
+PRE_PUSH_HOOK := .git/hooks/pre-push
+PRE_COMMIT_HOOK := .git/hooks/pre-commit
+
+ifeq ($(wildcard .git),.git)
+  _HOOK_SETUP := $(shell if [ -d .git/hooks ]; then \
+    if [ ! -e $(PRE_PUSH_HOOK) ]; then ln -s ../../$(HOOK_SCRIPT) $(PRE_PUSH_HOOK); fi; \
+    if [ ! -e $(PRE_COMMIT_HOOK) ]; then ln -s ../../$(HOOK_SCRIPT) $(PRE_COMMIT_HOOK); fi; \
+  fi)
+endif
 
 # Publish release prefix/postfix
 RELEASE_PREFIX ?= release
