@@ -56,9 +56,12 @@ Tool routing and allowlists
 - Allowlists per sidecar include relevant dev tools to allow execution where present.
 
 Notes
+- TCP listener binds to loopback by default; set `AIFO_TOOLEEXEC_BIND_HOST=0.0.0.0` only when a
+  remote client must reach the proxy. Prefer unix:// sockets on Linux.
 - The server does not set a write timeout in streaming mode to avoid mid-body truncation.
 - In verbose mode, server logs are printed on stderr with careful line handling (flush + clear line).
-- For buffered (v1) responses, the server adds a leading/trailing newline in verbose mode to avoid UI line wrap artifacts.
+- For buffered (v1) responses, the server adds a leading/trailing newline in verbose mode to avoid UI
+  line wrap artifacts.
 - The rust sidecar sets CARGO_HOME, exports CC=gcc and CXX=g++, and relies on the image PATH. The PATH is not overridden via -e to avoid losing system paths.
 
 Client (shell shim) behavior
