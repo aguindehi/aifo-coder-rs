@@ -260,7 +260,7 @@ prime_gpg_agent_if_requested() {
     signing_key="$(detect_signing_key)"
 
     if is_fullscreen_agent; then
-        # Fullscreen agents (e.g., opencode) must never rely on pinentry during runtime.
+        # Fullscreen agents (e.g., opencode/codex) must never rely on pinentry during runtime.
         # Obtain the passphrase from env/file or via a single interactive prompt here,
         # then supply it via AIFO_GPG_PASSPHRASE so the aifo-gpg-wrapper can always
         # use loopback mode without invoking pinentry.
@@ -341,7 +341,7 @@ runtime_home="$(resolve_home "$runtime_user")"
 [ -n "$runtime_home" ] || runtime_home="/home/$runtime_user"
 mark_step "root-reexec"
 
-# For fullscreen agents (e.g., opencode), keep loopback pinentry enabled so that
+# For fullscreen agents (e.g., opencode/codex), keep loopback pinentry enabled so that
 # gpg operations from non-interactive environments (no TTY) can still use the
 # cached passphrase via gpg-agent and the aifo-gpg-wrapper.
 
@@ -469,7 +469,7 @@ configure_git_gpg_wrapper() {
     if [ ! -x /usr/local/bin/aifo-gpg-wrapper ]; then
         return
     fi
-    # For fullscreen agents (e.g., opencode), always force the loopback wrapper so that
+    # For fullscreen agents (e.g., opencode/codex), always force the loopback wrapper so that
     # later non-interactive git signing uses gpg --batch --pinentry-mode loopback and can
     # reuse the cached passphrase from gpg-agent without requiring a TTY.
     if is_fullscreen_agent; then
