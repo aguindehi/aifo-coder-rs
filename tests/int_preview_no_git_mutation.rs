@@ -3,12 +3,13 @@ fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_wor
     // Isolate HOME so preview mount discovery stays fast and deterministic
     let td = tempfile::tempdir().expect("tmpdir");
     let old_home = std::env::var("HOME").ok();
+    let old_container = std::env::var("AIFO_CODER_CONTAINER_NAME").ok();
     std::env::set_var("HOME", td.path());
 
     // Ensure a stable container name for reproducibility
     std::env::set_var("AIFO_CODER_CONTAINER_NAME", "aifo-coder-unit-test");
 
-    let agents = ["aider", "codex", "crush"];
+    let agents = ["aider", "crush"];
     for agent in agents {
         let args = vec!["--help".to_string()];
         let preview = aifo_coder::build_docker_preview_only(agent, &args, "alpine:3.20", None);
@@ -51,5 +52,47 @@ fn int_preview_contains_no_git_mutations_and_aider_disable_signing_env_still_wor
         std::env::set_var("HOME", v);
     } else {
         std::env::remove_var("HOME");
+    }
+    if let Some(v) = old_container {
+        std::env::set_var("AIFO_CODER_CONTAINER_NAME", v);
+    } else {
+        std::env::remove_var("AIFO_CODER_CONTAINER_NAME");
+    }
+}
+
+#[test]
+fn int_preview_fullscreen_agents_force_loopback_wrapper() {
+    // Isolate HOME for deterministic mount resolution
+    let td = tempfile::tempdir().expect("tmpdir");
+    let old_home = std::env::var("HOME").ok();
+    let old_container = std::env::var("AIFO_CODER_CONTAINER_NAME").ok();
+    std::env::set_var("HOME", td.path());
+    std::env::set_var("AIFO_CODER_CONTAINER_NAME", "aifo-coder-unit-test");
+
+    for agent in ["opencode", "codex"] {
+        let args = vec!["--help".to_string()];
+        let preview = aifo_coder::build_docker_preview_only(agent, &args, "alpine:3.20", None);
+
+        assert!(
+            preview.contains("GIT_CONFIG_KEY_0=gpg.program"),
+            "{agent} preview must set gpg.program via transient env; preview:\n{}",
+            preview
+        );
+        assert!(
+            preview.contains("GIT_CONFIG_VALUE_0=/usr/local/bin/aifo-gpg-wrapper"),
+            "{agent} preview must force aifo-gpg-wrapper; preview:\n{}",
+            preview
+        );
+    }
+
+    if let Some(v) = old_home {
+        std::env::set_var("HOME", v);
+    } else {
+        std::env::remove_var("HOME");
+    }
+    if let Some(v) = old_container {
+        std::env::set_var("AIFO_CODER_CONTAINER_NAME", v);
+    } else {
+        std::env::remove_var("AIFO_CODER_CONTAINER_NAME");
     }
 }

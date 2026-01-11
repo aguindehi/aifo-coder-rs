@@ -3,7 +3,7 @@ use std::thread;
 use std::time::Duration;
 
 mod support;
-use support::have_git;
+use support::{have_git, init_repo_with_default_user};
 
 fn init_repo(path: &std::path::Path) {
     assert!(Command::new("git")
@@ -70,6 +70,7 @@ fn int_test_fork_merge_lock_serializes_concurrent_merges() {
 
     // Commit a change in each pane.
     for (pane_dir, _branch) in clones1.iter().chain(clones2.iter()) {
+        let _ = init_repo_with_default_user(pane_dir);
         std::fs::write(
             pane_dir.join("change.txt"),
             format!("pane at {:?}", pane_dir),
