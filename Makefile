@@ -66,6 +66,13 @@ CARGO_UI_FLAGS ?= -q
 # Optional corporate CA for rust toolchain build and more; if present, pass as BuildKit secret
 MIGROS_CA ?= $(HOME)/.certificates/MigrosRootCA2.crt
 
+# Artifact directories for generated tools, coverage, logs, and profiles
+ARTIFACT_DIR ?= target/aifo
+TOOLS_DIR := $(ARTIFACT_DIR)/tools
+COV_DIR := $(ARTIFACT_DIR)/coverage
+APPARMOR_DIR := $(ARTIFACT_DIR)/apparmor
+LOG_DIR := $(ARTIFACT_DIR)/logs
+
 # macOS code signing identity
 #SIGN_IDENTITY ?= AI Foundation Code Signer
 #SIGN_IDENTITY ?= AI Foundation - Code Signing
@@ -726,10 +733,10 @@ help: banner
 	@echo ""
 		$(call title,AppArmor (security) profile:)
 	@echo
-	@echo "  apparmor .................... Generate build/apparmor/$${APPARMOR_PROFILE_NAME} from template"
+	@echo "  apparmor .................... Generate $(APPARMOR_DIR)/$${APPARMOR_PROFILE_NAME} from template"
 	@echo ""
 	@echo "  apparmor-load-colima ........ Load the generated profile directly into the Colima VM"
-	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into build/logs/apparmor.log"
+	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into $(LOG_DIR)/apparmor.log"
 	@echo ""
 	$(call title_ul,Usage:)
 	@echo ""
@@ -763,7 +770,7 @@ help: banner
 	$(call title_ul,AppArmor:)
 	@echo ""
 	@echo "   Load AppArmor policy into Colima VM (macOS):"
-	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/build/apparmor/$${APPARMOR_PROFILE_NAME}\""
+	@echo "   colima ssh -- sudo apparmor_parser -r -W \"$$PWD/$(APPARMOR_DIR)/$${APPARMOR_PROFILE_NAME}\""
 	@echo ""
 	$(call title_ul,Docs:)
 	@echo ""
@@ -2221,10 +2228,10 @@ tidy-no-multiline-strings:
 	@set -e; \
 	echo ""; \
 	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (repo-wide guard: src/** + tests/** + build.rs) ..."; \
-	mkdir -p target/tools; \
+	mkdir -p $(TOOLS_DIR); \
 	if command -v rustc >/dev/null 2>&1; then \
-	  rustc -O scripts/tidy_no_multiline_strings.rs -o target/tools/tidy-no-multiline-strings; \
-	  ./target/tools/tidy-no-multiline-strings; \
+	  rustc -O scripts/tidy_no_multiline_strings.rs -o $(TOOLS_DIR)/tidy-no-multiline-strings; \
+	  ./$(TOOLS_DIR)/tidy-no-multiline-strings; \
 	else \
 	  echo "Error: rustc not found; cannot run tidy-no-multiline-strings." >&2; \
 	  exit 1; \
@@ -2360,11 +2367,11 @@ endef
 define RUN_NEXTEST_WITH_COVERAGE
 $(SET_COV_ENV) \
 if [ -n "$$AIFO_EXEC_ID" ]; then \
-  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/$(COV_DIR)/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 elif command -v rustup >/dev/null 2>&1; then \
-  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/$(COV_DIR)/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} rustup run stable cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS) || nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 elif command -v cargo >/dev/null 2>&1; then \
-  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/build/coverage/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
+  eval "$$COV_ENV LLVM_PROFILE_FILE=$(PWD)/$(COV_DIR)/aifo-%p-%m.profraw nice -n ${NICENESS_CARGO_NEXTEST} ( cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked ); nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)"; \
 elif command -v docker >/dev/null 2>&1; then \
   $(DETECT_PLATFORM_ARGS) \
   if ! docker image inspect $(RUST_BUILDER_IMAGE) >/dev/null 2>&1; then \
@@ -2372,7 +2379,7 @@ elif command -v docker >/dev/null 2>&1; then \
     exit 1; \
   fi; \
   MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_TARGET_DIR=/var/tmp/aifo-target CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/build/coverage/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)'; \
+    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; export CARGO_TARGET_DIR=/var/tmp/aifo-target CARGO_INCREMENTAL=0 RUSTFLAGS="-C instrument-coverage"; export LLVM_PROFILE_FILE=/workspace/$(COV_DIR)/aifo-%p-%m.profraw; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run -j 1 --tests $(ARGS_NEXTEST) $(ARGS)'; \
 else \
   echo "error: neither rustup/cargo nor docker found"; \
   exit 1; \
@@ -2380,32 +2387,32 @@ fi
 endef
 
 define RUN_GRCOV_LCOV_LOCAL
-grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage/lcov.info
+grcov . --binary-path target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o $(COV_DIR)/lcov.info
 endef
 
 define RUN_GRCOV_LCOV_DOCKER
 MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-  $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path /var/tmp/aifo-target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage/lcov.info'
+  $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path /var/tmp/aifo-target -s . -t lcov --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/$(COV_DIR)/lcov.info'
 endef
 
 define RUN_GRCOV_HTML_LOCAL
-grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o build/coverage
+grcov . --binary-path target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o $(COV_DIR)
 endef
 
 define RUN_GRCOV_HTML_DOCKER
 MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -v "$$PWD:/workspace" -v "$$PWD/target:/workspace/target" -w /workspace \
-  $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path /var/tmp/aifo-target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/build/coverage'
+  $(RUST_BUILDER_IMAGE) sh -lc 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; grcov . --binary-path /var/tmp/aifo-target -s . -t html --branch --ignore-not-existing --threads $(THREADS_GRCOV) $(KEEP_ONLY_GRCOV) $(ARGS_GRCOV) $(ARGS) -o /workspace/$(COV_DIR)'
 endef
 
 define RESET_HTML_DIR
-rm -rf build/coverage/html || true; \
-mkdir -p build/coverage/html
+rm -rf $(COV_DIR)/html || true; \
+mkdir -p $(COV_DIR)/html
 endef
 
 define FIX_INDEX_CSS
-if [ -f build/coverage/html/index.html ]; then \
-  tmp=build/coverage/html/index.html.tmp; \
-  sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' build/coverage/html/index.html > "$$tmp" && mv "$$tmp" build/coverage/html/index.html; \
+if [ -f $(COV_DIR)/html/index.html ]; then \
+  tmp=$(COV_DIR)/html/index.html.tmp; \
+  sed 's|href="/bulma\.min\.css"|href="./bulma.min.css"|g' $(COV_DIR)/html/index.html > "$$tmp" && mv "$$tmp" $(COV_DIR)/html/index.html; \
 fi
 endef
 
@@ -2414,16 +2421,16 @@ cov: coverage-data coverage-lcov coverage-html
 
 coverage-data:
 	@set -e; \
-	mkdir -p build/coverage; \
+	mkdir -p $(COV_DIR); \
 	$(RUN_NEXTEST_WITH_COVERAGE); \
-	echo "Wrote raw coverage profiles in build/coverage/*.profraw"
+	echo "Wrote raw coverage profiles in $(COV_DIR)/*.profraw"
 
 cov: coverage-data coverage-lcov coverage-html
 
 coverage-lcov:
 	@set -e; \
-	mkdir -p build/coverage; \
-	if ls build/coverage/*.profraw >/dev/null 2>&1; then \
+	mkdir -p $(COV_DIR); \
+	if ls $(COV_DIR)/*.profraw >/dev/null 2>&1; then \
 	  $(DETECT_PLATFORM_ARGS) \
 	  if command -v grcov >/dev/null 2>&1; then \
 	    $(RUN_GRCOV_LCOV_LOCAL); \
@@ -2445,16 +2452,16 @@ coverage-lcov:
 	    exit 1; \
 	  fi; \
 	fi; \
-	echo "Wrote build/coverage/lcov.info"
+	echo "Wrote $(COV_DIR)/lcov.info"
 
 coverage-html:
 	@set -e; \
-	mkdir -p build/coverage; \
-	if [ "$${COVERAGE_HTML_IMPL:-}" = "genhtml" ] && [ -f build/coverage/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
+	mkdir -p $(COV_DIR); \
+	if [ "$${COVERAGE_HTML_IMPL:-}" = "genhtml" ] && [ -f $(COV_DIR)/lcov.info ] && command -v genhtml >/dev/null 2>&1; then \
 	  $(RESET_HTML_DIR); \
-	  genhtml build/coverage/lcov.info --ignore-errors inconsistent,corrupt,range --output-directory build/coverage/html; \
+	  genhtml $(COV_DIR)/lcov.info --ignore-errors inconsistent,corrupt,range --output-directory $(COV_DIR)/html; \
 	  $(FIX_INDEX_CSS); \
-	  echo "Wrote build/coverage/html from lcov.info via genhtml."; \
+	  echo "Wrote $(COV_DIR)/html from lcov.info via genhtml."; \
 	  exit 0; \
 	fi; \
 	$(DETECT_PLATFORM_ARGS) \
@@ -2468,7 +2475,7 @@ coverage-html:
 	  exit 1; \
 	fi; \
 	$(FIX_INDEX_CSS); \
-	echo "Wrote build/coverage/html (grcov HTML)"
+	echo "Wrote $(COV_DIR)/html (grcov HTML)"
 
 .PHONY: test-proxy-smoke test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
 test-proxy-smoke:
@@ -3072,43 +3079,43 @@ APPARMOR_PROFILE_NAME ?= aifo-coder
 .PHONY: apparmor
 ifeq ($(OS),Windows_NT)
 apparmor:
-	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path 'build/apparmor' | Out-Null"
-	powershell -NoProfile -Command "(Get-Content 'apparmor/aifo-coder.apparmor.tpl') | ForEach-Object { $_ -replace '__PROFILE_NAME__','$(APPARMOR_PROFILE_NAME)' } | Set-Content 'build/apparmor/$(APPARMOR_PROFILE_NAME)'"
-	@echo "Wrote build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(APPARMOR_DIR)' | Out-Null"
+	powershell -NoProfile -Command "(Get-Content 'apparmor/aifo-coder.apparmor.tpl') | ForEach-Object { $_ -replace '__PROFILE_NAME__','$(APPARMOR_PROFILE_NAME)' } | Set-Content '$(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)'"
+	@echo "Wrote $(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)"
 	@echo "Load into AppArmor on a Linux host with:"
-	@echo "  sudo apparmor_parser -r -W build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	@echo "  sudo apparmor_parser -r -W $(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)"
 	@echo "Load into Colima's VM (macOS) with:"
-	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/build/apparmor/$(APPARMOR_PROFILE_NAME)\""
+	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/$(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)\""
 else
 apparmor:
-	mkdir -p build/apparmor
-	sed -e 's/__PROFILE_NAME__/$(APPARMOR_PROFILE_NAME)/g' apparmor/aifo-coder.apparmor.tpl > build/apparmor/$(APPARMOR_PROFILE_NAME)
-	@echo "Wrote build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	mkdir -p $(APPARMOR_DIR)
+	sed -e 's/__PROFILE_NAME__/$(APPARMOR_PROFILE_NAME)/g' apparmor/aifo-coder.apparmor.tpl > $(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)
+	@echo "Wrote $(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)"
 	@echo "Load into AppArmor on a Linux host with:"
-	@echo "  sudo apparmor_parser -r -W build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	@echo "  sudo apparmor_parser -r -W $(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)"
 	@echo "Load into Colima's VM (macOS) with:"
-	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/build/apparmor/$(APPARMOR_PROFILE_NAME)\""
+	@echo "  colima ssh -- sudo apparmor_parser -r -W \"$(PWD)/$(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)\""
 endif
 
 .PHONY: apparmor-load-colima
 apparmor-load-colima:
-	colima ssh -- sudo apparmor_parser -r -W "$(PWD)/build/apparmor/$(APPARMOR_PROFILE_NAME)"
+	colima ssh -- sudo apparmor_parser -r -W "$(PWD)/$(APPARMOR_DIR)/$(APPARMOR_PROFILE_NAME)"
 
 .PHONY: apparmor-log-colima
 apparmor-log-colima:
-	@mkdir -p build/logs
-	@echo "Streaming AppArmor logs to build/logs/apparmor.log (Ctrl-C to stop)..."
+	@mkdir -p $(LOG_DIR)
+	@echo "Streaming AppArmor logs to $(LOG_DIR)/apparmor.log (Ctrl-C to stop)..."
 	@if command -v colima >/dev/null 2>&1 && colima ssh -- uname -s >/dev/null 2>&1; then \
 		echo "Detected Colima VM; streaming kernel logs from inside the VM..."; \
 		colima ssh -- sudo sh -lc 'if command -v journalctl >/dev/null 2>&1; then SYSTEMD_COLORS=1 journalctl -k -n 100 -g apparmor -f --no-tail -o short-iso; elif [ -f /var/log/kern.log ]; then tail -n0 -F /var/log/kern.log | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E "apparmor|$$"; elif [ -f /var/log/syslog ]; then tail -n0 -F /var/log/syslog | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E "apparmor|$$"; elif command -v dmesg >/dev/null 2>&1; then dmesg -w | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E "apparmor|$$"; else echo "No kernel log source available"; fi' \
-		| tee -a build/logs/apparmor.log; \
+		| tee -a $(LOG_DIR)/apparmor.log; \
 	elif command -v journalctl >/dev/null 2>&1; then \
 		echo "Detected local Linux host; streaming kernel logs..."; \
-		sudo env SYSTEMD_COLORS=1 journalctl -k -n 100 -g apparmor -f --no-tail -o short-iso | tee -a build/logs/apparmor.log; \
+		sudo env SYSTEMD_COLORS=1 journalctl -k -n 100 -g apparmor -f --no-tail -o short-iso | tee -a $(LOG_DIR)/apparmor.log; \
 	elif [ -f /var/log/kern.log ]; then \
-		tail -n0 -F /var/log/kern.log | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E 'apparmor|$$' | tee -a build/logs/apparmor.log; \
+		tail -n0 -F /var/log/kern.log | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E 'apparmor|$$' | tee -a $(LOG_DIR)/apparmor.log; \
 	elif [ -f /var/log/syslog ]; then \
-		tail -n0 -F /var/log/syslog | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E 'apparmor|$$' | tee -a build/logs/apparmor.log; \
+		tail -n0 -F /var/log/syslog | env GREP_COLOR="1;31" GREP_COLORS="ms=1;31" grep -i --color=always -E 'apparmor|$$' | tee -a $(LOG_DIR)/apparmor.log; \
 	else \
 		echo "Unable to locate AppArmor logs. On macOS, ensure Colima is running; on Linux, ensure journalctl/syslog available." >&2; \
 		exit 1; \
@@ -4936,7 +4943,7 @@ endif
 
 .PHONY: cov-results
 cov-results:
-	xdg-open build/coverage/html/index.html
+	xdg-open $(COV_DIR)/html/index.html
 
 # -----------------------------------------------------------------------------
 # Guardrails (CI-capable; Linux OK)
