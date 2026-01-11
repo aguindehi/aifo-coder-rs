@@ -574,8 +574,14 @@ pub fn toolexec_start_proxy(
                 .and_then(|s| s.parse::<u64>().ok())
                 .filter(|&v| v > 0)
         })
-        .unwrap_or(0);
+        .unwrap_or(300);
+    let max_conns: usize = std_env::var("AIFO_TOOLEEXEC_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&v| v > 0)
+        .unwrap_or(64);
     let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let active_conns = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let session = session_id.to_string();
 
     // Optional unix socket (Linux)
@@ -640,6 +646,7 @@ pub fn toolexec_start_proxy(
                 host_dir.to_string_lossy().to_string(),
             );
             let running_cl2 = running.clone();
+            let active_conns_cl = active_conns.clone();
             let token_for_thread2 = token_for_thread.clone();
             let host_dir_cl = host_dir.clone();
             let sock_path_cl = sock_path.clone();
@@ -676,6 +683,17 @@ pub fn toolexec_start_proxy(
                             }
                         }
                     };
+                    let current = active_conns_cl.load(std::sync::atomic::Ordering::SeqCst);
+                    if current >= max_conns {
+                        if verbose {
+                            eprintln!(
+                                "aifo-coder: dropping connection; active {} exceeds max {}",
+                                current, max_conns
+                            );
+                        }
+                        continue;
+                    }
+                    active_conns_cl.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     let _ = stream.set_nonblocking(false);
                     if timeout_secs > 0 {
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
@@ -690,6 +708,7 @@ pub fn toolexec_start_proxy(
                     let runtime_cl = runtime.clone();
                     let token_cl = token_for_thread2.clone();
                     let session_cl = session.clone();
+                    let active_conns_inner = active_conns_cl.clone();
                     std::thread::spawn(move || {
                         let disable_user =
                             std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref()
@@ -709,6 +728,10 @@ pub fn toolexec_start_proxy(
                         };
                         let mut s = stream;
                         handle_connection(&ctx2, &mut s, &tc, &er, &rs);
+                        active_conns_inner.fetch_sub(
+                            1,
+                            std::sync::atomic::Ordering::SeqCst,
+                        );
                     });
                 }
                 let _ = fs::remove_file(&sock_path_cl);
@@ -747,6 +770,7 @@ pub fn toolexec_start_proxy(
     let port = addr.port();
     let _ = listener.set_nonblocking(true);
     let running_cl = running.clone();
+    let active_conns_cl = active_conns.clone();
 
     let handle = std::thread::spawn(move || {
         if verbose {
@@ -784,6 +808,17 @@ pub fn toolexec_start_proxy(
                     }
                 }
             };
+            let current = active_conns_cl.load(std::sync::atomic::Ordering::SeqCst);
+            if current >= max_conns {
+                if verbose {
+                    eprintln!(
+                        "aifo-coder: dropping connection; active {} exceeds max {}",
+                        current, max_conns
+                    );
+                }
+                continue;
+            }
+            active_conns_cl.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let _ = stream.set_nonblocking(false);
             if timeout_secs > 0 {
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
@@ -798,6 +833,7 @@ pub fn toolexec_start_proxy(
             let runtime_cl = runtime.clone();
             let token_cl = token_for_thread.clone();
             let session_cl = session.clone();
+            let active_conns_inner = active_conns_cl.clone();
             std::thread::spawn(move || {
                 let disable_user =
                     std_env::var("AIFO_TOOLEEXEC_DISABLE_USER").ok().as_deref() == Some("1");
@@ -816,6 +852,10 @@ pub fn toolexec_start_proxy(
                 };
                 let mut s = stream;
                 handle_connection(&ctx2, &mut s, &tc, &er, &rs);
+                active_conns_inner.fetch_sub(
+                    1,
+                    std::sync::atomic::Ordering::SeqCst,
+                );
             });
         }
         if verbose {
