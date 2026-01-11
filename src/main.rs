@@ -81,7 +81,7 @@ fn apply_cli_globals(cli: &Cli) {
     }
 }
 
-const FULLSCREEN_GPG_AGENTS: &[&str] = &["opencode"];
+const FULLSCREEN_GPG_AGENTS: &[&str] = &["opencode", "codex"];
 
 fn is_fullscreen_agent(agent: &str) -> bool {
     FULLSCREEN_GPG_AGENTS.contains(&agent)

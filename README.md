@@ -717,7 +717,9 @@ Tip:
   - Ensures `$HOME` and `$GNUPGHOME` exist (0700), prepares `$XDG_RUNTIME_DIR`
   - Copies keys from `/home/coder/.gnupg-host` (read‑only mount) into `GNUPGHOME`
   - Configures pinentry to `pinentry-curses` and launches `gpg-agent`
-  - For fullscreen agents (currently `opencode`) it runs an interactive priming signature before the UI starts so pinentry-curses can cache your signing key passphrase. Cancelling the prompt aborts startup so you can fix the key and retry.
+  - For fullscreen agents (`opencode`, `codex`) it primes GPG before entering the fullscreen UI so
+    pinentry-curses runs once up front; cancelling the prompt aborts startup so you can fix the key
+    and retry.
 
 #### GPG priming flow
 
@@ -729,7 +731,9 @@ Tip:
   (add `--local-user <key>` if you use a non-default key). The entrypoint prints the exact command to rerun whenever priming fails.
 - The entrypoint captures the actual controlling TTY path (for example `/dev/pts/0`) and updates `gpg-agent` before invoking pinentry. If you still hit `gpg: signing failed: No such device or address`, re-run `aifo-coder …` from a real terminal (no background `nohup`) and make sure `docker run` includes `-it` so pinentry can draw.
 - Deterministic priming: set `AIFO_GPG_PASSPHRASE_FILE=/path/to/file` (or `AIFO_GPG_PASSPHRASE`) before launching the agent. The entrypoint enables `allow-preset-passphrase` and, when `gpg-preset-passphrase` is available, presets the passphrase via the keygrip before falling back to pinentry-curses if needed.
-- Fullscreen agents (e.g., Opencode) automatically disable the loopback `aifo-gpg-wrapper` after priming so `git commit` reuses the cached `gpg-agent` session without requesting a second passphrase.
+- Fullscreen agents (Codex, OpenCode) force the loopback `aifo-gpg-wrapper` and require priming
+  before the UI starts so git signing reuses the cached `gpg-agent` session without triggering
+  pinentry inside the TUI.
 - Manual `docker run -it … /bin/bash` sessions skip priming unless you explicitly set `AIFO_GPG_REQUIRE_PRIME=1`, so diagnostics shells work even when no TTY is available for pinentry.
 
  ### Host notifications command (notifications-cmd)
