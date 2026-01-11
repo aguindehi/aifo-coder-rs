@@ -156,6 +156,12 @@ pub(crate) fn read_http_request<R: Read>(reader: &mut R) -> io::Result<HttpReque
                     ));
                 }
             };
+            if size > BODY_CAP {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "chunk size exceeds limit",
+                ));
+            }
             if size == 0 {
                 // Consume trailers until blank line
                 while let Some(tr) = read_line_from(reader, &mut rbuf) {
@@ -524,6 +530,27 @@ mod http_hardening_tests {
             1_048_576,
             "expected BODY_CAP=1MiB enforcement for non-chunked"
         );
+    }
+
+    #[test]
+    fn test_chunk_over_cap_is_rejected() {
+        // Single chunk declares a size larger than BODY_CAP; parser should reject early.
+        let req_text = [
+            "POST /exec HTTP/1.1",
+            "Host: localhost",
+            "Transfer-Encoding: chunked",
+            "",
+            "110000", // > 1MiB
+            "x",
+            "0",
+            "",
+            "",
+        ]
+        .join("\r\n");
+        let mut cur = Cursor::new(req_text.as_bytes().to_vec());
+        let err = read_http_request(&mut cur).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("chunk size"));
     }
 
     #[test]
