@@ -489,13 +489,6 @@ ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Install unison for host<->container storage sync and python3 for in-container execution
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  if [ -f /run/secrets/migros_root_ca ]; then \
-    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-  fi; \
-  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison python3; \
-  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -507,6 +500,9 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export SSL_CERT_DIR=/etc/ssl/certs; \
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison python3; \
+  apt-get clean; \
+  rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   export NPM_CONFIG_CACHE=/tmp/npm-cache; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPENCODE_VERSION}"; \
   rm -rf /tmp/npm-cache /root/.npm /root/.cache; \
@@ -902,13 +898,6 @@ ARG KEEP_APT=0
 ENV KEEP_APT=${KEEP_APT}
 # Install unison for host<->container storage sync and python3 for in-container execution
 RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
-  if [ -f /run/secrets/migros_root_ca ]; then \
-    install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; \
-    command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; \
-  fi; \
-  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison python3; \
-  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; \
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
   CAF=/run/secrets/migros_root_ca; \
   if [ -f "$CAF" ]; then \
@@ -920,6 +909,8 @@ RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,req
     export SSL_CERT_DIR=/etc/ssl/certs; \
     export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; \
   fi; \
+  apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends unison python3; \
+  apt-get clean; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*; \
   export NPM_CONFIG_CACHE=/tmp/npm-cache; \
   npm install -g --omit=dev --no-audit --no-fund --no-update-notifier --no-optional "opencode-ai@${OPENCODE_VERSION}"; \
   rm -rf /tmp/npm-cache /root/.npm /root/.cache; \

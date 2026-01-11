@@ -172,7 +172,8 @@ RUN set -eux; \
 
 # Provide rust-analyzer wrapper on PATH so consumers (e.g. MCP Serena) can use the toolchain version directly
 RUN set -eux; \
-    RA_BIN="$(ls /usr/local/rustup/toolchains/stable*/bin/rust-analyzer | head -n 1 || true)"; \
+    RA_BIN="$(find /usr/local/rustup/toolchains \
+      -maxdepth 3 -type f -name rust-analyzer -print -quit)"; \
     if [ -z "$RA_BIN" ] || [ ! -x "$RA_BIN" ]; then \
       echo "error: rust-analyzer binary not found in rustup toolchain" >&2; \
       exit 1; \
