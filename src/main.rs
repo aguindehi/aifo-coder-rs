@@ -180,6 +180,40 @@ fn configure_network_env(cli: &Cli) {
     aifo_coder::set_session_network_env(&final_net, managed, create, source);
 }
 
+fn ensure_session_network_if_needed(cli: &Cli) -> Result<(), u8> {
+    if cli.dry_run || !cli.toolchain.is_empty() {
+        return Ok(());
+    }
+    if let Some(net) = aifo_coder::session_network_from_env() {
+        if net.create_if_missing {
+            let runtime = match aifo_coder::container_runtime_path() {
+                Ok(p) => p,
+                Err(err) => {
+                    let use_err = aifo_coder::color_enabled_stderr();
+                    aifo_coder::log_error_stderr(
+                        use_err,
+                        &format!("aifo-coder: error: failed to resolve container runtime: {err}"),
+                    );
+                    return Err(aifo_coder::exit_code_for_io_error(&err));
+                }
+            };
+            let ok = aifo_coder::ensure_network_exists(&runtime, &net.name, cli.verbose);
+            if !ok {
+                let use_err = aifo_coder::color_enabled_stderr();
+                aifo_coder::log_error_stderr(
+                    use_err,
+                    &format!(
+                        "aifo-coder: error: failed to create session network {}",
+                        net.name
+                    ),
+                );
+                return Err(1);
+            }
+        }
+    }
+    Ok(())
+}
+
 fn require_repo_root() -> Result<PathBuf, ExitCode> {
     match aifo_coder::repo_root() {
         Some(p) => Ok(p),
@@ -651,6 +685,14 @@ fn main() -> ExitCode {
     configure_gpg_env(agent, signing_enabled, host_has_key);
 
     configure_network_env(&cli);
+    if let Err(code) = ensure_session_network_if_needed(&cli) {
+        #[cfg(feature = "otel")]
+        {
+            let duration = run_start.elapsed();
+            aifo_coder::record_run_end(agent, &toolchains_for_run, i32::from(code), duration);
+        }
+        return ExitCode::from(code);
+    }
 
     // Toolchain session RAII
     let mut _toolchain_session: Option<crate::toolchain_session::ToolchainSession> = None;
