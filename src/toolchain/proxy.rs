@@ -723,12 +723,12 @@ pub fn toolexec_start_proxy(
     }
 
     // TCP listener (default)
-    let bind_host: &str = if cfg!(target_os = "linux") {
-        "0.0.0.0"
-    } else {
-        "127.0.0.1"
-    };
-    let listener = TcpListener::bind((bind_host, 0)).map_err(|e| {
+    let bind_host: String = std_env::var("AIFO_TOOLEEXEC_BIND_HOST")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+    let listener = TcpListener::bind((bind_host.as_str(), 0)).map_err(|e| {
         io::Error::new(
             e.kind(),
             crate::display_for_toolchain_error(&crate::ToolchainError::Message(format!(
