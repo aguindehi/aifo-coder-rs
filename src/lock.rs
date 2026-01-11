@@ -19,7 +19,7 @@ pub struct RepoLock {
 impl Drop for RepoLock {
     fn drop(&mut self) {
         // Best-effort unlock; ignore errors
-        let _ = self.file.unlock();
+        let _ = FileExt::unlock(&self.file);
 
         // Try removal with brief retries (avoid background threads to keep tests leak-free)
         let path = self.path.clone();
