@@ -1,11 +1,11 @@
 # Architecture Assessment & Evolution
 
 ## 1. System Characterization
-- System type: Rust CLI orchestrating containerized coding agents and toolchain sidecars; entrypoint at src/main.rs with docker run orchestration in src/docker/run.rs.
-- Purpose: run Codex/Crush/Aider/OpenHands/OpenCode/Plandex in isolated containers with predictable mounts, env, and optional toolchain proxying. (README.md)
-- Problem domain: secure developer tooling/agent UX across Linux/macOS/Windows with Docker-based isolation and optional AppArmor. (README.md, docs/README-security-architecture.md)
+- System type: Rust CLI orchestrating containerized coding agents and toolchain sidecars; entrypoint at src/main.rs with docker run assembly in src/docker/run.rs.
+- Purpose: run Codex/Crush/Aider/OpenHands/OpenCode/Plandex/Letta in isolated containers with predictable mounts, env, and optional toolchain proxying. (README.md, src/cli.rs)
+- Problem domain: secure developer tooling/agent UX across Linux/macOS/Windows via Docker-based isolation and optional AppArmor. (README.md, docs/README-security-architecture.md)
 - Runtime/deployment: depends on Docker CLI; uses docker run/exec, named volumes, session networks, shim-first PATH, and optional AppArmor profiles. (src/docker/runtime.rs, src/docker/run.rs)
-- Persistence: binds /workspace plus curated config/state mounts (.gitconfig, aider/codex/opencode dirs) and toolchain caches/volumes for languages. (src/docker/run.rs, src/toolchain/mounts.rs)
+- Persistence: binds /workspace plus curated config/state mounts (.gitconfig, aider/codex/opencode dirs) and toolchain caches/volumes per language. (src/docker/run.rs, src/toolchain/mounts.rs)
 - Integration points: registry resolution, OpenAI/Gemini/Azure env forwarding, GPG signing hints, host notifications command, pnpm migration helper. (src/docker/env.rs, src/main.rs, src/toolchain/notifications.rs, src/toolchain_session.rs)
 - Users/use cases: developers needing reproducible agent runs and forked experiments; fork mode clones panes with isolated state. (README.md, src/fork/runner.rs)
 
@@ -36,34 +36,35 @@
 ## 5. Change & Evolution Analysis
 - Stable seams: Shell builders, registry resolution, mount policy helpers, and color/logging helpers are reused across commands. (src/util/*, src/registry.rs, src/docker/mounts.rs)
 - Volatile areas: proxy/shim protocol (streaming, signals), toolchain routing/bootstraps, docker run env/mount policy, fork UX. (src/toolchain/proxy.rs, src/bin/aifo-shim.rs, src/docker/run.rs, src/fork/runner.rs)
-- Failure propagation: docker availability errors bubble early; proxy/shim failures directly abort tool exec; network isolation misconfiguration surfaces as docker run failures; fork merge errors propagated with colorized messages. (src/main.rs, src/toolchain/proxy.rs, src/fork_impl/merge.rs)
+- Failure propagation: docker availability errors bubble early; proxy/shim failures abort tool exec; network isolation failures currently downgrade to bridge silently; toolchain startup errors can leave residual sidecars. (src/main.rs, src/toolchain/sidecar.rs, src/toolchain_session.rs)
 - Change safety: extensive nextest suites cover registry resolution, proxy semantics, fork flows, and toolchain routing; E2E tests gated by docker presence. (tests/*)
 
 ## 6. Structural Strengths
 - Clear separation between CLI orchestration, docker run composition, toolchain/proxy logic, and fork workflows.
 - Aggressive mount validation and limited env forwarding reduce accidental host exposure. (src/docker/mounts.rs, src/docker/env.rs)
+- Toolchain proxy defaults are safer: loopback bind, bounded connection count, max-runtime escalation. (src/toolchain/proxy.rs)
 - Rich automated tests across unit/int/e2e lanes with deterministic plans for registry/proxy behavior. (docs/README-testing.md, tests/TEST_PLAN.md)
 - Optional defense-in-depth via AppArmor selection and UID/GID mapping to avoid root-owned files. (src/docker/run.rs, src/apparmor.rs)
 - Reusable shell builders and staging helpers reduce ad-hoc shell injection risks. (src/util/shell_script.rs, src/docker/run.rs)
 
 ## 7. Structural Liabilities
-- Toolchain proxy binds 0.0.0.0 on Linux by default and lacks listener scoping, exposing the exec API beyond the host when docker sidecars are up. (src/toolchain/proxy.rs:697-735)
-- Proxy connection handling is unbounded: each accept spawns a thread with no concurrency cap and default infinite read timeouts, enabling trivial slow-connection DoS. (src/toolchain/proxy.rs:520-620, 697-770)
-- Chunked request parsing reads declared chunk sizes into memory without bounding the chunk size, allowing oversized chunk headers to drive large allocations despite a 1 MiB body cap. (src/toolchain/http.rs:64-189)
-- CLI network isolation flag sets AIFO_SESSION_NETWORK for agent runs but never creates the network when toolchains are disabled, causing docker run failures and inconsistent behavior. (src/main.rs:84-130, src/docker/run.rs:1155-1182)
+- Network isolation quietly downgrades to bridge when creation/inspection fails, reducing containment with no user-visible error. (src/toolchain/sidecar.rs:850-874)
+- Toolchain session startup errors return early without rolling back already-started sidecars, leaving containers/networks running on partial failure. (src/toolchain/sidecar.rs:1077-1188; src/toolchain_session.rs:520-545)
+- Proxy streaming uses blocking writes with no write deadlines; a slow/paused client can stall a worker thread until the socket drains despite the bounded channel, reducing concurrency headroom. (src/toolchain/proxy.rs:575-616, 1845-1995)
+- Letta agent support exists in CLI but is undocumented in README/feature lists, creating discoverability and support gaps. (src/cli.rs:87-140; README.md)
 
 ## 8. Architectural Direction (Concrete Refactorings)
-- Default the proxy to loopback/UDS and require explicit opt-in for 0.0.0.0; add bind-host CLI/env and tests covering TCP vs UDS bindings. (fixes liability 1)
-- Add connection acceptance limits, pooled worker model, and sane read/write timeouts to the proxy to prevent slowloris/connection floods; codify in int/e2e tests. (fixes liability 2)
-- Reject chunked requests with per-chunk caps (<= BODY_CAP) before buffering; enforce total read caps and simplify draining to avoid large allocations. (fixes liability 3)
-- Ensure --docker-network-isolate creates/cleans the session network even without toolchains (or disallow the flag in that mode); add docker run preview validation. (fixes liability 4)
+- Fail closed on network isolation: treat missing/failed network creation as an error (not a silent bridge fallback), surface a warning, and add an integration test that asserts isolation nets exist. (addresses liability 1)
+- Add rollback for toolchain_start_session: track started sidecars/networks and stop/remove them when subsequent startups fail; cover with unit/int tests. (addresses liability 2)
+- Add proxy write deadlines (or nonblocking with poll) for streaming responses so stalled clients release worker threads; emit verbose diagnostics and tests for slow-consumer behavior. (addresses liability 3)
+- Document Letta agent support alongside other agents and align README feature list with CLI surface; add a short smoke example. (addresses liability 4)
 
 ## 9. Architectural Guardrails
-- Bind proxy sockets to loopback or UDS by default; expose host-facing TCP only when explicitly configured and documented.
-- Enforce bounded connection counts, per-connection timeouts, and body/chunk size limits on proxy endpoints.
-- Treat network isolation as an atomic feature: create/manage networks alongside agent runs and clean them deterministically.
-- Keep env/mount allowlists audited; add regression tests when expanding forwarded env or config staging.
-- Preserve deterministic logs for registry/proxy/fork flows to keep tests and telemetry stable.
+- Treat isolation nets as mandatory when requested; fail fast on creation errors and avoid silent downgrades.
+- Roll back sidecars on startup failure and keep session-scoped cleanup idempotent.
+- Keep proxy listeners loopback/UDS-first with bounded connection counts and timeouts on both read and write paths.
+- Maintain audited env/mount allowlists; add regression tests whenever expanding forwarded env or config staging.
+- Keep README/CLI/docs aligned when adding agents or flags to avoid support drift.
 
 ## 10. Evidence Appendix
 - CLI orchestration and warnings: src/main.rs

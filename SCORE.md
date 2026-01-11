@@ -10,48 +10,52 @@
 - Assessment based on static code/doc review (src/, tests/, docs/README-testing.md, docs/README-security-architecture.md).
 
 ## 4. Findings Summary (counts per category)
-- Architecture: 1
-- Error Handling: 1
 - Operational Robustness: 2
+- Change Safety: 1
+- Documentation Gaps: 1
 - Other categories: 0
 
 Findings (IDs → severity → brief):
 
-- F1 (High, Operational Robustness): Proxy binds 0.0.0.0 on Linux by default, widening exec surface. (src/toolchain/proxy.rs:697-735)
-- F2 (Medium, Operational Robustness): Proxy spawns unbounded per-connection threads with default infinite read timeouts; slowloris DoS risk. (src/toolchain/proxy.rs:520-620, 697-770)
-- F3 (Medium, Architecture): --docker-network-isolate sets a session network for agent runs but never creates it when toolchains are disabled, leading to docker run failures/inconsistent behavior. (src/main.rs:84-130, src/docker/run.rs:1155-1182)
-- F4 (Medium, Error Handling): Chunked HTTP parsing reads declared chunk sizes into memory without bounding per-chunk size, enabling large allocations despite a 1 MiB body cap. (src/toolchain/http.rs:64-189)
+- F1 (Medium, Operational Robustness): Isolation network requests silently fall back to bridge when inspection/creation fails, erasing containment without user feedback. (src/toolchain/sidecar.rs:850-874)
+- F2 (Medium, Change Safety): Toolchain session startup errors return without rolling back already-started sidecars/networks, leaving residual containers on partial failure. (src/toolchain/sidecar.rs:1077-1188; src/toolchain_session.rs:520-545)
+- F3 (Medium, Operational Robustness): Proxy streaming uses blocking writes with no write deadlines; a slow/paused client can stall a worker thread until the socket drains despite bounded channels. (src/toolchain/proxy.rs:575-616, 1845-1995)
+- F4 (Low, Documentation Gaps): Letta agent is supported in CLI but absent from README/feature lists, reducing discoverability and support clarity. (src/cli.rs:87-140; README.md)
 
 ## 5. Scorecard (with grades)
-- Architecture & Design Quality: **72/100 (C)** — clear module boundaries, but network isolation gap and proxy exposure reduce design safety.
-- Code Quality & Maintainability: **78/100 (C)** — organized Rust crate with helpers/builders; heavy env/mount code is complex but readable.
-- Testing & Change Safety: **86/100 (B)** — extensive unit/int/e2e suites and documented lanes; gaps around new proxy/network edge cases noted above.
-- Development Ergonomics: **80/100 (B)** — strong CLI surface, previews, pnpm migration helper; some env mutation (XDG) and network-isolate behavior surprises users.
-- Reliability & Operability: **65/100 (D)** — proxy binding/timeout/connection-cap issues and missing network creation for isolated runs threaten uptime.
-- Documentation Quality: **90/100 (A)** — rich README, security architecture, testing guides, and specs.
+- Architecture & Design Quality: **78/100 (C)** — strong module seams; isolation fallback erodes security intent.
+- Code Quality & Maintainability: **82/100 (B)** — organized helpers/builders; complex flows are still readable and tested.
+- Testing & Change Safety: **86/100 (B)** — broad unit/int/e2e coverage; gaps around rollback paths and network-failure handling.
+- Development Ergonomics: **82/100 (B)** — rich CLI surface, previews, pnpm migration helper; network fallback surprises users.
+- Reliability & Operability: **72/100 (C)** — silent isolation downgrade, lack of rollback, and blocking proxy writes limit robustness.
+- Documentation Quality: **85/100 (B)** — strong docs overall; agent surface not fully reflected (Letta gap).
 
 ## 6. Overall Score
-- **76/100 (C)** — solid baseline with strong docs/tests; reliability/security liabilities in proxy binding, connection limits, and network isolation reduce the grade.
+- **79/100 (C)** — solid, well-tested base; reliability and isolation gaps plus doc drift keep the score below B.
 
 ## 7. Gap Summary
-- Proxy exposure and lack of connection limits/timeouts conflict with “containment by default.”
-- Network isolation flag is not self-contained for agent-only runs, causing failures and user surprise.
-- Chunked request parsing lacks per-chunk cap, leaving a memory DoS vector.
+- Isolation network creation failures silently downgrade to bridge, breaking containment expectations.
+- Toolchain startup failures can leave residual sidecars/networks, requiring manual cleanup.
+- Proxy streaming lacks write deadlines/backpressure handling for stalled clients.
+- Letta agent support is undocumented, leading to user confusion.
 
 ## 8. Improvement Plan Summary
-- R1 (Immediate): Default proxy to loopback/UDS, add bind-host flag, and enforce sane accept/timeout policies.
-- R2 (Short): Cap chunk sizes before buffering and reject oversized chunked bodies.
-- R3 (Short): Create/clean session network when --docker-network-isolate is used without toolchains (or block the flag in that mode) and add previews/tests.
+- R1 (Immediate): Fail closed on isolation nets—error when creation/inspect fails, surface warnings, and add regression tests.
+- R2 (Short): Track and roll back started sidecars on startup errors; add tests to assert cleanup idempotence.
+- R3 (Short): Add proxy write deadlines/nonblocking streaming plus tests for slow-consumer scenarios.
+- R4 (Short): Document Letta agent support and add a smoke example aligned with CLI surface.
 
 ## 9. Score Delta Budget
-- R1 → addresses F1, F2. Deltas: +8 Architecture & Design, +12 Reliability & Operability, +4 Testing & Change Safety. Confidence: medium. Rationale: removes remote exposure, adds timeout/backpressure, and codifies behavior in tests.
-- R2 → addresses F4. Deltas: +2 Architecture & Design, +6 Reliability & Operability, +4 Testing & Change Safety. Confidence: medium. Rationale: enforces parser bounds and adds regression coverage.
-- R3 → addresses F3. Deltas: +3 Architecture & Design, +5 Reliability & Operability, +2 Development Ergonomics. Confidence: medium. Rationale: makes network isolation atomic and user-friendly.
+- R1 → addresses F1. Deltas: +6 Architecture & Design, +8 Reliability & Operability, +3 Testing & Change Safety. Confidence: medium. Rationale: containment remains intact when isolation nets fail; adds regression coverage.
+- R2 → addresses F2. Deltas: +4 Testing & Change Safety, +5 Reliability & Operability, +2 Architecture & Design. Confidence: medium. Rationale: prevents orphaned sidecars and reduces manual cleanup.
+- R3 → addresses F3. Deltas: +3 Reliability & Operability, +3 Architecture & Design, +2 Testing & Change Safety. Confidence: medium. Rationale: write deadlines and backpressure handling reduce stalled threads and codify behavior in tests.
+- R4 → addresses F4. Deltas: +0 Architecture & Design, +2 Documentation Quality, +1 Development Ergonomics. Confidence: high. Rationale: aligns docs with shipped agents and aids support.
 
-(>50% of total delta comes from architectural/systemic reliability work: R1+R2+R3 architecture/reliability contributions dominate.)
+(>50% of total delta comes from architectural/systemic reliability work: R1–R3 target isolation, cleanup, and proxy streaming.)
 
 ## 10. Longitudinal History
-- None yet; first scorecard in this repository snapshot.
+- Previous score: 76/100 (C) — initial assessment (proxy bound 0.0.0.0, unbounded threads, chunk parsing gaps, isolation create gap).
+- Current score: 79/100 (C) — improved defaults (loopback bind, bounded connections, chunk cap) but new robustness/doc gaps remain.
 
 ## 11. Limitations
 - No runtime validation or docker-backed tests executed in this read-only session; results are static-analysis-based.
@@ -60,30 +64,34 @@ Findings (IDs → severity → brief):
 ```
 machine_readable:
   project: aifo-coder
-  overall_score: 76
+  overall_score: 79
   scores:
-    architecture_design_quality: {score: 72, grade: "C"}
-    code_quality_maintainability: {score: 78, grade: "C"}
+    architecture_design_quality: {score: 78, grade: "C"}
+    code_quality_maintainability: {score: 82, grade: "B"}
     testing_change_safety: {score: 86, grade: "B"}
-    development_ergonomics: {score: 80, grade: "B"}
-    reliability_operability: {score: 65, grade: "D"}
-    documentation_quality: {score: 90, grade: "A"}
+    development_ergonomics: {score: 82, grade: "B"}
+    reliability_operability: {score: 72, grade: "C"}
+    documentation_quality: {score: 85, grade: "B"}
   findings:
-    - {id: F1, category: Operational Robustness, severity: High, evidence: "src/toolchain/proxy.rs:697-735"}
-    - {id: F2, category: Operational Robustness, severity: Medium, evidence: "src/toolchain/proxy.rs:520-620,697-770"}
-    - {id: F3, category: Architecture, severity: Medium, evidence: "src/main.rs:84-130; src/docker/run.rs:1155-1182"}
-    - {id: F4, category: Error Handling, severity: Medium, evidence: "src/toolchain/http.rs:64-189"}
+    - {id: F1, category: Operational Robustness, severity: Medium, evidence: "src/toolchain/sidecar.rs:850-874"}
+    - {id: F2, category: Change Safety, severity: Medium, evidence: "src/toolchain/sidecar.rs:1077-1188; src/toolchain_session.rs:520-545"}
+    - {id: F3, category: Operational Robustness, severity: Medium, evidence: "src/toolchain/proxy.rs:575-616, 1845-1995"}
+    - {id: F4, category: Documentation Gaps, severity: Low, evidence: "src/cli.rs:87-140; README.md"}
   roadmap:
     - id: R1
-      targets: [F1, F2]
-      deltas: {architecture_design_quality: 8, reliability_operability: 12, testing_change_safety: 4}
+      targets: [F1]
+      deltas: {architecture_design_quality: 6, reliability_operability: 8, testing_change_safety: 3}
       confidence: medium
     - id: R2
-      targets: [F4]
-      deltas: {architecture_design_quality: 2, reliability_operability: 6, testing_change_safety: 4}
+      targets: [F2]
+      deltas: {architecture_design_quality: 2, testing_change_safety: 4, reliability_operability: 5}
       confidence: medium
     - id: R3
       targets: [F3]
-      deltas: {architecture_design_quality: 3, reliability_operability: 5, development_ergonomics: 2}
+      deltas: {architecture_design_quality: 3, reliability_operability: 3, testing_change_safety: 2}
       confidence: medium
+    - id: R4
+      targets: [F4]
+      deltas: {documentation_quality: 2, development_ergonomics: 1}
+      confidence: high
 ```
