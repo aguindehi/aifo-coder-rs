@@ -105,7 +105,7 @@ pub fn set_session_network_env(name: &str, managed: bool, create: bool, source: 
         fields(aifo_coder_network = %name, aifo_coder_verbose = %verbose)
     )
 )]
-pub(crate) fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
+pub fn ensure_network_exists(runtime: &Path, name: &str, verbose: bool) -> bool {
     let use_err = crate::color_enabled_stderr();
     // Fast path: already exists
     let exists = Command::new(runtime)

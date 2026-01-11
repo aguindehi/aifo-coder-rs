@@ -74,7 +74,8 @@ pub use lock::*;
 pub use proxy::*;
 pub use registry::*;
 pub use toolchain::sidecar::{
-    session_network_from_env, set_generated_session_network_env, set_session_network_env,
+    ensure_network_exists, session_network_from_env, set_generated_session_network_env,
+    set_session_network_env,
 };
 pub use toolchain::*;
 pub use ui::warn::{warn_print, warn_prompt_continue_or_quit};
