@@ -2221,10 +2221,10 @@ tidy-no-multiline-strings:
 	@set -e; \
 	echo ""; \
 	echo "Running tidy: forbid multi-line Rust string literals and continuation strings (repo-wide guard: src/** + tests/** + build.rs) ..."; \
-	mkdir -p build; \
+	mkdir -p target/tools; \
 	if command -v rustc >/dev/null 2>&1; then \
-	  rustc -O scripts/tidy_no_multiline_strings.rs -o build/tidy-no-multiline-strings; \
-	  ./build/tidy-no-multiline-strings; \
+	  rustc -O scripts/tidy_no_multiline_strings.rs -o target/tools/tidy-no-multiline-strings; \
+	  ./target/tools/tidy-no-multiline-strings; \
 	else \
 	  echo "Error: rustc not found; cannot run tidy-no-multiline-strings." >&2; \
 	  exit 1; \
