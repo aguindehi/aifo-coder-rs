@@ -728,10 +728,7 @@ pub fn toolexec_start_proxy(
                         };
                         let mut s = stream;
                         handle_connection(&ctx2, &mut s, &tc, &er, &rs);
-                        active_conns_inner.fetch_sub(
-                            1,
-                            std::sync::atomic::Ordering::SeqCst,
-                        );
+                        active_conns_inner.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                     });
                 }
                 let _ = fs::remove_file(&sock_path_cl);
@@ -852,10 +849,7 @@ pub fn toolexec_start_proxy(
                 };
                 let mut s = stream;
                 handle_connection(&ctx2, &mut s, &tc, &er, &rs);
-                active_conns_inner.fetch_sub(
-                    1,
-                    std::sync::atomic::Ordering::SeqCst,
-                );
+                active_conns_inner.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             });
         }
         if verbose {
