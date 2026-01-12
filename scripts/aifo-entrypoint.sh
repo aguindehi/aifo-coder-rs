@@ -78,6 +78,31 @@ is_fullscreen_agent() {
     esac
 }
 
+derive_azure_resource() {
+    if [ -n "${AZURE_RESOURCE_NAME:-}" ]; then
+        return 0
+    fi
+    for src in "${AIFO_API_BASE:-}" "${AZURE_OPENAI_ENDPOINT:-}" "${AZURE_API_BASE:-}"; do
+        [ -n "$src" ] || continue
+        host="$src"
+        host="${host#https://}"
+        host="${host#http://}"
+        host="${host%%/*}"
+        case "$host" in
+            *.openai.azure.com)
+                resource="${host%%.*}"
+                if [ -n "$resource" ]; then
+                    export AZURE_RESOURCE_NAME="$resource"
+                    return 0
+                fi
+                ;;
+            *)
+                ;;
+        esac
+    done
+    return 0
+}
+
 resolve_home() {
     home_path="$(getent passwd "$1" 2>/dev/null | cut -d: -f6)"
     if [ -z "$home_path" ]; then
@@ -530,6 +555,9 @@ trace_writability_paths() {
 mark_step "ensure-local-tree"
 ensure_local_tree
 trace_writability_paths
+
+# Derive Azure resource name if missing (supports fullscreen opencode agents).
+derive_azure_resource
 
 # Bootstrap gnupg configs
 mark_step "bootstrap-gpg"
