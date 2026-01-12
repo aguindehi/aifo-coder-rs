@@ -279,6 +279,38 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
             }
         }
     }
+    // Derive Azure resource name from provided endpoints unless already set explicitly.
+    let mut derived_resource: Option<String> = None;
+    let parse_resource = |s: &str| -> Option<String> {
+        // Try URL parse first (covers https://<resource>.openai.azure.com/).
+        if let Ok(url) = Url::parse(s) {
+            if let Some(host) = url.host_str() {
+                if host.ends_with(".openai.azure.com") {
+                    if let Some(resource) = host.split('.').next() {
+                        let res = resource.trim();
+                        if !res.is_empty() {
+                            return Some(res.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback: handle host-only inputs (e.g., "<resource>.openai.azure.com").
+        let trimmed = s
+            .trim_start_matches("https://")
+            .trim_start_matches("http://");
+        let host = trimmed.split('/').next().unwrap_or(trimmed);
+        if host.ends_with(".openai.azure.com") {
+            if let Some(resource) = host.split('.').next() {
+                let res = resource.trim();
+                if !res.is_empty() {
+                    return Some(res.to_string());
+                }
+            }
+        }
+        None
+    };
+
     if let Ok(v) = env::var("AIFO_API_BASE") {
         if !v.is_empty() {
             if !is_opencode {
@@ -288,28 +320,32 @@ fn collect_env_flags(agent: &str, uid_opt: Option<u32>) -> Vec<OsString> {
                 push_env_kv(&mut env_flags, "AZURE_API_BASE", &v);
                 push_env_kv(&mut env_flags, "OPENAI_API_TYPE", "azure");
             }
-
-            // Derive AZURE_RESOURCE_NAME from AIFO_API_BASE when it looks like an Azure OpenAI endpoint,
-            // e.g. https://<resource>.openai.azure.com/.
-            //
-            // Do not override an explicit host-provided AZURE_RESOURCE_NAME.
-            if env::var("AZURE_RESOURCE_NAME")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .is_none()
-            {
-                if let Ok(url) = Url::parse(&v) {
-                    if let Some(host) = url.host_str() {
-                        if host.ends_with(".openai.azure.com") {
-                            if let Some(resource) = host.split('.').next() {
-                                if !resource.trim().is_empty() {
-                                    push_env_kv(&mut env_flags, "AZURE_RESOURCE_NAME", resource);
-                                }
-                            }
-                        }
-                    }
-                }
+            if derived_resource.is_none() {
+                derived_resource = parse_resource(&v);
             }
+        }
+    }
+    if derived_resource.is_none() {
+        if let Ok(v) = env::var("AZURE_OPENAI_ENDPOINT") {
+            if !v.is_empty() {
+                derived_resource = parse_resource(&v);
+            }
+        }
+    }
+    if derived_resource.is_none() {
+        if let Ok(v) = env::var("AZURE_API_BASE") {
+            if !v.is_empty() {
+                derived_resource = parse_resource(&v);
+            }
+        }
+    }
+    if env::var("AZURE_RESOURCE_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .is_none()
+    {
+        if let Some(resource) = derived_resource {
+            push_env_kv(&mut env_flags, "AZURE_RESOURCE_NAME", &resource);
         }
     }
     if let Ok(v) = env::var("AIFO_API_VERSION") {

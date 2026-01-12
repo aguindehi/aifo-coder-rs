@@ -168,7 +168,7 @@ ARG RUNTIME_USER
 ARG RUNTIME_UID
 ARG RUNTIME_GID
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl ripgrep dumb-init gosu procps emacs-nox vim nano mg nvi libnss-wrapper file build-essential; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg gnupg-utils gnupg-agent gpg-agent pinentry-curses ca-certificates curl ripgrep dumb-init gosu procps emacs-nox vim nano mg nvi libnss-wrapper file build-essential; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
 RUN set -eux; \
     if ! getent group "${RUNTIME_USER}" >/dev/null 2>&1; then \
         groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
@@ -583,7 +583,7 @@ ARG RUNTIME_USER
 ARG RUNTIME_UID
 ARG RUNTIME_GID
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg pinentry-curses ca-certificates curl dumb-init gosu mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
+RUN --mount=type=secret,id=migros_root_ca,target=/run/secrets/migros_root_ca,required=false sh -lc 'set -e; if [ -f /run/secrets/migros_root_ca ]; then install -m 0644 /run/secrets/migros_root_ca /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; fi; apt-get update && apt-get -o APT::Keep-Downloaded-Packages=false install -y --no-install-recommends git gnupg gnupg-utils gnupg-agent gpg-agent pinentry-curses ca-certificates curl dumb-init gosu mg nvi libnss-wrapper file; rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/locale/*;'
 RUN set -eux; \
     if ! getent group "${RUNTIME_USER}" >/dev/null 2>&1; then \
         groupadd -g "${RUNTIME_GID}" "${RUNTIME_USER}" || groupadd "${RUNTIME_USER}"; \
