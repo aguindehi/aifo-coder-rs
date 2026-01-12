@@ -652,6 +652,7 @@ pub fn run_doctor(verbose: bool) {
         );
 
         // Show env overrides presence
+        eprintln!();
         eprintln!(
             "  {:<label_w$} {:<name_w$} {}",
             "environment:",
@@ -695,6 +696,53 @@ pub fn run_doctor(verbose: bool) {
             .map(|o| String::from_utf8_lossy(&o.stdout).contains("\nfpr:"))
             .unwrap_or(false);
 
+        // GPG agent capabilities/config
+        let gnupg_home = std::env::var("GNUPGHOME")
+            .ok()
+            .filter(|p| !p.is_empty())
+            .unwrap_or_else(|| home.join(".gnupg").display().to_string());
+        let agent_conf = PathBuf::from(&gnupg_home).join("gpg-agent.conf");
+        let agent_conf_str = fs::read_to_string(&agent_conf).unwrap_or_default();
+        let agent_conf_found = agent_conf.exists();
+        let agent_conf_disp = if agent_conf_found {
+            agent_conf.display().to_string()
+        } else {
+            "(missing)".to_string()
+        };
+        let gpg_conf = PathBuf::from(&gnupg_home).join("gpg.conf");
+        let gpg_conf_str = fs::read_to_string(&gpg_conf).unwrap_or_default();
+        let gpg_conf_found = gpg_conf.exists();
+        let gpg_conf_disp = if gpg_conf_found {
+            gpg_conf.display().to_string()
+        } else {
+            "(missing)".to_string()
+        };
+        let has_allow_loopback = agent_conf_str
+            .lines()
+            .any(|l| l.trim_start().starts_with("allow-loopback-pinentry"));
+        let has_allow_preset = agent_conf_str
+            .lines()
+            .any(|l| l.trim_start().starts_with("allow-preset-passphrase"));
+        let gpg_pinentry_loopback = gpg_conf_str
+            .lines()
+            .any(|l| l.trim_start().starts_with("pinentry-mode loopback"));
+        let preset_available = {
+            let candidate_bins = [
+                "gpg-preset-passphrase",
+                "/usr/lib/gnupg/gpg-preset-passphrase",
+                "/usr/lib/gnupg2/gpg-preset-passphrase",
+            ];
+            candidate_bins.iter().any(|bin| {
+                Command::new(bin)
+                    .arg("--version")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            })
+        };
+
         let yesno = |b: bool| if b { "yes" } else { "no" };
         let sign_disp = |v: &Option<String>| {
             v.as_ref()
@@ -710,7 +758,7 @@ pub fn run_doctor(verbose: bool) {
                 })
                 .unwrap_or_else(|| "(unset)".to_string())
         };
-
+        eprintln!();
         eprintln!(
             "  {:<label_w$} {:<name_w$} {}",
             "git signing:",
@@ -719,6 +767,7 @@ pub fn run_doctor(verbose: bool) {
             label_w = label_w,
             name_w = name_w
         );
+        eprintln!();
         eprintln!(
             "  {:<label_w$} {:<name_w$} {}",
             "",
@@ -748,6 +797,7 @@ pub fn run_doctor(verbose: bool) {
             .as_deref()
             .map(blue)
             .unwrap_or_else(|| "(unset)".to_string());
+        eprintln!();
         eprintln!(
             "  {:<label_w$} {:<name_w$} {}",
             "",
@@ -761,6 +811,88 @@ pub fn run_doctor(verbose: bool) {
             "",
             "secret keys available",
             blue(yesno(secret_keys_available)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "gpg-agent config file",
+            blue(&agent_conf_disp),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "gpg.conf",
+            blue(&gpg_conf_disp),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!();
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "allow-loopback-pinentry",
+            blue(yesno(has_allow_loopback)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "allow-preset-passphrase",
+            blue(yesno(has_allow_preset)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "pinentry-mode loopback",
+            blue(yesno(gpg_pinentry_loopback)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "gpg-preset-passphrase",
+            blue(yesno(preset_available)),
+            label_w = label_w,
+            name_w = name_w
+        );
+        // Container-enforced defaults (entrypoint) for fullscreen agents
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "container: allow-loopback-pinentry",
+            blue("yes (enforced)"),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "container: allow-preset-passphrase",
+            blue("yes (enforced)"),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "container: pinentry-mode loopback",
+            blue("yes (enforced)"),
+            label_w = label_w,
+            name_w = name_w
+        );
+        eprintln!(
+            "  {:<label_w$} {:<name_w$} {}",
+            "",
+            "container: gpg-preset-passphrase",
+            blue("yes (via /usr/lib/gnupg{,2})"),
             label_w = label_w,
             name_w = name_w
         );
@@ -788,6 +920,42 @@ pub fn run_doctor(verbose: bool) {
             if !desired_signing && sign_eff_true {
                 eprintln!("    tip: Signing disabled by AIFO_CODER_GIT_SIGN=0 but repo enables it. Disable in repo if undesired:");
                 eprintln!("    tip:   git config commit.gpgsign false");
+            }
+            if sign_effective
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
+                && !preset_available
+            {
+                eprintln!("    tip: gpg-preset-passphrase missing; install package 'gnupg-utils' so caching works without pinentry.");
+            }
+            if sign_effective
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
+                && !(has_allow_loopback && has_allow_preset)
+            {
+                eprintln!("    tip: gpg-agent.conf should include allow-loopback-pinentry and allow-preset-passphrase for non-interactive signing.");
+                eprintln!(
+                    "    tip:   echo \"allow-loopback-pinentry\" >> \"{}/gpg-agent.conf\"",
+                    gnupg_home
+                );
+                eprintln!(
+                    "    tip:   echo \"allow-preset-passphrase\" >> \"{}/gpg-agent.conf\"",
+                    gnupg_home
+                );
+            }
+            if sign_effective
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
+                && !gpg_pinentry_loopback
+            {
+                eprintln!("    tip: gpg.conf should set pinentry-mode loopback for non-interactive signing (fullscreen agents).");
+                eprintln!(
+                    "    tip:   echo \"pinentry-mode loopback\" >> \"{}/gpg.conf\"",
+                    gnupg_home
+                );
             }
         }
     } else {

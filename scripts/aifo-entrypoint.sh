@@ -115,6 +115,20 @@ maybe_chmod() {
     fi
 }
 
+find_gpg_preset_bin() {
+    if command -v gpg-preset-passphrase >/dev/null 2>&1; then
+        command -v gpg-preset-passphrase
+        return 0
+    fi
+    for p in /usr/lib/gnupg/gpg-preset-passphrase /usr/lib/gnupg2/gpg-preset-passphrase; do
+        if [ -x "$p" ]; then
+            printf '%s' "$p"
+            return 0
+        fi
+    done
+    return 1
+}
+
 ensure_gpg_tty() {
     if [ -t 0 ] || [ -t 1 ]; then
         tty_path="$(tty 2>/dev/null || printf '')"
@@ -138,6 +152,15 @@ refresh_gpg_agent_tty() {
     fi
     gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1 || true
     gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
+}
+
+restart_gpg_agent() {
+    if command -v gpgconf >/dev/null 2>&1; then
+        gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+        gpgconf --launch gpg-agent >/dev/null 2>&1 || true
+        return
+    fi
+    gpg-agent --homedir "$GNUPGHOME" --daemon --allow-loopback-pinentry --allow-preset-passphrase >/dev/null 2>&1 || true
 }
 
 copy_with_mode() {
@@ -208,6 +231,21 @@ gpg_keygrip_for_signing() {
     printf '%s\n' "$listing" | awk -F: '/^grp/ { print $10; exit }'
 }
 
+gpg_keygrips_for_signing() {
+    key_filter="$1"
+    if [ -n "$key_filter" ]; then
+        listing="$(gpg --list-secret-keys --with-colons --with-keygrip "$key_filter" 2>/dev/null || true)"
+    else
+        listing="$(gpg --list-secret-keys --with-colons --with-keygrip 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$listing" | awk -F: '/^grp/ { print $10 }'
+}
+
+gpg_all_keygrips() {
+    listing="$(gpg --list-secret-keys --with-colons --with-keygrip 2>/dev/null || true)"
+    printf '%s\n' "$listing" | awk -F: '/^grp/ { print $10 }'
+}
+
 maybe_preset_gpg_passphrase() {
     signing_key="$1"
     passphrase=""
@@ -221,22 +259,41 @@ maybe_preset_gpg_passphrase() {
     if [ -z "$passphrase" ]; then
         return 1
     fi
-    if ! command -v gpg-preset-passphrase >/dev/null 2>&1; then
+    preset_bin="$(find_gpg_preset_bin 2>/dev/null || true)"
+    if [ -z "$preset_bin" ]; then
         return 1
     fi
-    keygrip="$(gpg_keygrip_for_signing "$signing_key")"
-    if [ -z "$keygrip" ]; then
+    grips="$(gpg_keygrips_for_signing "$signing_key" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+    if [ -z "$grips" ]; then
+        grips="$(gpg_all_keygrips | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+    fi
+    if [ -z "$grips" ]; then
         return 1
     fi
-    if printf '%s' "$passphrase" | gpg-preset-passphrase --preset "$keygrip" >/dev/null 2>&1; then
+    restart_gpg_agent
+    success=1
+    last_status=1
+    last_error=""
+    for grip in $grips; do
+        output="$(printf '%s\n' "$passphrase" | "$preset_bin" --homedir "$GNUPGHOME" --preset "$grip" 2>&1)"
+        status=$?
+        if [ "$status" -eq 0 ]; then
+            success=0
+            last_status=0
+            continue
+        fi
+        last_status="$status"
+        [ -n "$output" ] && last_error="$output"
+    done
+    unset passphrase
+    if [ "$success" = "0" ]; then
         printf '%s: gpg: passphrase cached via gpg-preset-passphrase.\n' "$log_prefix" >&2
-        unset passphrase
         export AIFO_GPG_PRIMED=1
         return 0
     fi
-    status=$?
-    unset passphrase
-    printf '%s: warning: gpg-preset-passphrase failed (exit %s); falling back to pinentry.\n' "$log_prefix" "$status" >&2
+    msg="$last_status"
+    [ -n "$last_error" ] && msg="$msg: $last_error"
+    printf '%s: warning: gpg-preset-passphrase failed (exit %s); falling back to pinentry.\n' "$log_prefix" "$msg" >&2
     return 1
 }
 
@@ -258,12 +315,21 @@ prime_gpg_agent_if_requested() {
     fi
 
     signing_key="$(detect_signing_key)"
+    preset_available=0
+    preset_bin="$(find_gpg_preset_bin 2>/dev/null || true)"
+    if [ -n "$preset_bin" ]; then
+        preset_available=1
+    fi
 
     if is_fullscreen_agent; then
         # Fullscreen agents (e.g., opencode/codex) must never rely on pinentry during runtime.
         # Obtain the passphrase from env/file or via a single interactive prompt here,
         # then supply it via AIFO_GPG_PASSPHRASE so the aifo-gpg-wrapper can always
         # use loopback mode without invoking pinentry.
+        if [ "$preset_available" != "1" ]; then
+            printf '%s: error: gpg-preset-passphrase missing. Fullscreen agents require it to cache the passphrase non-interactively. Rebuild the image so gnupg-utils/gpg-agent is installed.\n' "$log_prefix" >&2
+            exit 1
+        fi
         if [ -z "${AIFO_GPG_PASSPHRASE:-}" ] && [ -n "${AIFO_GPG_PASSPHRASE_FILE:-}" ] && [ -r "$AIFO_GPG_PASSPHRASE_FILE" ]; then
             AIFO_GPG_PASSPHRASE="$(head -n1 "$AIFO_GPG_PASSPHRASE_FILE" 2>/dev/null | tr -d '\r\n')"
             export AIFO_GPG_PASSPHRASE
@@ -294,8 +360,28 @@ prime_gpg_agent_if_requested() {
             export AIFO_GPG_PASSPHRASE
         fi
 
-        # Optional: preset into gpg-agent so loopback can reuse it without pinentry.
-        maybe_preset_gpg_passphrase "$signing_key" || true
+        # Require preset to succeed (no pinentry allowed in fullscreen). Cache for all secret keys
+        # to ensure whichever signing key is used later is already primed.
+        if ! maybe_preset_gpg_passphrase ""; then
+            printf '%s: error: gpg-preset-passphrase failed; cannot cache passphrase for fullscreen agent.\n' "$log_prefix" >&2
+            exit 1
+        fi
+
+        # Sanity-check that caching worked by performing a loopback sign without providing the passphrase.
+        set -- gpg --batch --yes --pinentry-mode loopback --armor --sign --detach-sig --output /dev/null
+        if [ -n "$signing_key" ]; then
+            set -- "$@" --local-user "$signing_key" --default-key "$signing_key"
+        fi
+        set -- "$@" /dev/null
+        if ! "$@"; then
+            status=$?
+            [ "$status" -eq 0 ] && status=1
+            printf '%s: error: gpg priming verification failed; cached passphrase not usable (exit %s).\n' "$log_prefix" "$status" >&2
+            printf '%s: hint: ensure allow-preset-passphrase is in gpg-agent.conf and gnupg-utils/gpg-agent is installed.\n' "$log_prefix" >&2
+            exit "$status"
+        fi
+
+        printf '%s: gpg: passphrase cached via gpg-preset-passphrase.\n' "$log_prefix" >&2
         export AIFO_GPG_PRIMED=1
         return
     fi
@@ -406,6 +492,11 @@ ensure_conf_line "$conf" "allow-loopback-pinentry" "allow-loopback-pinentry"
 ensure_conf_line "$conf" "allow-preset-passphrase" "allow-preset-passphrase"
 ensure_conf_line "$conf" "default-cache-ttl " "default-cache-ttl ${cache_ttl}"
 ensure_conf_line "$conf" "max-cache-ttl " "max-cache-ttl ${max_cache_ttl}"
+gpg_conf="$GNUPGHOME/gpg.conf"
+if is_fullscreen_agent; then
+    # Force loopback for all gpg invocations in fullscreen agents so cached passphrases are reused.
+    ensure_conf_line "$gpg_conf" "pinentry-mode " "pinentry-mode loopback"
+fi
 
 if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
     export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
@@ -445,12 +536,8 @@ mark_step "bootstrap-gpg"
 ensure_gpg_tty || unset GPG_TTY || true
 unset GPG_AGENT_INFO || true
 if [ "${AIFO_GPG_PRIMED:-0}" != "1" ]; then
-    if command -v gpgconf >/dev/null 2>&1; then
-        gpgconf --kill gpg-agent >/dev/null 2>&1 || true
-        gpgconf --launch gpg-agent >/dev/null 2>&1 || true
-    else
-        gpg-agent --daemon >/dev/null 2>&1 || true
-    fi
+    # Launch gpg-agent after writing config so allow-preset-passphrase is honored for fullscreen agents.
+    restart_gpg_agent
 fi
 refresh_gpg_agent_tty
 
