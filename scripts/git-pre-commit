@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$repo_root" ]; then
+  echo "git-pre-commit: not inside a git repository; skipping." >&2
+  exit 0
+fi
+
+cd "$repo_root"
+
+# Prefer repo-specific config, fall back to global.
+name="$(git config --get user.name 2>/dev/null || true)"
+if [ -z "$name" ]; then
+  name="$(git config --global --get user.name 2>/dev/null || true)"
+fi
+
+email="$(git config --get user.email 2>/dev/null || true)"
+if [ -z "$email" ]; then
+  email="$(git config --global --get user.email 2>/dev/null || true)"
+fi
+
+valid_email_regex='^[^@[:space:]]+@(mgb\.ch|datacore\.ch)$'
+valid_name_regex='^[^[:space:]]+[[:space:]]+[^[:space:]]+'
+
+if [ -z "$email" ] || ! printf '%s\n' "$email" | grep -Eq "$valid_email_regex"; then
+  echo "git-pre-commit: invalid user.email; expected *@mgb.ch or *@datacore.ch (current: '${email:-unset}')." >&2
+  exit 1
+fi
+
+if [ -z "$name" ] || ! printf '%s\n' "$name" | grep -Eq "$valid_name_regex"; then
+  echo "git-pre-commit: invalid user.name; expected 'First Last' (at least two words)." >&2
+  exit 1
+fi
+
+gpgsign="$(git config --bool commit.gpgsign 2>/dev/null || true)"
+if [ -z "$gpgsign" ]; then
+  gpgsign="$(git config --bool --global commit.gpgsign 2>/dev/null || true)"
+fi
+if [ "$gpgsign" != "true" ]; then
+  echo "git-pre-commit: commit signing is not enabled (set commit.gpgsign=true in repo or globally)." >&2
+  exit 1
+fi
+
+signing_key="$(git config --get user.signingkey 2>/dev/null || true)"
+if [ -z "$signing_key" ]; then
+  signing_key="$(git config --global --get user.signingkey 2>/dev/null || true)"
+fi
+if [ -z "$signing_key" ]; then
+  echo "git-pre-commit: user.signingkey is not set (configure your signing key fingerprint in repo or globally)." >&2
+  exit 1
+fi
+
+if ! command -v gpg >/dev/null 2>&1; then
+  echo "git-pre-commit: gpg is not available in PATH; cannot verify signing key." >&2
+  exit 1
+fi
+
+if ! gpg --list-secret-keys --with-colons "$signing_key" 2>/dev/null | grep -q '^sec'; then
+  echo "git-pre-commit: signing key '${signing_key}' not found among secret keys; import it or adjust user.signingkey." >&2
+  exit 1
+fi
+
+exit 0
