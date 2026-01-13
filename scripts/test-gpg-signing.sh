@@ -41,6 +41,27 @@ fi
 AGENTS="${AIFO_TEST_AGENTS:-opencode codex crush aider openhands plandex}"
 PASSPHRASE="${AIFO_TEST_GPG_PASSPHRASE:-test-passphrase}"
 
+# Seed a test GNUPGHOME on the host (temp) to mount into containers so entrypoints can prime.
+seed_gnupg="$tmp_root/seed-gnupg"
+mkdir -p "$seed_gnupg"
+chmod 700 "$seed_gnupg"
+cat >"$seed_gnupg/gpg-agent.conf" <<EOF
+allow-loopback-pinentry
+allow-preset-passphrase
+pinentry-program /usr/bin/pinentry-curses
+EOF
+cat >"$seed_gnupg/gpg.conf" <<EOF
+pinentry-mode loopback
+EOF
+SEED_UID="Test User <test@mgb.ch>"
+GNUPGHOME="$seed_gnupg" gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" --quick-generate-key "$SEED_UID" ed25519 sign 0
+seed_fpr="$(GNUPGHOME="$seed_gnupg" gpg --batch --with-colons --list-secret-keys "$SEED_UID" | awk -F: '$1=="fpr"{print $10; exit}')"
+seed_grip="$(GNUPGHOME="$seed_gnupg" gpg --batch --with-colons --with-keygrip --list-secret-keys "$SEED_UID" | awk -F: '$1=="grp"{print $10; exit}')"
+if [ -z "$seed_fpr" ] || [ -z "$seed_grip" ]; then
+  echo "test-gpg-signing: failed to seed test key" >&2
+  exit 1
+fi
+
 is_fullscreen() {
   case "$1" in
     opencode|opencode-slim|codex|codex-slim|crush|crush-slim) return 0 ;;
@@ -69,6 +90,11 @@ run_agent() {
     -e XDG_DATA_HOME=/tmp/home/.local/share \
     -e XDG_CACHE_HOME=/tmp/home/.cache \
     -e AIFO_AGENT_NAME="$agent" \
+    -e AIFO_GPG_REQUIRE_PRIME=1 \
+    -e AIFO_GPG_PASSPHRASE="$PASSPHRASE" \
+    -e AIFO_GPG_CACHE_TTL_SECONDS=43200 \
+    -e AIFO_GPG_CACHE_MAX_TTL_SECONDS=172800 \
+    -v "$seed_gnupg":/home/coder/.gnupg \
     -e TEST_PASSPHRASE="$PASSPHRASE" \
     "$image" /bin/sh -eu <<'EOS'
 home="$HOME"
@@ -106,29 +132,35 @@ if [ -z "$preset_bin" ]; then
   exit 1
 fi
 
-cat >"$gnupg/gpg-agent.conf" <<EOF
-allow-loopback-pinentry
-allow-preset-passphrase
-pinentry-program /usr/bin/pinentry-curses
-default-cache-ttl 21600
-max-cache-ttl 86400
-log-file /tmp/gpg-agent.log
-EOF
-cat >"$gnupg/gpg.conf" <<EOF
-pinentry-mode loopback
-EOF
-chmod 600 "$gnupg/gpg-agent.conf" "$gnupg/gpg.conf" || true
+need_line() {
+  file="$1"
+  pat="$2"
+  if ! grep -q "$pat" "$file" 2>/dev/null; then
+    echo "missing config '$pat' in $file" >&2
+    exit 1
+  fi
+}
 
-gpgconf --kill gpg-agent >/dev/null 2>&1 || true
-gpgconf --launch gpg-agent >/dev/null 2>&1 || true
+need_line "$gnupg/gpg-agent.conf" "^allow-loopback-pinentry"
+need_line "$gnupg/gpg-agent.conf" "^allow-preset-passphrase"
+need_line "$gnupg/gpg-agent.conf" "^pinentry-program"
+if [ -n "${AIFO_AGENT_NAME:-}" ]; then
+  case "$AIFO_AGENT_NAME" in
+    opencode|opencode-slim|codex|codex-slim|crush|crush-slim)
+      need_line "$gnupg/gpg.conf" "^pinentry-mode loopback"
+      ;;
+  esac
+fi
 
-uid="Test User <test@mgb.ch>"
-gpg --batch --yes --pinentry-mode loopback --passphrase "$pass" --quick-generate-key "$uid" ed25519 sign 0
+if [ ! -S "$gnupg/S.gpg-agent" ]; then
+  echo "gpg-agent socket missing: $gnupg/S.gpg-agent" >&2
+  exit 1
+fi
 
-fpr="$(gpg --batch --with-colons --list-secret-keys "$uid" | awk -F: '$1=="fpr"{print $10; exit}')"
-grip="$(gpg --batch --with-colons --with-keygrip --list-secret-keys "$uid" | awk -F: '$1=="grp"{print $10; exit}')"
+fpr="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1=="fpr"{print $10; exit}')"
+grip="$(gpg --batch --with-colons --with-keygrip --list-secret-keys | awk -F: '$1=="grp"{print $10; exit}')"
 if [ -z "$fpr" ] || [ -z "$grip" ]; then
-  echo "failed to obtain key fingerprint/keygrip" >&2
+  echo "no secret key available after seed mount" >&2
   exit 1
 fi
 
@@ -157,7 +189,7 @@ cd "$repo"
 git init -q
 echo hello > file.txt
 git add file.txt
-git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fpr" -c commit.gpgsign=true -c gpg.program=gpg commit -qm "signed commit"
+git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fpr" -c commit.gpgsign=true commit -qm "signed commit"
 EOS
 }
 
