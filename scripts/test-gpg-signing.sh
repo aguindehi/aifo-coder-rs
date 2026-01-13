@@ -70,7 +70,7 @@ run_agent() {
     -e XDG_CACHE_HOME=/tmp/home/.cache \
     -e AIFO_AGENT_NAME="$agent" \
     -e TEST_PASSPHRASE="$PASSPHRASE" \
-    "$image" /bin/sh -euo pipefail <<'EOS'
+    "$image" /bin/sh -eu <<'EOS'
 home="$HOME"
 gnupg="$GNUPGHOME"
 pass="$TEST_PASSPHRASE"
