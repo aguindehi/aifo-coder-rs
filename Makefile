@@ -710,7 +710,7 @@ help: banner
 	@echo "  test-proxy-errors ........... Run proxy error semantics tests (integration)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
-	@echo "  test-gpg-signing ............ Run GPG signing harness in isolated HOME (no side effects)"
+	@echo "  test-gpg-signing ............ Run GPG signing e2e (isolated temp HOME; ignored by default)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
@@ -2636,7 +2636,23 @@ test-toolchain-cpp:
 
 .PHONY: test-gpg-signing
 test-gpg-signing:
-	@./scripts/test-gpg-signing.sh
+	@set -e; \
+	echo "Running GPG signing e2e (ignored by default) ..."; \
+	if ! command -v cargo >/dev/null 2>&1; then \
+	  echo "Error: cargo not found; cannot run tests." >&2; \
+	  exit 1; \
+	fi; \
+	if ! cargo nextest -V >/dev/null 2>&1; then \
+	  echo "cargo-nextest not found; installing with 'cargo install cargo-nextest --locked' ..."; \
+	  cargo install cargo-nextest --locked; \
+	fi; \
+	if [ "${AIFO_CODER_TEST_DISABLE_DOCKER:-0}" = "1" ] || ! command -v docker >/dev/null 2>&1; then \
+	  echo "docker not available; skipping gpg signing e2e."; \
+	  exit 0; \
+	fi; \
+	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
+	  cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_gpg_signing$$/)' $(ARGS)
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
