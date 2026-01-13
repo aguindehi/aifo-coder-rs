@@ -31,6 +31,7 @@
 - Keep commits focused; separate refactors from behavioral changes. Link relevant specs/issues in PR descriptions.
 - PRs should list which targets ran (`make check`/`make test`), mention platform (Linux/macOS/Windows), and include logs or screenshots when CLI output changes.
 - Automatically propose to commit the changes done when finished.
+- Never re-configure git user.name nor user.email!
 
 ## Environment
 
