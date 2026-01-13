@@ -52,6 +52,8 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
 fn seed_gpg(root: &Path, passphrase: &str) -> std::io::Result<PathBuf> {
     let gnupg = root.join("seed-gnupg");
     fs::create_dir_all(&gnupg)?;
+    #[cfg(unix)]
+    let _ = fs::set_permissions(&gnupg, fs::Permissions::from_mode(0o700));
     fs::write(
         gnupg.join("gpg-agent.conf"),
         b"allow-loopback-pinentry\nallow-preset-passphrase\npinentry-program /usr/bin/pinentry-curses\n",
@@ -216,7 +218,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             "-e",
             "HOME=/home/coder",
             "-e",
-            "AIFO_RUNTIME_USER=root",
+            "AIFO_RUNTIME_USER=coder",
             "-e",
             "GNUPGHOME=/home/coder/.gnupg",
             "-e",
