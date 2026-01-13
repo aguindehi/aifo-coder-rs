@@ -85,9 +85,26 @@ require_bin() {
   fi
 }
 
-for b in gpg gpg-agent gpg-preset-passphrase pinentry-curses git; do
+for b in gpg gpg-agent pinentry-curses git; do
   require_bin "$b"
 done
+
+preset_bin=""
+if command -v gpg-preset-passphrase >/dev/null 2>&1; then
+  preset_bin="$(command -v gpg-preset-passphrase)"
+fi
+if [ -z "$preset_bin" ]; then
+  for p in /usr/lib/gnupg/gpg-preset-passphrase /usr/lib/gnupg2/gpg-preset-passphrase; do
+    if [ -x "$p" ]; then
+      preset_bin="$p"
+      break
+    fi
+  done
+fi
+if [ -z "$preset_bin" ]; then
+  echo "missing binary: gpg-preset-passphrase" >&2
+  exit 1
+fi
 
 cat >"$gnupg/gpg-agent.conf" <<EOF
 allow-loopback-pinentry
@@ -115,7 +132,7 @@ if [ -z "$fpr" ] || [ -z "$grip" ]; then
   exit 1
 fi
 
-if printf '%s\n' "$pass" | gpg-preset-passphrase --homedir "$gnupg" --preset "$grip" >/dev/null 2>&1; then
+if printf '%s\n' "$pass" | "$preset_bin" --homedir "$gnupg" --preset "$grip" >/dev/null 2>&1; then
   :
 else
   echo "gpg-preset-passphrase failed" >&2
