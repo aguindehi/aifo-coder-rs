@@ -12,16 +12,6 @@ fn docker_available() -> bool {
     aifo_coder::container_runtime_path().is_ok()
 }
 
-fn host_gpg_available() -> bool {
-    Command::new("gpg")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
 fn image_present(image: &str) -> bool {
     Command::new("docker")
         .args(["image", "inspect", image])
@@ -49,42 +39,6 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn seed_gpg(root: &Path, passphrase: &str) -> std::io::Result<PathBuf> {
-    let gnupg = root.join("seed-gnupg");
-    fs::create_dir_all(&gnupg)?;
-    #[cfg(unix)]
-    let _ = fs::set_permissions(&gnupg, fs::Permissions::from_mode(0o700));
-    fs::write(
-        gnupg.join("gpg-agent.conf"),
-        b"allow-loopback-pinentry\nallow-preset-passphrase\npinentry-program /usr/bin/pinentry-curses\n",
-    )?;
-    fs::write(gnupg.join("gpg.conf"), b"pinentry-mode loopback\n")?;
-
-    let status = Command::new("gpg")
-        .env("GNUPGHOME", &gnupg)
-        .args([
-            "--batch",
-            "--yes",
-            "--pinentry-mode",
-            "loopback",
-            "--passphrase",
-            passphrase,
-            "--quick-generate-key",
-            "Test User <test@mgb.ch>",
-            "ed25519",
-            "sign",
-            "0",
-        ])
-        .status()?;
-    if !status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "failed to seed gpg key",
-        ));
-    }
-    Ok(gnupg)
-}
-
 fn fullscreen(agent: &str) -> bool {
     matches!(
         agent,
@@ -97,10 +51,6 @@ fn fullscreen(agent: &str) -> bool {
 fn e2e_gpg_signing_across_agents() {
     if !docker_available() {
         eprintln!("skipping: docker not available");
-        return;
-    }
-    if !host_gpg_available() {
-        eprintln!("skipping: host gpg not available to seed test key");
         return;
     }
 
@@ -131,9 +81,6 @@ fn e2e_gpg_signing_across_agents() {
     }
 
     let passphrase = "test-passphrase";
-    let seed_dir = seed_gpg(root, passphrase).expect("seed gpg");
-    #[cfg(unix)]
-    let _ = std::fs::set_permissions(&seed_dir, std::fs::Permissions::from_mode(0o700));
 
     let agents = vec![
         "opencode",
@@ -201,32 +148,42 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             continue;
         }
 
-        // Per-agent GNUPGHOME (copy seeded key) to avoid cross-agent socket reuse.
+        // Per-agent GNUPGHOME (seeded inside the image as coder).
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
-        copy_dir(&seed_dir, &agent_seed).expect("copy seed gnupg");
-        // Ensure perms are acceptable to gpg inside the container.
         #[cfg(unix)]
         let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o700));
-        // Normalize ownership to coder (uid/gid 1001) inside the bind so entrypoint sees the host GNUPGHOME.
-        let chown_status = Command::new("docker")
+        let prep_status = Command::new("docker")
             .args([
                 "run",
                 "--rm",
                 "--user",
-                "root",
+                "1001:1001",
+                "-e",
+                "HOME=/home/coder",
+                "-e",
+                "GNUPGHOME=/home/coder/.gnupg-host",
                 "-v",
-                &format!("{}:/seed", agent_seed.display()),
+                &format!("{}:/home/coder/.gnupg-host", agent_seed.display()),
                 &image,
                 "sh",
-                "-c",
-                "chown -R 1001:1001 /seed && chmod -R go-rwx /seed",
+                "-lc",
+                &format!(
+                    "set -e; mkdir -p \"$GNUPGHOME\"; chmod 700 \"$GNUPGHOME\"; \
+                     echo 'allow-loopback-pinentry' >\"$GNUPGHOME/gpg-agent.conf\"; \
+                     echo 'allow-preset-passphrase' >>\"$GNUPGHOME/gpg-agent.conf\"; \
+                     echo 'pinentry-program /usr/bin/pinentry-curses' >>\"$GNUPGHOME/gpg-agent.conf\"; \
+                     echo 'pinentry-mode loopback' >\"$GNUPGHOME/gpg.conf\"; \
+                     gpg --batch --yes --pinentry-mode loopback --passphrase {pass} --quick-generate-key 'Test User <test@mgb.ch>' ed25519 sign 0",
+                    pass = passphrase
+                ),
             ])
             .status()
-            .expect("docker run chown");
-        if !chown_status.success() {
-            panic!("failed to chown seeded gnupg for agent={agent}");
-        }
+            .expect("docker run prep");
+        assert!(
+            prep_status.success(),
+            "failed to prep seed gnupg for agent={agent}"
+        );
 
         let mut cmd = Command::new("docker");
         cmd.env("DOCKER_CONFIG", &docker_cfg_dst);
