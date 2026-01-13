@@ -1,5 +1,7 @@
 use std::env;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -200,6 +202,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         copy_dir(&seed_dir, &agent_seed).expect("copy seed gnupg");
         // Ensure perms are acceptable to gpg inside the container.
+        #[cfg(unix)]
         let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o700));
 
         let mut cmd = Command::new("docker");
