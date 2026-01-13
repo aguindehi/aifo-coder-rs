@@ -163,7 +163,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         #[cfg(unix)]
-        let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o777));
+        let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o700));
         let prep_status = Command::new("docker")
             .args([
                 "run",
@@ -173,9 +173,9 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
                 "-e",
                 "HOME=/home/coder",
                 "-e",
-                "GNUPGHOME=/home/coder/.gnupg-host",
+                "GNUPGHOME=/home/coder/.gnupg-host-writable",
                 "-v",
-                &format!("{}:/home/coder/.gnupg-host", agent_seed.display()),
+                &format!("{}:/home/coder/.gnupg-host-writable", agent_seed.display()),
                 &image,
                 "sh",
                 "-lc",
@@ -224,7 +224,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         }
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg-host", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg-host:ro", agent_seed.display()),
             &image,
             "sh",
             "-lc",
