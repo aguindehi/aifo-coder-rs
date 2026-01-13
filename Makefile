@@ -2652,7 +2652,7 @@ test-gpg-signing:
 	fi; \
 	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 \
 	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
-	  cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_gpg_signing$$/)' $(ARGS)
+	  cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_gpg_signing_across_agents$$/)' $(ARGS)
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
