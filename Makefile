@@ -710,6 +710,7 @@ help: banner
 	@echo "  test-proxy-errors ........... Run proxy error semantics tests (integration)"
 	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
 	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
+	@echo "  test-gpg-signing ............ Run GPG signing harness in isolated HOME (no side effects)"
 	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
 	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
 	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
@@ -2632,6 +2633,10 @@ test-dev-tool-routing:
 test-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
+
+.PHONY: test-gpg-signing
+test-gpg-signing:
+	@./scripts/test-gpg-signing.sh
 
 .PHONY: test-toolchain-rust test-toolchain-rust-e2e
 test-toolchain-rust:
