@@ -39,6 +39,17 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+fn chmod_tree(path: &Path, mode: u32) -> std::io::Result<()> {
+    for entry in WalkDir::new(path) {
+        let entry = entry?;
+        let perm = fs::Permissions::from_mode(mode);
+        fs::set_permissions(entry.path(), perm.clone())?;
+    }
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+    Ok(())
+}
+
 fn fullscreen(agent: &str) -> bool {
     matches!(
         agent,
@@ -152,7 +163,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         #[cfg(unix)]
-        let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o700));
+        let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o777));
         let prep_status = Command::new("docker")
             .args([
                 "run",
@@ -184,6 +195,10 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             prep_status.success(),
             "failed to prep seed gnupg for agent={agent}"
         );
+        #[cfg(unix)]
+        {
+            chmod_tree(&agent_seed, 0o777).expect("chmod agent seed");
+        }
 
         let mut cmd = Command::new("docker");
         cmd.env("DOCKER_CONFIG", &docker_cfg_dst);
@@ -209,7 +224,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         }
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg-host:ro", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg-host", agent_seed.display()),
             &image,
             "sh",
             "-lc",
