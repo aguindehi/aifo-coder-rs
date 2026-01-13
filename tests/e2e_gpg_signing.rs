@@ -208,6 +208,23 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         // Ensure perms are acceptable to gpg inside the container.
         #[cfg(unix)]
         let _ = std::fs::set_permissions(&agent_seed, std::fs::Permissions::from_mode(0o700));
+        // Normalize ownership to root:root inside the bind volume so the entrypoint sees a safe GNUPGHOME.
+        let chown_status = Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "-v",
+                &format!("{}:/seed", agent_seed.display()),
+                &image,
+                "sh",
+                "-c",
+                "chown -R 0:0 /seed && chmod -R go-rwx /seed",
+            ])
+            .status()
+            .expect("docker run chown");
+        if !chown_status.success() {
+            panic!("failed to chown seeded gnupg for agent={agent}");
+        }
 
         let mut cmd = Command::new("docker");
         cmd.env("DOCKER_CONFIG", &docker_cfg_dst);
