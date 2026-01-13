@@ -214,6 +214,8 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         cmd.args([
             "run",
             "--rm",
+            "--user",
+            "1001:1001",
             "-i",
             "-e",
             "HOME=/home/coder",
@@ -231,7 +233,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         }
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg-host:ro", agent_seed.display()),
             &image,
             "sh",
             "-lc",
