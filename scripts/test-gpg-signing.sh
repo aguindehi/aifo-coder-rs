@@ -9,6 +9,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Preserve docker connectivity without touching the caller's config by copying DOCKER_CONFIG.
+source_docker_config="${DOCKER_CONFIG:-${orig_home}/.docker}"
+if [ -d "$source_docker_config" ]; then
+  mkdir -p "$tmp_root/docker-config"
+  cp -a "$source_docker_config"/. "$tmp_root/docker-config"/ 2>/dev/null || true
+  export DOCKER_CONFIG="$tmp_root/docker-config"
+fi
+
 export HOME="$tmp_root/home"
 export GNUPGHOME="$HOME/.gnupg"
 export XDG_RUNTIME_DIR="$tmp_root/run"
@@ -21,6 +29,9 @@ chmod 700 "$HOME" "$GNUPGHOME" "$XDG_RUNTIME_DIR"
 
 echo "test-gpg-signing: isolated HOME=${HOME} (original HOME=${orig_home})"
 echo "test-gpg-signing: GNUPGHOME=${GNUPGHOME}"
+if [ -n "${DOCKER_CONFIG:-}" ]; then
+  echo "test-gpg-signing: DOCKER_CONFIG (copied)=${DOCKER_CONFIG}"
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "test-gpg-signing: docker not available; skipping container signing checks." >&2
@@ -40,9 +51,13 @@ is_fullscreen() {
 run_agent() {
   agent="$1"
   image="${AIFO_TEST_IMAGE_PREFIX:-aifo-coder}-${agent}:${AIFO_TEST_IMAGE_TAG:-latest}"
-  if ! docker image inspect "$image" >/dev/null 2>&1; then
-    echo "test-gpg-signing: skip ${agent} (image not found: ${image})"
-    return 0
+  if ! err="$(docker image inspect "$image" 2>&1 >/dev/null)"; then
+    if printf '%s' "$err" | grep -qi "No such image"; then
+      echo "test-gpg-signing: skip ${agent} (image not found: ${image})"
+      return 0
+    fi
+    echo "test-gpg-signing: docker inspect failed for ${image}: ${err}" >&2
+    return 1
   fi
 
   echo "test-gpg-signing: testing agent=${agent} image=${image}"
