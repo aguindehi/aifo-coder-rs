@@ -130,6 +130,8 @@ fn e2e_gpg_signing_across_agents() {
 
     let passphrase = "test-passphrase";
     let seed_dir = seed_gpg(root, passphrase).expect("seed gpg");
+    #[cfg(unix)]
+    let _ = std::fs::set_permissions(&seed_dir, std::fs::Permissions::from_mode(0o700));
 
     let agents = vec![
         "opencode",
@@ -213,6 +215,8 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             "-i",
             "-e",
             "HOME=/home/coder",
+            "-e",
+            "AIFO_RUNTIME_USER=root",
             "-e",
             "GNUPGHOME=/home/coder/.gnupg",
             "-e",
