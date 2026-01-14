@@ -110,12 +110,21 @@ fn e2e_gpg_signing_across_agents() {
 set -eu
 home="${HOME:-/home/coder}"
 gnupg="${GNUPGHOME:-$home/.gnupg}"
+gnupg_host="${GNUPGHOST:-/home/coder/.gnupg-host}"
 pass="${AIFO_GPG_PASSPHRASE:-test-passphrase}"
 mkdir -p "$home" "$gnupg" "${XDG_RUNTIME_DIR:-/tmp/runtime-$$}"
 work="/tmp/gpg-e2e"
 mkdir -p "$work"
 cd "$work"
 chmod 700 "$home" "$gnupg" "${XDG_RUNTIME_DIR:-/tmp/runtime-$$}" || true
+
+if [ -d "$gnupg_host" ]; then
+  cp -a "$gnupg_host"/. "$gnupg"/
+fi
+# Drop stale agent sockets/locks that break a fresh agent.
+find "$gnupg" -maxdepth 1 \( -type s -o -name '.#lk*' \) -exec rm -f {} +
+chown -R "$(id -u)":"$(id -g)" "$gnupg"
+chmod -R go-rwx "$gnupg"
 
 for b in gpg gpg-agent pinentry-curses git; do
   command -v "$b" >/dev/null 2>&1 || { echo "missing binary: $b"; exit 1; }
@@ -209,6 +218,8 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             "--user",
             "1001:1001",
             "-i",
+            "--tmpfs",
+            "/home/coder/.gnupg:uid=1001,gid=1001,mode=0700",
             "-e",
             "HOME=/home/coder",
             "-e",
@@ -224,7 +235,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         ]);
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg-host:ro", agent_seed.display()),
             &image,
             "sh",
             "-lc",
