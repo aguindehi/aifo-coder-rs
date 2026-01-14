@@ -269,7 +269,7 @@ Phase 2 — File renames (git mv only; keep bodies intact)
 - Do not change test function names in this phase.
 - Validate locally:
   - make check passes on dockerless hosts.
-  - make test-integration-suite self-skips reliably where docker/images are missing.
+  - make test-int self-skips reliably where docker/images are missing.
   - make check-e2e runs ignored tests only (when explicitly invoked).
 
 Phase 3 — Function renames (deterministic filtering)
@@ -307,7 +307,7 @@ Phase 7 — Ongoing maintenance
 Acceptance criteria
 
 - Unit lane (make check) passes on hosts without docker or git installed.
-- Integration lane (make test-integration-suite) passes or self-skips cleanly (no image pulls).
+- Integration lane (make test-int) passes or self-skips cleanly (no image pulls).
 - E2E lane (make check-e2e) runs ignored-heavy tests and passes in provisioned CI.
 - After Phase 5:
   - nextest and CI filters rely solely on unit_/int_/e2e_ prefixes.

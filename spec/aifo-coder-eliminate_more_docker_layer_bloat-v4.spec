@@ -148,11 +148,11 @@ Risk assessment and rollback
 Testing and validation
 - Run “make check” locally (cargo nextest).
 - Integration/acceptance:
-  - make test-integration-suite
-  - make test-acceptance-suite
+  - make test-int
+  - make test-e2e
 - Toolchain tests:
-  - make test-toolchain-rust
-  - make test-toolchain-cpp
+  - make test-int-toolchain-rust
+  - make test-int-toolchain-cpp
 - Image sanity:
   - Build aider/aider-slim; verify Playwright install intact.
   - Build rust toolchain; verify grcov present and stripped.

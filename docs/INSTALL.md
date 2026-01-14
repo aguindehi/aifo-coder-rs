@@ -185,19 +185,19 @@ make toolchain-cache-clear
 Tests (optional, require Docker)
 - TCP proxy smoke (ignored by default):
 ```bash
-make test-proxy-smoke
+make test-e2e-proxy-smoke
 ```
 - Linux-only unix-socket proxy smoke (falls back to TCP on non-Linux):
 ```bash
-make test-proxy-unix
+make test-e2e-proxy-unix
 ```
 - TCP streaming integration (ignored by default):
 ```bash
-make test-proxy-tcp
+make test-e2e-proxy-tcp
 ```
 - Dev-tool routing across sidecars (ignored by default):
 ```bash
-make test-dev-tool-routing
+make test-e2e-dev-routing
 ```
 - TypeScript local tsc resolution (ignored by default):
 ```bash
@@ -205,9 +205,9 @@ make test-tsc-resolution
 ```
 - Proxy error semantics (ignored by default):
 ```bash
-make test-proxy-errors
+make test-e2e-proxy-errors
 ```
 - C/C++ dry-run tests:
 ```bash
-make test-toolchain-cpp
+make test-int-toolchain-cpp
 ```

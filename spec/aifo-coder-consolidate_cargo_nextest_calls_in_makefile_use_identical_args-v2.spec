@@ -47,20 +47,20 @@ Verification against v1
   - Clarify that coverage macros already use $(ARGS_NEXTEST) and must remain unchanged.
 
 Inventory of changes (before → after)
-A) test-acceptance-suite
+A) test-e2e
 - Before:
   cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
 - After:
   cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 - Notes: Secret/cache mounts and CA env remain unchanged (none added/removed here).
 
-B) test-integration-suite
+B) test-int
 - Before:
   cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
 - After:
   cargo nextest run $(ARGS_NEXTEST) -j 1 -E "$$EXPR" $(ARGS)
 
-C) test-macos-cross-image (inside container command)
+C) test-e2e-macos-cross (inside container command)
 - Before:
   sh -lc '/usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
 - After:
@@ -87,7 +87,7 @@ Non-Linux branch:
   - After:  cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E '!test(/_uds/)' $(ARGS)
 - Notes: Retain any mounts/secret handling on docker run lines.
 
-E) test-toolchain-rust
+E) test-int-toolchain-rust
 - rustup path:
   - Before: rustup run stable cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS)
   - After:  rustup run stable cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS)
@@ -99,7 +99,7 @@ E) test-toolchain-rust
   - After:  sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; ... cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS)"
 - Notes: Keep CA/caches mounts and env exports on surrounding docker run lines unchanged.
 
-F) test-toolchain-rust-e2e
+F) test-e2e-toolchain-rust
 - rustup path:
   - Before: rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)
   - After:  rustup run stable cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)
@@ -133,7 +133,7 @@ Acceptance criteria
 - All cargo nextest run invocations include $(ARGS_NEXTEST).
 - Suite-specific behaviors (filters, run-ignored policies, -j 1) remain identical.
 - Secret and cache mounts, and related env exports, are unchanged and still effective.
-- make check, make test-acceptance-suite, make test-integration-suite, make test-all-junit, make test-toolchain-rust, make test-toolchain-rust-e2e all execute the same set of tests as before.
+- make check, make test-e2e, make test-int, make test-all-junit, make test-int-toolchain-rust, make test-e2e-toolchain-rust all execute the same set of tests as before.
 
 Phased implementation plan
 
@@ -144,12 +144,12 @@ Phase 0: Land this spec (v2)
 
 Phase 1: Consolidation edits
 - Modify the following sections in Makefile to inject $(ARGS_NEXTEST) and remove duplicated flags:
-  - test-acceptance-suite
-  - test-integration-suite
-  - test-macos-cross-image (quoting fix + ARGS_NEXTEST)
+  - test-e2e
+  - test-int
+  - test-e2e-macos-cross (quoting fix + ARGS_NEXTEST)
   - test-all-junit (all branches; fix /divert/null → /dev/null)
-  - test-toolchain-rust (all branches)
-  - test-toolchain-rust-e2e (all branches)
+  - test-int-toolchain-rust (all branches)
+  - test-e2e-toolchain-rust (all branches)
 - Ensure surrounding docker run lines (if any) retain all existing secret and cache mounts, and env exports used for CA trust.
 - Do not change targets that already use $(ARGS_NEXTEST) consistently.
 
@@ -160,11 +160,11 @@ Phase 2: Lint and quick build
 Phase 3: Verification
 - Run:
   - make check
-  - make test-acceptance-suite
-  - make test-integration-suite
+  - make test-e2e
+  - make test-int
   - make test-all-junit
-  - make test-toolchain-rust
-  - make test-toolchain-rust-e2e
+  - make test-int-toolchain-rust
+  - make test-e2e-toolchain-rust
 - Confirm output shows $(ARGS_NEXTEST) flags present and that filters/run-ignored/concurrency are unchanged.
 - Validate that corporate CA injection is active (e.g., registry/git commands succeed) and caches operate as expected (no unexpected re-fetch/rebuild).
 

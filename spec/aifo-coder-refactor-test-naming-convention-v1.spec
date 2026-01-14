@@ -175,7 +175,7 @@ Phase 2 — File renames
 - Keep module internals unchanged for now (only the filename changes).
 - Validate:
   - make check (unit/fast) passes on a dockerless host.
-  - make test-integration-suite self-skips as designed where docker or images are missing.
+  - make test-int self-skips as designed where docker or images are missing.
   - make check-e2e runs ignored E2E tests under CI lanes only.
 
 Phase 3 — Function renames
@@ -202,7 +202,7 @@ Phase 6 — Optional enforcement
 Acceptance criteria
 
 - Unit lane (make check) passes on hosts without docker or git installed.
-- Integration lane (make test-integration-suite) passes or self-skips cleanly (no pulls).
+- Integration lane (make test-int) passes or self-skips cleanly (no pulls).
 - E2E lane (make check-e2e) runs ignored-heavy tests and passes when prerequisites are met.
 - nextest and CI filters rely solely on unit_/int_/e2e_ prefixes (after transitional period).
 - All test files and functions follow the naming convention with appropriate platform/transport suffixes where relevant.

@@ -8,7 +8,7 @@ Lanes
 
 - Unit/fast (default nextest run; no Docker required)
   - Parser/utility/unit tests.
-  - Run with: make check or make test.
+  - Run with: make check or make test-unit (alias: make test).
   - Should pass on hosts without Docker.
 
 - Integration (Docker present; local images only)
@@ -17,12 +17,12 @@ Lanes
     - aifo_coder::container_runtime_path() (Docker CLI available)
     - tests/support::docker_image_present(runtime, image) (image present locally)
   - Skips cleanly if requirements are not met (no pulls).
-  - Run with: make test-integration-suite
+  - Run with: make test-int
 
 - Acceptance/E2E (ignored by default)
   - Heavy tests and end-to-end paths; include unix:// transport (Linux-only).
   - Marked #[ignore] by default.
-  - Run with: make test-acceptance-suite or make check-e2e
+  - Run with: make test-e2e or make check-e2e
 
 Gating helpers
 
@@ -77,12 +77,12 @@ How to run
 
 - Default (unit/fast):
   - make check
-  - or: make test
+  - or: make test-unit (alias: make test)
 
 - Integration/E2E (Docker and images present):
   - make check-e2e
-  - make test-integration-suite
-  - make test-acceptance-suite
+  - make test-int
+  - make test-e2e
 
 
 Coverage

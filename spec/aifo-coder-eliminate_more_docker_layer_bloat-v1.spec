@@ -110,11 +110,11 @@ Risk assessment and rollback
 Testing strategy
 - Run “make check” locally (cargo nextest) after each phase.
 - Run integration suites:
-  - make test-integration-suite
-  - make test-acceptance-suite
+  - make test-int
+  - make test-e2e
 - For toolchain images, run specific tests:
-  - make test-toolchain-rust
-  - make test-toolchain-cpp
+  - make test-int-toolchain-rust
+  - make test-int-toolchain-cpp
 - Validate Docker images build for codex/crush/aider/openhands/opencode/plandex and slim variants.
 
 Operational notes
