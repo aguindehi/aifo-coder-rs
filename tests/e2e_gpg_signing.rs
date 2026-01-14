@@ -50,6 +50,7 @@ fn chmod_tree(path: &Path, mode: u32) -> std::io::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn fullscreen(agent: &str) -> bool {
     matches!(
         agent,
@@ -106,11 +107,14 @@ fn e2e_gpg_signing_across_agents() {
     let image_tag = env::var("AIFO_TEST_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
 
     let script = r#"
-set -euo pipefail
+set -eu
 home="${HOME:-/home/coder}"
 gnupg="${GNUPGHOME:-$home/.gnupg}"
 pass="${AIFO_GPG_PASSPHRASE:-test-passphrase}"
 mkdir -p "$home" "$gnupg" "${XDG_RUNTIME_DIR:-/tmp/runtime-$$}"
+work="/tmp/gpg-e2e"
+mkdir -p "$work"
+cd "$work"
 chmod 700 "$home" "$gnupg" "${XDG_RUNTIME_DIR:-/tmp/runtime-$$}" || true
 
 for b in gpg gpg-agent pinentry-curses git; do
@@ -159,7 +163,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             continue;
         }
 
-        // Per-agent GNUPGHOME: seed as coder inside a writable mount, then reuse read-write.
+        // Per-agent GNUPGHOME: seed as coder inside a writable mount, then reuse read-only.
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         #[cfg(unix)]
@@ -168,8 +172,6 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             .args([
                 "run",
                 "--rm",
-                "--user",
-                "1001:1001",
                 "-e",
                 "HOME=/home/coder",
                 "-e",
@@ -185,7 +187,8 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
                      echo 'allow-preset-passphrase' >>\"$GNUPGHOME/gpg-agent.conf\"; \
                      echo 'pinentry-program /usr/bin/pinentry-curses' >>\"$GNUPGHOME/gpg-agent.conf\"; \
                      echo 'pinentry-mode loopback' >\"$GNUPGHOME/gpg.conf\"; \
-                     gpg --batch --yes --pinentry-mode loopback --passphrase {pass} --quick-generate-key 'Test User <test@mgb.ch>' ed25519 sign 0",
+                     gpg --batch --yes --pinentry-mode loopback --passphrase {pass} --quick-generate-key 'Test User <test@mgb.ch>' ed25519 sign 0; \
+                     chown -R 1001:1001 \"$GNUPGHOME\"; chmod -R go-rwx \"$GNUPGHOME\"",
                     pass = passphrase
                 ),
             ])
