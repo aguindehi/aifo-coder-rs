@@ -159,7 +159,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             continue;
         }
 
-        // Per-agent GNUPGHOME: seed as coder inside a writable mount, then reuse read-only.
+        // Per-agent GNUPGHOME: seed as coder inside a writable mount, then reuse read-write.
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         #[cfg(unix)]
@@ -221,7 +221,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
         ]);
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg:ro", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg", agent_seed.display()),
             &image,
             "sh",
             "-lc",
