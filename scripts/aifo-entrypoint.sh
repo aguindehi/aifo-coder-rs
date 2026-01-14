@@ -349,6 +349,24 @@ maybe_preset_gpg_passphrase() {
     return 1
 }
 
+prime_gpg_agent_minimal() {
+    if ! command -v gpg >/dev/null 2>&1; then
+        return 0
+    fi
+    # Use configured signing key if available to force the agent to load that key.
+    key_filter="${AIFO_GPG_PRIME_KEY:-}"
+    if [ -z "$key_filter" ]; then
+        key_filter="$(detect_signing_key)"
+    fi
+    if [ -n "$key_filter" ]; then
+        gpg --list-secret-keys --with-colons "$key_filter" >/dev/null 2>&1 || \
+            gpg --list-secret-keys --with-colons >/dev/null 2>&1 || true
+        return 0
+    fi
+    gpg --list-secret-keys --with-colons >/dev/null 2>&1 || true
+    return 0
+}
+
 prime_gpg_agent_if_requested() {
     if [ "${AIFO_GPG_REQUIRE_PRIME:-0}" != "1" ]; then
         return
