@@ -32,6 +32,7 @@
 - PRs should list which targets ran (`make check`/`make test`), mention platform (Linux/macOS/Windows), and include logs or screenshots when CLI output changes.
 - Automatically propose to commit the changes done when finished.
 - Never re-configure git user.name nor user.email!
+- never commit without signature. If signing fails, warn the user and do not commit without signature.
 
 ## Environment
 
