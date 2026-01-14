@@ -159,7 +159,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             continue;
         }
 
-        // Per-agent GNUPGHOME (seeded inside the image as coder).
+        // Per-agent GNUPGHOME: seed as coder inside a writable mount, then reuse read-only.
         let agent_seed = root.join(format!("seed-{}", agent));
         fs::create_dir_all(&agent_seed).expect("agent seed dir");
         #[cfg(unix)]
@@ -173,9 +173,9 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
                 "-e",
                 "HOME=/home/coder",
                 "-e",
-                "GNUPGHOME=/home/coder/.gnupg-host-writable",
+                "GNUPGHOME=/home/coder/.gnupg",
                 "-v",
-                &format!("{}:/home/coder/.gnupg-host-writable", agent_seed.display()),
+                &format!("{}:/home/coder/.gnupg", agent_seed.display()),
                 &image,
                 "sh",
                 "-lc",
@@ -196,9 +196,7 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             "failed to prep seed gnupg for agent={agent}"
         );
         #[cfg(unix)]
-        {
-            chmod_tree(&agent_seed, 0o777).expect("chmod agent seed");
-        }
+        let _ = chmod_tree(&agent_seed, 0o700);
 
         let mut cmd = Command::new("docker");
         cmd.env("DOCKER_CONFIG", &docker_cfg_dst);
@@ -218,13 +216,12 @@ git -c user.name="Test User" -c user.email="test@mgb.ch" -c user.signingkey="$fp
             &format!("AIFO_AGENT_NAME={agent}"),
             "-e",
             &format!("AIFO_GPG_PASSPHRASE={passphrase}"),
+            "-e",
+            "AIFO_GPG_REQUIRE_PRIME=0",
         ]);
-        if fullscreen(agent) {
-            cmd.args(["-e", "AIFO_GPG_REQUIRE_PRIME=1"]);
-        }
         cmd.args([
             "-v",
-            &format!("{}:/home/coder/.gnupg-host:ro", agent_seed.display()),
+            &format!("{}:/home/coder/.gnupg:ro", agent_seed.display()),
             &image,
             "sh",
             "-lc",
