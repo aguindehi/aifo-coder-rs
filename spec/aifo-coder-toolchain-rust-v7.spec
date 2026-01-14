@@ -415,8 +415,8 @@ Repository Integration Map (files and responsibilities)
   - No changes required for v7 beyond integration points; ensure existing agent previews remain consistent with tests (PATH shims, mounts, env pass-through, network flags).
 
 Makefile Test Targets (optional, recommended)
-- test-toolchain-rust: run unit/integration rust sidecar tests (exclude ignored/E2E)
-- test-toolchain-rust-e2e: run ignored tests explicitly (CI lanes)
+- test-int-toolchain-rust: run unit/integration rust sidecar tests (exclude ignored/E2E)
+- test-e2e-toolchain-rust: run ignored tests explicitly (CI lanes)
 - Example nextest expressions (informational):
   - cargo nextest run -E 'test(/^toolchain_rust_/)'
   - cargo nextest run --include-ignored -E 'test(/^toolchain_rust_/)'

@@ -96,9 +96,9 @@ Implementation status
 - Verbose logging is line-safe (flush + clear line) and does not interfere with streamed output.
 
 Test coverage (ignored by default; run via Makefile targets)
-- TCP streaming: tests/proxy_streaming_tcp.rs (make test-proxy-tcp)
-- Unix-socket streaming: tests/proxy_unix_socket.rs (make test-proxy-unix; Linux-only)
-- Error semantics (v1/v2): tests/proxy_error_semantics.rs (make test-proxy-errors)
-- Dev-tool routing (prefer and fallback): tests/dev_tool_routing.rs (make test-dev-tool-routing)
+- TCP streaming: tests/proxy_streaming_tcp.rs (make test-e2e-proxy-tcp)
+- Unix-socket streaming: tests/proxy_unix_socket.rs (make test-e2e-proxy-unix; Linux-only)
+- Error semantics (v1/v2): tests/proxy_error_semantics.rs (make test-e2e-proxy-errors)
+- Dev-tool routing (prefer and fallback): tests/dev_tool_routing.rs (make test-e2e-dev-routing)
 - Python venv activation: tests/python_venv_activation.rs (make test-python-venv, via test target)
 - TypeScript local tsc resolution: tests/tsc_resolution.rs (make test-tsc-resolution)

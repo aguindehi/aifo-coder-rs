@@ -27,19 +27,19 @@ Consistency rules
 
 Inventory of changes (before → after)
 
-A) test-acceptance-suite
+A) test-e2e
 - Before:
   cargo nextest run -j 1 --run-ignored ignored-only --no-fail-fast -E "$$EXPR" $(ARGS)
 - After:
   cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS)
 
-B) test-integration-suite
+B) test-int
 - Before:
   cargo nextest run -j 1 --no-fail-fast -E "$$EXPR" $(ARGS)
 - After:
   cargo nextest run $(ARGS_NEXTEST) -j 1 -E "$$EXPR" $(ARGS)
 
-C) test-macos-cross-image (inside container command)
+C) test-e2e-macos-cross (inside container command)
 - Before:
   sh -lc '/usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; /usr/local/cargo/bin/cargo nextest run --run-ignored ignored-only --profile ci --no-fail-fast -E "test(/^e2e_macos_cross_/)"'
 - After:
@@ -62,7 +62,7 @@ Non-Linux branch:
   - Before: cargo nextest run --run-ignored all --profile ci --no-fail-fast -E '!test(/_uds/)' $(ARGS)
   - After:  cargo nextest run $(ARGS_NEXTEST) --run-ignored all -E '!test(/_uds/)' $(ARGS)
 
-E) test-toolchain-rust
+E) test-int-toolchain-rust
 - rustup path:
   - Before: rustup run stable cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS)
   - After:  rustup run stable cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS)
@@ -73,7 +73,7 @@ E) test-toolchain-rust
   - Before: sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; ... cargo nextest run -E 'test(/^int_toolchain_rust_/)' $(ARGS)"
   - After:  sh -lc "cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; ... cargo nextest run $(ARGS_NEXTEST) -E 'test(/^int_toolchain_rust_/)' $(ARGS)"
 
-F) test-toolchain-rust-e2e
+F) test-e2e-toolchain-rust
 - rustup path:
   - Before: rustup run stable cargo nextest run --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)
   - After:  rustup run stable cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_toolchain_rust_/)' $(ARGS)
@@ -101,8 +101,8 @@ Risks and mitigations
 Acceptance criteria
 - All cargo nextest run invocations include $(ARGS_NEXTEST).
 - Suite-specific behaviors (filters, run-ignored policies, -j 1) remain identical.
-- make check, make test-acceptance-suite, make test-integration-suite, make test-all-junit,
-  make test-toolchain-rust, make test-toolchain-rust-e2e all execute the same set of tests as before.
+- make check, make test-e2e, make test-int, make test-all-junit,
+  make test-int-toolchain-rust, make test-e2e-toolchain-rust all execute the same set of tests as before.
 
 Phased implementation plan
 
@@ -112,12 +112,12 @@ Phase 0: Land this spec (v1)
 
 Phase 1: Consolidation edits
 - Modify the following sections in Makefile to inject $(ARGS_NEXTEST) and remove duplicated flags:
-  - test-acceptance-suite
-  - test-integration-suite
-  - test-macos-cross-image (quoting fix + ARGS_NEXTEST)
+  - test-e2e
+  - test-int
+  - test-e2e-macos-cross (quoting fix + ARGS_NEXTEST)
   - test-all-junit (all branches)
-  - test-toolchain-rust (all branches)
-  - test-toolchain-rust-e2e (all branches)
+  - test-int-toolchain-rust (all branches)
+  - test-e2e-toolchain-rust (all branches)
 - Apply typo fix in test-all-junit: replace /divert/null with /dev/null.
 
 Phase 2: Lint and quick build
@@ -126,11 +126,11 @@ Phase 2: Lint and quick build
 Phase 3: Verification
 - Run:
   - make check
-  - make test-acceptance-suite
-  - make test-integration-suite
+  - make test-e2e
+  - make test-int
   - make test-all-junit
-  - make test-toolchain-rust
-  - make test-toolchain-rust-e2e
+  - make test-int-toolchain-rust
+  - make test-e2e-toolchain-rust
 - Confirm output shows ARGS_NEXTEST flags present and that filters/run-ignored/concurrency are unchanged.
 
 Phase 4: Documentation

@@ -454,8 +454,8 @@ help: banner
 	@echo "  REGISTRY .................... Registry prefix for publish (e.g., repository.migros.net/). If unset, we will NOT push."
 	@echo "  ADD_ARCH_IN_TAG ............ Append -linux-<arch> to tags for single-arch pushes (default: 1 in CI, 0 locally)"
 	@echo "  CACHE_DIR ................... Local buildx cache directory for faster rebuilds (.buildx-cache)"
-	@echo "  ARGS ........................ Extra args passed to tests when running 'make test' (e.g., -- --nocapture)"
-	@echo "  CLIPPY ...................... Set to 1 to run 'make lint' before 'make test' (default: off)"
+	@echo "  ARGS ........................ Extra args passed to tests when running 'make test-unit' (alias: test)"
+	@echo "  CLIPPY ...................... Set to 1 to run 'make lint' before 'make test-unit' (default: off)"
 	@echo "  DOCKER_BUILDKIT ............. Enable BuildKit for builds (default: 1)"
 	@echo "  MIGROS_CA ................... Corporate CA secret path ($(HOME)/.certificates/MigrosRootCA2.crt)"
 	@echo "  RUST_TOOLCHAIN_TAG .......... Tag for rust toolchain image (default: latest)"
@@ -701,20 +701,22 @@ help: banner
 	@echo "  lint-ultra .................. Lint by running curated clippy: deny unsafe/dbg/await-holding-lock; includes tests by default"
 	@echo "                                Set AIFO_ULTRA_INCLUDE_TESTS=0 to skip tests. Set AIFO_ULTRA_WARNINGS=1 to show advisories."
 	@echo ""
-	@echo "  test ........................ Run Rust tests with cargo-nextest (installs in container if missing)"
-	@echo "  test-cargo .................. Run legacy 'cargo test' (no nextest)"
-	@echo "  test-legacy ................. Alias for test-cargo"
-	@echo "  test-proxy-smoke ............ Run proxy smoke test (ignored by default)"
-	@echo "  test-shim-embed ............. Check embedded shim presence in agent image (ignored by default)"
-	@echo "  test-proxy-unix ............. Run unix-socket proxy smoke test (ignored by default; Linux-only)"
-	@echo "  test-proxy-errors ........... Run proxy error semantics tests (integration)"
-	@echo "  test-proxy-tcp .............. Run TCP streaming proxy test (ignored by default)"
-	@echo "  test-dev-tool-routing ....... Run dev-tool routing tests (ignored by default)"
-	@echo "  test-gpg-signing ............ Run GPG signing e2e (isolated temp HOME; ignored by default)"
-	@echo "  test-toolchain-cpp .......... Run c-cpp toolchain dry-run tests"
-	@echo "  test-toolchain-rust ......... Run unit/integration rust sidecar tests (exclude ignored/E2E)"
-	@echo "  test-toolchain-rust-e2e ..... Run ignored rust sidecar E2E tests (docker required)"
-	@echo "  test-macos-cross-image ...... Run macOS cross E2E tests inside cross image (e2e_macos_cross_*)"
+	@echo "  test-unit ................... Run Rust tests with cargo-nextest (alias: test)"
+	@echo "  test-int .................... Run integration test suite via nextest (alias: test-integration-suite)"
+	@echo "  test-e2e .................... Run acceptance/e2e suite (alias: test-acceptance-suite)"
+	@echo "  test-all .................... Run unit + integration + e2e (alias: check-all)"
+	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
+	@echo "  test-int-toolchain-cpp ...... Run c-cpp toolchain dry-run tests"
+	@echo "  test-int-toolchain-rust ..... Run rust sidecar tests (unit/integration)"
+	@echo "  test-e2e-toolchain-rust ..... Run rust sidecar E2E tests (ignored by default)"
+	@echo "  test-e2e-proxy-smoke ........ Run proxy smoke test (ignored by default)"
+	@echo "  test-e2e-proxy-unix ......... Run unix-socket proxy smoke test (ignored by default; Linux-only)"
+	@echo "  test-e2e-proxy-errors ....... Run proxy error semantics tests (integration)"
+	@echo "  test-e2e-proxy-tcp .......... Run TCP streaming proxy test (ignored by default)"
+	@echo "  test-e2e-dev-routing ........ Run dev-tool routing tests (ignored by default)"
+	@echo "  test-e2e-shim-embed ......... Check embedded shim presence in agent image (ignored by default)"
+	@echo "  test-e2e-gpg-signing ........ Run GPG signing e2e (isolated temp HOME; ignored by default)"
+	@echo "  test-e2e-macos-cross ........ Run macOS cross E2E tests inside cross image (e2e_macos_cross_*)"
 	@echo ""
 	@echo "  cov ......................... Run coverage-html and coverage-lcov (composite target)"
 	@echo "  cov-results ................. Show coverage-html in the browser"
@@ -723,15 +725,13 @@ help: banner
 	@echo ""
 	$(call title,Test suites:)
 	@echo ""
-	@echo "  check ....................... Run 'lint', 'lint-docker', 'lint-tests-naming' then 'test' (lint and unit test suites)"
+	@echo "  check ....................... Run 'lint', 'lint-docker', 'lint-tests-naming' then 'test-unit' (lint and unit test suites)"
 	@echo "  check-unit .................. Run unit tests (unit test suite)"
 	@echo "  check-int ................... Run integration tests (integration test suite)"
 	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance test suite)"
 	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
 	@echo ""
 	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
-	@echo "  test-acceptance-suite ....... Run acceptance suite (shim/proxy: native HTTP TCP/UDS, wrappers, logs, disconnect, override)"
-	@echo "  test-integration-suite ...... Run integration/E2E suite (proxy smoke/unix/errors/tcp, routing, tsc, rust E2E)"
 	@echo ""
 		$(call title,AppArmor (security) profile:)
 	@echo
@@ -1199,8 +1199,8 @@ validate-macos-artifact-arm64:
 	fi; \
 	echo "macOS artifact validation OK: $$BIN"
 
-.PHONY: test-macos-cross-image
-test-macos-cross-image:
+.PHONY: test-e2e-macos-cross
+test-e2e-macos-cross:
 	@set -e; \
 	if ! docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Error: $(MACOS_CROSS_IMAGE) not present locally. Hint: make build-macos-cross-rust-builder"; \
@@ -1224,6 +1224,8 @@ test-macos-cross-image:
 	  -w /workspace \
 	  -t -e TERM=xterm-256color -e CARGO_TERM_COLOR=always \
 	  $(MACOS_CROSS_IMAGE) sh -lc 'set -e; CA="/run/secrets/migros_root_ca"; if [ -f "$$CA" ]; then install -m 0644 "$$CA" /usr/local/share/ca-certificates/migros-root-ca.crt || true; command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates || true; export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt; export CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt; export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; fi; export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:/usr/sbin:/usr/bin:/sbin:/bin:$$PATH"; export RUSTC="/usr/local/cargo/bin/rustc"; unset LD; sccache --version || true; sccache --show-stats || true; rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null 2>&1 || true; /usr/local/cargo/bin/cargo nextest -V >/dev/null 2>&1 || /usr/local/cargo/bin/cargo install cargo-nextest --locked; export TMPDIR=/var/tmp; export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; unset CARGO_TARGET_DIR; /usr/local/cargo/bin/cargo nextest run --target-dir /var/tmp/aifo-target $(ARGS_NEXTEST) --run-ignored ignored-only -E "test(/^e2e_macos_cross_/)"'
+
+test-macos-cross-image: test-e2e-macos-cross
 
 .PHONY: validate-macos-artifact-x86_64
 validate-macos-artifact-x86_64:
@@ -2062,7 +2064,7 @@ build-shim-with-builder:
 	  $(RUST_BUILDER_IMAGE) cargo build $(CARGO_FLAGS) --release --bin aifo-shim; \
 	echo "Built (Linux target): $$(ls -1 target/*/release/aifo-shim 2>/dev/null || echo 'target/<triple>/release/aifo-shim')"
 
-.PHONY: lint check check-unit test test-cargo test-legacy tidy-no-multiline-strings coverage coverage-html coverage-lcov coverage-data
+.PHONY: lint check check-unit test-unit test test-all tidy-no-multiline-strings coverage coverage-html coverage-lcov coverage-data
 
 lint:
 	@set -e; \
@@ -2220,11 +2222,11 @@ check:
 	echo "OK: guardrails"; \
 	echo ""; \
 	echo "==> check: unit tests (cargo nextest)"; \
-	$(MAKE) test; \
-	echo "OK: test"; \
+	$(MAKE) test-unit; \
+	echo "OK: test-unit"; \
 	echo "OK: check (all steps successful)"
 
-check-unit: tidy-no-multiline-strings test
+check-unit: tidy-no-multiline-strings test-unit
 
 tidy-no-multiline-strings:
 	@set -e; \
@@ -2239,7 +2241,7 @@ tidy-no-multiline-strings:
 	  exit 1; \
 	fi
 
-test:
+test-unit:
 	@set -e; \
 	export AIFO_SHIM_EXIT_ZERO_ON_SIGINT=0; \
 	export AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT=0; \
@@ -2316,38 +2318,7 @@ test:
 	  exit 1; \
 	fi
 
-test-cargo:
-	@set -e; \
-	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
-	case "$$OS" in \
-	  MINGW*|MSYS*|CYGWIN*|Windows_NT) DOCKER_PLATFORM_ARGS="" ;; \
-	  *) case "$$ARCH" in \
-	       x86_64|amd64) DOCKER_PLATFORM_ARGS="--platform linux/amd64" ;; \
-	       aarch64|arm64) DOCKER_PLATFORM_ARGS="--platform linux/arm64" ;; \
-	       *) DOCKER_PLATFORM_ARGS="" ;; \
-	     esac ;; \
-	esac; \
-	if command -v rustup >/dev/null 2>&1; then \
-	  echo "Running cargo test locally via rustup (stable toolchain) ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo test; \
-	elif command -v cargo >/dev/null 2>&1; then \
-	  echo "Running cargo test locally via cargo ..."; \
-	  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test; \
-	elif command -v docker >/dev/null 2>&1; then \
-	  echo "Running cargo test inside $(RUST_BUILDER_IMAGE) ..."; \
-	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
-	    -v "$$PWD:/workspace" \
-	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
-	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
-	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo test $(CARGO_FLAGS)'; \
-	else \
-	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
-	  exit 1; \
-	fi
-
-test-legacy: test-cargo
+test: test-unit
 
 define DETECT_PLATFORM_ARGS
 OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -2479,17 +2450,17 @@ coverage-html:
 	$(FIX_INDEX_CSS); \
 	echo "Wrote $(COV_DIR)/html (grcov HTML)"
 
-.PHONY: test-proxy-smoke test-shim-embed test-proxy-unix test-toolchain-cpp test-proxy-errors
-test-proxy-smoke:
+.PHONY: test-e2e-proxy-smoke test-e2e-shim-embed test-e2e-proxy-unix test-int-toolchain-cpp test-e2e-proxy-errors
+test-e2e-proxy-smoke:
 	@echo "Running proxy TCP streaming smoke (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
 
-test-shim-embed:
+test-e2e-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_shim_embed -- --ignored
 
-test-proxy-unix:
+test-e2e-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
@@ -2500,18 +2471,34 @@ test-proxy-unix:
 	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored; \
 	fi
 
-test-proxy-errors:
+test-e2e-proxy-errors:
 	@echo "Running proxy error semantics tests ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_proxy_error_semantics
 
-.PHONY: test-proxy-tcp
-test-proxy-tcp:
+test-int-toolchain-cpp:
+	@echo "Running c-cpp toolchain dry-run tests ..."
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
+
+test-proxy-smoke: test-e2e-proxy-smoke
+
+test-shim-embed: test-e2e-shim-embed
+
+test-proxy-unix: test-e2e-proxy-unix
+
+test-proxy-errors: test-e2e-proxy-errors
+
+test-toolchain-cpp: test-int-toolchain-cpp
+
+.PHONY: test-e2e-proxy-tcp
+test-e2e-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
 
-.PHONY: test-acceptance-suite test-integration-suite check-int check-e2e check-all
+test-proxy-tcp: test-e2e-proxy-tcp
 
-test-acceptance-suite:
+.PHONY: test-e2e test-int check-int check-e2e check-all test-all
+
+test-e2e:
 	@set -e; \
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -2554,12 +2541,12 @@ test-acceptance-suite:
 	  cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS); \
 	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
-	  $(MAKE) test-macos-cross-image; \
+	  $(MAKE) test-e2e-macos-cross; \
 	else \
 	  echo "macOS cross image $(MACOS_CROSS_IMAGE) not found locally; skipping macOS cross E2E."; \
 	fi
 
-test-integration-suite:
+test-int:
 	@set -e; \
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
@@ -2586,17 +2573,23 @@ test-integration-suite:
 
 check-e2e:
 	@echo "Running ignored-by-default e2e (acceptance) suite ..."
-	$(MAKE) test-acceptance-suite
+	$(MAKE) test-e2e
 
 check-int:
 	@echo "Running ignored-by-default integration suite ..."
-	$(MAKE) test-integration-suite
+	$(MAKE) test-int
 
 check-all: check
 	@echo "Running full test suite including ignored-by-default (unit + integration + all e2e tests) ..."
 	$(MAKE) ensure-macos-cross-image
-	$(MAKE) test-acceptance-suite
-	$(MAKE) test-integration-suite
+	$(MAKE) test-e2e
+	$(MAKE) test-int
+
+test-all: check-all
+
+test-acceptance-suite: test-e2e
+
+test-integration-suite: test-int
 
 .PHONY: test-all-junit
 test-all-junit:
@@ -2624,18 +2617,16 @@ test-all-junit:
 	  fi; \
 	fi
 
-.PHONY: test-dev-tool-routing
-test-dev-tool-routing:
+.PHONY: test-e2e-dev-routing
+test-e2e-dev-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
 	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_dev_tool_routing_make_tcp_v2 -- --ignored
 
+test-dev-tool-routing: test-e2e-dev-routing
 
-test-toolchain-cpp:
-	@echo "Running c-cpp toolchain dry-run tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
 
-.PHONY: test-gpg-signing
-test-gpg-signing:
+.PHONY: test-e2e-gpg-signing
+test-e2e-gpg-signing:
 	@set -e; \
 	echo "Running GPG signing e2e (ignored by default) ..."; \
 	if ! command -v cargo >/dev/null 2>&1; then \
@@ -2654,8 +2645,8 @@ test-gpg-signing:
 	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
 	  cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only -E 'test(/^e2e_gpg_signing_across_agents$$/)' $(ARGS)
 
-.PHONY: test-toolchain-rust test-toolchain-rust-e2e
-test-toolchain-rust:
+.PHONY: test-int-toolchain-rust test-e2e-toolchain-rust
+test-int-toolchain-rust:
 	@set -e; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
@@ -2691,7 +2682,7 @@ test-toolchain-rust:
 	  exit 1; \
 	fi
 
-test-toolchain-rust-e2e:
+test-e2e-toolchain-rust:
 	@set -e; \
 	if command -v rustup >/dev/null 2>&1; then \
 	  rustup run stable cargo nextest -V >/dev/null 2>&1 || rustup run stable cargo install cargo-nextest --locked >/dev/null 2>&1 || true; \
@@ -2726,6 +2717,12 @@ test-toolchain-rust-e2e:
 	  echo "Error: neither rustup/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
 	fi
+
+test-gpg-signing: test-e2e-gpg-signing
+
+test-toolchain-rust: test-int-toolchain-rust
+
+test-toolchain-rust-e2e: test-e2e-toolchain-rust
 
 .PHONY: toolchain-cache-clear
 toolchain-cache-clear:

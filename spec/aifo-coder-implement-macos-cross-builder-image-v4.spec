@@ -101,7 +101,7 @@ Launcher builds
   - Produce dist/aifo-coder-macos-x86_64 and verify Mach‑O via file(1).
 
 E2E test job
-- test-macos-cross-image:
+- test-e2e-macos-cross:
   - Runs nextest e2e macOS cross tests inside the cross image.
   - Hygiene: export PATH to system cargo/rustup only and unset LD for nextest install/run to avoid
     host linker conflicts; tests use absolute wrapper paths (oa64-clang) with -B to select Darwin ld.
@@ -115,7 +115,7 @@ Makefile convenience
 - build-macos-cross-rust-builder: local build of the cross image; requires ci/osx/MacOSX.sdk.tar.xz.
 - rebuild-macos-cross-rust-builder: no-cache rebuild with --pull to refresh base layers; purges buildx cache (best-effort).
 - build-launcher-macos-cross(-arm64|‑x86_64): build macOS artifacts inside the cross image; show file(1).
-- test-macos-cross-image: run the e2e tests inside the cross image with PATH/LD hygiene.
+- test-e2e-macos-cross: run the e2e tests inside the cross image with PATH/LD hygiene.
 
 Artifact naming
 - Linux: aifo-coder (unchanged).
@@ -134,7 +134,7 @@ Acceptance criteria
   1) Runs prepare-apple-sdk and publishes ci/osx/MacOSX.sdk.tar.xz with .sha256 artifact.
   2) Builds macos-cross-rust-builder in Kaniko and pushes the image.
   3) Builds aifo-coder for aarch64-apple-darwin and (optionally) x86_64; verifies Mach‑O via file(1).
-  4) Runs test-macos-cross-image with all e2e macOS cross tests passing.
+  4) Runs test-e2e-macos-cross with all e2e macOS cross tests passing.
   5) publish-release attaches Linux and macOS artifacts to the release.
 
 Risks, constraints and mitigations
@@ -226,7 +226,7 @@ Phase 1 — Dockerfile: macos-cross-rust-builder stage (no secrets)
 Phase 2 — CI: build macOS cross image (Kaniko), tests, and macOS launcher
 - prepare-apple-sdk: producer job; see above.
 - build-macos-cross-rust-builder: consumer job; needs artifacts from prepare-apple-sdk; verifies checksum.
-- test-macos-cross-image: run nextest e2e tests inside the cross image with PATH/LD hygiene.
+- test-e2e-macos-cross: run nextest e2e tests inside the cross image with PATH/LD hygiene.
 - build-launcher-macos (+ x86_64): build macOS artifacts and verify Mach‑O via file(1).
 - publish-release: attach Linux and macOS artifacts.
 
@@ -235,17 +235,17 @@ Phase 3 — Makefile (developer convenience)
   - build-macos-cross-rust-builder: build Docker stage locally.
   - rebuild-macos-cross-rust-builder: force rebuild (no cache, pull fresh bases).
   - build-launcher-macos-cross[-arm64|‑x86_64]: build macOS artifacts using the cross image.
-  - test-macos-cross-image: run nextest e2e macOS tests inside the cross image.
+  - test-e2e-macos-cross: run nextest e2e macOS tests inside the cross image.
 
 Phase 4 — Validation
 - Local (optional):
-  - Place SDK under ci/osx/; make build-macos-cross-rust-builder; then make test-macos-cross-image;
+  - Place SDK under ci/osx/; make build-macos-cross-rust-builder; then make test-e2e-macos-cross;
     verify tests pass; optionally build launchers via Makefile and validate with file(1).
 - CI:
   - Tag a commit and verify:
     - prepare-apple-sdk produces SDK artifacts and passes checksum.
     - build-macos-cross-rust-builder completes.
-    - test-macos-cross-image passes all e2e macOS tests.
+    - test-e2e-macos-cross passes all e2e macOS tests.
     - build-launcher-macos produces dist/aifo-coder-macos-arm64 and passes file(1) check.
     - publish-release attaches Linux and macOS artifacts.
 
