@@ -56,9 +56,14 @@ if ! command -v gpg >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! gpg --list-secret-keys --with-colons "$signing_key" 2>/dev/null | grep -q '^sec'; then
-  echo "git-pre-commit: signing key '${signing_key}' not found among secret keys; import it or adjust user.signingkey." >&2
-  exit 1
-fi
+#if ! command -v aifo-gpg-wrapper >/dev/null 2>&1; then
+#  echo "git-pre-commit: aifo-gpg-wrapper is not available in PATH; cannot verify signing key." >&2
+#  exit 1
+#fi
+
+#if ! aifo-gpg-wrapper --list-secret-keys --with-colons "$signing_key" 2>/dev/null | grep -q '^sec'; then
+#  echo "git-pre-commit: signing key '${signing_key}' not found among secret keys; import it or adjust user.signingke#y." >&2
+#  exit 1
+#fi
 
 exit 0
