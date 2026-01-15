@@ -487,6 +487,7 @@ help: banner
 	@echo "  COVERAGE_HTML_IMPL .......... Coverage HTML via grcov or genhtml (default: grcov)"
 	@echo "  NICENESS_CARGO_NEXTEST ...... niceness for cargo-nextest runs (default: 0)"
 	@echo "  AIFO_E2E_MACOS_CROSS ........ Include macOS-cross E2E in acceptance (default: 1)"
+	@echo "  AIFO_RUN_ALL_TESTS .......... Set to 1 to run ignored tests and skip local filters (used by check-full)"
 	@echo "  AIFO_CODER_TEST_DISABLE_DOCKER .. Disable docker-requiring tests (default: 0)"
 	@echo ""
 	@echo "  APPARMOR_PROFILE_NAME ....... Rendered AppArmor profile name (default: aifo-coder)"
@@ -730,10 +731,9 @@ help: banner
 	@echo "  check-int ................... Run integration tests (integration test suite)"
 	@echo "  check-e2e ................... Run all ignored-by-default tests (acceptance test suite)"
 	@echo "  check-all ................... Run all ignored-by-default tests (unit + integration + acceptance suites)"
+	@echo "  check-full .................. Run lint + guardrails + all tests with AIFO_RUN_ALL_TESTS=1 (incl. filtered/ignored)"
 	@echo ""
-	@echo "  test-all-junit .............. Run unit + acceptance + integration in a single nextest run (one JUnit)"
-	@echo ""
-		$(call title,AppArmor (security) profile:)
+	$(call title,AppArmor (security) profile:)
 	@echo
 	@echo "  apparmor .................... Generate $(APPARMOR_DIR)/$${APPARMOR_PROFILE_NAME} from template"
 	@echo ""
@@ -2245,6 +2245,11 @@ test-unit:
 	@set -e; \
 	export AIFO_SHIM_EXIT_ZERO_ON_SIGINT=0; \
 	export AIFO_SHIM_EXIT_ZERO_ON_DISCONNECT=0; \
+	if [ "$${AIFO_RUN_ALL_TESTS:-0}" = "1" ]; then \
+	  RUN_IGNORED_ARG="--run-ignored all"; \
+	else \
+	  RUN_IGNORED_ARG=""; \
+	fi; \
 	if [ "$(CLIPPY)" = "1" ]; then $(MAKE) lint; fi; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	ARCH="$$(uname -m 2>/dev/null || echo unknown)"; \
@@ -2261,58 +2266,60 @@ test-unit:
 	if [ -n "$$AIFO_EXEC_ID" ]; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (sidecar) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  else \
 	    echo "cargo-nextest missing in sidecar; attempting prebuilt install ..."; \
 	    curl -fsSL --retry 3 --connect-timeout 5 https://get.nexte.st/latest/linux -o /tmp/nextest.tgz 2>/dev/null || true; \
 	    if [ -f /tmp/nextest.tgz ]; then mkdir -p /tmp/nextest && tar -C /tmp/nextest -xzf /tmp/nextest.tgz; bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)"; [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tgz; fi; \
 	    if ! cargo nextest -V >/dev/null 2>&1; then arch="$$(uname -m)"; case "$$(uname -m)" in x86_64|amd64) tgt="x86_64-unknown-linux-gnu" ;; aarch64|arm64) tgt="aarch64-unknown-linux-gnu" ;; *) tgt="";; esac; if [ -n "$$tgt" ]; then url="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$(NEXTEST_VERSION)/cargo-nextest-$$tgt.tar.xz"; curl -fsSL --retry 3 --connect-timeout 5 "$$url" -o /tmp/nextest.tar.xz 2>/dev/null && mkdir -p /tmp/nextest && tar -C /tmp/nextest -xf /tmp/nextest.tar.xz && bin="$$(find /tmp/nextest -type f -name cargo-nextest -print -quit)" && [ -n "$$bin" ] && install -m 0755 "$$bin" /usr/local/cargo/bin/cargo-nextest; rm -rf /tmp/nextest /tmp/nextest.tar.xz || true; fi; fi; \
 	    cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  fi; \
 	elif command -v rustup >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  elif rustup run stable cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest (rustup stable) ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -e RUN_IGNORED_ARG="$$RUN_IGNORED_ARG" \
 	      -v "$$PWD:/workspace" \
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $${RUN_IGNORED_ARG} $(ARGS)'; \
 	  else \
-	    echo "cargo-nextest not available; falling back to cargo test ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
+	    echo "cargo-nextest not available; installing locally via rustup and running ..."; \
+	    rustup run stable cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
 	    echo "Running cargo nextest ..."; \
-	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  elif command -v docker >/dev/null 2>&1; then \
 	    echo "cargo-nextest not found locally; running inside $(RUST_BUILDER_IMAGE) (first run may install; slower) ..."; \
-	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
+	    MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -e RUN_IGNORED_ARG="$$RUN_IGNORED_ARG" \
 	      -v "$$PWD:/workspace" \
 	      -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
 	      -v "$$HOME/.cargo/git:/root/.cargo/git" \
 	      -v "$$PWD/target:/workspace/target" \
-	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
+	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $${RUN_IGNORED_ARG} $(ARGS)'; \
 	  else \
-	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
+	    echo "cargo-nextest not found locally; installing with 'cargo install cargo-nextest --locked' ..."; \
+	    cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $$RUN_IGNORED_ARG $(ARGS); \
 	  fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
-	  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm \
-	    -v "$$PWD:/workspace" \
-	    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
-	    -v "$$HOME/.cargo/git:/root/.cargo/git" \
-	    -v "$$PWD/target:/workspace/target" \
-	    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS)'; \
+		  MSYS_NO_PATHCONV=1 docker run $$DOCKER_PLATFORM_ARGS --rm -e RUN_IGNORED_ARG="$$RUN_IGNORED_ARG" \
+		    -v "$$PWD:/workspace" \
+		    -v "$$HOME/.cargo/registry:/root/.cargo/registry" \
+		    -v "$$HOME/.cargo/git:/root/.cargo/git" \
+		    -v "$$PWD/target:/workspace/target" \
+		    $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $${RUN_IGNORED_ARG} $(ARGS)'; \
 	else \
 	  echo "Error: neither cargo-nextest/cargo nor docker found; cannot run tests." >&2; \
 	  exit 1; \
@@ -2453,31 +2460,31 @@ coverage-html:
 .PHONY: test-e2e-proxy-smoke test-e2e-shim-embed test-e2e-proxy-unix test-int-toolchain-cpp test-e2e-proxy-errors
 test-e2e-proxy-smoke:
 	@echo "Running proxy TCP streaming smoke (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS)
 
 
 test-e2e-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_shim_embed -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_shim_embed $(ARGS)
 
 test-e2e-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
 	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_unix_socket -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_unix_socket $(ARGS); \
 	else \
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS); \
 	fi
 
 test-e2e-proxy-errors:
 	@echo "Running proxy error semantics tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_proxy_error_semantics
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --test int_proxy_error_semantics $(ARGS)
 
 test-int-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --test int_toolchain_cpp $(ARGS)
 
 test-proxy-smoke: test-e2e-proxy-smoke
 
@@ -2492,7 +2499,7 @@ test-toolchain-cpp: test-int-toolchain-cpp
 .PHONY: test-e2e-proxy-tcp
 test-e2e-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS)
 
 test-proxy-tcp: test-e2e-proxy-tcp
 
@@ -2502,19 +2509,25 @@ test-e2e:
 	@set -e; \
 	echo "Running acceptance test suite (ignored by default; target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
-	if [ "$$OS" = "Linux" ]; then \
-	  if [ "$${TEST_E2E_MACOS_CROSS:-1}" = "1" ]; then \
-	    EXPR='test(/^e2e_/)' ; \
-	  else \
-	    EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
-	  fi; \
+	if [ "$${AIFO_RUN_ALL_TESTS:-0}" = "1" ]; then \
+	  EXPR='test(/^e2e_/)' ; \
+	  RUN_IGNORED_FLAG="--run-ignored all"; \
 	else \
-	  if [ "$${AIFO_E2E_MACOS_CROSS:-1}" = "1" ]; then \
-	    EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	  RUN_IGNORED_FLAG="--run-ignored ignored-only"; \
+	  if [ "$$OS" = "Linux" ]; then \
+	    if [ "$${TEST_E2E_MACOS_CROSS:-1}" = "1" ]; then \
+	      EXPR='test(/^e2e_/)' ; \
+	    else \
+	      EXPR='test(/^e2e_/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
+	    fi; \
 	  else \
-	    EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
+	    if [ "$${AIFO_E2E_MACOS_CROSS:-1}" = "1" ]; then \
+	      EXPR='test(/^e2e_/) & !test(/_uds/)' ; \
+	    else \
+	      EXPR='test(/^e2e_/) & !test(/_uds/) & !binary(/^(e2e_macos_cross|e2e_macos_cross_sccache)$$/)' ; \
+	    fi; \
+	    echo "Skipping UDS acceptance test (non-Linux host)"; \
 	  fi; \
-	  echo "Skipping UDS acceptance test (non-Linux host)"; \
 	fi; \
 	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
 	  gitlab) : ;; \
@@ -2538,7 +2551,7 @@ test-e2e:
 	fi; \
 	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 \
 	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
-	  cargo nextest run $(ARGS_NEXTEST) -j 1 --run-ignored ignored-only -E "$$EXPR" $(ARGS); \
+	  cargo nextest run $(ARGS_NEXTEST) -j 1 $$RUN_IGNORED_FLAG -E "$$EXPR" $(ARGS); \
 	if command -v docker >/dev/null 2>&1 && docker image inspect $(MACOS_CROSS_IMAGE) >/dev/null 2>&1; then \
 	  echo "Running macOS cross E2E inside $(MACOS_CROSS_IMAGE) ..."; \
 	  $(MAKE) test-e2e-macos-cross; \
@@ -2551,14 +2564,19 @@ test-int:
 	echo "Running integration test suite (target-state filters) via cargo nextest ..."; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	EXPR='test(/^int_/)' ; \
-	case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
-	  gitlab) : ;; \
-	  *) EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/) & !test(/^int_proxy_tsc_prefers_local_compiler$$/))"; \
-	     : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
-	     : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
-	     git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
-	     ;; \
-	esac; \
+	if [ "$${AIFO_RUN_ALL_TESTS:-0}" = "1" ]; then \
+	  RUN_IGNORED_FLAG="--run-ignored all"; \
+	else \
+	  RUN_IGNORED_FLAG=""; \
+	  case "$${CI_PLATFORM:-$${CI_SERVER_FQDN:+gitlab}}" in \
+	    gitlab) : ;; \
+	    *) EXPR="($$EXPR) & (!test(/^int_test_agent_preview_includes_apparmor_flag_when_supported$$/) & !test(/^int_test_fork_merge_lock_serializes_concurrent_merges$$/) & !test(/^int_error_semantics_tcp_v1_and_v2$$/) & !test(/^int_proxy_tsc_prefers_local_compiler$$/))"; \
+	       : $${AIFO_CODER_TEST_RUST_IMAGE:=aifo-coder-toolchain-rust:ci}; \
+	       : $${AIFO_CODER_TEST_CPP_IMAGE:=aifo-coder-toolchain-cpp:ci}; \
+	       git config --global user.email "ci@example.com" && git config --global user.name "CI" || true; \
+	       ;; \
+	  esac; \
+	fi; \
 	if ! command -v cargo >/dev/null 2>&1; then \
 	  echo "Error: cargo not found; cannot run integration tests." >&2; \
 	  exit 1; \
@@ -2569,7 +2587,7 @@ test-int:
 	fi; \
 	AIFO_CODER_NOTIFICATIONS_TIMEOUT_SECS=5 AIFO_CODER_NOTIFICATIONS_TIMEOUT=5 \
 	  CARGO_TARGET_DIR=/var/tmp/aifo-target \
-	  cargo nextest run $(ARGS_NEXTEST) -j 1 -E "$$EXPR" $(ARGS)
+	  cargo nextest run $(ARGS_NEXTEST) -j 1 $$RUN_IGNORED_FLAG -E "$$EXPR" $(ARGS)
 
 check-e2e:
 	@echo "Running ignored-by-default e2e (acceptance) suite ..."
@@ -2586,6 +2604,22 @@ check-all: check
 	$(MAKE) test-int
 
 test-all: check-all
+
+.PHONY: check-full
+check-full:
+	@set -e; \
+	echo ""; \
+	echo "==> check-full: lint + clippy + docker lint + tidy + all tests (incl. ignored/filtered)"; \
+	$(MAKE) lint; \
+	$(MAKE) lint-docker; \
+	$(MAKE) lint-tests-naming; \
+	$(MAKE) tidy-no-multiline-strings; \
+	$(MAKE) check-macos-cli-dmg-plan; \
+	AIFO_RUN_ALL_TESTS=1 $(MAKE) test-unit; \
+	$(MAKE) ensure-macos-cross-image; \
+	AIFO_RUN_ALL_TESTS=1 $(MAKE) test-e2e; \
+	AIFO_RUN_ALL_TESTS=1 $(MAKE) test-int; \
+	echo "OK: check-full (all tests run)"
 
 test-acceptance-suite: test-e2e
 
@@ -2620,7 +2654,7 @@ test-all-junit:
 .PHONY: test-e2e-dev-routing
 test-e2e-dev-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_dev_tool_routing_make_tcp_v2 -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_dev_tool_routing_make_tcp_v2 $(ARGS)
 
 test-dev-tool-routing: test-e2e-dev-routing
 
