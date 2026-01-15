@@ -936,19 +936,36 @@ DOCKER_HUB_REGISTRY ?= registry-1.docker.io
 
 define MIRROR_CHECK_STRICT
   RP=""; \
-  echo "Checking reachability of https://$(MIRROR_REGISTRY) ..."; \
-  if command -v curl >/dev/null 2>&1 && \
-     curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(MIRROR_REGISTRY)/v2/ >/dev/null 2>&1; then \
-    echo "$(MIRROR_REGISTRY) reachable via HTTPS; using registry prefix for base images."; RP="$(MIRROR_REGISTRY)/"; \
-  else \
+  has_proxy_env() { [ -n "$${http_proxy:-}" ] || [ -n "$${https_proxy:-}" ] || [ -n "$${HTTP_PROXY:-}" ] || [ -n "$${HTTPS_PROXY:-}" ]; }; \
+  check_repos() { \
+    echo "Checking reachability of https://$(MIRROR_REGISTRY) ..."; \
+    if command -v curl >/dev/null 2>&1 && \
+       curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(MIRROR_REGISTRY)/v2/ >/dev/null 2>&1; then \
+      echo "$(MIRROR_REGISTRY) reachable via HTTPS; using registry prefix for base images."; RP="$(MIRROR_REGISTRY)/"; \
+      return 0; \
+    fi; \
     echo "$(MIRROR_REGISTRY) not reachable via HTTPS; using Docker Hub (no prefix)."; \
     if command -v curl >/dev/null 2>&1 && \
        curl --connect-timeout 1 --max-time 2 -sSI -o /dev/null https://$(DOCKER_HUB_REGISTRY)/v2/ >/dev/null 2>&1; then \
-      echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; \
+      echo "Docker Hub reachable via HTTPS; proceeding without registry prefix."; RP=""; \
+      return 0; \
+    fi; \
+    echo "Docker Hub not reachable via HTTPS."; \
+    return 1; \
+  }; \
+  if check_repos; then :; \
+  elif has_proxy_env; then \
+    echo "Initial reachability checks failed; retrying without http_proxy/https_proxy ..."; \
+    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; \
+    if check_repos; then \
+      echo "Reachability succeeded after removing proxy env; continuing without proxy."; \
     else \
       echo "Error: Neither $(MIRROR_REGISTRY) nor Docker Hub is reachable via HTTPS; cannot proceed."; \
       exit 1; \
     fi; \
+  else \
+    echo "Error: Neither $(MIRROR_REGISTRY) nor Docker Hub is reachable via HTTPS; cannot proceed."; \
+    exit 1; \
   fi
 endef
 
