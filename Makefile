@@ -2286,8 +2286,9 @@ test-unit:
 	      -v "$$PWD/target:/workspace/target" \
 	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
-	    echo "cargo-nextest not available; falling back to cargo test ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
+	    echo "cargo-nextest not available; installing locally via rustup and running ..."; \
+	    rustup run stable cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 rustup run stable cargo nextest run $(CARGO_FLAGS) $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
 	elif command -v cargo >/dev/null 2>&1; then \
 	  if cargo nextest -V >/dev/null 2>&1; then \
@@ -2302,8 +2303,9 @@ test-unit:
 	      -v "$$PWD/target:/workspace/target" \
 	      $(RUST_BUILDER_IMAGE) sh -lc 'set -e; cargo nextest -V >/dev/null 2>&1 || cargo install cargo-nextest --locked; export CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/workspace/ci/git-nosign.conf GIT_TERMINAL_PROMPT=0; cargo nextest run $(ARGS_NEXTEST) $(ARGS)'; \
 	  else \
-	    echo "cargo-nextest not found locally and docker unavailable; running 'cargo test' ..."; \
-	    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 cargo test $(CARGO_FLAGS) $(ARGS); \
+	    echo "cargo-nextest not found locally; installing with 'cargo install cargo-nextest --locked' ..."; \
+	    cargo install cargo-nextest --locked; \
+	    CARGO_TARGET_DIR=/var/tmp/aifo-target GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$$PWD/ci/git-nosign.conf" GIT_TERMINAL_PROMPT=0 nice -n ${NICENESS_CARGO_NEXTEST} cargo nextest run $(ARGS_NEXTEST) $(ARGS); \
 	  fi; \
 	elif command -v docker >/dev/null 2>&1; then \
 	  echo "cargo/cargo-nextest not found locally; running tests inside $(RUST_BUILDER_IMAGE) ..."; \
@@ -2453,31 +2455,31 @@ coverage-html:
 .PHONY: test-e2e-proxy-smoke test-e2e-shim-embed test-e2e-proxy-unix test-int-toolchain-cpp test-e2e-proxy-errors
 test-e2e-proxy-smoke:
 	@echo "Running proxy TCP streaming smoke (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS)
 
 
 test-e2e-shim-embed:
 	@echo "Running embedded shim presence test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_shim_embed -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_shim_embed $(ARGS)
 
 test-e2e-proxy-unix:
 	@set -e; \
 	OS="$$(uname -s 2>/dev/null || echo unknown)"; \
 	if [ "$$OS" = "Linux" ]; then \
 	  echo "Running unix-socket proxy test (ignored by default; Linux-only) ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_unix_socket -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_unix_socket $(ARGS); \
 	else \
 	  echo "Skipping unix-socket proxy test on $$OS; running TCP proxy smoke instead ..."; \
-	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored; \
+	  CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS); \
 	fi
 
 test-e2e-proxy-errors:
 	@echo "Running proxy error semantics tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_proxy_error_semantics
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --test int_proxy_error_semantics $(ARGS)
 
 test-int-toolchain-cpp:
 	@echo "Running c-cpp toolchain dry-run tests ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test int_toolchain_cpp
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --test int_toolchain_cpp $(ARGS)
 
 test-proxy-smoke: test-e2e-proxy-smoke
 
@@ -2492,7 +2494,7 @@ test-toolchain-cpp: test-int-toolchain-cpp
 .PHONY: test-e2e-proxy-tcp
 test-e2e-proxy-tcp:
 	@echo "Running TCP streaming proxy test (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_proxy_streaming_tcp -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_proxy_streaming_tcp $(ARGS)
 
 test-proxy-tcp: test-e2e-proxy-tcp
 
@@ -2620,7 +2622,7 @@ test-all-junit:
 .PHONY: test-e2e-dev-routing
 test-e2e-dev-routing:
 	@echo "Running dev-tool routing tests (ignored by default) ..."
-	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo test --test e2e_dev_tool_routing_make_tcp_v2 -- --ignored
+	CARGO_TARGET_DIR=/var/tmp/aifo-target cargo nextest run $(ARGS_NEXTEST) --run-ignored ignored-only --test e2e_dev_tool_routing_make_tcp_v2 $(ARGS)
 
 test-dev-tool-routing: test-e2e-dev-routing
 
