@@ -271,6 +271,33 @@ gpg_all_keygrips() {
     printf '%s\n' "$listing" | awk -F: '/^grp/ { print $10 }'
 }
 
+prime_gpg_agent_minimal() {
+    if [ "${AIFO_GPG_REQUIRE_PRIME_MINIMAL:-0}" != "1" ]; then
+        return
+    fi
+    if [ "${AIFO_GPG_PRIMED:-0}" = "1" ]; then
+        log_debug "gpg minimal prime skipped; already primed"
+        return
+    fi
+    if ! command -v gpg >/dev/null 2>&1; then
+        log_debug "gpg minimal prime skipped; gpg not available"
+        return
+    fi
+    home="${GNUPGHOME:-$HOME/.gnupg}"
+    set -- gpg --list-secret-keys --with-colons
+    if output="$("$@" 2>&1)"; then
+        log_debug "gpg minimal prime succeeded"
+        return
+    fi
+    status=$?
+    if printf '%s\n' "$output" | grep -qi "permission denied"; then
+        printf '%s: gpg cannot access %s; approve ~/.gnupg access.\n' "$log_prefix" "$home" >&2
+        printf '%s: hint: set GNUPGHOME to a workspace path if approvals fail.\n' "$log_prefix" >&2
+        return
+    fi
+    printf '%s: gpg prime check failed (exit %s); continuing.\n' "$log_prefix" "$status" >&2
+}
+
 maybe_preset_gpg_passphrase() {
     signing_key="$1"
     passphrase=""
@@ -567,6 +594,8 @@ if [ "${AIFO_GPG_PRIMED:-0}" != "1" ]; then
     # Launch gpg-agent after writing config so allow-preset-passphrase is honored for fullscreen agents.
     restart_gpg_agent
 fi
+mark_step "prime-gpg-minimal"
+prime_gpg_agent_minimal
 refresh_gpg_agent_tty
 
 mark_step "git-gpg"
