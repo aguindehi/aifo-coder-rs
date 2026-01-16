@@ -931,6 +931,8 @@ TC_IMAGE_NODE_REG ?= $(TC_REPO_NODE):$(NODE_REG_TAG)
 TC_IMAGE_CPP_REG  ?= $(TC_REPO_CPP):$(CPP_REG_TAG)
 
 # Centralized registry reachability and tagging prefix logic
+# MIRROR_CHECK_STRICT retries reachability without proxy env vars if both mirror and Docker Hub
+# fail, and only errors after both attempts.
 MIRROR_REGISTRY ?= repository.migros.net
 DOCKER_HUB_REGISTRY ?= registry-1.docker.io
 
