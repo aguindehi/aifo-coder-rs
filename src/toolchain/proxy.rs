@@ -50,9 +50,10 @@ use crate::container_runtime_path;
 use crate::shell_join;
 use crate::ShellScript;
 
+use super::routing::tool_allowed_in_kind;
 use super::sidecar;
 use super::{auth, http, notifications};
-use super::{container_exists, select_kind_for_tool, sidecar_allowlist};
+use super::{container_exists, select_kind_for_tool};
 
 use super::{
     log_parsed_request, log_request_result, random_token, ERR_BAD_REQUEST, ERR_FORBIDDEN,
@@ -1478,8 +1479,7 @@ fn handle_connection<S: Read + Write>(
         select_kind_for_tool(session, &tool, timeout_secs, &mut cache)
     };
     let kind = selected_kind.as_str();
-    let allow = sidecar_allowlist(kind);
-    if !allow.contains(&tool.as_str()) {
+    if !tool_allowed_in_kind(kind, &tool) {
         respond_plain(stream, "403 Forbidden", 86, ERR_FORBIDDEN);
         let _ = stream.flush();
         return;
@@ -2322,7 +2322,7 @@ fn is_tool_allowed_any_sidecar(tool: &str) -> bool {
     let tl = tool.to_ascii_lowercase();
     ["rust", "node", "python", "c-cpp", "go"]
         .iter()
-        .any(|k| sidecar_allowlist(k).contains(&tl.as_str()))
+        .any(|k| tool_allowed_in_kind(k, &tl))
 }
 
 #[cfg(test)]
