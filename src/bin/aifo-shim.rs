@@ -1261,7 +1261,7 @@ fn main() {
     // Special-case: for OpenCode agent, always use local python inside the agent container,
     // even when a proxy is configured. This ensures python3 runs from the opencode image.
     let agent_name = env::var("AIFO_AGENT_NAME").ok().unwrap_or_default();
-    if agent_name == "opencode" && (effective_tool == "python" || effective_tool == "python3") {
+    if agent_name == "opencode" && aifo_coder::shim::tool_is_python_name(&effective_tool) {
         if let Some(local) = pick_local_python_path() {
             let mut cmd = Command::new(local);
             cmd.env("PATH", base_sanitized_path());
@@ -1352,14 +1352,30 @@ fn main() {
             }
         }
 
-        if (effective_tool == "python" || effective_tool == "python3")
+        if aifo_coder::shim::tool_is_python_name(&effective_tool)
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART")
             && aifo_coder::shim::env_is_truthy("AIFO_SHIM_SMART_PYTHON")
         {
-            let module_mode = aifo_coder::shim::python_is_module_mode(&effective_argv_os);
-            if module_mode {
+            let py = aifo_coder::shim::python_invocation(&effective_argv_os, None);
+
+            // Force toolchain for pip/uv to avoid host pollution.
+            let force_proxy =
+                py.module_is_pip_like() || aifo_coder::shim::tool_is_always_proxy(&effective_tool);
+
+            // Optional global overrides
+            let force_local_env = aifo_coder::shim::env_is_truthy("AIFO_SHIM_FORCE_LOCAL_PYTHON");
+            let force_proxy_env = aifo_coder::shim::env_is_truthy("AIFO_SHIM_FORCE_PROXY_PYTHON");
+
+            let in_ws = py.target_in_workspace();
+
+            if force_local_env && !force_proxy {
                 if let Some(local) = pick_local_python_path() {
-                    log_smart_line("python", "module-mode", None, Some(local));
+                    log_smart_line(
+                        "python",
+                        "force-local-env",
+                        py.target.as_deref(),
+                        Some(local),
+                    );
                     let mut cmd = Command::new(local);
                     if effective_argv_os.len() > 1 {
                         cmd.args(&effective_argv_os[1..]);
@@ -1370,23 +1386,30 @@ fn main() {
                     });
                     process::exit(st.code().unwrap_or(1));
                 }
-            } else if let Some(script) = aifo_coder::shim::python_script_arg(&effective_argv_os) {
-                let p = aifo_coder::shim::resolve_program_path(&script);
-                if !aifo_coder::shim::is_under_workspace(&p) {
-                    if let Some(local) = pick_local_python_path() {
-                        log_smart_line("python", "outside-workspace", Some(&p), Some(local));
-                        let mut cmd = Command::new(local);
-                        if effective_argv_os.len() > 1 {
-                            cmd.args(&effective_argv_os[1..]);
-                        }
-                        let st = cmd.status().unwrap_or_else(|e| {
-                            eprintln!("aifo-shim: failed to exec local python: {e}");
-                            process::exit(1);
-                        });
-                        process::exit(st.code().unwrap_or(1));
+            }
+
+            // Run locally when outside workspace, unless explicitly forced to proxy.
+            if !in_ws && !force_proxy && !force_proxy_env {
+                if let Some(local) = pick_local_python_path() {
+                    log_smart_line(
+                        "python",
+                        "outside-workspace",
+                        py.target.as_deref(),
+                        Some(local),
+                    );
+                    let mut cmd = Command::new(local);
+                    if effective_argv_os.len() > 1 {
+                        cmd.args(&effective_argv_os[1..]);
                     }
+                    let st = cmd.status().unwrap_or_else(|e| {
+                        eprintln!("aifo-shim: failed to exec local python: {e}");
+                        process::exit(1);
+                    });
+                    process::exit(st.code().unwrap_or(1));
                 }
             }
+
+            // If force-proxy env is set, defer to proxy; otherwise continue.
         }
     }
 
@@ -1443,7 +1466,7 @@ fn main() {
                 process::exit(st.code().unwrap_or(1));
             }
         }
-        if effective_tool == "python" || effective_tool == "python3" {
+        if aifo_coder::shim::tool_is_python_name(&effective_tool) {
             if let Some(local) = pick_local_python_path() {
                 let mut cmd = Command::new(local);
                 cmd.env("PATH", base_sanitized_path());

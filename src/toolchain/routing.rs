@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use super::sidecar::sidecar_container_name;
-use crate::{container_runtime_path, shell_escape, ShellScript};
+use crate::{container_runtime_path, shell_escape, shim, ShellScript};
 
 #[cfg(unix)]
 use wait_timeout::ChildExt as _;
@@ -131,16 +131,48 @@ pub fn sidecar_allowlist(kind: &str) -> &'static [&'static str] {
     }
 }
 
+fn tool_allowed_in_python(tool: &str) -> bool {
+    let tl = tool.to_ascii_lowercase();
+    if ALLOW_PYTHON.contains(&tl.as_str()) {
+        return true;
+    }
+    if shim::tool_is_python_name(&tl) {
+        return true;
+    }
+    if tl.starts_with("pip3.") {
+        return true;
+    }
+    false
+}
+
+pub fn tool_allowed_in_kind(kind: &str, tool: &str) -> bool {
+    let tl = tool.to_ascii_lowercase();
+    match kind {
+        "python" => tool_allowed_in_python(&tl),
+        "rust" => ALLOW_RUST.contains(&tl.as_str()),
+        "node" => ALLOW_NODE.contains(&tl.as_str()),
+        "c-cpp" => ALLOW_CCPP.contains(&tl.as_str()),
+        "go" => ALLOW_GO.contains(&tl.as_str()),
+        _ => false,
+    }
+}
+
 /// Map a tool name to the sidecar kind.
 pub fn route_tool_to_sidecar(tool: &str) -> &'static str {
     let t = tool.to_ascii_lowercase();
+
+    if shim::tool_is_python_name(&t) {
+        return "python";
+    }
+    if t == "pip" || t == "pip3" || t.starts_with("pip3.") || t == "uv" || t == "uvx" {
+        return "python";
+    }
+
     match t.as_str() {
         // rust
         "cargo" | "rustc" | "rust-analyzer" => "rust",
         // node/typescript and related managers
         "node" | "npm" | "npx" | "yarn" | "pnpm" | "deno" | "bun" | "tsc" | "ts-node" => "node",
-        // python and uv/uvx tools
-        "python" | "python3" | "pip" | "pip3" | "uv" | "uvx" => "python",
         // c/c++
         "gcc" | "g++" | "clang" | "clang++" | "make" | "cmake" | "ninja" | "pkg-config" => "c-cpp",
         // dockerfile linting

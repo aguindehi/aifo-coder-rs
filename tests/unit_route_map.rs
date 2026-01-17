@@ -14,8 +14,10 @@ fn unit_route_tool_to_sidecar_mapping() {
 
     assert_eq!(aifo_coder::route_tool_to_sidecar("python"), "python");
     assert_eq!(aifo_coder::route_tool_to_sidecar("python3"), "python");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("python3.11"), "python");
     assert_eq!(aifo_coder::route_tool_to_sidecar("pip"), "python");
     assert_eq!(aifo_coder::route_tool_to_sidecar("pip3"), "python");
+    assert_eq!(aifo_coder::route_tool_to_sidecar("pip3.11"), "python");
     assert_eq!(aifo_coder::route_tool_to_sidecar("uv"), "python");
     assert_eq!(aifo_coder::route_tool_to_sidecar("uvx"), "python");
 
