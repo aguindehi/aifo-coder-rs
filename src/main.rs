@@ -602,6 +602,18 @@ fn main() -> ExitCode {
     apply_cli_globals(&cli);
     let use_err = aifo_coder::color_enabled_stderr();
 
+    if let aifo_coder::ProxyCheckOutcome::Cleared(vars) =
+        aifo_coder::check_proxy_connectivity()
+    {
+        let joined = vars.join(", ");
+        aifo_coder::log_warn_stderr(
+            use_err,
+            &format!(
+                "aifo-coder: warning: proxy unreachable ({joined}); continuing without proxy."
+            ),
+        );
+    }
+
     // Fork orchestrator: run early if requested
     if let Some(n) = cli.fork {
         return crate::fork::runner::fork_run(&cli, n);
