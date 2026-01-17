@@ -602,9 +602,7 @@ fn main() -> ExitCode {
     apply_cli_globals(&cli);
     let use_err = aifo_coder::color_enabled_stderr();
 
-    if let aifo_coder::ProxyCheckOutcome::Cleared(vars) =
-        aifo_coder::check_proxy_connectivity()
-    {
+    if let aifo_coder::ProxyCheckOutcome::Cleared(vars) = aifo_coder::check_proxy_connectivity() {
         let joined = vars.join(", ");
         aifo_coder::log_warn_stderr(
             use_err,

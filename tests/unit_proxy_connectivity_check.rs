@@ -25,8 +25,7 @@ fn unit_proxy_connectivity_marks_unreachable_and_clears_env() {
     env::set_var("https_proxy", "https://example.invalid:9");
     env::set_var("no_proxy", "127.0.0.1,localhost");
 
-    let outcome =
-        aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
+    let outcome = aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
 
     assert_eq!(
         outcome,
@@ -57,13 +56,9 @@ fn unit_proxy_connectivity_retains_when_probe_succeeds() {
     let prev = stash_proxy_env();
     env::set_var("http_proxy", "http://example.invalid:9");
 
-    let outcome =
-        aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| true);
+    let outcome = aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| true);
 
-    assert_eq!(
-        outcome,
-        aifo_coder::proxy::ProxyCheckOutcome::Retained
-    );
+    assert_eq!(outcome, aifo_coder::proxy::ProxyCheckOutcome::Retained);
     assert_eq!(
         env::var("http_proxy").unwrap_or_default(),
         "http://example.invalid:9"
@@ -82,13 +77,9 @@ fn unit_proxy_connectivity_skips_when_fallback_disabled() {
     env::set_var("http_proxy", "http://example.invalid:9");
     env::set_var("AIFO_PROXY_FALLBACK", "0");
 
-    let outcome =
-        aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
+    let outcome = aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
 
-    assert_eq!(
-        outcome,
-        aifo_coder::proxy::ProxyCheckOutcome::Skipped
-    );
+    assert_eq!(outcome, aifo_coder::proxy::ProxyCheckOutcome::Skipped);
     assert_eq!(
         env::var("http_proxy").unwrap_or_default(),
         "http://example.invalid:9"
@@ -111,13 +102,9 @@ fn unit_proxy_connectivity_skips_when_no_proxy_env_present() {
         env::remove_var(k);
     }
 
-    let outcome =
-        aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
+    let outcome = aifo_coder::proxy::proxy_connectivity_check_with(|_host, _port| false);
 
-    assert_eq!(
-        outcome,
-        aifo_coder::proxy::ProxyCheckOutcome::Skipped
-    );
+    assert_eq!(outcome, aifo_coder::proxy::ProxyCheckOutcome::Skipped);
     assert!(!aifo_coder::proxy::should_force_direct_proxy());
 
     restore_proxy_env(&prev);

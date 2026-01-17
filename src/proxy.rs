@@ -8,8 +8,14 @@ use std::time::Duration;
 use url::Url;
 
 // Proxy environment variable names we track.
-pub(crate) const PROXY_ENV_VARS: &[&str] =
-    &["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "no_proxy", "NO_PROXY"];
+pub(crate) const PROXY_ENV_VARS: &[&str] = &[
+    "http_proxy",
+    "https_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "no_proxy",
+    "NO_PROXY",
+];
 const PROXY_PROBE_ENV_VARS: &[&str] = &["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"];
 
 static FORCE_DIRECT_PROXY: AtomicBool = AtomicBool::new(false);
@@ -77,10 +83,7 @@ fn parse_proxy_target(raw: &str) -> Option<(String, u16)> {
     if trimmed.is_empty() {
         return None;
     }
-    let candidates = [
-        trimmed.to_string(),
-        format!("http://{trimmed}"),
-    ];
+    let candidates = [trimmed.to_string(), format!("http://{trimmed}")];
     for candidate in candidates {
         let parsed = if candidate.contains("://") {
             Url::parse(&candidate).ok()
