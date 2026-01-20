@@ -193,7 +193,11 @@ RUN set -eux; \
     curl -fsSL --retry 3 --connect-timeout 5 "$url" -o /usr/local/bin/hadolint; \
     chmod 0755 /usr/local/bin/hadolint; \
     strip /usr/local/bin/hadolint 2>/dev/null || true; \
-    /usr/local/bin/hadolint --version >/dev/null
+    if [ "${HADOLINT_RUN_SELFTEST:-0}" = "1" ]; then \
+      /usr/local/bin/hadolint --version >/dev/null; \
+    else \
+      echo "hadolint: self-test disabled (qemu segfaults on some builders)" >&2; \
+    fi
 
 # Optionally drop procps/apt and fold final CMake verification into same layer
 RUN set -eux; \
