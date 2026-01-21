@@ -70,9 +70,18 @@ pub(crate) fn node_toolchain_requested(cli: &Cli) -> bool {
 fn maybe_migrate_node_to_pnpm_interactive() {
     use std::io::{self, Write};
 
-    // Do not run in CI or when non-interactive mode is requested
-    if std::env::var("CI").ok().as_deref() == Some("true")
-        || std::env::var("AIFO_CODER_NON_INTERACTIVE").ok().as_deref() == Some("1")
+    let auto_yes = std::env::var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    // Do not run in CI or when non-interactive mode is requested, unless explicitly forced
+    if !auto_yes
+        && (std::env::var("CI").ok().as_deref() == Some("true")
+            || std::env::var("AIFO_CODER_NON_INTERACTIVE")
+                .ok()
+                .as_deref()
+                == Some("1"))
     {
         return;
     }
@@ -126,10 +135,6 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     }
 
     let use_err = aifo_coder::color_enabled_stderr();
-    let auto_yes = std::env::var("AIFO_CODER_PNPM_MIGRATE_AUTO_YES")
-        .ok()
-        .as_deref()
-        == Some("1");
     let mut out = io::stderr();
 
     // Explain what will happen (mirrors Makefile semantics), but report actual artifacts found.
