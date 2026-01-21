@@ -78,10 +78,7 @@ fn maybe_migrate_node_to_pnpm_interactive() {
     // Do not run in CI or when non-interactive mode is requested, unless explicitly forced
     if !auto_yes
         && (std::env::var("CI").ok().as_deref() == Some("true")
-            || std::env::var("AIFO_CODER_NON_INTERACTIVE")
-                .ok()
-                .as_deref()
-                == Some("1"))
+            || std::env::var("AIFO_CODER_NON_INTERACTIVE").ok().as_deref() == Some("1"))
     {
         return;
     }

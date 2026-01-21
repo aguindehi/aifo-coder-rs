@@ -21,6 +21,8 @@ main() {
     return 0
   fi
 
+  echo "Checking proxy settings..."
+
   if python3 - $proxy_keys <<'PY'
 import os
 import socket
