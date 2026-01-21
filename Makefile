@@ -740,6 +740,11 @@ help: banner
 	@echo "  apparmor-load-colima ........ Load the generated profile directly into the Colima VM"
 	@echo "  apparmor-log-colima ......... Stream AppArmor logs (Colima VM or local Linux) into $(LOG_DIR)/apparmor.log"
 	@echo ""
+	$(call title,GIT targets:)
+	@echo ""
+	@echo "  push ........................ Run git push after clearing proxy if unreachable"
+	@echo "  push-all .................... Run git push all after clearing proxy if unreachable"
+	@echo ""
 	$(call title_ul,Usage:)
 	@echo ""
 	@echo "  Run Aider CLI:"
@@ -969,6 +974,10 @@ define MIRROR_CHECK_STRICT
     echo "Error: Neither $(MIRROR_REGISTRY) nor Docker Hub is reachable via HTTPS; cannot proceed."; \
     exit 1; \
   fi
+endef
+
+define PROXY_FALLBACK_IF_UNREACHABLE
+  if [ -r scripts/proxy_fallback.sh ]; then . scripts/proxy_fallback.sh; fi;
 endef
 
 define MIRROR_CHECK_LAX
@@ -2219,6 +2228,7 @@ lint-ultra:
 
 check:
 	@set -e; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
 	echo ""; \
 	echo "==> check: fmt + clippy"; \
 	$(MAKE) lint; \
@@ -2617,9 +2627,11 @@ check-int:
 	$(MAKE) test-int
 
 check-all: check
-	@echo "Running full test suite including ignored-by-default (unit + integration + all e2e tests) ..."
-	$(MAKE) ensure-macos-cross-image
-	$(MAKE) test-e2e
+	@set -e; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
+	echo "Running full test suite including ignored-by-default (unit + integration + all e2e tests) ..."; \
+	$(MAKE) ensure-macos-cross-image; \
+	$(MAKE) test-e2e; \
 	$(MAKE) test-int
 
 test-all: check-all
@@ -2627,6 +2639,7 @@ test-all: check-all
 .PHONY: check-full
 check-full:
 	@set -e; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
 	echo ""; \
 	echo "==> check-full: lint + clippy + docker lint + tidy + all tests (incl. ignored/filtered)"; \
 	$(MAKE) lint; \
@@ -3269,6 +3282,19 @@ gpg-unset-signing:
 	-@git config --unset commit.gpgSign 2>/dev/null || true
 	-@git config --unset tag.gpgSign 2>/dev/null || true
 	@echo "Unset local signing config for this repo."
+
+.PHONY: push push-all
+push:
+	@set -e; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
+	echo "Running git push ..."; \
+	git push
+
+push-all:
+	@set -e; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
+	echo "Running git push all ..."; \
+	git push all
 
 git-commit-no-sign:
 	@test -n "$(MESSAGE)" || { echo "Usage: make git-commit-no-sign MESSAGE='your commit message'"; exit 1; }

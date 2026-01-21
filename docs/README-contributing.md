@@ -23,8 +23,10 @@ Conventions and registries (IR vs MR)
   - Automatic login: on permission-denied pulls, the launcher will prompt for `docker login` to
     the resolved registry and retry once (interactive only). Disable with AIFO_CODER_AUTO_LOGIN=0.
 - Connectivity fallback: both Makefile builds and the CLI registry probe retry without
-  http_proxy/https_proxy when mirror and Docker Hub checks fail. Disable CLI fallback with
-  AIFO_PROXY_FALLBACK=0 if you must keep the proxy enforced.
+  http_proxy/https_proxy when mirror and Docker Hub checks fail. `make check`/`check-all`/`check-full`
+  also clear proxy env vars when the proxy host is unreachable. Disable CLI fallback with
+  AIFO_PROXY_FALLBACK=0 or force proxy usage with AIFO_PROXY_FORCE_PROXY=1 if you must keep the proxy
+  enforced.
 
 Toolchain image overrides
 
