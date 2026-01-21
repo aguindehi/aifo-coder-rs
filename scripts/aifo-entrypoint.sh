@@ -5,6 +5,7 @@ umask 077
 log_prefix="aifo-entrypoint"
 log_verbose="${AIFO_TOOLCHAIN_VERBOSE:-0}"
 runtime_user="${AIFO_RUNTIME_USER:-coder}"
+gpg_prompt_interactive=0
 current_step="init"
 IS_ROOT=0
 if [ "$(id -u)" = "0" ]; then
@@ -415,6 +416,7 @@ prime_gpg_agent_if_requested() {
                 exit 1
             fi
             # Read passphrase once interactively (no echo) and cache in env for wrapper use.
+            gpg_prompt_interactive=1
             printf '%s: enter GPG passphrase for fullscreen agent (input will not be echoed): ' "$log_prefix" >&2
             # shellcheck disable=SC2162
             stty -echo 2>/dev/null || true
@@ -879,6 +881,12 @@ run_prewarm_cmds() {
 
 mark_step "prewarm"
 run_prewarm_cmds
+
+if [ "$gpg_prompt_interactive" = "1" ]; then
+    mark_step "passphrase-delay"
+    # Give users a moment to read GPG confirmations before fullscreen agent takes over.
+    sleep 2
+fi
 
 mark_step "exec"
 trap - EXIT
