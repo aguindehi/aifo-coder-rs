@@ -618,9 +618,11 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-release ............. Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
-	@echo "  publish-release-images ...... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
-	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs"
+	@echo "  publish-release ............. Alias for publish-release-gitlab (default)"
+	@echo "  publish-release-gitlab ....... Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
+	@echo "  publish-release-github ....... Darwin-only: publish signed macOS CLI DMGs to an existing GitHub Release"
+	@echo "  publish-release-images ....... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
+	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs (GitLab)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and NOTARY_PROFILE."
 	@echo "  publish-release-macos-zip-signed  Darwin-only: legacy zip flow (kept for one migration cycle)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
@@ -641,6 +643,7 @@ help: banner
 	@echo "  macos-notary-setup .......... One-time setup: stores notarytool credentials in macOS keychain (prompts for missing values)"
 	@echo "  release-macos-dmg-signed  Build+sign+notarize+staple+verify per-arch macOS DMGs (Darwin-only)"
 	@echo "  publish-release-macos-dmg-signed  Create/update GitLab Release and upload notarized macOS DMGs (Darwin-only)"
+	@echo "  publish-release-macos-dmg-signed-github  Upload notarized macOS DMGs to an existing GitHub Release (Darwin-only)"
 	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab (legacy)"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -1848,8 +1851,8 @@ publish-release-images:
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
-.PHONY: publish-release
-publish-release:
+.PHONY: publish-release-gitlab
+publish-release-gitlab:
 	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
 	@$(MAKE) publish-release-images
 	@echo
@@ -1858,6 +1861,17 @@ publish-release:
 	@echo
 	@echo "Tag and GitLab Release have been created/updated locally."
 	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
+
+.PHONY: publish-release-github
+publish-release-github:
+	@echo "==> Building and uploading signed macOS DMGs to the existing GitHub Release ..."
+	@$(MAKE) publish-release-macos-dmg-signed-github
+	@echo
+	@echo "GitHub release assets updated."
+
+.PHONY: publish-release
+publish-release:
+	@$(MAKE) publish-release-gitlab
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
@@ -1897,6 +1911,44 @@ publish-release-macos-dmg-signed:
 	$(MAKE) TAG="$$TAG_EFF" release-macos-dmg-signed; \
 	$(MAKE) TAG="$$TAG_EFF" publish-macos-dmg-local; \
 	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
+	'
+
+.PHONY: publish-release-macos-dmg-signed-github
+publish-release-macos-dmg-signed-github:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-dmg-signed-github; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	echo "publish-release-macos-dmg-signed-github: upload signed macOS DMGs to an existing GitHub Release."; \
+	if ! command -v gh >/dev/null 2>&1; then \
+	  echo "Error: gh (GitHub CLI) is required to upload DMGs." >&2; \
+	  echo "Hint: install gh and authenticate (gh auth login)." >&2; \
+	  exit 1; \
+	fi; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
+	  TAG_EFF="$(TAG)"; \
+	else \
+	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
+	fi; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
+	    exit 1 ;; \
+	  latest ) \
+	    echo "Error: refusing to publish macOS signed release with tag '\''latest'\''." >&2; \
+	    echo "Hint: run make publish-release-github (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    exit 2 ;; \
+	  -* ) \
+	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: make -npr publish-release-macos-dmg-signed-github | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
+	    exit 3 ;; \
+	esac; \
+	echo "Publishing signed+notarized macOS DMGs for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-dmg-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-dmg-local-gh; \
+	echo "Done. Ensure the GitHub Release for tag '\''$$TAG_EFF'\'' exists."; \
 	'
 
 .PHONY: publish-release-macos-zip-signed
@@ -4396,6 +4448,66 @@ publish-macos-dmg-local-glab:
 	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
 	echo "Upload complete (glab)."
 
+.PHONY: publish-macos-dmg-local-gh
+publish-macos-dmg-local-gh:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local-gh; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git gh); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	ARM="$(MACOS_CLI_DMG_ARM64)"; \
+	X86="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS CLI DMG artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-cli-dmg-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
+	if [ -z "$$ORIGIN" ]; then \
+	  echo "Error: could not determine origin remote." >&2; \
+	  exit 1; \
+	fi; \
+	case "$$ORIGIN" in \
+	  git@github.com:* ) PROJ_PATH="$${ORIGIN#git@github.com:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@github.com/* ) PROJ_PATH="$${ORIGIN#ssh://git@github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://github.com/* ) PROJ_PATH="$${ORIGIN#https://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://github.com/* ) PROJ_PATH="$${ORIGIN#http://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  * ) PROJ_PATH="" ;; \
+	esac; \
+	if [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: could not derive GitHub repo from origin remote: $$ORIGIN" >&2; \
+	  echo "Expected GitHub remote (git@github.com:owner/repo.git or https://github.com/owner/repo.git)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Checking gh auth for github.com ..."; \
+	gh auth status --hostname github.com >/dev/null 2>&1 || { \
+	  echo "Error: gh is not authenticated for github.com." >&2; \
+	  echo "Run: gh auth login --hostname github.com" >&2; \
+	  exit 2; \
+	}; \
+	echo "Ensuring GitHub Release exists for tag $$TAG ..."; \
+	gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1 || { \
+	  echo "Error: GitHub Release for tag $$TAG does not exist." >&2; \
+	  echo "Hint: create the release first (CI tag pipeline or gh release create)." >&2; \
+	  exit 3; \
+	}; \
+	FILES=""; \
+	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
+	if [ -f "$$X86" ]; then FILES="$$FILES $$X86"; fi; \
+	if [ -z "$$FILES" ]; then \
+	  echo "Error: no macOS DMG artifacts found to upload (expected $$ARM and/or $$X86)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Uploading signed macOS CLI DMG assets to GitHub Release $$TAG ..."; \
+	gh release upload "$$TAG" $$FILES --repo "$$PROJ_PATH" --clobber; \
+	echo "Upload complete (gh)."
+
 .PHONY: publish-macos-signed-zips-local-glab
 publish-macos-signed-zips-local-glab:
 	@set -eu; \
@@ -5092,10 +5204,14 @@ check-macos-cli-dmg-plan:
 	need "^release-macos-dmg-signed:"; \
 	need "^\\.PHONY: publish-release-macos-dmg-signed$$"; \
 	need "^publish-release-macos-dmg-signed:"; \
+	need "^\\.PHONY: publish-release-macos-dmg-signed-github$$"; \
+	need "^publish-release-macos-dmg-signed-github:"; \
 	need "^\\.PHONY: publish-macos-dmg-local$$"; \
 	need "^publish-macos-dmg-local:"; \
 	need "^\\.PHONY: publish-macos-dmg-local-glab$$"; \
 	need "^publish-macos-dmg-local-glab:"; \
+	need "^\\.PHONY: publish-macos-dmg-local-gh$$"; \
+	need "^publish-macos-dmg-local-gh:"; \
 	need "^\\.PHONY: publish-macos-dmg-local-curl$$"; \
 	need "^publish-macos-dmg-local-curl:"; \
 	need_lit 'MACOS_CLI_DMG_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg'; \

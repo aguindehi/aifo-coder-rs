@@ -22,6 +22,11 @@ env:
   REGISTRY_PREFIX: ${{ vars.REGISTRY_PREFIX || '' }}
 
 jobs:
+  publish-images:
+    name: Publish multi-arch images
+    uses: ./.github/workflows/container-images.yml
+    secrets: inherit
+
   require-apple-sdk:
     name: Ensure Apple SDK secrets exist
     runs-on: ubuntu-latest
@@ -72,6 +77,9 @@ jobs:
   build-linux-binary:
     name: Build Linux binary
     runs-on: ubuntu-latest
+    env:
+      AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
+      AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,7 +102,7 @@ jobs:
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-target-
       - name: Build release binary (Linux)
-        run: cargo build --release
+        run: cargo build ${{ env.CARGO_FLAGS }} --release
       - name: Stage Linux artifact
         run: |
           mkdir -p dist
@@ -105,6 +113,55 @@ jobs:
         with:
           name: linux-binary
           path: dist/aifo-coder-linux-x86_64
+          if-no-files-found: error
+
+  build-linux-arm64-binary:
+    name: Build Linux binary (arm64)
+    runs-on: ubuntu-latest
+    env:
+      AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
+      AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Install arm64 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-
+      - name: Build release binary (Linux arm64)
+        env:
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+        run: cargo build ${{ env.CARGO_FLAGS }} --release --target aarch64-unknown-linux-gnu
+      - name: Stage Linux arm64 artifact
+        run: |
+          mkdir -p dist
+          cp target/aarch64-unknown-linux-gnu/release/aifo-coder dist/aifo-coder-linux-arm64
+          file dist/aifo-coder-linux-arm64 || true
+      - name: Upload Linux arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-binary
+          path: dist/aifo-coder-linux-arm64
           if-no-files-found: error
 
   build-macos-binaries:
@@ -144,18 +201,18 @@ jobs:
       - name: Build macOS arm64 binary
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace \
-            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT \
+            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT -e CARGO_FLAGS \
             aifo-coder-macos-cross-rust-builder:release \
-            bash -lc 'rustup target add aarch64-apple-darwin || true; cargo build --release --target aarch64-apple-darwin'
+            bash -lc 'rustup target add aarch64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target aarch64-apple-darwin'
           mkdir -p dist
           cp target/aarch64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-arm64
           file dist/aifo-coder-macos-arm64 || true
       - name: Build macOS x86_64 binary
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace \
-            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT \
+            -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT -e CARGO_FLAGS \
             aifo-coder-macos-cross-rust-builder:release \
-            bash -lc 'rustup target add x86_64-apple-darwin || true; cargo build --release --target x86_64-apple-darwin'
+            bash -lc 'rustup target add x86_64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target x86_64-apple-darwin'
           mkdir -p dist
           cp target/x86_64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-x86_64
           file dist/aifo-coder-macos-x86_64 || true
@@ -168,11 +225,49 @@ jobs:
             dist/aifo-coder-macos-x86_64
           if-no-files-found: error
 
+  build-macos-dmgs:
+    name: Build macOS DMGs
+    needs: build-macos-binaries
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist
+      - name: Build DMGs
+        run: |
+          set -euo pipefail
+          VERSION="$(python - <<'PY'
+          import tomllib
+          with open("Cargo.toml", "rb") as f:
+              print(tomllib.load(f)["package"]["version"])
+          PY
+          )"
+          make release-macos-dmg MACOS_DMG_VERSION="${VERSION}"
+          ls -lh dist/aifo-coder-"${VERSION}"-macos-arm64.dmg \
+                 dist/aifo-coder-"${VERSION}"-macos-x86_64.dmg
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        id: dmg
+      - name: Upload macOS DMG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmgs
+          path: |
+            dist/aifo-coder-${{ steps.dmg.outputs.version }}-macos-arm64.dmg
+            dist/aifo-coder-${{ steps.dmg.outputs.version }}-macos-x86_64.dmg
+          if-no-files-found: error
+
   package-release:
     name: Package release assets
     needs:
+      - publish-images
       - build-linux-binary
+      - build-linux-arm64-binary
       - build-macos-binaries
+      - build-macos-dmgs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -182,10 +277,20 @@ jobs:
         with:
           name: linux-binary
           path: dist
+      - name: Download Linux arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-binary
+          path: dist
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: macos-binaries
+          path: dist
+      - name: Download macOS DMGs
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmgs
           path: dist
       - name: Package archives
         run: |
@@ -212,6 +317,13 @@ jobs:
           rm -rf "${stage}"
 
           stage="$(mktemp -d)"
+          install -m 0755 dist/aifo-coder-linux-arm64 "${stage}/aifo-coder"
+          install -m 0644 README.md NOTICE LICENSE "${stage}/"
+          cp -a docs "${stage}/"
+          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-linux-arm64.zip" .)
+          rm -rf "${stage}"
+
+          stage="$(mktemp -d)"
           install -m 0755 dist/aifo-coder-macos-arm64 "${stage}/aifo-coder"
           install -m 0644 README.md NOTICE LICENSE "${stage}/"
           cp -a docs "${stage}/"
@@ -226,6 +338,7 @@ jobs:
           rm -rf "${stage}"
 
           ls -lh aifo-coder-${VERSION}-linux-x86_64.zip \
+                 aifo-coder-${VERSION}-linux-arm64.zip \
                  aifo-coder-${VERSION}-macos-arm64.zip \
                  aifo-coder-${VERSION}-macos-x86_64.zip
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -236,6 +349,7 @@ jobs:
           name: release-zips
           path: |
             aifo-coder-${{ steps.package.outputs.version }}-linux-x86_64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-linux-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
           if-no-files-found: error
@@ -244,8 +358,11 @@ jobs:
         with:
           files: |
             aifo-coder-${{ steps.package.outputs.version }}-linux-x86_64.zip
+            aifo-coder-${{ steps.package.outputs.version }}-linux-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
+            dist/aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.dmg
+            dist/aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.dmg
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -285,6 +402,45 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: signed/*.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  attach-signed-macos-dmgs:
+    name: Attach signed macOS DMGs (optional)
+    needs: package-release
+    runs-on: ubuntu-latest
+    if: ${{ vars.SIGNED_MACOS_ARM64_DMG_URL != '' || vars.SIGNED_MACOS_X86_64_DMG_URL != '' }}
+    steps:
+      - name: Download signed macOS DMGs
+        run: |
+          set -euo pipefail
+          mkdir -p signed
+          found=0
+          if [ -n "${{ vars.SIGNED_MACOS_ARM64_DMG_URL }}" ]; then
+            if curl -fL --retry 2 "${{ vars.SIGNED_MACOS_ARM64_DMG_URL }}" -o signed/signed-macos-arm64.dmg; then
+              found=1
+            else
+              echo "WARN: could not fetch arm64 signed DMG from SIGNED_MACOS_ARM64_DMG_URL" >&2
+            fi
+          fi
+          if [ -n "${{ vars.SIGNED_MACOS_X86_64_DMG_URL }}" ]; then
+            if curl -fL --retry 2 "${{ vars.SIGNED_MACOS_X86_64_DMG_URL }}" -o signed/signed-macos-x86_64.dmg; then
+              found=1
+            else
+              echo "WARN: could not fetch x86_64 signed DMG from SIGNED_MACOS_X86_64_DMG_URL" >&2
+            fi
+          fi
+          if [ "${found}" = "0" ]; then
+            echo "No signed macOS DMGs downloaded; skipping upload."
+            exit 0
+          fi
+          ls -lh signed || true
+      - name: Upload signed DMGs to release
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          files: signed/*.dmg
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
