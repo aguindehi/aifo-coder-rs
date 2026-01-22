@@ -312,6 +312,8 @@ pub fn preferred_internal_registry_source() -> String {
 
 const DEFAULT_INTERNAL_HOST: &str = "registry.intern.migros.net";
 const DEFAULT_INTERNAL_NAMESPACE: &str = "ai-foundation/prototypes/aifo-coder-rs";
+const DEFAULT_GHCR_HOST: &str = "ghcr.io";
+const DEFAULT_GHCR_NAMESPACE: &str = "aguindehi/aifo-coder-rs";
 
 /// Optional namespace for our internal registry; env override or sensible default.
 fn registry_namespace_opt() -> Option<String> {
@@ -348,9 +350,27 @@ fn internal_registry_reachable() -> bool {
     is_host_port_reachable(DEFAULT_INTERNAL_HOST, 443, 300)
 }
 
+fn ghcr_registry_reachable() -> bool {
+    if let Some(success) = curl_head(&format!("https://{}/v2/", DEFAULT_GHCR_HOST)) {
+        if success {
+            return true;
+        }
+    }
+    is_host_port_reachable(DEFAULT_GHCR_HOST, 443, 300)
+}
+
+fn ghcr_registry_prefix() -> String {
+    let mut s = format!("{}/{}/", DEFAULT_GHCR_HOST, DEFAULT_GHCR_NAMESPACE);
+    while s.contains("//") {
+        s = s.replace("//", "/");
+    }
+    s
+}
+
 /// Autodetect internal registry prefix:
 /// - Env AIFO_CODER_INTERNAL_REGISTRY_PREFIX wins (normalized trailing '/')
 /// - Else if registry.intern.migros.net reachable, compose "<host>/<namespace>/"
+/// - Else if ghcr.io reachable, compose "<host>/<namespace>/"
 /// - Else empty (Docker Hub fallback)
 #[cfg_attr(
     feature = "otel",
@@ -377,6 +397,9 @@ pub fn preferred_internal_registry_prefix_autodetect() -> String {
             s = s.replace("//", "/");
         }
         return s;
+    }
+    if ghcr_registry_reachable() {
+        return ghcr_registry_prefix();
     }
     String::new()
 }

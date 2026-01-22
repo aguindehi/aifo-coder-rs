@@ -108,6 +108,7 @@ Subcommands:
 Tips:
 
 - Two registries: mirror registry (MR) is used only for Dockerfile base pulls (build-time) via REGISTRY_PREFIX; internal registry (IR) is used for tagging/push and runtime image prefixing via AIFO_CODER_INTERNAL_REGISTRY_PREFIX or REGISTRY in Makefile/scripts. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
+- Internal registry autodetect for first-party images: prefer registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/, fall back to ghcr.io/aguindehi/aifo-coder-rs/, then unqualified (Docker Hub).
 - To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
 - Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR. For runtime registry prefixing of our images, use AIFO_CODER_INTERNAL_REGISTRY_PREFIX.
 - Fallback: if images are not yet published, use --image to provide an explicit image ref.
