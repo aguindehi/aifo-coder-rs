@@ -1872,6 +1872,8 @@ publish-release-github:
 .PHONY: publish-release
 publish-release:
 	@$(MAKE) publish-release-gitlab
+	@echo
+	@$(MAKE) publish-release-github
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
