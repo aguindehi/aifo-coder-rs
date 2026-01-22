@@ -39,7 +39,17 @@ RUN set -e; \
     fi; \
     mkdir -p osxcross/tarballs; \
     mv "$SDK_TMP" "osxcross/tarballs/${SDK_NAME}"; \
-    UNATTENDED=1 osxcross/build.sh; \
+    success=0; \
+    for attempt in 1 2 3; do \
+      rm -rf osxcross/build 2>/dev/null || true; \
+      if UNATTENDED=1 osxcross/build.sh; then \
+        success=1; \
+        break; \
+      fi; \
+      echo "osxcross build failed (attempt ${attempt}/3); retrying..." >&2; \
+      sleep $((attempt * 10)); \
+    done; \
+    [ "$success" -eq 1 ]; \
     mkdir -p /opt/osxcross/SDK; \
     printf '%s\n' "${SDK_NAME}" > /opt/osxcross/SDK/SDK_NAME.txt || true; \
     SDK_DIR="$(find /opt/osxcross/target/SDK -mindepth 1 -maxdepth 1 -type d -name 'MacOSX*.sdk' -print -quit 2>/dev/null)"; \
