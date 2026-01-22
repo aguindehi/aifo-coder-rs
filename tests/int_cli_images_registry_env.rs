@@ -11,6 +11,7 @@ fn int_test_cli_images_respects_registry_env_value() {
 
     // Force mirror probe to succeed via curl-ok
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "curl-ok");
+    std::env::set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "");
 
     let out = Command::new(bin)
         .arg("images")
@@ -43,6 +44,7 @@ fn int_test_cli_images_respects_registry_env_value() {
     );
 
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
+    std::env::remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }
 
 #[test]
@@ -52,6 +54,7 @@ fn int_test_cli_images_respects_registry_env_empty() {
 
     // Force mirror probe to fail → Docker Hub
     std::env::set_var("AIFO_CODER_TEST_REGISTRY_PROBE", "tcp-fail");
+    std::env::set_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX", "");
 
     let out = Command::new(bin)
         .arg("images")
@@ -82,4 +85,5 @@ fn int_test_cli_images_respects_registry_env_empty() {
     );
 
     std::env::remove_var("AIFO_CODER_TEST_REGISTRY_PROBE");
+    std::env::remove_var("AIFO_CODER_INTERNAL_REGISTRY_PREFIX");
 }
