@@ -4305,6 +4305,7 @@ publish-macos-dmg-local:
 	@set -eu; \
 	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local; \
 	$(MACOS_REQUIRE_DARWIN); \
+	$(MIRROR_CHECK_STRICT); \
 	if command -v glab >/dev/null 2>&1; then \
 	  $(MAKE) publish-macos-dmg-local-glab; \
 	else \
@@ -4325,6 +4326,7 @@ publish-macos-dmg-local-glab:
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
 	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
+	$(MIRROR_CHECK_STRICT); \
 	ARM="$(MACOS_CLI_DMG_ARM64)"; \
 	X86="$(MACOS_CLI_DMG_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
@@ -4457,6 +4459,7 @@ publish-macos-dmg-local-gh:
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git gh); \
 	if [ -f ./.env ]; then . ./.env; fi; \
+	$(MIRROR_CHECK_STRICT); \
 	ARM="$(MACOS_CLI_DMG_ARM64)"; \
 	X86="$(MACOS_CLI_DMG_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
@@ -4470,27 +4473,38 @@ publish-macos-dmg-local-gh:
 	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
 	  exit 1; \
 	fi; \
-	ORIGIN="$$(git remote get-url origin 2>/dev/null || true)"; \
-	if [ -z "$$ORIGIN" ]; then \
-	  echo "Error: could not determine origin remote." >&2; \
+	REMOTE_NAME="$${AIFO_GITHUB_REMOTE:-github}"; \
+	REMOTE_URL="$$(git remote get-url "$$REMOTE_NAME" 2>/dev/null || true)"; \
+	if [ -z "$$REMOTE_URL" ]; then \
+	  echo "Error: could not determine '$$REMOTE_NAME' remote URL." >&2; \
+	  echo "Hint: add a GitHub remote named '$$REMOTE_NAME' (git remote add $$REMOTE_NAME git@github.com:owner/repo.git)." >&2; \
 	  exit 1; \
 	fi; \
-	case "$$ORIGIN" in \
-	  git@github.com:* ) PROJ_PATH="$${ORIGIN#git@github.com:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
-	  ssh://git@github.com/* ) PROJ_PATH="$${ORIGIN#ssh://git@github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
-	  https://github.com/* ) PROJ_PATH="$${ORIGIN#https://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
-	  http://github.com/* ) PROJ_PATH="$${ORIGIN#http://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	case "$$REMOTE_URL" in \
+	  git@github.com:* ) PROJ_PATH="$${REMOTE_URL#git@github.com:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@github.com/* ) PROJ_PATH="$${REMOTE_URL#ssh://git@github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://github.com/* ) PROJ_PATH="$${REMOTE_URL#https://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://github.com/* ) PROJ_PATH="$${REMOTE_URL#http://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
 	  * ) PROJ_PATH="" ;; \
 	esac; \
 	if [ -z "$$PROJ_PATH" ]; then \
-	  echo "Error: could not derive GitHub repo from origin remote: $$ORIGIN" >&2; \
+	  echo "Error: could not derive GitHub repo from $$REMOTE_NAME remote: $$REMOTE_URL" >&2; \
 	  echo "Expected GitHub remote (git@github.com:owner/repo.git or https://github.com/owner/repo.git)." >&2; \
 	  exit 1; \
 	fi; \
 	echo "Checking gh auth for github.com ..."; \
+	if ! gh auth status --hostname github.com >/dev/null 2>&1; then \
+	  if [ -t 0 ]; then \
+	    echo "gh is not authenticated; launching interactive login..." >&2; \
+	    gh auth login --hostname github.com; \
+	  else \
+	    echo "Error: gh is not authenticated for github.com." >&2; \
+	    echo "Run: gh auth login --hostname github.com" >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
 	gh auth status --hostname github.com >/dev/null 2>&1 || { \
-	  echo "Error: gh is not authenticated for github.com." >&2; \
-	  echo "Run: gh auth login --hostname github.com" >&2; \
+	  echo "Error: gh authentication still not configured for github.com." >&2; \
 	  exit 2; \
 	}; \
 	echo "Ensuring GitHub Release exists for tag $$TAG ..."; \
