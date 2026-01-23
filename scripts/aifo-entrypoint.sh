@@ -884,8 +884,9 @@ run_prewarm_cmds
 
 if [ "$gpg_prompt_interactive" = "1" ]; then
     mark_step "passphrase-delay"
+    printf '%s: startup in progress; loading plugins if needed. Please wait for the console to appear.\n' "$log_prefix" >&2
     # Give users a moment to read GPG confirmations before fullscreen agent takes over.
-    sleep 2
+    sleep 1
 fi
 
 mark_step "exec"
