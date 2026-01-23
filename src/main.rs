@@ -133,7 +133,7 @@ fn configure_gpg_env(agent: &str, signing_enabled: bool, host_has_key: bool) {
     }
     if is_fullscreen_agent(agent) {
         std::env::set_var("AIFO_GPG_REQUIRE_PRIME", "1");
-        std::env::set_var("AIFO_GPG_CACHE_TTL_SECONDS", "43200");
+        std::env::set_var("AIFO_GPG_CACHE_TTL_SECONDS", "172800");
         std::env::set_var("AIFO_GPG_CACHE_MAX_TTL_SECONDS", "172800");
     } else {
         std::env::remove_var("AIFO_GPG_REQUIRE_PRIME");
