@@ -233,14 +233,20 @@ jobs:
     needs: build-macos-binaries
     runs-on: macos-latest
     steps:
+      - name: DMG generation disabled
+        if: ${{ vars.GITHUB_DMG_UPLOAD != 'true' }}
+        run: echo "macOS DMG generation disabled; set GITHUB_DMG_UPLOAD=true to enable."
       - name: Checkout
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/checkout@v4
       - name: Download macOS binaries
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: macos-binaries
           path: dist
       - name: Build DMGs
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         run: |
           set -euo pipefail
           VERSION="$(python - <<'PY'
@@ -255,6 +261,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         id: dmg
       - name: Upload macOS DMG artifacts
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmgs
@@ -291,6 +298,7 @@ jobs:
           name: macos-binaries
           path: dist
       - name: Download macOS DMGs
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: macos-dmgs
@@ -364,6 +372,14 @@ jobs:
             aifo-coder-${{ steps.package.outputs.version }}-linux-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload macOS DMGs to release
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
             dist/aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.dmg
             dist/aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.dmg
           fail_on_unmatched_files: true
@@ -413,7 +429,7 @@ jobs:
     name: Attach signed macOS DMGs (optional)
     needs: package-release
     runs-on: ubuntu-latest
-    if: ${{ vars.SIGNED_MACOS_ARM64_DMG_URL != '' || vars.SIGNED_MACOS_X86_64_DMG_URL != '' }}
+    if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' && (vars.SIGNED_MACOS_ARM64_DMG_URL != '' || vars.SIGNED_MACOS_X86_64_DMG_URL != '') }}
     steps:
       - name: Download signed macOS DMGs
         run: |
