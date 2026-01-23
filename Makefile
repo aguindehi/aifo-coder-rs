@@ -4474,11 +4474,21 @@ publish-macos-dmg-local-gh:
 	  exit 1; \
 	fi; \
 	REMOTE_NAME="$${AIFO_GITHUB_REMOTE:-github}"; \
+	if ! git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null 2>&1; then \
+	  echo "Error: tag $$TAG does not exist locally; create it before publishing." >&2; \
+	  exit 1; \
+	fi; \
 	REMOTE_URL="$$(git remote get-url "$$REMOTE_NAME" 2>/dev/null || true)"; \
 	if [ -z "$$REMOTE_URL" ]; then \
 	  echo "Error: could not determine '$$REMOTE_NAME' remote URL." >&2; \
 	  echo "Hint: add a GitHub remote named '$$REMOTE_NAME' (git remote add $$REMOTE_NAME git@github.com:owner/repo.git)." >&2; \
 	  exit 1; \
+	fi; \
+	echo "Pushing tag $$TAG to $$REMOTE_NAME ..."; \
+	if [ "$${AIFO_GITHUB_FORCE_TAG:-0}" = "1" ]; then \
+	  git push "$$REMOTE_NAME" "refs/tags/$$TAG" --force; \
+	else \
+	  git push "$$REMOTE_NAME" "refs/tags/$$TAG"; \
 	fi; \
 	case "$$REMOTE_URL" in \
 	  git@github.com:* ) PROJ_PATH="$${REMOTE_URL#git@github.com:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
