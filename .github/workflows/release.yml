@@ -203,7 +203,7 @@ jobs:
           docker run --rm -v "$PWD:/workspace" -w /workspace \
             -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT -e CARGO_FLAGS \
             aifo-coder-macos-cross-rust-builder:release \
-            bash -lc 'rustup target add aarch64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target aarch64-apple-darwin'
+            bash -c 'rustup target add aarch64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target aarch64-apple-darwin'
           mkdir -p dist
           cp target/aarch64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-arm64
           file dist/aifo-coder-macos-arm64 || true
@@ -212,7 +212,7 @@ jobs:
           docker run --rm -v "$PWD:/workspace" -w /workspace \
             -e AIFO_OTEL_ENDPOINT -e AIFO_OTEL_TRANSPORT -e CARGO_FLAGS \
             aifo-coder-macos-cross-rust-builder:release \
-            bash -lc 'rustup target add x86_64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target x86_64-apple-darwin'
+            bash -c 'rustup target add x86_64-apple-darwin || true; cargo build $CARGO_FLAGS --release --target x86_64-apple-darwin'
           mkdir -p dist
           cp target/x86_64-apple-darwin/release/aifo-coder dist/aifo-coder-macos-x86_64
           file dist/aifo-coder-macos-x86_64 || true
