@@ -72,6 +72,7 @@ jobs:
         with:
           name: apple-sdk
           path: ci/osx/MacOSX.sdk.tar.xz
+          overwrite: true
           if-no-files-found: error
 
   build-linux-binary:
@@ -80,6 +81,7 @@ jobs:
     env:
       AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
       AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+      CARGO_TARGET_DIR: target/x86_64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,16 +99,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target
+            ${{ env.CARGO_TARGET_DIR }}
             ~/.cache/sccache
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-target-
+          key: ${{ runner.os }}-target-x86_64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-x86_64-
       - name: Build release binary (Linux)
         run: cargo build ${{ env.CARGO_FLAGS }} --release
       - name: Stage Linux artifact
         run: |
           mkdir -p dist
-          cp target/release/aifo-coder dist/aifo-coder-linux-x86_64
+          cp "${CARGO_TARGET_DIR}/release/aifo-coder" dist/aifo-coder-linux-x86_64
           file dist/aifo-coder-linux-x86_64 || true
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -121,6 +123,7 @@ jobs:
     env:
       AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
       AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+      CARGO_TARGET_DIR: target/aarch64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,10 +147,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target
+            ${{ env.CARGO_TARGET_DIR }}
             ~/.cache/sccache
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-target-
+          key: ${{ runner.os }}-target-aarch64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-aarch64-
       - name: Build release binary (Linux arm64)
         env:
           CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
@@ -155,7 +158,7 @@ jobs:
       - name: Stage Linux arm64 artifact
         run: |
           mkdir -p dist
-          cp target/aarch64-unknown-linux-gnu/release/aifo-coder dist/aifo-coder-linux-arm64
+          cp "${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/aifo-coder" dist/aifo-coder-linux-arm64
           file dist/aifo-coder-linux-arm64 || true
       - name: Upload Linux arm64 artifact
         uses: actions/upload-artifact@v4
