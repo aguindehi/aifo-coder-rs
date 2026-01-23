@@ -72,6 +72,7 @@ jobs:
         with:
           name: apple-sdk
           path: ci/osx/MacOSX.sdk.tar.xz
+          overwrite: true
           if-no-files-found: error
 
   build-linux-binary:
@@ -80,6 +81,7 @@ jobs:
     env:
       AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
       AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+      CARGO_TARGET_DIR: target/x86_64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,16 +99,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target
+            ${{ env.CARGO_TARGET_DIR }}
             ~/.cache/sccache
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-target-
+          key: ${{ runner.os }}-target-x86_64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-x86_64-
       - name: Build release binary (Linux)
         run: cargo build ${{ env.CARGO_FLAGS }} --release
       - name: Stage Linux artifact
         run: |
           mkdir -p dist
-          cp target/release/aifo-coder dist/aifo-coder-linux-x86_64
+          cp "${CARGO_TARGET_DIR}/release/aifo-coder" dist/aifo-coder-linux-x86_64
           file dist/aifo-coder-linux-x86_64 || true
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -121,6 +123,7 @@ jobs:
     env:
       AIFO_OTEL_ENDPOINT: ${{ secrets.AIFO_OTEL_ENDPOINT }}
       AIFO_OTEL_TRANSPORT: ${{ secrets.AIFO_OTEL_TRANSPORT }}
+      CARGO_TARGET_DIR: target/aarch64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,10 +147,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target
+            ${{ env.CARGO_TARGET_DIR }}
             ~/.cache/sccache
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-target-
+          key: ${{ runner.os }}-target-aarch64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-target-aarch64-
       - name: Build release binary (Linux arm64)
         env:
           CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
@@ -155,7 +158,7 @@ jobs:
       - name: Stage Linux arm64 artifact
         run: |
           mkdir -p dist
-          cp target/aarch64-unknown-linux-gnu/release/aifo-coder dist/aifo-coder-linux-arm64
+          cp "${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/aifo-coder" dist/aifo-coder-linux-arm64
           file dist/aifo-coder-linux-arm64 || true
       - name: Upload Linux arm64 artifact
         uses: actions/upload-artifact@v4
@@ -230,14 +233,20 @@ jobs:
     needs: build-macos-binaries
     runs-on: macos-latest
     steps:
+      - name: DMG generation disabled
+        if: ${{ vars.GITHUB_DMG_UPLOAD != 'true' }}
+        run: echo "macOS DMG generation disabled; set GITHUB_DMG_UPLOAD=true to enable."
       - name: Checkout
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/checkout@v4
       - name: Download macOS binaries
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: macos-binaries
           path: dist
       - name: Build DMGs
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         run: |
           set -euo pipefail
           VERSION="$(python - <<'PY'
@@ -252,6 +261,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         id: dmg
       - name: Upload macOS DMG artifacts
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmgs
@@ -288,6 +298,7 @@ jobs:
           name: macos-binaries
           path: dist
       - name: Download macOS DMGs
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: macos-dmgs
@@ -361,6 +372,14 @@ jobs:
             aifo-coder-${{ steps.package.outputs.version }}-linux-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.zip
             aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload macOS DMGs to release
+        if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
             dist/aifo-coder-${{ steps.package.outputs.version }}-macos-arm64.dmg
             dist/aifo-coder-${{ steps.package.outputs.version }}-macos-x86_64.dmg
           fail_on_unmatched_files: true
@@ -410,7 +429,7 @@ jobs:
     name: Attach signed macOS DMGs (optional)
     needs: package-release
     runs-on: ubuntu-latest
-    if: ${{ vars.SIGNED_MACOS_ARM64_DMG_URL != '' || vars.SIGNED_MACOS_X86_64_DMG_URL != '' }}
+    if: ${{ vars.GITHUB_DMG_UPLOAD == 'true' && (vars.SIGNED_MACOS_ARM64_DMG_URL != '' || vars.SIGNED_MACOS_X86_64_DMG_URL != '') }}
     steps:
       - name: Download signed macOS DMGs
         run: |
