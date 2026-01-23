@@ -1054,6 +1054,16 @@ Notes:
 - By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
 - The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
 
+### Publish to GitHub Release (Darwin-only)
+
+```bash
+make publish-release-macos-dmg-signed-github
+```
+
+Notes:
+- Requires `gh auth login` for github.com.
+- If the GitHub Release is missing, it is created automatically (uses `RELEASE_NOTES`/`RELEASE_NOTES_FILE` if provided, otherwise `--generate-notes`).
+
 ---
 
 ## macOS cross-build (osxcross)

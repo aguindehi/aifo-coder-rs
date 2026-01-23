@@ -620,7 +620,7 @@ help: banner
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
 	@echo "  publish-release ............. Alias for publish-release-gitlab (default)"
 	@echo "  publish-release-gitlab ....... Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
-	@echo "  publish-release-github ....... Darwin-only: publish signed macOS CLI DMGs to an existing GitHub Release"
+	@echo "  publish-release-github ....... Darwin-only: publish signed macOS CLI DMGs to a GitHub Release (create if missing)"
 	@echo "  publish-release-images ....... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
 	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs (GitLab)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and NOTARY_PROFILE."
@@ -1864,7 +1864,7 @@ publish-release-gitlab:
 
 .PHONY: publish-release-github
 publish-release-github:
-	@echo "==> Building and uploading signed macOS DMGs to the existing GitHub Release ..."
+	@echo "==> Building and uploading signed macOS DMGs to the GitHub Release ..."
 	@$(MAKE) publish-release-macos-dmg-signed-github
 	@echo
 	@echo "GitHub release assets updated."
@@ -1921,7 +1921,7 @@ publish-release-macos-dmg-signed-github:
 	AIFO_DARWIN_TARGET_NAME=publish-release-macos-dmg-signed-github; \
 	$(MACOS_REQUIRE_DARWIN); \
 	if [ -f ./.env ]; then . ./.env; fi; \
-	echo "publish-release-macos-dmg-signed-github: upload signed macOS DMGs to an existing GitHub Release."; \
+	echo "publish-release-macos-dmg-signed-github: upload signed macOS DMGs to a GitHub Release (create if missing)."; \
 	if ! command -v gh >/dev/null 2>&1; then \
 	  echo "Error: gh (GitHub CLI) is required to upload DMGs." >&2; \
 	  echo "Hint: install gh and authenticate (gh auth login)." >&2; \
@@ -4494,11 +4494,29 @@ publish-macos-dmg-local-gh:
 	  exit 2; \
 	}; \
 	echo "Ensuring GitHub Release exists for tag $$TAG ..."; \
-	gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1 || { \
-	  echo "Error: GitHub Release for tag $$TAG does not exist." >&2; \
-	  echo "Hint: create the release first (CI tag pipeline or gh release create)." >&2; \
-	  exit 3; \
-	}; \
+	if ! gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "GitHub Release for tag $$TAG not found; creating it now..."; \
+	  NOTES_FILE=""; \
+	  NOTES_ARG="--generate-notes"; \
+	  if [ -n "$${RELEASE_NOTES:-}" ]; then \
+	    NOTES_FILE="$$(mktemp)"; \
+	    printf "%s\n" "$${RELEASE_NOTES}" >"$$NOTES_FILE"; \
+	    NOTES_ARG="--notes-file $$NOTES_FILE"; \
+	  elif [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	    if [ ! -f "$${RELEASE_NOTES_FILE}" ]; then \
+	      echo "Error: RELEASE_NOTES_FILE is set to '$${RELEASE_NOTES_FILE}' but the file does not exist." >&2; \
+	      exit 3; \
+	    fi; \
+	    NOTES_ARG="--notes-file $${RELEASE_NOTES_FILE}"; \
+	  fi; \
+	  TARGET_SHA="$$(git rev-parse HEAD 2>/dev/null || true)"; \
+	  TARGET_ARG=""; \
+	  if [ -n "$$TARGET_SHA" ]; then \
+	    TARGET_ARG="--target $$TARGET_SHA"; \
+	  fi; \
+	  gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH"; \
+	  if [ -n "$$NOTES_FILE" ]; then rm -f "$$NOTES_FILE"; fi; \
+	fi; \
 	FILES=""; \
 	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
 	if [ -f "$$X86" ]; then FILES="$$FILES $$X86"; fi; \
