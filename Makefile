@@ -4540,10 +4540,19 @@ publish-macos-dmg-local-gh:
 	  CREATE_LOG="$$(mktemp)"; \
 	  RETRY=0; \
 	  MAX_RETRY=3; \
+	  TARGET_STRIPPED=0; \
 	  while :; do \
 	    if gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH" \
 	      2>"$$CREATE_LOG"; then \
 	      break; \
+	    fi; \
+	    if grep -qi "target_commitish" "$$CREATE_LOG"; then \
+	      if [ "$$TARGET_STRIPPED" -eq 0 ]; then \
+	        echo "Release target invalid; retrying without --target." >&2; \
+	        TARGET_ARG=""; \
+	        TARGET_STRIPPED=1; \
+	        continue; \
+	      fi; \
 	    fi; \
 	    if grep -qi "workflow" "$$CREATE_LOG"; then \
 	      if [ -t 0 ]; then \
