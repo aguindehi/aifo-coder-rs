@@ -4535,7 +4535,28 @@ publish-macos-dmg-local-gh:
 	  if [ -n "$$TARGET_SHA" ]; then \
 	    TARGET_ARG="--target $$TARGET_SHA"; \
 	  fi; \
-	  gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH"; \
+	  CREATE_LOG="$$(mktemp)"; \
+	  if ! gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH" \
+	    2>"$$CREATE_LOG"; then \
+	    if grep -qi "workflow" "$$CREATE_LOG"; then \
+	      if [ -t 0 ]; then \
+	        echo "gh token missing workflow scope; refreshing auth..." >&2; \
+	        gh auth refresh -h github.com -s workflow; \
+	        gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH"; \
+	      else \
+	        cat "$$CREATE_LOG" >&2; \
+	        echo "Error: gh token missing workflow scope." >&2; \
+	        echo "Run: gh auth refresh -h github.com -s workflow" >&2; \
+	        rm -f "$$CREATE_LOG"; \
+	        exit 2; \
+	      fi; \
+	    else \
+	      cat "$$CREATE_LOG" >&2; \
+	      rm -f "$$CREATE_LOG"; \
+	      exit 1; \
+	    fi; \
+	  fi; \
+	  rm -f "$$CREATE_LOG"; \
 	  if [ -n "$$NOTES_FILE" ]; then rm -f "$$NOTES_FILE"; fi; \
 	fi; \
 	FILES=""; \
