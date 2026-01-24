@@ -4565,6 +4565,59 @@ publish-macos-dmg-local-gh:
 	      fi; \
 	      RETRY=$$((RETRY + 1)); \
 	      if [ "$$RETRY" -gt "$$MAX_RETRY" ]; then \
+	        if [ "$$NOTES_ARG" = "--generate-notes" ]; then \
+	          if [ -t 0 ]; then \
+	            echo "GitHub API error; falling back to explicit release notes." >&2; \
+	            FALLBACK_NOTES="$${RELEASE_NOTES:-}"; \
+	            if [ -z "$$FALLBACK_NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	              if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	                FALLBACK_NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	              else \
+	                echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
+	                rm -f "$$CREATE_LOG"; \
+	                exit 2; \
+	              fi; \
+	            fi; \
+	            if [ -z "$$FALLBACK_NOTES" ]; then \
+	              echo "Enter release notes (finish with a line containing only EOF):"; \
+	              FALLBACK_NOTES="$$( \
+	                first=1; \
+	                while IFS= read -r line; do \
+	                  [ "$$line" = "EOF" ] && break; \
+	                  if [ $$first -eq 1 ]; then \
+	                    printf '%s' "$$line"; \
+	                    first=0; \
+	                  else \
+	                    printf '\n%s' "$$line"; \
+	                  fi; \
+	                done \
+	              )"; \
+	            fi; \
+	            if [ -z "$$FALLBACK_NOTES" ]; then \
+	              echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	              rm -f "$$CREATE_LOG"; \
+	              exit 2; \
+	            fi; \
+	            FALLBACK_NOTES_FILE="$$(mktemp)"; \
+	            printf "%s\n" "$$FALLBACK_NOTES" >"$$FALLBACK_NOTES_FILE"; \
+	            FALLBACK_LOG="$$(mktemp)"; \
+	            if ! gh release create "$$TAG" $$TARGET_ARG \
+	              --notes-file "$$FALLBACK_NOTES_FILE" --repo "$$PROJ_PATH" \
+	              2>"$$FALLBACK_LOG"; then \
+	              cat "$$FALLBACK_LOG" >&2; \
+	              rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE" "$$CREATE_LOG"; \
+	              exit 1; \
+	            fi; \
+	            rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE"; \
+	            break; \
+	          else \
+	            cat "$$CREATE_LOG" >&2; \
+	            echo "Error: GitHub API error while generating release notes." >&2; \
+	            echo "Re-run with RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	            rm -f "$$CREATE_LOG"; \
+	            exit 1; \
+	          fi; \
+	        fi; \
 	        cat "$$CREATE_LOG" >&2; \
 	        rm -f "$$CREATE_LOG"; \
 	        exit 1; \
