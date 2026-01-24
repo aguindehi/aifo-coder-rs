@@ -1890,11 +1890,10 @@ publish-release-macos-dmg-signed:
 	  exit 1; \
 	fi; \
 	ORIG_TAG_ORIGIN="$(origin TAG)"; \
-	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
-	  TAG_EFF="$(TAG)"; \
-	else \
-	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
-	fi; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
 	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
@@ -1928,11 +1927,10 @@ publish-release-macos-dmg-signed-github:
 	  exit 1; \
 	fi; \
 	ORIG_TAG_ORIGIN="$(origin TAG)"; \
-	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
-	  TAG_EFF="$(TAG)"; \
-	else \
-	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
-	fi; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
 	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
@@ -1966,11 +1964,10 @@ publish-release-macos-zip-signed:
 	  exit 1; \
 	fi; \
 	ORIG_TAG_ORIGIN="$(origin TAG)"; \
-	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
-	  TAG_EFF="$(TAG)"; \
-	else \
-	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
-	fi; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
 	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
