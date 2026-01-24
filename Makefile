@@ -4532,7 +4532,7 @@ publish-macos-dmg-local-gh:
 	    fi; \
 	    NOTES_ARG="--notes-file $${RELEASE_NOTES_FILE}"; \
 	  fi; \
-	  TARGET_SHA="$$(git rev-parse HEAD 2>/dev/null || true)"; \
+	  TARGET_SHA="$$(git rev-parse "$$TAG^{commit}" 2>/dev/null || true)"; \
 	  TARGET_ARG=""; \
 	  if [ -n "$$TARGET_SHA" ]; then \
 	    TARGET_ARG="--target $$TARGET_SHA"; \
@@ -4610,13 +4610,23 @@ publish-macos-dmg-local-gh:
 	            FALLBACK_NOTES_FILE="$$(mktemp)"; \
 	            printf "%s\n" "$$FALLBACK_NOTES" >"$$FALLBACK_NOTES_FILE"; \
 	            FALLBACK_LOG="$$(mktemp)"; \
-	            if ! gh release create "$$TAG" $$TARGET_ARG \
-	              --notes-file "$$FALLBACK_NOTES_FILE" --repo "$$PROJ_PATH" \
-	              2>"$$FALLBACK_LOG"; then \
+	            FALLBACK_TARGET_ARG="$$TARGET_ARG"; \
+	            while :; do \
+	              if gh release create "$$TAG" $$FALLBACK_TARGET_ARG \
+	                --notes-file "$$FALLBACK_NOTES_FILE" --repo "$$PROJ_PATH" \
+	                2>"$$FALLBACK_LOG"; then \
+	                break; \
+	              fi; \
+	              if grep -qi "target_commitish" "$$FALLBACK_LOG" \
+	                && [ -n "$$FALLBACK_TARGET_ARG" ]; then \
+	                echo "Release target invalid; retrying without --target." >&2; \
+	                FALLBACK_TARGET_ARG=""; \
+	                continue; \
+	              fi; \
 	              cat "$$FALLBACK_LOG" >&2; \
 	              rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE" "$$CREATE_LOG"; \
 	              exit 1; \
-	            fi; \
+	            done; \
 	            rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE"; \
 	            break; \
 	          else \
