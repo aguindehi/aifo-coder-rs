@@ -4536,13 +4536,18 @@ publish-macos-dmg-local-gh:
 	    TARGET_ARG="--target $$TARGET_SHA"; \
 	  fi; \
 	  CREATE_LOG="$$(mktemp)"; \
-	  if ! gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH" \
-	    2>"$$CREATE_LOG"; then \
+	  RETRY=0; \
+	  MAX_RETRY=3; \
+	  while :; do \
+	    if gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH" \
+	      2>"$$CREATE_LOG"; then \
+	      break; \
+	    fi; \
 	    if grep -qi "workflow" "$$CREATE_LOG"; then \
 	      if [ -t 0 ]; then \
 	        echo "gh token missing workflow scope; refreshing auth..." >&2; \
 	        gh auth refresh -h github.com -s workflow; \
-	        gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH"; \
+	        continue; \
 	      else \
 	        cat "$$CREATE_LOG" >&2; \
 	        echo "Error: gh token missing workflow scope." >&2; \
@@ -4550,12 +4555,29 @@ publish-macos-dmg-local-gh:
 	        rm -f "$$CREATE_LOG"; \
 	        exit 2; \
 	      fi; \
-	    else \
-	      cat "$$CREATE_LOG" >&2; \
-	      rm -f "$$CREATE_LOG"; \
-	      exit 1; \
 	    fi; \
-	  fi; \
+	    if grep -qi "HTTP 5[0-9][0-9]" "$$CREATE_LOG"; then \
+	      if gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1; then \
+	        echo "Release found after transient GitHub error; continuing." >&2; \
+	        break; \
+	      fi; \
+	      RETRY=$$((RETRY + 1)); \
+	      if [ "$$RETRY" -gt "$$MAX_RETRY" ]; then \
+	        cat "$$CREATE_LOG" >&2; \
+	        rm -f "$$CREATE_LOG"; \
+	        exit 1; \
+	      fi; \
+	      echo "Transient GitHub error; retrying release create (attempt $$RETRY)..." >&2; \
+	      sleep $$((RETRY * 2)); \
+	      continue; \
+	    fi; \
+	    if grep -qi "already exists" "$$CREATE_LOG"; then \
+	      break; \
+	    fi; \
+	    cat "$$CREATE_LOG" >&2; \
+	    rm -f "$$CREATE_LOG"; \
+	    exit 1; \
+	  done; \
 	  rm -f "$$CREATE_LOG"; \
 	  if [ -n "$$NOTES_FILE" ]; then rm -f "$$NOTES_FILE"; fi; \
 	fi; \
