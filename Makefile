@@ -4323,6 +4323,7 @@ publish-macos-dmg-local-glab:
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
 	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
 	$(MIRROR_CHECK_STRICT); \
 	ARM="$(MACOS_CLI_DMG_ARM64)"; \
 	X86="$(MACOS_CLI_DMG_X86_64)"; \
@@ -4456,6 +4457,7 @@ publish-macos-dmg-local-gh:
 	$(MACOS_REQUIRE_DARWIN); \
 	$(call MACOS_REQUIRE_TOOLS,git gh); \
 	if [ -f ./.env ]; then . ./.env; fi; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
 	$(MIRROR_CHECK_STRICT); \
 	ARM="$(MACOS_CLI_DMG_ARM64)"; \
 	X86="$(MACOS_CLI_DMG_X86_64)"; \
