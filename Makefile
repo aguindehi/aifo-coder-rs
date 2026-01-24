@@ -618,9 +618,11 @@ help: banner
 	$(call title,Publish images:)
 	@echo ""
 	@echo "  publish ..................... Buildx multi-arch and push all images (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
-	@echo "  publish-release ............. Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
-	@echo "  publish-release-images ...... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
-	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs"
+	@echo "  publish-release ............. Alias for publish-release-gitlab (default)"
+	@echo "  publish-release-gitlab ....... Orchestrator: publish multi-arch images, then notarized macOS CLI DMGs for the same release tag"
+	@echo "  publish-release-github ....... Darwin-only: publish signed macOS CLI DMGs to a GitHub Release (create if missing)"
+	@echo "  publish-release-images ....... Release images: derive TAG from Cargo.toml (release-<version>), then run publish"
+	@echo "  publish-release-macos-dmg-signed  Darwin-only: derive TAG from Cargo.toml (release-<version>) and publish notarized macOS DMGs (GitLab)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and NOTARY_PROFILE."
 	@echo "  publish-release-macos-zip-signed  Darwin-only: legacy zip flow (kept for one migration cycle)"
 	@echo "                                Requires glab auth (preferred) or RELEASE_ASSETS_API_TOKEN for curl fallback; uses SIGN_IDENTITY and optional NOTARY_PROFILE."
@@ -641,6 +643,7 @@ help: banner
 	@echo "  macos-notary-setup .......... One-time setup: stores notarytool credentials in macOS keychain (prompts for missing values)"
 	@echo "  release-macos-dmg-signed  Build+sign+notarize+staple+verify per-arch macOS DMGs (Darwin-only)"
 	@echo "  publish-release-macos-dmg-signed  Create/update GitLab Release and upload notarized macOS DMGs (Darwin-only)"
+	@echo "  publish-release-macos-dmg-signed-github  Upload notarized macOS DMGs to an existing GitHub Release (Darwin-only)"
 	@echo "  publish-macos-signed-zips-local-glab ... Aquiring release notes, create annotated tag and release and upload signed macOS launchers to Gitlab (legacy)"
 	@echo ""
 	@echo "  publish-toolchain-rust ...... Buildx multi-arch and push Rust toolchain (set PLATFORMS=linux/amd64,linux/arm64 PUSH=1)"
@@ -1848,8 +1851,8 @@ publish-release-images:
 	  CPP_TOOLCHAIN_TAG=$(if $(filter command% environment override,$(origin CPP_TOOLCHAIN_TAG)),$(CPP_TOOLCHAIN_TAG),$(if $(filter command% environment override,$(origin TAG)),$(TAG),$(if $(filter command% environment override,$(origin RELEASE_PREFIX)),$(RELEASE_PREFIX),release)-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(RELEASE_POSTFIX),))) \
 	  publish
 
-.PHONY: publish-release
-publish-release:
+.PHONY: publish-release-gitlab
+publish-release-gitlab:
 	@echo "==> Running publish-release-images (multi-arch agent/toolchain images) ..."
 	@$(MAKE) publish-release-images
 	@echo
@@ -1858,6 +1861,19 @@ publish-release:
 	@echo
 	@echo "Tag and GitLab Release have been created/updated locally."
 	@echo "CI tag pipeline will attach the unsigned CI launcher artifacts to the GitLab Release page."
+
+.PHONY: publish-release-github
+publish-release-github:
+	@echo "==> Building and uploading signed macOS DMGs to the GitHub Release ..."
+	@$(MAKE) publish-release-macos-dmg-signed-github
+	@echo
+	@echo "GitHub release assets updated."
+
+.PHONY: publish-release
+publish-release:
+	@$(MAKE) publish-release-gitlab
+	@echo
+	@$(MAKE) publish-release-github
 
 # For glab uploads, we rely on glab auth (no RELEASE_ASSETS_API_TOKEN needed).
 # For curl fallback, we require RELEASE_ASSETS_API_TOKEN.
@@ -1874,11 +1890,10 @@ publish-release-macos-dmg-signed:
 	  exit 1; \
 	fi; \
 	ORIG_TAG_ORIGIN="$(origin TAG)"; \
-	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
-	  TAG_EFF="$(TAG)"; \
-	else \
-	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
-	fi; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
 	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
@@ -1899,6 +1914,43 @@ publish-release-macos-dmg-signed:
 	echo "Done. Ensure the git tag '\''$$TAG_EFF'\'' exists in GitLab so the Release reflects these assets."; \
 	'
 
+.PHONY: publish-release-macos-dmg-signed-github
+publish-release-macos-dmg-signed-github:
+	@/bin/sh -ec '\
+	AIFO_DARWIN_TARGET_NAME=publish-release-macos-dmg-signed-github; \
+	$(MACOS_REQUIRE_DARWIN); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	echo "publish-release-macos-dmg-signed-github: upload signed macOS DMGs to a GitHub Release (create if missing)."; \
+	if ! command -v gh >/dev/null 2>&1; then \
+	  echo "Error: gh (GitHub CLI) is required to upload DMGs." >&2; \
+	  echo "Hint: install gh and authenticate (gh auth login)." >&2; \
+	  exit 1; \
+	fi; \
+	ORIG_TAG_ORIGIN="$(origin TAG)"; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
+	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
+	case "$$TAG_EFF" in \
+	  "" ) \
+	    echo "Error: derived release tag is empty. Check VERSION/RELEASE_PREFIX." >&2; \
+	    exit 1 ;; \
+	  latest ) \
+	    echo "Error: refusing to publish macOS signed release with tag '\''latest'\''." >&2; \
+	    echo "Hint: run make publish-release-github (defaults to release-$(VERSION)) or pass TAG=release-$(VERSION)." >&2; \
+	    exit 2 ;; \
+	  -* ) \
+	    echo "Error: derived release tag '\''$$TAG_EFF'\'' starts with '\''-'\'' (likely empty RELEASE_PREFIX)." >&2; \
+	    echo "Hint: make -npr publish-release-macos-dmg-signed-github | grep -E ^RELEASE_PREFIX\\|^RELEASE_POSTFIX\\|^VERSION\\|^TAG" >&2; \
+	    exit 3 ;; \
+	esac; \
+	echo "Publishing signed+notarized macOS DMGs for $$TAG_EFF ..."; \
+	$(MAKE) TAG="$$TAG_EFF" release-macos-dmg-signed; \
+	$(MAKE) TAG="$$TAG_EFF" publish-macos-dmg-local-gh; \
+	echo "Done. Ensure the GitHub Release for tag '\''$$TAG_EFF'\'' exists."; \
+	'
+
 .PHONY: publish-release-macos-zip-signed
 publish-release-macos-zip-signed:
 	@/bin/sh -ec '\
@@ -1912,11 +1964,10 @@ publish-release-macos-zip-signed:
 	  exit 1; \
 	fi; \
 	ORIG_TAG_ORIGIN="$(origin TAG)"; \
-	if [ "$$ORIG_TAG_ORIGIN" = "command" ]; then \
-	  TAG_EFF="$(TAG)"; \
-	else \
-	  TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)"; \
-	fi; \
+	case "$$ORIG_TAG_ORIGIN" in \
+	  command*|environment* ) TAG_EFF="$(TAG)" ;; \
+	  * ) TAG_EFF="$(strip $(RELEASE_PREFIX))-$(VERSION)$(if $(strip $(RELEASE_POSTFIX)),-$(strip $(RELEASE_POSTFIX)),)" ;; \
+	esac; \
 	TAG_EFF="$$(printf "%s" "$$TAG_EFF" | tr -d "\r\n" | sed -e "s/^[[:space:]]*//" -e "s/[[:space:]]*$$//")"; \
 	case "$$TAG_EFF" in \
 	  "" ) \
@@ -4251,6 +4302,7 @@ publish-macos-dmg-local:
 	@set -eu; \
 	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local; \
 	$(MACOS_REQUIRE_DARWIN); \
+	$(MIRROR_CHECK_STRICT); \
 	if command -v glab >/dev/null 2>&1; then \
 	  $(MAKE) publish-macos-dmg-local-glab; \
 	else \
@@ -4271,6 +4323,8 @@ publish-macos-dmg-local-glab:
 	$(call MACOS_REQUIRE_TOOLS,git glab); \
 	export GLAB_CHECK_FOR_UPDATES=false; \
 	if [ -f ./.env ]; then . ./.env; fi; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
+	$(MIRROR_CHECK_STRICT); \
 	ARM="$(MACOS_CLI_DMG_ARM64)"; \
 	X86="$(MACOS_CLI_DMG_X86_64)"; \
 	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
@@ -4395,6 +4449,222 @@ publish-macos-dmg-local-glab:
 	fi; \
 	glab release upload "$$TAG" $$FILES -R "$$PROJ_PATH" --use-package-registry; \
 	echo "Upload complete (glab)."
+
+.PHONY: publish-macos-dmg-local-gh
+publish-macos-dmg-local-gh:
+	@set -eu; \
+	AIFO_DARWIN_TARGET_NAME=publish-macos-dmg-local-gh; \
+	$(MACOS_REQUIRE_DARWIN); \
+	$(call MACOS_REQUIRE_TOOLS,git gh); \
+	if [ -f ./.env ]; then . ./.env; fi; \
+	$(PROXY_FALLBACK_IF_UNREACHABLE) \
+	$(MIRROR_CHECK_STRICT); \
+	ARM="$(MACOS_CLI_DMG_ARM64)"; \
+	X86="$(MACOS_CLI_DMG_X86_64)"; \
+	if [ ! -f "$$ARM" ] && [ ! -f "$$X86" ]; then \
+	  echo "No macOS CLI DMG artifacts found to upload under $(DIST_DIR)." >&2; \
+	  echo "Hint: run 'make release-macos-cli-dmg-signed' first." >&2; \
+	  exit 1; \
+	fi; \
+	TAG="$(RELEASE_TAG_EFFECTIVE)"; \
+	if [ -z "$$TAG" ]; then \
+	  echo "Error: derived release tag is empty (RELEASE_TAG_EFFECTIVE)." >&2; \
+	  echo "Hint: ensure VERSION/RELEASE_PREFIX/RELEASE_POSTFIX are set, or pass TAG explicitly." >&2; \
+	  exit 1; \
+	fi; \
+	REMOTE_NAME="$${AIFO_GITHUB_REMOTE:-github}"; \
+	if ! git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null 2>&1; then \
+	  echo "Error: tag $$TAG does not exist locally; create it before publishing." >&2; \
+	  exit 1; \
+	fi; \
+	REMOTE_URL="$$(git remote get-url "$$REMOTE_NAME" 2>/dev/null || true)"; \
+	if [ -z "$$REMOTE_URL" ]; then \
+	  echo "Error: could not determine '$$REMOTE_NAME' remote URL." >&2; \
+	  echo "Hint: add a GitHub remote named '$$REMOTE_NAME' (git remote add $$REMOTE_NAME git@github.com:owner/repo.git)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Pushing tag $$TAG to $$REMOTE_NAME ..."; \
+	if [ "$${AIFO_GITHUB_FORCE_TAG:-0}" = "1" ]; then \
+	  git push "$$REMOTE_NAME" "refs/tags/$$TAG" --force; \
+	else \
+	  git push "$$REMOTE_NAME" "refs/tags/$$TAG"; \
+	fi; \
+	case "$$REMOTE_URL" in \
+	  git@github.com:* ) PROJ_PATH="$${REMOTE_URL#git@github.com:}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  ssh://git@github.com/* ) PROJ_PATH="$${REMOTE_URL#ssh://git@github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  https://github.com/* ) PROJ_PATH="$${REMOTE_URL#https://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  http://github.com/* ) PROJ_PATH="$${REMOTE_URL#http://github.com/}"; PROJ_PATH="$${PROJ_PATH%.git}" ;; \
+	  * ) PROJ_PATH="" ;; \
+	esac; \
+	if [ -z "$$PROJ_PATH" ]; then \
+	  echo "Error: could not derive GitHub repo from $$REMOTE_NAME remote: $$REMOTE_URL" >&2; \
+	  echo "Expected GitHub remote (git@github.com:owner/repo.git or https://github.com/owner/repo.git)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Checking gh auth for github.com ..."; \
+	if ! gh auth status --hostname github.com >/dev/null 2>&1; then \
+	  if [ -t 0 ]; then \
+	    echo "gh is not authenticated; launching interactive login..." >&2; \
+	    gh auth login --hostname github.com; \
+	  else \
+	    echo "Error: gh is not authenticated for github.com." >&2; \
+	    echo "Run: gh auth login --hostname github.com" >&2; \
+	    exit 2; \
+	  fi; \
+	fi; \
+	gh auth status --hostname github.com >/dev/null 2>&1 || { \
+	  echo "Error: gh authentication still not configured for github.com." >&2; \
+	  exit 2; \
+	}; \
+	echo "Ensuring GitHub Release exists for tag $$TAG ..."; \
+	if ! gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1; then \
+	  echo "GitHub Release for tag $$TAG not found; creating it now..."; \
+	  NOTES_FILE=""; \
+	  NOTES_ARG="--generate-notes"; \
+	  if [ -n "$${RELEASE_NOTES:-}" ]; then \
+	    NOTES_FILE="$$(mktemp)"; \
+	    printf "%s\n" "$${RELEASE_NOTES}" >"$$NOTES_FILE"; \
+	    NOTES_ARG="--notes-file $$NOTES_FILE"; \
+	  elif [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	    if [ ! -f "$${RELEASE_NOTES_FILE}" ]; then \
+	      echo "Error: RELEASE_NOTES_FILE is set to '$${RELEASE_NOTES_FILE}' but the file does not exist." >&2; \
+	      exit 3; \
+	    fi; \
+	    NOTES_ARG="--notes-file $${RELEASE_NOTES_FILE}"; \
+	  fi; \
+	  TARGET_SHA="$$(git rev-parse "$$TAG^{commit}" 2>/dev/null || true)"; \
+	  TARGET_ARG=""; \
+	  if [ -n "$$TARGET_SHA" ]; then \
+	    TARGET_ARG="--target $$TARGET_SHA"; \
+	  fi; \
+	  CREATE_LOG="$$(mktemp)"; \
+	  RETRY=0; \
+	  MAX_RETRY=3; \
+	  TARGET_STRIPPED=0; \
+	  while :; do \
+	    if gh release create "$$TAG" $$TARGET_ARG $$NOTES_ARG --repo "$$PROJ_PATH" \
+	      2>"$$CREATE_LOG"; then \
+	      break; \
+	    fi; \
+	    if grep -qi "target_commitish" "$$CREATE_LOG"; then \
+	      if [ "$$TARGET_STRIPPED" -eq 0 ]; then \
+	        echo "Release target invalid; retrying without --target." >&2; \
+	        TARGET_ARG=""; \
+	        TARGET_STRIPPED=1; \
+	        continue; \
+	      fi; \
+	    fi; \
+	    if grep -qi "workflow" "$$CREATE_LOG"; then \
+	      if [ -t 0 ]; then \
+	        echo "gh token missing workflow scope; refreshing auth..." >&2; \
+	        gh auth refresh -h github.com -s workflow; \
+	        continue; \
+	      else \
+	        cat "$$CREATE_LOG" >&2; \
+	        echo "Error: gh token missing workflow scope." >&2; \
+	        echo "Run: gh auth refresh -h github.com -s workflow" >&2; \
+	        rm -f "$$CREATE_LOG"; \
+	        exit 2; \
+	      fi; \
+	    fi; \
+	    if grep -qi "HTTP 5[0-9][0-9]" "$$CREATE_LOG"; then \
+	      if gh release view "$$TAG" --repo "$$PROJ_PATH" >/dev/null 2>&1; then \
+	        echo "Release found after transient GitHub error; continuing." >&2; \
+	        break; \
+	      fi; \
+	      RETRY=$$((RETRY + 1)); \
+	      if [ "$$RETRY" -gt "$$MAX_RETRY" ]; then \
+	        if [ "$$NOTES_ARG" = "--generate-notes" ]; then \
+	          if [ -t 0 ]; then \
+	            echo "GitHub API error; falling back to explicit release notes." >&2; \
+	            FALLBACK_NOTES="$${RELEASE_NOTES:-}"; \
+	            if [ -z "$$FALLBACK_NOTES" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	              if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	                FALLBACK_NOTES="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	              else \
+	                echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
+	                rm -f "$$CREATE_LOG"; \
+	                exit 2; \
+	              fi; \
+	            fi; \
+	            if [ -z "$$FALLBACK_NOTES" ]; then \
+	              echo "Enter release notes (finish with a line containing only EOF):"; \
+	              FALLBACK_NOTES="$$( \
+	                first=1; \
+	                while IFS= read -r line; do \
+	                  [ "$$line" = "EOF" ] && break; \
+	                  if [ $$first -eq 1 ]; then \
+	                    printf '%s' "$$line"; \
+	                    first=0; \
+	                  else \
+	                    printf '\n%s' "$$line"; \
+	                  fi; \
+	                done \
+	              )"; \
+	            fi; \
+	            if [ -z "$$FALLBACK_NOTES" ]; then \
+	              echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	              rm -f "$$CREATE_LOG"; \
+	              exit 2; \
+	            fi; \
+	            FALLBACK_NOTES_FILE="$$(mktemp)"; \
+	            printf "%s\n" "$$FALLBACK_NOTES" >"$$FALLBACK_NOTES_FILE"; \
+	            FALLBACK_LOG="$$(mktemp)"; \
+	            FALLBACK_TARGET_ARG="$$TARGET_ARG"; \
+	            while :; do \
+	              if gh release create "$$TAG" $$FALLBACK_TARGET_ARG \
+	                --notes-file "$$FALLBACK_NOTES_FILE" --repo "$$PROJ_PATH" \
+	                2>"$$FALLBACK_LOG"; then \
+	                break; \
+	              fi; \
+	              if grep -qi "target_commitish" "$$FALLBACK_LOG" \
+	                && [ -n "$$FALLBACK_TARGET_ARG" ]; then \
+	                echo "Release target invalid; retrying without --target." >&2; \
+	                FALLBACK_TARGET_ARG=""; \
+	                continue; \
+	              fi; \
+	              cat "$$FALLBACK_LOG" >&2; \
+	              rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE" "$$CREATE_LOG"; \
+	              exit 1; \
+	            done; \
+	            rm -f "$$FALLBACK_LOG" "$$FALLBACK_NOTES_FILE"; \
+	            break; \
+	          else \
+	            cat "$$CREATE_LOG" >&2; \
+	            echo "Error: GitHub API error while generating release notes." >&2; \
+	            echo "Re-run with RELEASE_NOTES or RELEASE_NOTES_FILE." >&2; \
+	            rm -f "$$CREATE_LOG"; \
+	            exit 1; \
+	          fi; \
+	        fi; \
+	        cat "$$CREATE_LOG" >&2; \
+	        rm -f "$$CREATE_LOG"; \
+	        exit 1; \
+	      fi; \
+	      echo "Transient GitHub error; retrying release create (attempt $$RETRY)..." >&2; \
+	      sleep $$((RETRY * 2)); \
+	      continue; \
+	    fi; \
+	    if grep -qi "already exists" "$$CREATE_LOG"; then \
+	      break; \
+	    fi; \
+	    cat "$$CREATE_LOG" >&2; \
+	    rm -f "$$CREATE_LOG"; \
+	    exit 1; \
+	  done; \
+	  rm -f "$$CREATE_LOG"; \
+	  if [ -n "$$NOTES_FILE" ]; then rm -f "$$NOTES_FILE"; fi; \
+	fi; \
+	FILES=""; \
+	if [ -f "$$ARM" ]; then FILES="$$FILES $$ARM"; fi; \
+	if [ -f "$$X86" ]; then FILES="$$FILES $$X86"; fi; \
+	if [ -z "$$FILES" ]; then \
+	  echo "Error: no macOS DMG artifacts found to upload (expected $$ARM and/or $$X86)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "Uploading signed macOS CLI DMG assets to GitHub Release $$TAG ..."; \
+	gh release upload "$$TAG" $$FILES --repo "$$PROJ_PATH" --clobber; \
+	echo "Upload complete (gh)."
 
 .PHONY: publish-macos-signed-zips-local-glab
 publish-macos-signed-zips-local-glab:
@@ -5092,10 +5362,14 @@ check-macos-cli-dmg-plan:
 	need "^release-macos-dmg-signed:"; \
 	need "^\\.PHONY: publish-release-macos-dmg-signed$$"; \
 	need "^publish-release-macos-dmg-signed:"; \
+	need "^\\.PHONY: publish-release-macos-dmg-signed-github$$"; \
+	need "^publish-release-macos-dmg-signed-github:"; \
 	need "^\\.PHONY: publish-macos-dmg-local$$"; \
 	need "^publish-macos-dmg-local:"; \
 	need "^\\.PHONY: publish-macos-dmg-local-glab$$"; \
 	need "^publish-macos-dmg-local-glab:"; \
+	need "^\\.PHONY: publish-macos-dmg-local-gh$$"; \
+	need "^publish-macos-dmg-local-gh:"; \
 	need "^\\.PHONY: publish-macos-dmg-local-curl$$"; \
 	need "^publish-macos-dmg-local-curl:"; \
 	need_lit 'MACOS_CLI_DMG_ARM64 ?= $(DIST_DIR)/$(BIN_NAME)-$(MACOS_DMG_VERSION)-macos-arm64.dmg'; \

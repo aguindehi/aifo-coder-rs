@@ -3,10 +3,10 @@ name: Container Images
 on:
   push:
     branches: [main, master]
-    tags: ["*"]
   workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
+  workflow_call:
 
 concurrency:
   group: images-${{ github.ref }}

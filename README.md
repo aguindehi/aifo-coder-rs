@@ -108,6 +108,7 @@ Subcommands:
 Tips:
 
 - Two registries: mirror registry (MR) is used only for Dockerfile base pulls (build-time) via REGISTRY_PREFIX; internal registry (IR) is used for tagging/push and runtime image prefixing via AIFO_CODER_INTERNAL_REGISTRY_PREFIX or REGISTRY in Makefile/scripts. The obsolete AIFO_CODER_REGISTRY_PREFIX is ignored.
+- Internal registry autodetect for first-party images: prefer registry.intern.migros.net/ai-foundation/prototypes/aifo-coder-rs/, fall back to ghcr.io/aguindehi/aifo-coder-rs/, then unqualified (Docker Hub).
 - To select slim images via environment, set AIFO_CODER_IMAGE_FLAVOR=slim.
 - Overrides supported: AIFO_CODER_IMAGE (full ref), AIFO_CODER_IMAGE_PREFIX/TAG/FLAVOR. For runtime registry prefixing of our images, use AIFO_CODER_INTERNAL_REGISTRY_PREFIX.
 - Fallback: if images are not yet published, use --image to provide an explicit image ref.
@@ -1052,6 +1053,16 @@ make publish-release-macos-dmg-signed
 Notes:
 - By default, images are minimized by dropping apt and procps in final stages. To keep them, build with KEEP_APT=1 (see “Image build options and package dropping” below).
 - The aifo-coder wrapper will auto-build the Rust launcher with cargo when possible; if cargo is missing, it can build via Docker.
+
+### Publish to GitHub Release (Darwin-only)
+
+```bash
+make publish-release-macos-dmg-signed-github
+```
+
+Notes:
+- Requires `gh auth login` for github.com.
+- If the GitHub Release is missing, it is created automatically (uses `RELEASE_NOTES`/`RELEASE_NOTES_FILE` if provided, otherwise `--generate-notes`).
 
 ---
 
