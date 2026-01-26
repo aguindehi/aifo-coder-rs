@@ -362,7 +362,7 @@ jobs:
         if: steps.sdk.outputs.available == 'true' && inputs.apple_sdk_artifact_name == ''
         uses: actions/upload-artifact@v4
         with:
-          name: apple-sdk
+          name: apple-sdk-container-images
           path: ci/osx/MacOSX.sdk.tar.xz
           if-no-files-found: error
 
@@ -377,7 +377,7 @@ jobs:
       - name: Download SDK artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.apple_sdk_artifact_name != '' && inputs.apple_sdk_artifact_name || 'apple-sdk' }}
+          name: ${{ inputs.apple_sdk_artifact_name != '' && inputs.apple_sdk_artifact_name || 'apple-sdk-container-images' }}
           path: ci/osx
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
