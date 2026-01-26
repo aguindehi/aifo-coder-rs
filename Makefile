@@ -4474,8 +4474,48 @@ publish-macos-dmg-local-gh:
 	fi; \
 	REMOTE_NAME="$${AIFO_GITHUB_REMOTE:-github}"; \
 	if ! git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null 2>&1; then \
-	  echo "Error: tag $$TAG does not exist locally; create it before publishing." >&2; \
-	  exit 1; \
+	  if [ -t 0 ]; then \
+	    printf "Tag %s does not exist. Create it at HEAD? [y/N] " "$$TAG"; \
+	    read -r CREATE_TAG_ANS; \
+	    case "$$CREATE_TAG_ANS" in \
+	      y|Y|yes|YES ) : ;; \
+	      * ) echo "Error: tag $$TAG does not exist locally; create it before publishing." >&2; exit 1 ;; \
+	    esac; \
+	    NOTES_INPUT="$${RELEASE_NOTES:-}"; \
+	    if [ -z "$$NOTES_INPUT" ] && [ -n "$${RELEASE_NOTES_FILE:-}" ]; then \
+	      if [ -f "$$RELEASE_NOTES_FILE" ]; then \
+	        NOTES_INPUT="$$(cat "$$RELEASE_NOTES_FILE")"; \
+	      else \
+	        echo "Error: RELEASE_NOTES_FILE is set to '$$RELEASE_NOTES_FILE' but the file does not exist." >&2; \
+	        exit 2; \
+	      fi; \
+	    fi; \
+	    if [ -z "$$NOTES_INPUT" ]; then \
+	      echo "Enter release notes (finish with a line containing only EOF):"; \
+	      NOTES_INPUT="$$( \
+	        first=1; \
+	        while IFS= read -r line; do \
+	          [ "$$line" = "EOF" ] && break; \
+	          if [ $$first -eq 1 ]; then \
+	            printf '%s' "$$line"; \
+	            first=0; \
+	          else \
+	            printf '\n%s' "$$line"; \
+	          fi; \
+	        done \
+	      )"; \
+	    fi; \
+	    if [ -z "$$NOTES_INPUT" ]; then \
+	      echo "Error: release notes are required (set RELEASE_NOTES, RELEASE_NOTES_FILE, or provide input interactively)." >&2; \
+	      exit 2; \
+	    fi; \
+	    RELEASE_NOTES="$$NOTES_INPUT"; \
+	    echo "Creating annotated git tag $$TAG at HEAD ..."; \
+	    printf '%s\n' "$$NOTES_INPUT" | git tag -a "$$TAG" -F -; \
+	  else \
+	    echo "Error: tag $$TAG does not exist locally; create it before publishing." >&2; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	REMOTE_URL="$$(git remote get-url "$$REMOTE_NAME" 2>/dev/null || true)"; \
 	if [ -z "$$REMOTE_URL" ]; then \
