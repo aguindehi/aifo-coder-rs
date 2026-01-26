@@ -317,7 +317,7 @@ jobs:
     name: Prepare Apple SDK artifact
     needs: meta
     runs-on: ubuntu-latest
-    if: ${{ needs.meta.outputs.push == 'true' }}
+    if: ${{ needs.meta.outputs.push == 'true' && inputs.apple_sdk_artifact_name == '' }}
     outputs:
       available: ${{ steps.sdk.outputs.available }}
     env:
@@ -370,7 +370,7 @@ jobs:
     name: Build macOS cross rust builder
     needs: [meta, prepare-apple-sdk]
     runs-on: ubuntu-latest
-    if: ${{ needs.meta.outputs.push == 'true' && needs.prepare-apple-sdk.outputs.available == 'true' }}
+    if: ${{ needs.meta.outputs.push == 'true' && (needs.prepare-apple-sdk.outputs.available == 'true' || inputs.apple_sdk_artifact_name != '') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
