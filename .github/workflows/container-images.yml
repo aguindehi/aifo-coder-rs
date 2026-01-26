@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "0 2 * * *"
   workflow_call:
+    inputs:
+      apple_sdk_artifact_name:
+        description: "Optional artifact name to reuse from caller; skips SDK prepare in this workflow."
+        required: false
+        type: string
 
 concurrency:
   group: images-${{ github.ref }}
@@ -323,6 +328,11 @@ jobs:
       - name: Check Apple SDK secrets
         id: sdk
         run: |
+          if [ -n "${{ inputs.apple_sdk_artifact_name }}" ]; then
+            echo "Using caller-provided SDK artifact: ${{ inputs.apple_sdk_artifact_name }}"
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -n "${APPLE_SDK_URL:-}" ] || [ -n "${APPLE_SDK_BASE64:-}" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
@@ -330,10 +340,10 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Checkout
-        if: steps.sdk.outputs.available == 'true'
+        if: steps.sdk.outputs.available == 'true' && inputs.apple_sdk_artifact_name == ''
         uses: actions/checkout@v4
       - name: Decode Apple SDK
-        if: steps.sdk.outputs.available == 'true'
+        if: steps.sdk.outputs.available == 'true' && inputs.apple_sdk_artifact_name == ''
         run: |
           set -euo pipefail
           mkdir -p ci/osx
@@ -349,10 +359,10 @@ jobs:
           fi
           ls -lh ci/osx/MacOSX.sdk.tar.xz
       - name: Upload SDK artifact
-        if: steps.sdk.outputs.available == 'true'
+        if: steps.sdk.outputs.available == 'true' && inputs.apple_sdk_artifact_name == ''
         uses: actions/upload-artifact@v4
         with:
-          name: apple-sdk-container-images
+          name: apple-sdk
           path: ci/osx/MacOSX.sdk.tar.xz
           if-no-files-found: error
 
@@ -367,7 +377,7 @@ jobs:
       - name: Download SDK artifact
         uses: actions/download-artifact@v4
         with:
-          name: apple-sdk-container-images
+          name: ${{ inputs.apple_sdk_artifact_name != '' && inputs.apple_sdk_artifact_name || 'apple-sdk' }}
           path: ci/osx
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

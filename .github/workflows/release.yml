@@ -25,6 +25,9 @@ jobs:
   publish-images:
     name: Publish multi-arch images
     uses: ./.github/workflows/container-images.yml
+    needs: prepare-apple-sdk
+    with:
+      apple_sdk_artifact_name: apple-sdk
     secrets: inherit
 
   require-apple-sdk:
