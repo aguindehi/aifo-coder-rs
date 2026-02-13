@@ -39,5 +39,6 @@
                 "edit": false
             }
         }
-    }
+    },
+    "share": "disabled"
 }
