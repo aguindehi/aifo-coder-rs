@@ -1,21 +1,20 @@
 model_provider = "azure"
-profile = "gpt-5"
+profile = "gpt-5.1"
 approval_policy = "untrusted"
 sandbox_mode = "workspace-write"
+
 
 [model_providers.azure]
 name = "Azure"
 base_url = "https://mgb-aifo-proxy.service.migros.cloud/aoai/openai"
-env_key = "AIFO_API_KEY"  # Name of the environment variable
+env_key = "OPENAI_API_KEY"  # Name of the environment variable
 query_params = { api-version = "2025-04-01-preview" }
 wire_api = "responses"
 
-[profiles.gpt-5]
-model_provider = "azure"
-model = "gpt-5.1"
-model_context_window = 272000
-model_max_output_tokens = 128000
-model_verbosity = "low"
+[model_providers.ollama]
+name = "Ollama"
+base_url = "http://localhost:11434/v1"
+
 
 [profiles.high]
 model_provider = "azure"
@@ -23,6 +22,21 @@ model = "gpt-5.1"
 model_reasoning_effort = "high"
 model_context_window = 272000
 model_max_output_tokens = 128000
+model_verbosity = "low"
+
+[profiles.gpt-5.1]
+model_provider = "azure"
+model = "gpt-5.1"
+model_context_window = 272000
+model_max_output_tokens = 128000
+model_verbosity = "low"
+
+[profiles.mini]
+model_provider = "azure"
+model = "gpt-5.1-mini"
+model_context_window = 272000
+model_max_output_tokens = 128000
+model_verbosity = "low"
 
 [features]
 web_search_request = false
@@ -30,3 +44,11 @@ web_search_request = false
 [notice]
 hide_gpt5_1_migration_prompt = true
 "hide_gpt-5.1-codex-max_migration_prompt" = true
+
+[notice.model_migrations]
+"gpt-5.1-codex" = "gpt-5.2-codex"
+"gpt-5.1" = "gpt-5.2-codex"
+"gpt-5.1-codex-max" = "gpt-5.2-codex"
+
+[sandbox_workspace_write]
+network_access = false   # Pflicht: Netzwerk immer aus

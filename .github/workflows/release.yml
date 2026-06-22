@@ -25,6 +25,9 @@ jobs:
   publish-images:
     name: Publish multi-arch images
     uses: ./.github/workflows/container-images.yml
+    needs: prepare-apple-sdk
+    with:
+      apple_sdk_artifact_name: apple-sdk
     secrets: inherit
 
   require-apple-sdk:
@@ -323,32 +326,33 @@ jobs:
             echo "docs/ not found; creating empty docs directory for archive layout." >&2
             mkdir -p docs
           fi
+          out_dir="$PWD"
           stage="$(mktemp -d)"
           install -m 0755 dist/aifo-coder-linux-x86_64 "${stage}/aifo-coder"
           install -m 0644 README.md NOTICE LICENSE "${stage}/"
           cp -a docs "${stage}/"
-          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-linux-x86_64.zip" .)
+          (cd "${stage}" && zip -9qr "${out_dir}/aifo-coder-${VERSION}-linux-x86_64.zip" .)
           rm -rf "${stage}"
 
           stage="$(mktemp -d)"
           install -m 0755 dist/aifo-coder-linux-arm64 "${stage}/aifo-coder"
           install -m 0644 README.md NOTICE LICENSE "${stage}/"
           cp -a docs "${stage}/"
-          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-linux-arm64.zip" .)
+          (cd "${stage}" && zip -9qr "${out_dir}/aifo-coder-${VERSION}-linux-arm64.zip" .)
           rm -rf "${stage}"
 
           stage="$(mktemp -d)"
           install -m 0755 dist/aifo-coder-macos-arm64 "${stage}/aifo-coder"
           install -m 0644 README.md NOTICE LICENSE "${stage}/"
           cp -a docs "${stage}/"
-          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-arm64.zip" .)
+          (cd "${stage}" && zip -9qr "${out_dir}/aifo-coder-${VERSION}-macos-arm64.zip" .)
           rm -rf "${stage}"
 
           stage="$(mktemp -d)"
           install -m 0755 dist/aifo-coder-macos-x86_64 "${stage}/aifo-coder"
           install -m 0644 README.md NOTICE LICENSE "${stage}/"
           cp -a docs "${stage}/"
-          (cd "${stage}" && zip -9qr "../aifo-coder-${VERSION}-macos-x86_64.zip" .)
+          (cd "${stage}" && zip -9qr "${out_dir}/aifo-coder-${VERSION}-macos-x86_64.zip" .)
           rm -rf "${stage}"
 
           ls -lh aifo-coder-${VERSION}-linux-x86_64.zip \
