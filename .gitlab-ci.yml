@@ -15,6 +15,14 @@ include:
       # gitlab.i7 until CI is migrated to DataCore-native build jobs.
       - if: $CI_SERVER_HOST != "gitlab.i7.datacore.ch"
 
+  # STOPGAP: on gitlab.i7 the component above is skipped, leaving `container-build`
+  # without a script (invalid config, checked before workflow:rules). Supply a
+  # no-op stub there so the config validates; the workflow rule below still
+  # prevents any pipeline from running on gitlab.i7.
+  - local: .gitlab/ci/container-build-stub.yml
+    rules:
+      - if: $CI_SERVER_HOST == "gitlab.i7.datacore.ch"
+
 variables:
   PACKAGE_REGISTRY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}
   # Local-only macOS signing: optional upload location for signed/notarized per-arch zips.

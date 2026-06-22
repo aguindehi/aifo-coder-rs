@@ -1,0 +1,17 @@
+# STOPGAP stub — gitlab.i7 (DataCore) only.
+#
+# The `container-build` base job's script is normally provided by the MGB
+# cicd-component (devops-services-public/infrastructure-as-code/cicd-components/
+# container/build). That component does not exist on gitlab.i7, so the main
+# .gitlab-ci.yml skips its include there. Without it, `container-build` has no
+# script and GitLab rejects the whole config:
+#   "jobs container-build config should implement the script:, run:, or trigger: keyword"
+# (config validity is checked BEFORE workflow:rules can drop the pipeline).
+#
+# This stub supplies a no-op script so the merged config validates on gitlab.i7.
+# No pipeline actually runs there: the workflow rule in .gitlab-ci.yml suppresses
+# pipeline creation on gitlab.i7. Remove this file together with the gitlab.i7
+# stopgap once CI is migrated to DataCore-native build jobs/runners.
+container-build:
+  script:
+    - echo "container-build is provided by the MGB cicd-component and is unavailable on gitlab.i7 (stopgap stub)."
